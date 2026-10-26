@@ -1,10 +1,10 @@
 # Orbit Core MCP
 
-**Local-first, approval-driven agent orchestration for your own coding IDE.** Python 3.10+ · SQLite · **33 MCP tools** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
+**Local-first, approval-driven agent orchestration for your own coding IDE.** Python 3.10+ · SQLite · **33 released MCP tools (34 in the product-experience branch)** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
 
 Orbit helps an existing coding host turn plain-language requests into approved product decisions, researched architecture, reusable components, staged implementation tasks, checkpointed progress, and verifiable checks. **Orbit is not a standalone LLM, IDE, code editor or background worker**: the host performs reasoning, agent invocation, file edits and terminal commands. Model recommendations never switch providers or consume credits by themselves.
 
-> **Release status:** v0.24.1 is a **candidate** until tagged and published. GitHub CI is not a substitute for live Windows/IDE acceptance. Published releases are available at [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). This repository is separate from other Orbit-branded CLIs/plugins.
+> **Release status:** v0.24.1 is **published as a prerelease candidate**. The unmerged product-experience updates are not part of that release. GitHub CI is not a substitute for live Windows/IDE acceptance. Published releases are available at [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). This repository is separate from other Orbit-branded CLIs/plugins.
 
 ## Get started (install once)
 
@@ -84,4 +84,8 @@ See [architecture](docs/ARCHITECTURE.md), [release process](docs/RELEASE-PROCESS
 
 ## Product experience (development branch)
 
-The `feat/product-experience-v1` branch adds a read-only one-glance `experience` summary to `orbit_project_resume` and `orbit_build_status` (next decision, real stage/task progress, approval and blocker hints). It also fixes non-web build flows being advanced with the web stage sequence. This is **not included in the published 0.24.1 release** until reviewed/merged, and does not claim a separate IDE visual panel. See [product experience specification](docs/PRODUCT-EXPERIENCE.md).
+The `feat/product-experience-v1` branch adds a read-only one-glance `experience` summary to `orbit_project_resume` and `orbit_build_status` (next decision, real stage/task progress, approval and blocker hints), fixes native/SDK-specific stage progression, and adds the 34th tool, `orbit_build_feedback`: an approval-gated, revision-checked change-request history.
+
+**Use the IDE you already have:** Antigravity's native Implementation Plan (comments and Proceed), Task List, diff review, and walkthrough are the editing/review surfaces. Orbit tracks unresolved requests in SQLite; a stage cannot be marked PASS while requested changes remain open. The MCP does not pretend to create a new IDE visual panel or automatically inspect or approve Antigravity artifacts.
+
+These branch changes are **not included in the published v0.24.1 release** until reviewed and shipped separately. See [product experience specification](docs/PRODUCT-EXPERIENCE.md) and [PR #5](https://github.com/samjuniors/Orbit-Core-MCP/pull/5).
