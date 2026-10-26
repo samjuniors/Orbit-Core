@@ -84,7 +84,7 @@ For new products, Orbit now guides the host to classify project type/complexity/
 
 ## Persistent guided intake (development branch)
 
-New Orbit MCP projects must obtain an approved product classification and user answers before `orbit_build_begin` creates a build; a fresh build otherwise returns HOLD. Five additional tools expose intake status, proposals, approved choices, autonomy review and repeatable documentation gap audits (29 total). Existing builds such as a prior Todo test are not retroactively blocked. Host-owned architect/writer agents create substantive missing docs only after reviewing owner canonical sources. No automated autonomy escalation or approval bypass is offered.
+New Orbit MCP projects must obtain an approved product classification and user answers before `orbit_build_begin` creates a build; a fresh build otherwise returns HOLD. Seven additional tools expose intake status, proposed questions, per-answer recording, conditional follow-ups, approved choices, autonomy review and repeatable documentation gap audits (31 total; including two incremental interview tools). Existing builds such as a prior Todo test are not retroactively blocked. Host-owned architect/writer agents create substantive missing docs only after reviewing owner canonical sources. No automated autonomy escalation or approval bypass is offered.
 
 ## Install once; update and detect hosts (feature branch)
 
