@@ -126,13 +126,14 @@ class UniversalSetupTests(unittest.TestCase):
         with zipfile.ZipFile(ROOT/'ORBIT-Claude-Desktop-v0.24.0.mcpb') as z:
             m=json.loads(z.read('manifest.json'))
             self.assertEqual(m['server']['type'],'python')
-            self.assertEqual(len(m['tools']),24)
+            self.assertEqual(len(m['tools']),29)
             self.assertIn('server/orbit_mcp.py',z.namelist())
             self.assertIn('server/orbit_tasks.py',z.namelist())
             self.assertIn('server/orbit_capabilities.py',z.namelist())
             self.assertIn('server/orbit_preview.py',z.namelist())
             self.assertIn('server/orbit_browser.py',z.namelist())
             self.assertIn('server/orbit_build.py',z.namelist())
+            self.assertIn('server/orbit_intake.py',z.namelist())
 
 
 
