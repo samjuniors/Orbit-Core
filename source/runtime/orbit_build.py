@@ -285,8 +285,13 @@ def project_signals(root):
            'tests','test','android','ios','.git'}
     for child in root.iterdir():
         if child.is_symlink():continue
-        if child.name in known and child.is_file(): signals.append(child.name)
-        elif child.name in roots and child.is_dir():signals.append(child.name+'/')
+        if child.name in known and child.is_file():
+            signals.append(child.name)
+        elif child.name in roots and child.is_dir():
+            # An empty source folder is scaffolding, not evidence of written code.
+            # Do not traverse source or inspect contents; only check for one child.
+            if child.name=='.git' or next(child.iterdir(), None) is not None:
+                signals.append(child.name+'/')
         if len(signals)>=12:break
     return sorted(signals)
 
