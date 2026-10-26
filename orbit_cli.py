@@ -55,17 +55,29 @@ def download(url,limit):
         if len(data)>limit:raise ValueError('Update asset exceeds byte limit')
         return data
 
-def latest():
-    # Draft/prerelease versions do not replace an installed stable release.
-    data=json.loads(download('https://api.github.com/repos/'+REPO+'/releases',2_000_000))
+def latest(channel='candidate'):
+    """Select the highest published release in the opted-in channel.
+
+    v0.x is published as prerelease by policy. Candidate is explicit to avoid
+    claiming these are stable or silently switching a stable installation.
+    """
+    if channel not in {'stable','candidate'}:
+        raise ValueError('Unknown update channel')
+    data=json.loads(download('https://api.github.com/repos/'+REPO+'/releases?per_page=100',2_000_000))
+    matched=[]
     for release in data:
         v=str(release.get('tag_name','')).removeprefix('v')
-        if release.get('draft') or release.get('prerelease') or not VERS.fullmatch(v):continue
-        assets={a['name']:a['browser_download_url'] for a in release.get('assets',[]) if 'name' in a}
+        if release.get('draft') or not VERS.fullmatch(v):continue
+        if channel=='stable' and release.get('prerelease'):continue
+        if channel=='candidate' and not release.get('prerelease'):continue
+        assets={x['name']:x['browser_download_url'] for x in release.get('assets',[])
+                if isinstance(x,dict) and isinstance(x.get('name'),str) and isinstance(x.get('browser_download_url'),str)}
         name='ORBIT-Universal-Setup-v'+v+'.zip'
         if name in assets and name+'.sha256' in assets:
-            return {'version':v,'zip':assets[name],'sha':assets[name+'.sha256'],'url':release.get('html_url')}
-    raise ValueError('No published stable release with a ZIP and SHA256 sidecar')
+            matched.append((tuple(map(int,v.split('.'))),{'version':v,'zip':assets[name],
+                'sha':assets[name+'.sha256'],'url':release.get('html_url'),'channel':channel}))
+    if matched:return max(matched,key=lambda x:x[0])[1]
+    raise ValueError('No published '+channel+' release with verified ZIP and SHA256 asset')
 
 def validate_zip(data,v):
     z=zipfile.ZipFile(io.BytesIO(data))
@@ -95,9 +107,9 @@ def update(a):
         with zipfile.ZipFile(io.BytesIO(raw)) as z:
             v=z.read(next(n for n in z.namelist() if re.fullmatch(r'orbit-universal-[0-9.]+/VERSION',n))).decode().strip()
     else:
-        info=latest();v=info['version'];print('Installed:',version(),'Available:',v,info['url'])
+        info=latest(a.channel);v=info['version'];print('Installed:',version(),'Available:',v,info['url'])
         if version()!='unknown' and tuple(map(int,v.split('.'))) <= tuple(map(int,version().split('.'))) and not a.force:
-            print('No newer stable release.');return 0
+            print('No newer '+a.channel+' release.');return 0
         if a.check:return 0
         claimed=download(info['sha'],1024).decode('ascii').split()[0]
         raw=download(info['zip'],64_000_000)
@@ -133,6 +145,8 @@ def main(argv=None):
     d=sub.add_parser('detect',help='Read-only probable CLI/desktop host detection')
     d.add_argument('--project')
     u=sub.add_parser('update',help='Check verified releases; preview by default, apply explicitly')
+    u.add_argument('--channel',choices=['candidate','stable'],default='candidate',
+                   help='candidate for published 0.x prereleases (default), stable for production releases')
     u.add_argument('--check',action='store_true')
     u.add_argument('--apply',action='store_true')
     u.add_argument('--project')
