@@ -39,15 +39,39 @@ class BuildBrowserTests(unittest.TestCase):
         self.pa={'preview_id':'browser-test','port':self.port,'command':[sys.executable,'-m','http.server',str(self.port),'--bind','127.0.0.1']}
         self.addCleanup(lambda:orbit_preview.stop(self.root,{'preview_id':'browser-test','confirm_stop':True}))
 
+    def stage_evidence(self,stage):
+        if stage=='RESEARCH':
+            return '{"task":"Build tested todo product","candidates":["native HTML UI","existing SQLite"],"decision":"Reuse native tools and test existing code", "sources":["README.md"],"risks":["bad user data"]}'
+        if stage=='VERIFY':
+            return '{"commands":[{"command":"python -m unittest discover","exit_code":0}],"edge_cases":["empty todo items"],"security":["untrusted input escaped"]}'
+        return 'Verified by test run'
+
     def advance(self,outcome='PASS'):
         status=orbit_build.current(self.db,self.root,self.meta)['run']
-        return orbit_build.advance(self.db,self.root,{**self.meta,'expected_revision':status['revision'],'outcome':outcome,'evidence':'Verified by test run','preview_id':'browser-test','confirm_write':True})
+        return orbit_build.advance(self.db,self.root,{**self.meta,'expected_revision':status['revision'],'outcome':outcome,'evidence':self.stage_evidence(status['stage']),'preview_id':'browser-test','confirm_write':True})
+
+    def test_new_research_stage_requires_structured_evidence(self):
+        a={**self.meta,'objective':'Create a Todo web app','confirm_write':True}
+        orbit_build.begin(self.db,self.root,a)
+        status=orbit_build.current(self.db,self.root,self.meta)['run']
+        result=orbit_build.advance(self.db,self.root,{**self.meta,'expected_revision':status['revision'],
+            'outcome':'PASS','evidence':'researched', 'confirm_write':True})
+        self.assertEqual(result['status'],'HOLD')
+        self.assertEqual(orbit_build.current(self.db,self.root,self.meta)['run']['stage'],'RESEARCH')
+
+    def test_existing_plan_stage_is_compatible(self):
+        with self.db:
+            self.db.execute('INSERT INTO build_runs VALUES (?,?,?,?,?,?,?,?)',
+                (self.meta['project'],str(self.root),self.meta['build_id'],'PLAN',1,'prior version','{}','now'))
+        self.assertEqual(self.advance()['run']['stage'],'IMPLEMENT')
 
     def test_durable_build_revision_and_qa_gate(self):
         a={**self.meta,'objective':'Create a Todo web app','confirm_write':True}
         self.assertEqual(orbit_build.begin(self.db,self.root,a)['status'],'CREATED')
         self.assertEqual(orbit_build.begin(self.db,self.root,a)['status'],'EXISTS')
+        self.assertEqual(self.advance()['run']['stage'],'PLAN')
         self.assertEqual(self.advance()['run']['stage'],'IMPLEMENT')
+        self.assertEqual(self.advance()['run']['stage'],'VERIFY')
         self.assertEqual(self.advance()['run']['stage'],'PREVIEW')
         self.assertEqual(self.advance()['status'],'HOLD')
         self.assertEqual(orbit_preview.start(self.root,{**self.pa,'confirm_run':True})['status'],'READY')
@@ -115,7 +139,7 @@ class BuildBrowserTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec('playwright') and (shutil.which('chromium') or shutil.which('google-chrome')), 'Playwright and system Chromium both required for optional browser test')
     def test_real_chromium_todo_interaction_and_screenshot(self):
         orbit_build.begin(self.db,self.root,{**self.meta,'objective':'Todo','confirm_write':True})
-        for _ in range(2): self.advance()
+        for _ in range(4): self.advance()
         self.assertEqual(orbit_preview.start(self.root,{**self.pa,'confirm_run':True})['status'],'READY')
         self.advance()
         inputs={**self.meta,'preview_id':'browser-test','viewport':'mobile',
