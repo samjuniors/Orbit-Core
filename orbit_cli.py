@@ -138,10 +138,32 @@ def update(a):
         print('Updated',len(written),'files/backups. Refresh selected MCP hosts.')
         return 0
 
+def doctor(project=None):
+    """Local read-only preflight; host must separately prove MCP connection."""
+    base=home()/'.orbit-universal'
+    v=version()
+    runtime=base/v/'orbit_mcp.py'
+    report={'installed_version':v,
+            'runtime_exists':runtime.is_file() and not runtime.is_symlink(),
+            'python':sys.executable,'hosts':detect(project),
+            'playwright_importable':False,
+            'note':'Configured is not the same as connected. Test orbit_project_scan in the host.',
+            'next':'Refresh your MCP host and inspect actual Orbit tools.'}
+    try:
+        import importlib.util
+        report['playwright_importable']=importlib.util.find_spec('playwright') is not None
+    except (ImportError,ValueError):
+        pass
+    print(json.dumps(report,indent=2))
+    return 0 if report['runtime_exists'] else 1
+
+
 def main(argv=None):
     p=argparse.ArgumentParser(prog='orbit')
     sub=p.add_subparsers(dest='command',required=True)
     sub.add_parser('status',help='Show installed Orbit version')
+    check=sub.add_parser('doctor',help='Read-only installation and host diagnostic')
+    check.add_argument('--project')
     d=sub.add_parser('detect',help='Read-only probable CLI/desktop host detection')
     d.add_argument('--project')
     u=sub.add_parser('update',help='Check verified releases; preview by default, apply explicitly')
@@ -158,6 +180,7 @@ def main(argv=None):
     try:
         if a.command=='status':print('Orbit version:',version());return 0
         if a.command=='detect':print(json.dumps(detect(a.project),indent=2));return 0
+        if a.command=='doctor':return doctor(a.project)
         return update(a)
     except (OSError,ValueError,KeyError,zipfile.BadZipFile,StopIteration,ImportError) as exc:
         print('ORBIT UPDATE BLOCKED:',str(exc),file=sys.stderr);return 1
