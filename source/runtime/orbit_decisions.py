@@ -22,7 +22,7 @@ FLOWS={
 # Small verified-source research index. Nothing is installed or executed from here.
 CATALOG=(
     ('astryx','UI components','web','react,stylex','https://astryx.atmeta.com/components',
-     'React 19+ and StyleX beta; accessible components/themes/templates, CLI and integrations.'),
+     'Meta MIT open-source design system, React 19+; StyleX authors internals but consumer styling can use CSS or Tailwind. CLI and custom integrations.'),
     ('shadcn-ui','UI components','web','react,tailwind','https://ui.shadcn.com/docs',
      'Copyable, ownable source components; review registry licenses/compatibility.'),
     ('radix-primitives','UI primitives','web','react','https://www.radix-ui.com/primitives/docs/overview/introduction',
@@ -123,7 +123,7 @@ def components(product_type,platforms,stack,preference):
         if 'any' not in permitted and not wants.intersection(permitted):continue
         if product_type in {'sdk-library','cli','api-service','plugin-mcp','os-platform','data-automation'} and kind in {'UI components','UI primitives','mobile framework','native mobile UI','browser QA'}:continue
         if ident=='astryx':
-            status='REVIEW_MATCH' if flags['react'] and flags['stylex'] else 'REVIEW_COMPATIBILITY' if flags['react'] or not lower else 'INCOMPATIBLE_STACK'
+            status='INCOMPATIBLE_STACK' if re.search(r'\\breact\\s*(?:1[0-8]|[1-9])\\b',lower) else 'REVIEW_MATCH' if flags['react'] else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
         elif ident in {'shadcn-ui','radix-primitives','react-aria'}:
             status='REVIEW_MATCH' if flags['react'] and (ident!='shadcn-ui' or flags['tailwind']) else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
         elif ident=='native-web':
