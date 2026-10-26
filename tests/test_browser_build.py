@@ -52,6 +52,24 @@ class BuildBrowserTests(unittest.TestCase):
         status=orbit_build.current(self.db,self.root,self.meta)['run']
         return orbit_build.advance(self.db,self.root,{**self.meta,'expected_revision':status['revision'],'outcome':outcome,'evidence':self.stage_evidence(status['stage']),'preview_id':'browser-test','confirm_write':True})
 
+    def test_product_kit_style_recovery_is_read_only_and_bounded(self):
+        project={**self.meta,'objective':'Build tested Todo','confirm_write':True}
+        self.assertEqual(orbit_build.recovery_brief(self.db,self.root,self.meta['project'])['status'],'NO_BUILD')
+        orbit_build.begin(self.db,self.root,project)
+        first=orbit_build.recovery_brief(self.db,self.root,self.meta['project'])
+        self.assertEqual(first['status'],'RESUME')
+        self.assertEqual(first['stage'],'RESEARCH')
+        self.assertEqual(first['revision'],1)
+        self.assertEqual(first['task_progress']['registered'],0)
+        self.assertIn('research',first['next'].lower())
+        self.assertEqual(orbit_build.current(self.db,self.root,self.meta)['run']['revision'],1)
+        # Distinct unfinished builds require explicit selection, not guessed work.
+        second={**project,'build_id':'parallel'}
+        orbit_build.begin(self.db,self.root,second)
+        competing=orbit_build.recovery_brief(self.db,self.root,self.meta['project'])
+        self.assertEqual(competing['status'],'NEEDS_BUILD_SELECTION')
+        self.assertEqual(len(competing['builds']),2)
+
     def test_new_research_stage_requires_structured_evidence(self):
         a={**self.meta,'objective':'Create a Todo web app','confirm_write':True}
         orbit_build.begin(self.db,self.root,a)

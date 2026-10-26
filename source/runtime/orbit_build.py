@@ -71,6 +71,60 @@ def task_progress(conn,project,root):
             'completion_percent':round(finished*100/total)}
 
 
+def recovery_brief(conn, root, project):
+    """Small, read-only recover/continue view derived from actual local records."""
+    rows=conn.execute(
+        '''SELECT build_id,stage,revision,objective,updated_at,evidence_json
+           FROM build_runs WHERE project=? AND root=?
+           ORDER BY updated_at DESC,build_id LIMIT 12''',
+        (project,str(root))).fetchall()
+    all_builds=[dict(x) for x in rows]
+    active=[x for x in all_builds if x['stage']!='DONE']
+    progress=task_progress(conn,project,root)
+    tasks=[]
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='orbit_agent_tasks'").fetchone():
+        tasks=[{'task_key':x['task_key'],'status':x['status'],
+                'step':x['step'],'role':x['role'],'goal':x['goal'][:180]}
+               for x in conn.execute(
+                   '''SELECT task_key,status,step,role,goal FROM orbit_agent_tasks
+                      WHERE project=? AND project_root=? AND status<>'REVIEW_ACCEPTED'
+                      ORDER BY updated_at DESC LIMIT 6''',(project,str(root)))]
+    if len(active)>1:
+        return {'status':'NEEDS_BUILD_SELECTION',
+                'builds':[{'build_id':x['build_id'],'stage':x['stage'],'revision':x['revision']}
+                          for x in active[:8]],
+                'next':'Select a build ID; do not guess which parallel build to resume.',
+                'task_progress':progress,'pending_tasks':tasks,
+                'evidence_source':'persisted_local_sqlite'}
+    if not active:
+        return {'status':'ALL_DONE' if all_builds else 'NO_BUILD',
+                'last_completed_build':all_builds[0]['build_id'] if all_builds else None,
+                'next':'For a new objective, inspect existing project/intake and start an approved new build; never replay finished work.',
+                'task_progress':progress,'pending_tasks':tasks,
+                'evidence_source':'persisted_local_sqlite'}
+    selected=active[0]
+    next_by_stage={
+        'RESEARCH':'Inspect only relevant code/docs, compare reuse candidates, record sources and risks; never re-run old research.',
+        'PLAN':'Present a concise editable task plan and ask for actual approval or explicit build delegation.',
+        'IMPLEMENT':'Resume authorized scoped tasks; inspect only changed files and run targeted checks.',
+        'VERIFY':'Run real tests/security and business-rule edge cases; record actual commands and exit codes.',
+        'PREVIEW':'Confirm permission and start a managed loopback preview; HTTP readiness is not QA.',
+        'BROWSER_QA':'Run approved real browser interactions and capture failures/screenshots.',
+        'REVIEW':'Independently inspect changes, test evidence, open findings and any user-only milestone tests.',
+        'CHECKPOINT':'Save the next step, blockers and verified result in Orbit-managed .orbit/STATE.md.',
+    }
+    ev=json.loads(selected['evidence_json'])
+    blockers=[{'stage':stage,'outcome':v.get('outcome'),
+               'evidence':str(v.get('evidence',''))[:200]}
+              for stage,v in ev.items() if isinstance(v,dict) and
+              v.get('outcome') in ('FAIL','BLOCKED')][:4]
+    return {'status':'RESUME','build_id':selected['build_id'],'stage':selected['stage'],
+            'revision':selected['revision'],'next':next_by_stage.get(selected['stage'],'Inspect current persisted stage before acting.'),
+            'blockers':blockers,'task_progress':progress,'pending_tasks':tasks,
+            'evidence_source':'persisted_local_sqlite',
+            'note':'Never treat saved caller-reported evidence as an independently executed check.'}
+
+
 def public(row):
     return {**{k:v for k,v in row.items() if k!='evidence_json'},'evidence':json.loads(row['evidence_json'])}
 

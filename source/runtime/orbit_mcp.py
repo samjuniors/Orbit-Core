@@ -355,6 +355,8 @@ def execute(conn, name, a):
         status=scan(a)
         status['memories']=memory_recall(conn,{'project':status['project'],'limit':5})
         status['intake']=orbit_intake.status(conn,project_root(a),a)
+        status['recovery']=orbit_build.recovery_brief(conn,project_root(a),project_key(a))
+        status['context_strategy']='Load current checkpoint and agreed brief, then only stage-specific docs and changed source files; do not reread all reference documents.'
         return status
     if name=='orbit_memory_save': return memory_save(conn,a)
     if name=='orbit_memory_recall': return memory_recall(conn,a)
