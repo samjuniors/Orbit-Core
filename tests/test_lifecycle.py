@@ -117,8 +117,17 @@ class LifecycleTests(unittest.TestCase):
                          'feature')
         self.assertEqual(self.inspect('stop preview')['action'],'preview_stop')
 
+    def test_empty_source_scaffolding_still_needs_new_project_intake(self):
+        (self.root/'src').mkdir()
+        self.assertEqual(self.inspect('start')['maturity'],'new')
+        denied=self.call('orbit_build_begin',build_id='no-code-yet',
+            objective='Add feature to empty source',change_kind='feature',
+            baseline_reference='git:deadbeef',confirm_write=True)
+        self.assertEqual(denied['status'],'HOLD')
+
     def test_scoped_fix_skips_new_project_plan_but_requires_tests(self):
         (self.root/'src').mkdir()
+        (self.root/'src'/'existing.py').write_text('print("existing")\n')
         run=self.call('orbit_build_begin', build_id='repair-export',
             objective='Repair CSV quoting regression', change_kind='fix',
             baseline_reference='git:abc12345', confirm_write=True)
