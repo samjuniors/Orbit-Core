@@ -83,23 +83,33 @@ def answer(conn,root,a):
         raise ValueError('Host must provide a real user answer reference')
     questions=json.loads(old['questions_json'])
     matches=[q for q in questions if q['id']==a['question_id']]
-    if len(matches)!=1 or a['choice'] not in matches[0]['options']:
-        raise ValueError('Choice must match the active question options')
+    if len(matches)!=1:
+        raise ValueError('Question must match the active interview')
+    # Options are suggestions, never a closed vocabulary: product users can
+    # describe custom platforms, data rules, UI components and constraints.
+    choice=a['choice']
+    if not isinstance(choice,str) or not 1<=len(choice.strip())<=500:
+        raise ValueError('Custom answer must be 1–500 characters of actual user text')
+    if choice.strip().lower() in {'custom','other','type my own answer'}:
+        return {'status':'HOLD','reason':'Ask the user to type the custom decision in their own words, then record that text.'}
+    choice=choice.strip()
     answers=json.loads(old['answers_json'])
     if a['question_id'] in answers:
         if answers[a['question_id']]!=a['choice']:
             return {'status':'HOLD','reason':'An existing decision cannot be silently changed; use a reviewed new intake'}
         return {'status':'ALREADY_ANSWERED','intake':public(old)}
     if a.get('confirm_write') is not True:
-        return {'status':'PREVIEW_ONLY','question_id':a['question_id'],'choice':a['choice']}
-    answers[a['question_id']]=a['choice']
+        return {'status':'PREVIEW_ONLY','question_id':a['question_id'],'choice':choice,
+                'choice_type':'SUGGESTED' if choice in matches[0]['options'] else 'CUSTOM'}
+    answers[a['question_id']]=choice
     with conn:
         update=conn.execute('''UPDATE orbit_project_intake SET answers_json=?,revision=revision+1,
           updated_at=? WHERE project=? AND root=? AND revision=?''',
           (json.dumps(answers),now(),a['project'],str(root),old['revision']))
         if update.rowcount!=1:raise ValueError('Concurrent intake decision conflict')
     return {'status':'ANSWER_RECORDED','intake':status(conn,root,a),
-            'next':'Analyze this actual choice and either propose a conditional follow-up or request final approval.'}
+            'choice_type':'SUGGESTED' if choice in matches[0]['options'] else 'CUSTOM',
+            'next':'Analyze this specific choice and ask a conditional follow-up only when it changes meaningful product requirements.'}
 
 def followup(conn,root,a):
     """Append exactly one question tied to an already recorded parent answer."""
@@ -138,7 +148,9 @@ def approve(conn,root,a):
     if old['status']=='APPROVED':return {'status':'ALREADY_APPROVED','intake':public(old)}
     q=json.loads(old['questions_json']);ans=a['answers']
     if not isinstance(ans,dict) or set(ans)!={x['id'] for x in q}:raise ValueError('All questions require answers')
-    if any(ans[x['id']] not in x['options'] for x in q):raise ValueError('Answer must match an offered option')
+    if any(not isinstance(ans[x['id']],str) or not 1<=len(ans[x['id']].strip())<=500
+           or ans[x['id']].strip().lower() in {'custom','other','type my own answer'} for x in q):
+        raise ValueError('Every answer must be a bounded actual choice or free-form description')
     recorded=json.loads(old['answers_json'])
     if any(ans[k]!=v for k,v in recorded.items()):
         raise ValueError('Final approval cannot silently override previously recorded choices')
