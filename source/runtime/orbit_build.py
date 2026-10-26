@@ -8,7 +8,7 @@ import json
 import sqlite3
 from datetime import datetime,timezone
 
-STAGES=('PLAN','IMPLEMENT','PREVIEW','BROWSER_QA','REVIEW','CHECKPOINT','DONE')
+STAGES=('RESEARCH','PLAN','IMPLEMENT','VERIFY','PREVIEW','BROWSER_QA','REVIEW','CHECKPOINT','DONE')
 
 def now(): return datetime.now(timezone.utc).isoformat(timespec='seconds')
 
@@ -44,15 +44,47 @@ def begin(conn,root,a):
     if row:return {'status':'EXISTS','run':public(row)}
     if a.get('confirm_write') is not True:
         return {'status':'PREVIEW_ONLY','project':a['project'],'root':str(root),'build_id':key,
-                'stage':'PLAN','next':'Create a scoped plan; host model and tools perform real work.'}
+                'stage':'RESEARCH','next':'Research domain rules and reusable components before making the plan.'}
     with conn:
         conn.execute('INSERT INTO build_runs VALUES (?,?,?,?,?,?,?,?)',
-                     (a['project'],str(root),key,'PLAN',1,objective,'{}',now()))
+                     (a['project'],str(root),key,'RESEARCH',1,objective,'{}',now()))
     return {'status':'CREATED','run':public(get(conn,root,a))}
 
 def current(conn,root,a):
     row=get(conn,root,a)
     return {'status':'FOUND','run':public(row),'stages':list(STAGES)} if row else {'status':'NOT_FOUND'}
+
+
+def valid_stage_evidence(stage, evidence):
+    if stage not in ('RESEARCH','VERIFY'):
+        return True
+    try:
+        data=json.loads(evidence)
+    except (ValueError,TypeError):
+        return False
+    if not isinstance(data,dict):
+        return False
+    if stage=='RESEARCH':
+        if set(data)!={'task','candidates','decision','sources','risks'}:
+            return False
+        if any(not isinstance(data[x],str) or len(data[x].strip())<8 for x in ('task','decision')):
+            return False
+        keys=('candidates','sources','risks')
+    else:
+        if set(data)!={'commands','edge_cases','security'}:
+            return False
+        cmds=data['commands']
+        if not isinstance(cmds,list) or not 1<=len(cmds)<=8:
+            return False
+        for c in cmds:
+            if (not isinstance(c,dict) or set(c)!={'command','exit_code'} or
+                not isinstance(c['command'],str) or len(c['command'])<3 or
+                type(c['exit_code']) is not int or c['exit_code']!=0):
+                return False
+        keys=('edge_cases','security')
+    return all(isinstance(data[x],list) and 1<=len(data[x])<=8 and
+               all(isinstance(v,str) and 3<=len(v)<=240 for v in data[x])
+               for x in keys)
 
 def advance(conn,root,a):
     row=get(conn,root,a)
@@ -66,6 +98,8 @@ def advance(conn,root,a):
     if not isinstance(evidence,str) or not 1<=len(evidence)<=1600:
         raise ValueError('evidence must be bounded text')
     evidence_map=json.loads(row['evidence_json'])
+    if outcome=='PASS' and not valid_stage_evidence(row['stage'],evidence):
+        return {'status':'HOLD','reason':'RESEARCH/VERIFY PASS needs structured task, reuse, command, edge-case and security evidence.'}
     # A readiness probe is evidence of a live local app server, not a functional pass.
     if row['stage']=='PREVIEW' and outcome=='PASS':
         import orbit_preview
@@ -86,7 +120,7 @@ def advance(conn,root,a):
     if a.get('confirm_write') is not True:
         return {'status':'PREVIEW_ONLY','stage':row['stage'], 'next_stage':STAGES[STAGES.index(row['stage'])+1] if outcome=='PASS' else row['stage']}
     evidence_map[row['stage']]={'outcome':outcome,'evidence':evidence,'updated_at':now(),
-                                'verification':'browser-tool' if row['stage']=='BROWSER_QA' and outcome=='PASS' else 'caller-reported'}
+                                'verification':'browser-tool' if row['stage']=='BROWSER_QA' and outcome=='PASS' else 'caller-reported-not-attested'}
     new_stage=STAGES[STAGES.index(row['stage'])+1] if outcome=='PASS' else row['stage']
     with conn:
         cursor=conn.execute('''UPDATE build_runs SET stage=?,revision=revision+1,evidence_json=?,updated_at=?
