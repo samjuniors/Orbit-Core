@@ -83,6 +83,31 @@ class ProductFeedbackTests(unittest.TestCase):
         history=done['run']['evidence']['__orbit_feedback']
         self.assertEqual(history[0]['status'],'RESOLVED')
 
+
+    def test_comment_deduplication_does_not_advance_revision(self):
+        version=self.revision()
+        kwargs={'action':'request','source':'plan','note':'Add a keyboard accessible filter',
+                'user_reference':'antigravity-comment-77','confirm_write':True}
+        self.assertEqual(self.feedback(expected_revision=version,**kwargs)['status'],
+                         'FEEDBACK_RECORDED')
+        fresh=self.revision()
+        dupe=self.feedback(expected_revision=fresh,**kwargs)
+        self.assertEqual(dupe['status'],'ALREADY_RECORDED')
+        self.assertEqual(self.revision(),fresh)
+        self.assertEqual(self.call('orbit_build_status')['experience']['open_feedback'],1)
+
+    def test_explicit_build_selection_does_not_ask_again(self):
+        orbit_build.begin(self.db,self.root,{'project':'product','build_id':'second',
+                          'objective':'Another parallel product','confirm_write':True})
+        unresolved=self.call('orbit_project_resume')['experience']
+        self.assertEqual(unresolved['phase'],'CHOOSE_BUILD')
+        selected=self.call('orbit_build_status')['experience']
+        self.assertEqual(selected['phase'],'BUILDING')
+        self.assertEqual(selected['progress']['build_id'],'app-1')
+        self.assertEqual(selected['progress']['stage'],'RESEARCH')
+        self.assertFalse(selected['approval_required'])
+        self.assertIn('Research',selected['next_action']['label'])
+
     def test_stale_revision_and_unknown_feedback_never_overwrite(self):
         prior=self.revision()
         first=self.feedback(action='request',expected_revision=prior,note='Change input behavior',
