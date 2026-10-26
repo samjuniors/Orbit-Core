@@ -86,11 +86,16 @@ def model_route(role,task,complexity,models,host,budget):
            'deep':('deep','balanced','fast','unknown')}[tier]
     clean=list(dict.fromkeys(x.strip() for x in models))
     chosen=next((m for k in order for m in clean if _tier(m)==k),None)
+    insufficient=bool(tier=='deep' and chosen and _tier(chosen) in {'fast','unknown'}
+                      and complexity=='high-assurance')
+    suggested=None if insufficient else chosen
+    selection_status=('REQUIRES_MODEL_QUALITY_REVIEW' if insufficient else
+                      'HOST_REPORTED_UNVERIFIED' if chosen else 'INHERIT_HOST_MODEL')
     return {'role':role,'task':task,'host':host,'desired_tier':tier,
             'available_models_reported':len(clean),
-            'recommended_model':chosen, 'selection_status':'HOST_REPORTED_UNVERIFIED' if chosen else 'INHERIT_HOST_MODEL',
-            'chosen_tier':_tier(chosen) if chosen else None,
-            'tier_fallback':bool(chosen and _tier(chosen)!=tier),
+            'recommended_model':suggested, 'selection_status':selection_status,
+            'chosen_tier':_tier(suggested) if suggested else None,
+            'tier_fallback':bool(suggested and _tier(suggested)!=tier),
             'host_control_guidance':HOST_ROUTING[host],
             'no_switch_executed':True,
             'cost_note':'Heuristic only. No real-time quotas, price, billing, entitlements or benchmark measurements.',
