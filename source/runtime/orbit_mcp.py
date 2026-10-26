@@ -15,6 +15,7 @@ import orbit_capabilities
 import orbit_preview
 import orbit_browser
 import orbit_build
+import orbit_intake
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -102,6 +103,7 @@ def db_connect():
     conn.commit()
     orbit_tasks.setup(conn)
     orbit_build.setup(conn)
+    orbit_intake.setup(conn)
     orbit_build.setup_browser(conn)
     if os.name != 'nt':
         try: path.chmod(0o600)
@@ -271,6 +273,13 @@ TOOLS += [
     {'name':'orbit_build_status','description':'Read persistent app build stage and evidence, across host/MCP restarts.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40)},['project_root','project','build_id'])},
     {'name':'orbit_build_advance','description':'Revision-guarded explicit stage advance; browser QA PASS requires a real Orbit-recorded Playwright PASS.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['PASS','FAIL','BLOCKED']},'evidence':string(1600),'preview_id':string(40),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','expected_revision','outcome','evidence'])}
 ]
+TOOLS += [
+ {'name':'orbit_intake_status','description':'Read guided product intake and progressive autonomy.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
+ {'name':'orbit_intake_propose','description':'Save proposed product classification and interview questions, not user acceptance.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'profile':{'type':'object'},'questions':{'type':'array','maxItems':6},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','profile','questions'])},
+ {'name':'orbit_intake_approve','description':'Record selected options or explicitly delegated recommended defaults; user consent is host-attested.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'answers':{'type':'object'},'answer_source':{'type':'string','enum':['user_choices','user_delegated_defaults']},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','answers','answer_source','user_reference'])},
+ {'name':'orbit_autonomy_review','description':'Recommend maturity-based guided/assisted/trusted mode; no automatic promotion.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'level':{'type':'string','enum':['guided','assisted','trusted']},'expected_revision':{'type':'integer','minimum':1},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project'])},
+ {'name':'orbit_docs_audit','description':'Read-only, repeatable project documentation inventory and growth signals.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'signals':{'type':'array','maxItems':8,'items':{'type':'string'}}},['project_root','project'])},
+]
 TOOL_MAP = {x['name']:x['inputSchema'] for x in TOOLS}
 
 
@@ -300,9 +309,22 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name in {'orbit_intake_status','orbit_intake_propose','orbit_intake_approve','orbit_autonomy_review','orbit_docs_audit'}:
+        a={**a,'project':project_key(a)}
+        root=project_root(a)
+        handlers={'orbit_intake_status':orbit_intake.status,
+                  'orbit_intake_propose':orbit_intake.propose,
+                  'orbit_intake_approve':orbit_intake.approve,
+                  'orbit_autonomy_review':orbit_intake.autonomy,
+                  'orbit_docs_audit':orbit_intake.docs_audit}
+        return handlers[name](conn,root,a)
     if name=='orbit_build_begin':
         a={**a,'project':project_key(a)}
-        return orbit_build.begin(conn,project_root(a),a)
+        root=project_root(a)
+        if not orbit_build.get(conn,root,a) and orbit_intake.status(conn,root,a)['status']!='APPROVED':
+            return {'status':'HOLD','reason':'Fresh project requires a completed interview before build planning',
+                    'next':['orbit_intake_propose','ask the user or obtain explicit delegation of defaults','orbit_intake_approve']}
+        return orbit_build.begin(conn,root,a)
     if name=='orbit_build_status':
         a={**a,'project':project_key(a)}
         return orbit_build.current(conn,project_root(a),a)
@@ -329,6 +351,7 @@ def execute(conn, name, a):
     if name=='orbit_project_resume':
         status=scan(a)
         status['memories']=memory_recall(conn,{'project':status['project'],'limit':5})
+        status['intake']=orbit_intake.status(conn,project_root(a),a)
         return status
     if name=='orbit_memory_save': return memory_save(conn,a)
     if name=='orbit_memory_recall': return memory_recall(conn,a)

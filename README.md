@@ -81,3 +81,7 @@ until an independently verified adapter is implemented. See
 ## Guided intake, right-sized documentation and compact context (development candidate)
 
 For new products, Orbit now guides the host to classify project type/complexity/maturity, interview the user with recommended options **before** stack selection, and map existing canonical docs before making a plan. It instructs an actual writer/architect host agent—or the lead sequentially—to create necessary product-appropriate vision, architecture, roadmap and design documentation. Installed host skills now carry the reference policies; source-only reference files were previously omitted by the installer. The host model compacts the agreed intent into a small brief and sends targeted context, not repeated transcripts. **This is host instruction guidance, not a new enforced MCP intake stage**. See [project discovery](docs/PROJECT-DISCOVERY.md).
+
+## Persistent guided intake (development branch)
+
+New Orbit MCP projects must obtain an approved product classification and user answers before `orbit_build_begin` creates a build; a fresh build otherwise returns HOLD. Five additional tools expose intake status, proposals, approved choices, autonomy review and repeatable documentation gap audits (29 total). Existing builds such as a prior Todo test are not retroactively blocked. Host-owned architect/writer agents create substantive missing docs only after reviewing owner canonical sources. No automated autonomy escalation or approval bypass is offered.

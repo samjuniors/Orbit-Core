@@ -287,7 +287,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
     runtime=runtime_folder()
     if any(p.is_symlink() for p in [runtime,runtime.parent]):raise SetupError('Runtime directory is a symlink')
     changes=[]
-    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py']:
+    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py','orbit_intake.py']:
         p=src/'runtime'/name
         same_or_create(changes,runtime/name,p.read_bytes(),None,'Shared Orbit stdio MCP runtime')
     def add_references(dest: Path, boundary: Path) -> None:
