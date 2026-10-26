@@ -1,6 +1,6 @@
 # Orbit Core — Product experience v1
 
-**Status: development branch, not included in the published v0.24.1 release.** No new IDE plugin, models or dependency installs are introduced.
+**Status: merged into main through PR #5; not included in the previously published v0.24.1 release.** No new IDE plugin, models or dependency installs are introduced.
 
 ## Experience principles
 
