@@ -37,3 +37,12 @@ Official upstream indexes: https://github.com/vercel-labs/agent-skills, https://
 Scram says it assembles apps from pretested building blocks: https://www.scram.com. Orbit adopts the **reuse-first decision flow**: verified project components/native APIs → approved versioned templates → appropriately reviewed existing libraries/skills → narrowly scoped custom code with tests. It does **not** include or license Scram's proprietary building blocks. The policy and catalog suggestions are implemented; a separate production-grade, vetted component-block repository is **not yet built** and should not be claimed.
 
 Acceptance is not only UI click-through: test relevant business/domain rules (calendar streaks, weekly targets, data validation, persistence failure, XSS), accessibility and actual documentation consistency. Avoid a 15-stage bureaucracy for simple scripts.
+
+
+## Scoped build approval and minimal reading (Scram/Emergent/Lovable comparison)
+
+User screenshots of Scram show **Scope first / Just start building**, a progressive question interface (audience, selected features, aesthetic), an explicit plan preview and approval, visible tasks in a persistent plan pane and in-progress step updates. Official Emergent guides document selectable Plan/Build, live preview and checkpoints; Lovable distinguishes Chat/Plan/Build with editable plan approval. Orbit adopts these as host-facing behavior **without claiming to provide its own cloud builder UI**.
+
+To stop a vague `PLAN PASS` from silently triggering implementation, newly created build rows carry `__orbit_policy: approval-v1`. Only those rows require structured PLAN evidence with title, summary, tasks, approval_method and a real user consent/delegation reference before the stage can pass. Old builds remain resumable without retroactive interruption; all consent is **host-reported, not cryptographically authenticated by MCP**. `orbit_build_status` includes a task ledger progress summary; no fabricated completion percentage when no tasks are registered.
+
+For token/quota efficiency, don't load all skill instructions or every project document. Use only current references, compact accepted project brief, checkpoint and affected sources. Research is proportional: quick existing-code search for tiny fixes; dependency/license and domain-reasoning research for architectural or risky new products. This is **selective retrieval, not avoidance of necessary thinking**.

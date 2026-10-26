@@ -42,6 +42,8 @@ class BuildBrowserTests(unittest.TestCase):
     def stage_evidence(self,stage):
         if stage=='RESEARCH':
             return '{"task":"Build tested todo product","candidates":["native HTML UI","existing SQLite"],"decision":"Reuse native tools and test existing code", "sources":["README.md"],"risks":["bad user data"]}'
+        if stage=='PLAN':
+            return '{"title":"Build Todo application","summary":"Single-user accessible todo CRUD with local testing","tasks":["Implement a local task model","Create semantic accessible task UI","Run acceptance and regression checks"],"approval_method":"user_approved_plan","approval_reference":"user-confirmed-plan-message"}'
         if stage=='VERIFY':
             return '{"commands":[{"command":"python -m unittest discover","exit_code":0}],"edge_cases":["empty todo items"],"security":["untrusted input escaped"]}'
         return 'Verified by test run'
@@ -58,6 +60,20 @@ class BuildBrowserTests(unittest.TestCase):
             'outcome':'PASS','evidence':'researched', 'confirm_write':True})
         self.assertEqual(result['status'],'HOLD')
         self.assertEqual(orbit_build.current(self.db,self.root,self.meta)['run']['stage'],'RESEARCH')
+
+    def test_new_build_requires_real_approval_reference_before_implement(self):
+        a={**self.meta,'objective':'Create Todo app','confirm_write':True}
+        orbit_build.begin(self.db,self.root,a)
+        self.advance() # RESEARCH -> PLAN
+        state=orbit_build.current(self.db,self.root,self.meta)
+        self.assertEqual(state['run']['stage'],'PLAN')
+        self.assertEqual(state['task_progress']['registered'],0)
+        attempt=orbit_build.advance(self.db,self.root,{**self.meta,
+            'expected_revision':state['run']['revision'],'outcome':'PASS',
+            'evidence':'Looks good to me','confirm_write':True})
+        self.assertEqual(attempt['status'],'HOLD')
+        self.assertEqual(orbit_build.current(self.db,self.root,self.meta)['run']['stage'],'PLAN')
+        self.assertEqual(self.advance()['run']['stage'],'IMPLEMENT')
 
     def test_existing_plan_stage_is_compatible(self):
         with self.db:

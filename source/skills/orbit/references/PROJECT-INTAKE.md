@@ -42,3 +42,10 @@ Before selecting a stack or coding algorithms, run `orbit_capability_discover` /
 ## Research stage before planning
 
 For new product build IDs, an accepted interview begins the RESEARCH stage. Assess task type, domain invariants, existing source, native platform features, verified prebuilt components and potential license/security issues. Provide concise structured `orbit_build_advance` evidence as a JSON **string**: `task`, `candidates` (list), `decision`, `sources` (list), `risks` (list). Only move to PLAN after research is approved. A resumed existing build remains at its stored stage.
+
+
+## Choose depth and adapt like a product manager
+
+For a fresh high-level request, the **first choice** is `Scope first (recommended)` vs `Build using sensible defaults`, optionally `Custom description`. Choosing build means **explicit delegation of low-impact defaults**, not approval to deploy, install third-party tools or invent high-risk features. In scope mode ask at most one highest-leverage question per turn, with clear recommendations, multi-select only if the decision logically allows several features, and always a free-form choice. Use the actual user answer before selecting the next question; never force a questionnaire script. Show the impact of the selected answers in a brief and let user amend it.
+
+Before IMPLEMENT show the **plan**: title, purpose, key user journeys, reusable components/stack rationale, milestone tasks, tests, risks and `Approve / Request changes`. Include 3–8 useful tasks for ordinary applications, fewer for tiny edits and more only for complex projects. Accepted plan evidence is a JSON-encoded object `{"title":...,"summary":...,"tasks":[...],"approval_method":"user_approved_plan"|"user_delegated_build","approval_reference":...}` with actual user evidence. No host model may self-approve an un-delegated plan.

@@ -41,3 +41,8 @@ When creating/updating architecture or the roadmap, link back to the **actual in
 ## Document real reuse decisions, not just intent
 
 Record the accepted component choice and provenance in the existing architecture/roadmap docs where appropriate; explain maintenance, security, platform support and testing. Verify domain behavior and tests before checking a roadmap milestone. Re-audit docs after changes, but do not duplicate user-maintained canonical sources.
+
+
+## Context loading budget and doc relevance
+
+No specialist should blindly ingest all `docs/` or all Orbit references before every task. Start with the Orbit compact project brief and latest checkpoint if they exist. Build a **needed-source map** for the current objective, load only relevant sections of existing canonical docs and the 1–5 affected files; raise scope for structural/high-risk changes. Context may be summarized after decisions as `goal | last accepted choice | impacted paths | non-goals | tests | next action`, and refreshed only when those items change. A vision/roadmap is consulted for major product scope changes; API contract for interfaces; design rules for UI; no forced full architecture re-analysis for a text-color fix. Never skip required code security or test checks simply to save tokens.

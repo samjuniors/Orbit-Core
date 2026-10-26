@@ -32,6 +32,41 @@ def get(conn,root,a):
                     (a['project'],str(root),key)).fetchone()
     return dict(row) if row else None
 
+def valid_approved_plan(evidence):
+    """Host-reported approval + bounded task breakdown, not authenticated user consent."""
+    try:
+        doc=json.loads(evidence)
+    except (ValueError,TypeError):
+        return False
+    if not isinstance(doc,dict) or set(doc)!={'title','summary','tasks','approval_method','approval_reference'}:
+        return False
+    if any(not isinstance(doc.get(k),str) or not 8<=len(doc[k].strip())<=350
+           for k in ('title','summary')):
+        return False
+    if doc.get('approval_method') not in ('user_approved_plan','user_delegated_build'):
+        return False
+    if not isinstance(doc.get('approval_reference'),str) or not 8<=len(doc['approval_reference'])<=240:
+        return False
+    tasks=doc.get('tasks')
+    return isinstance(tasks,list) and 1<=len(tasks)<=12 and all(
+        isinstance(t,str) and 5<=len(t)<=140 for t in tasks)
+
+
+def task_progress(conn,project,root):
+    """Summary of persisted task ledger; never imply a host agent executed anything."""
+    counts={}
+    for row in conn.execute(
+        'SELECT status,COUNT(*) AS n FROM orbit_agent_tasks WHERE project=? AND project_root=? GROUP BY status',
+        (project,str(root))):
+        counts[row['status']]=row['n']
+    if not counts:
+        return {'registered':0,'finished':0,'counts':{},'completion_percent':None}
+    total=sum(counts.values())
+    finished=counts.get('APPROVED',0)
+    return {'registered':total,'finished':finished,'counts':counts,
+            'completion_percent':round(finished*100/total)}
+
+
 def public(row):
     return {**{k:v for k,v in row.items() if k!='evidence_json'},'evidence':json.loads(row['evidence_json'])}
 
@@ -47,12 +82,14 @@ def begin(conn,root,a):
                 'stage':'RESEARCH','next':'Research domain rules and reusable components before making the plan.'}
     with conn:
         conn.execute('INSERT INTO build_runs VALUES (?,?,?,?,?,?,?,?)',
-                     (a['project'],str(root),key,'RESEARCH',1,objective,'{}',now()))
+                     (a['project'],str(root),key,'RESEARCH',1,objective,json.dumps({'__orbit_policy':'approval-v1'}),now()))
     return {'status':'CREATED','run':public(get(conn,root,a))}
 
 def current(conn,root,a):
     row=get(conn,root,a)
-    return {'status':'FOUND','run':public(row),'stages':list(STAGES)} if row else {'status':'NOT_FOUND'}
+    return {'status':'FOUND','run':public(row),'stages':list(STAGES),
+            'task_progress':task_progress(conn,a['project'],root),
+            'evidence_policy':'host-reported-except-recorded-browser-qa'} if row else {'status':'NOT_FOUND'}
 
 
 def valid_stage_evidence(stage, evidence):
@@ -98,6 +135,12 @@ def advance(conn,root,a):
     if not isinstance(evidence,str) or not 1<=len(evidence)<=1600:
         raise ValueError('evidence must be bounded text')
     evidence_map=json.loads(row['evidence_json'])
+    # Only newly created builds carry this marker; legacy PLAN-stage builds
+    # must resume without a surprise migration or retroactive approval gate.
+    if (row['stage']=='PLAN' and outcome=='PASS'
+            and evidence_map.get('__orbit_policy')=='approval-v1'
+            and not valid_approved_plan(evidence)):
+        return {'status':'HOLD','reason':'Show/edit the plan, list bounded tasks and obtain actual user plan approval or explicit build delegation before implementation.'}
     if outcome=='PASS' and not valid_stage_evidence(row['stage'],evidence):
         return {'status':'HOLD','reason':'RESEARCH/VERIFY PASS needs structured task, reuse, command, edge-case and security evidence.'}
     # A readiness probe is evidence of a live local app server, not a functional pass.
