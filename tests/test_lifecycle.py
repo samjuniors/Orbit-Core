@@ -50,7 +50,7 @@ class LifecycleTests(unittest.TestCase):
         before = list(self.root.iterdir())
         result = self.inspect('start')
         self.assertEqual(result['maturity'], 'new')
-        self.assertEqual(result['status'], 'NO_UNFINISHED_BUILD' if False else 'READY')
+        self.assertEqual(result['status'], 'READY')
         self.assertFalse(result['host_action_executed'])
         self.assertEqual(before, list(self.root.iterdir()))
         self.assertEqual(self.call('orbit_build_begin', build_id='brand-new',
@@ -101,7 +101,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(draft['status'],'PREVIEW_ONLY')
         self.assertEqual(self.current()['revision'],v)
         self.assertEqual(self.inspect('pause',build_id='base',
-            expected_revision=v-1,confirm_write=True)['status'],'STALE_REVISION')
+            expected_revision=v+2,confirm_write=True)['status'],'STALE_REVISION')
         paused=self.inspect('pause',build_id='base',expected_revision=v,
             confirm_write=True,reason='Owner asked to pause after a safe point')
         self.assertEqual(paused['status'],'PAUSED')
