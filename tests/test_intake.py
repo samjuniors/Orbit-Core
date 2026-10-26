@@ -199,8 +199,9 @@ class TestIntake(unittest.TestCase):
     (?, ?, 1, 'APPROVED', ?, '[]', '{}', 'guided', 'user-approved', 'now')""",
       (name,str(root),json.dumps({**P,'type':kind})))
     database.commit()
-    a={**args,'build_id':name,'objective':'Build correct product'}
-    begin=orbit_mcp.execute(database,'orbit_build_begin',{**a,'confirm_write':True})
+    a={**args,'build_id':name}
+    begin=orbit_mcp.execute(database,'orbit_build_begin',
+                            {**a,'objective':'Build correct product','confirm_write':True})
     self.assertEqual(begin['status'],'CREATED')
     desired=orbit_mcp.execute(database,'orbit_build_status',a)['stages']
     self.assertIn(next_qa,desired)
