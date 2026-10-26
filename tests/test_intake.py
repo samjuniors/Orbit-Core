@@ -96,6 +96,9 @@ class TestIntake(unittest.TestCase):
   self.assertEqual(web['workflow_profile'],'web')
   self.assertTrue(web['custom_component_allowed'])
   self.assertEqual(next(x for x in web['candidates'] if x['id']=='astryx')['status'],'REVIEW_MATCH')
+  incompatible=self.do('orbit_decision_route',product_type='web-app',platforms=['web'],
+               existing_stack='React 18',component_preference='reuse')
+  self.assertEqual(next(x for x in incompatible['candidates'] if x['id']=='astryx')['status'],'INCOMPATIBLE_STACK')
   android=self.do('orbit_decision_route',product_type='mobile-app',platforms=['android'],
                   existing_stack='Kotlin',component_preference='reuse')
   self.assertEqual(android['workflow_profile'],'native')
