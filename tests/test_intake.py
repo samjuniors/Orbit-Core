@@ -118,4 +118,26 @@ class TestIntake(unittest.TestCase):
   self.assertIsNone(unknown['recommended_model'])
   self.assertEqual(unknown['selection_status'],'INHERIT_HOST_MODEL')
 
+ def test_native_mobile_build_skips_browser_only_gates(self):
+  mobile={**P,'type':'mobile-app','stack':'Kotlin native Android'}
+  self.do('orbit_intake_propose',profile=mobile,questions=Q,confirm_write=True)
+  self.do('orbit_intake_approve',expected_revision=1,answers={'target':'Personal'},answer_source='user_choices',user_reference='approved-android-native',confirm_write=True)
+  start=self.do('orbit_build_begin',build_id='android-app',objective='Android native UI',confirm_write=True)
+  self.assertEqual(start['status'],'CREATED')
+  flow=self.do('orbit_build_status',build_id='android-app')['stages']
+  self.assertIn('NATIVE_QA',flow)
+  self.assertNotIn('BROWSER_QA',flow)
+  self.assertNotIn('PREVIEW',flow)
+
+ def test_sdk_build_skips_ui_preview_and_qa_but_retains_verify(self):
+  sdk={**P,'type':'sdk-library','stack':'Python 3.11 SDK'}
+  self.do('orbit_intake_propose',profile=sdk,questions=Q,confirm_write=True)
+  self.do('orbit_intake_approve',expected_revision=1,answers={'target':'Personal'},answer_source='user_choices',user_reference='approved-sdk-contract',confirm_write=True)
+  self.do('orbit_build_begin',build_id='sdk',objective='Python SDK',confirm_write=True)
+  flow=self.do('orbit_build_status',build_id='sdk')['stages']
+  self.assertIn('VERIFY',flow)
+  self.assertNotIn('PREVIEW',flow)
+  self.assertNotIn('BROWSER_QA',flow)
+  self.assertNotIn('NATIVE_QA',flow)
+
 if __name__=='__main__':unittest.main()
