@@ -6,6 +6,8 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 - Next: persistent OS process supervisor and optional secure sharing. Actual host autonomous coding and permissions remain host-owned.
 
 ## [0.24.0] — Unreleased (feature branch)
+- Add guided fresh-project intake interview (recommended answer options), type/complexity/maturity classification, right-sized canonical docs policy and compact prompt/hand-off contract in installed host references. This guidance is host-executed; no new MCP stage gate is claimed.
+- Ensure installer delivers Orbit skill references to Antigravity, Codex and Claude Code, with preview/backup-aware upgrades; enable writer's native file tools when supported.
 - Recognize the optional Vercel Labs `agent-browser` MCP provider in capability selection; add opt-in host integration instructions and trust-status reporting. No binary bundling, automatic installs, or third-party QA gate bypass.
 - Browser QA compatibility: discover installed Microsoft Edge/Chrome and support explicit browser selection; avoids mandatory Chromium download on Windows.
 - Add three opt-in localhost preview MCP tools: start, status and stop.

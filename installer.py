@@ -21,6 +21,9 @@ HOSTS = ("antigravity", "codex", "claude-code")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Recognized previous unmodified v0.24 files; upgrade after backup, never overwrite owner edits.
+    'f6a4bd3c1e21d936403954b273d7e882dc897211e2da471ec8360e6639ee45a1',
+    '0f929f83c43c11b46a666387dd3d7581e081876a4cf401e2f2928b1a3f97f85c',
     # Exact previous v0.24.0 stock files for optional agent-browser support upgrades.
     '0f929f83c43c11b46a666387dd3d7581e081876a4cf401e2f2928b1a3f97f85c',
     '81bcd52a57163a9b071212a02ca9421a4df832ef6cfbaee9ff62dc46dc19aaa1',
@@ -157,10 +160,10 @@ description: Coordinate a software project through Orbit: inspect project, plan 
 
 You are the lead project orchestrator, using this host's current model and native tools. The Orbit MCP is a task/memory service; it does NOT spawn models or execute app code. Respect the host's permissions, sandbox and user approvals.
 
-1. Confirm the selected project folder and stable project key. Before planning, inspect current Git status and existing docs/source. Do not invent an existing implementation.
+1. Confirm the selected project folder and stable project key. Before planning, inspect current Git status and existing docs/source. Do not invent an existing implementation. **For new nontrivial products**, load `references/PROJECT-INTAKE.md`: interpret everyday prompts, propose project category, complexity and maturity, ask 2-5 high-impact questions with recommended options and a single **Use recommendations** shortcut; await choices unless user explicitly authorizes defaults. Skip repeat interviews for established/resumed projects.
 2. Call `orbit_project_resume` or `orbit_memory_recall` on `orbit-core-native` when connected; if disconnected, say memory is unavailable, never claim persistence.
-3. Build a right-sized plan: product, accessible UI, backend/API/data if actually needed, security, tests, CI, release/rollback. Track milestone/gate/next bounded step.
-4. Prefer existing docs and components. Write missing DRAFT documents only when needed; preserve all owner documents/ADRs.
+3. **Before** building the plan, load `references/DOCS-AND-CONTEXT.md`. Audit owner docs and ADRs by purpose; establish approved compact `.orbit/PROJECT.md` index only when appropriate; ask actual architect/writer agents to create needed short vision, architecture, roadmap, design, requirements, API and project-type docs, or write them sequentially with the host if agents are unavailable. Never duplicate/overwrite user docs. Then plan product, UI, backend/API/data, security, tests, CI, release/rollback as actually applicable.
+4. Refine the agreed plain-language goal with the **current host model** into a faithful 120–220 word brief and canonical file links; future tasks consume brief, checkpoint, 0–3 relevant memories and file deltas rather than entire transcripts. Prefer existing docs and components; write needed verified drafts only and preserve all owner documents/ADRs.
 5. For specialist tasks: use `orbit_task_plan`, then reserve using `orbit_task_reserve` **only** for user-authorized host delegation. Use this host's native subagent interface (Antigravity `invoke_subagent`, Codex delegation, Claude Code Task/Agent tools) only if actually available. Do not call another provider's CLI. Parallelize only non-overlapping work; default 2 task reservations.
 6. After a successful native start, record the real session using `orbit_task_started`. Do not claim an agent is running merely because a task was reserved. Report outcome with `orbit_task_report` and independently review actual diffs/tests with `orbit_task_review`. Reject scope violations, failed tests and unverifiable results.
 7. Use `orbit_project_checkpoint` with the fresh revision and user-approved `confirm_write=true` after meaningful work. Protect existing `.orbit/STATE.md` and use the same project key across hosts.
@@ -287,6 +290,10 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
     for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py']:
         p=src/'runtime'/name
         same_or_create(changes,runtime/name,p.read_bytes(),None,'Shared Orbit stdio MCP runtime')
+    def add_references(dest: Path, boundary: Path) -> None:
+        for ref in sorted((src/'skills/orbit/references').glob('*.md')):
+            same_or_create(changes,dest/'references'/ref.name,ref.read_bytes(),boundary,
+                           'Orbit guided workflow reference '+ref.name)
     cmd=python_binary()
     script=runtime/'orbit_mcp.py'
     common={'command':cmd,'args':[str(script)]}
@@ -296,6 +303,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
         for p in (src/'agents').glob('*.md'):
             same_or_create(changes,agents/p.name,p.read_bytes(),root or home,'Native Antigravity agent '+p.stem)
         same_or_create(changes,skills/'orbit/SKILL.md',ORBIT_SKILL.encode(),root or home,'Antigravity Orbit skill')
+        add_references(skills/'orbit',root or home)
         config=(root/'.agents/mcp_config.json') if root else (home/'.gemini/config/mcp_config.json')
         merge_json(changes,config,common,root or home,'Antigravity MCP configuration')
     if 'codex' in hosts:
@@ -303,6 +311,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
         # Codex and Antigravity share a project skill, but global paths differ.
         if scope=='machine' or 'antigravity' not in hosts:
             same_or_create(changes,skill,ORBIT_SKILL.encode(),root or home,'Codex Orbit skill')
+            add_references(skill.parent,root or home)
         if root:
             same_or_create(changes,root/'AGENTS.md',AGENTS_GUIDE.encode(),root,'Codex project guidance')
         config=(root/'.codex/config.toml') if root else (home/'.codex/config.toml')
@@ -311,6 +320,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
         skills=(root/'.claude/skills') if root else (home/'.claude/skills')
         agents=(root/'.claude/agents') if root else (home/'.claude/agents')
         same_or_create(changes,skills/'orbit/SKILL.md',ORBIT_SKILL.encode(),root or home,'Claude Code Orbit skill')
+        add_references(skills/'orbit',root or home)
         if root:
             same_or_create(changes,root/'CLAUDE.md',CLAUDE_GUIDE.encode(),root,'Claude Code guidance')
         same_or_create(changes,agents/'orbit-lead.md',ORBIT_LEAD_CLAUDE.encode(),root or home,'Claude lead agent')

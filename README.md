@@ -77,3 +77,7 @@ is **not bundled or auto-installed**. This provider does not replace the
 Orbit-owned Playwright QA gate in v0.24.0; host reports remain supplemental
 until an independently verified adapter is implemented. See
 [`docs/AGENT-BROWSER-OPTIONAL.md`](docs/AGENT-BROWSER-OPTIONAL.md).
+
+## Guided intake, right-sized documentation and compact context (development candidate)
+
+For new products, Orbit now guides the host to classify project type/complexity/maturity, interview the user with recommended options **before** stack selection, and map existing canonical docs before making a plan. It instructs an actual writer/architect host agent—or the lead sequentially—to create necessary product-appropriate vision, architecture, roadmap and design documentation. Installed host skills now carry the reference policies; source-only reference files were previously omitted by the installer. The host model compacts the agreed intent into a small brief and sends targeted context, not repeated transcripts. **This is host instruction guidance, not a new enforced MCP intake stage**. See [project discovery](docs/PROJECT-DISCOVERY.md).

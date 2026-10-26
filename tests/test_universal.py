@@ -65,6 +65,18 @@ class UniversalSetupTests(unittest.TestCase):
         self.assertIn('[mcp_servers."orbit-core-native"]',p.read_text())
         self.assertTrue((p.with_name('config.toml.orbit-backup')).exists())
 
+    def test_fresh_install_includes_guided_intake_and_doc_references(self):
+        installer.install(installer.plan(self.project,scope='project'))
+        for host_dir in ('.agents/skills', '.claude/skills'):
+            base=self.project/host_dir/'orbit'
+            self.assertTrue((base/'references/PROJECT-INTAKE.md').is_file())
+            self.assertTrue((base/'references/DOCS-AND-CONTEXT.md').is_file())
+            content=(base/'SKILL.md').read_text(encoding='utf-8')
+            self.assertIn('PROJECT-INTAKE.md',content)
+            self.assertIn('DOCS-AND-CONTEXT.md',content)
+        self.assertFalse((self.project/'.orbit').exists())
+        self.assertFalse((self.project/'docs').exists())
+
     def test_only_selected_host(self):
         installer.install(installer.plan(self.project,['codex'],scope='project'))
         self.assertTrue((self.project/'.agents/skills/orbit/SKILL.md').exists())

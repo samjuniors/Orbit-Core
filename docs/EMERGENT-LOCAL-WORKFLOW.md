@@ -59,3 +59,7 @@ are useful for UI review, but the current Orbit BROWSER_QA stage is not a
 self-attested status: only a recorded PASS from `orbit_browser_qa` advances
 it. Do not mark `build-001` complete using an external tool's unverified report.
 Full safety and opt-in configuration: [`AGENT-BROWSER-OPTIONAL.md`](AGENT-BROWSER-OPTIONAL.md).
+
+## Fresh project intake and documentation acceptance
+
+Before a **new** build, the host must follow `references/PROJECT-INTAKE.md` and `references/DOCS-AND-CONTEXT.md`: audit existing sources, classify product type and maturity, present meaningful recommended choices, obtain user-selected or expressly delegated defaults, then establish an agreed brief and only the missing useful canonical vision/architecture/roadmap/design docs. Do not silently choose a stack and jump to coding. On an **existing build** such as `build-001`, resume accepted decisions and checkpoints instead of imposing a new interview. This remains a host instruction policy rather than a new SQLite build gate. See `docs/PROJECT-DISCOVERY.md`.
