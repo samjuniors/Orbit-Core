@@ -117,6 +117,10 @@ class TestIntake(unittest.TestCase):
               available_models=['fast-small','deep-reasoning'],complexity='high-assurance',budget='quality')
   self.assertEqual(deep['desired_tier'],'deep')
   self.assertEqual(deep['recommended_model'],'deep-reasoning')
+  insufficient=self.do('orbit_model_route',role='orbit-security',task='security',host='claude-code',
+              available_models=['Claude Haiku 5.5'],complexity='high-assurance',budget='economy')
+  self.assertEqual(insufficient['selection_status'],'REQUIRES_MODEL_QUALITY_REVIEW')
+  self.assertIsNone(insufficient['recommended_model'])
   unknown=self.do('orbit_model_route',role='orbit-frontend',task='implementation',host='antigravity')
   self.assertIsNone(unknown['recommended_model'])
   self.assertEqual(unknown['selection_status'],'INHERIT_HOST_MODEL')
