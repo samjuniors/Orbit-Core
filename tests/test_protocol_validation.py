@@ -14,14 +14,19 @@ import orbit_mcp
 
 
 class ProtocolValidationTests(unittest.TestCase):
-    def test_desktop_bundle_runtime_matches_source(self):
+    def test_published_desktop_bundle_is_valid_without_repacking(self):
+        # Published .mcpb remains immutable while branch source advances.
+        # Release packaging requires scripts/check_version.py --strict-bundle.
         import zipfile
         version = (ROOT / 'VERSION').read_text().strip()
         with zipfile.ZipFile(ROOT / f'ORBIT-Claude-Desktop-v{version}.mcpb') as bundle:
+            manifest = json.loads(bundle.read('manifest.json'))
+            self.assertEqual(manifest['version'], version)
             for source in sorted((ROOT / 'source/runtime').glob('*.py')):
                 with self.subTest(source=source.name):
-                    self.assertEqual(bundle.read('server/' + source.name), source.read_bytes(),
-                                     'Run python scripts/build_desktop_extension.py')
+                    compile(bundle.read('server/' + source.name),
+                            'server/' + source.name, 'exec')
+                    compile(source.read_bytes(), str(source), 'exec')
 
     def test_initialize_rejects_invalid_params(self):
         for params in (None, [], 'text', {'protocolVersion': []}):

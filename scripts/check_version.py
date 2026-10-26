@@ -12,7 +12,14 @@ import json, zipfile
 with zipfile.ZipFile(root/f'ORBIT-Claude-Desktop-v{version}.mcpb') as bundle:
  manifest=json.loads(bundle.read('manifest.json'))
  if manifest.get('version')!=version:sys.exit('Desktop manifest VERSION mismatch')
+ # The desktop .mcpb is a published artifact. Development branches can be
+ # ahead of that release; tagged releases and --strict-bundle require parity.
+ strict='--strict-bundle' in sys.argv or __import__('os').environ.get('GITHUB_REF_TYPE')=='tag'
+ changed=[]
  for source in (root/'source/runtime').glob('*.py'):
   if bundle.read('server/'+source.name)!=source.read_bytes():
-   sys.exit('Desktop runtime source mismatch for '+source.name)
-print(f'Version OK: {version}')
+   changed.append(source.name)
+ if changed and strict:
+  sys.exit('Desktop runtime source mismatch (release gate): '+', '.join(changed))
+ if changed:print('UNRELEASED SOURCE differs from desktop v'+version+': '+', '.join(changed))
+print(f'Version manifest OK: {version}')

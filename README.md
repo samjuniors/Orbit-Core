@@ -1,6 +1,6 @@
 # Orbit Core MCP
 
-**Local-first, approval-driven agent orchestration for your own coding IDE.** Python 3.10+ · SQLite · **34 MCP tools on main (33 in published v0.24.1)** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
+**Local-first, approval-driven agent orchestration for your own coding IDE.** Python 3.10+ · SQLite · **35 MCP tools on this feature branch (34 on main, 33 in published v0.24.1)** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
 
 Orbit helps an existing coding host turn plain-language requests into approved product decisions, researched architecture, reusable components, staged implementation tasks, checkpointed progress, and verifiable checks. **Orbit is not a standalone LLM, IDE, code editor or background worker**: the host performs reasoning, agent invocation, file edits and terminal commands. Model recommendations never switch providers or consume credits by themselves.
 
@@ -89,3 +89,15 @@ The merged Product Experience v1 work adds a read-only one-glance `experience` s
 **Use the IDE you already have:** Antigravity's native Implementation Plan (comments and Proceed), Task List, diff review, and walkthrough are the editing/review surfaces. Orbit tracks unresolved requests in SQLite; a stage cannot be marked PASS while requested changes remain open. The MCP does not pretend to create a new IDE visual panel or automatically inspect or approve Antigravity artifacts.
 
 These changes are **merged into main but not included in the already published v0.24.1 release**. They require a future separately versioned release and real IDE acceptance before they are available to installed users. See [product experience specification](docs/PRODUCT-EXPERIENCE.md) and [PR #5](https://github.com/samjuniors/Orbit-Core-MCP/pull/5).
+
+## All-maturity lifecycle (Issue #7 — feature branch, unreleased)
+
+Ask Orbit to **start, stop/pause, resume, debug/fix, add a feature, redesign, refactor, test, review or continue**, in your own words. `orbit_project_resume` shows the existing compact experience/checkpoint. `orbit_project_action` accepts a plain-text `action` and returns evidence-limited project maturity signals and a proportional workflow. The host verifies Git, active branch, changed files and real tests; Orbit never runs a host model or automatically edits the product.
+
+An empty project uses adaptive intake. An established, partial, maintained or stalled project uses a read-only baseline and existing files/documents. For an owner-authorized change to existing code, `orbit_build_begin` accepts a **new** `build_id`, `change_kind` (`fix`, `feature`, `redesign`, `refactor`) and either `baseline_reference` (host-inspected existing code) or `change_from` (a completed DONE build ID). A fix starts with focused implementation/testing; new features, redesigns and refactors start at plan review. Completed builds never reopen or get overwritten.
+
+`orbit_project_action(action="pause", build_id="...", expected_revision=N)` first returns `PREVIEW_ONLY`. With owner permission, `confirm_write=true` pauses the specific Orbit build ledger; `resume` uses the new revision. Neither affects host-native agents or deployed processes. Stopping a managed *local preview* is a separate approved `orbit_preview_stop` call. Use `orbit_project_checkpoint` after meaningful work; if two unfinished builds exist, choose one explicitly. All source and history remain project-scoped; no new database schema, background worker, agent runtime or doc tree is introduced.
+
+**Host support:** Antigravity uses native plan/task artifacts and supported subagent APIs when available; Codex/Claude Code use their actual host tools; VS Code depends on the installed MCP-compatible extension; Claude Desktop chat may offer only read-only/status and Markdown handoff. None of these claims means a local IDE acceptance test has run.
+
+**Unreleased source policy:** the tracked `ORBIT-Claude-Desktop-v0.24.1.mcpb` is a frozen published artifact and does **not** contain Issue #7. Development tests compile both sources and bundle but permit intentional difference; `python scripts/check_version.py --strict-bundle` remains the strict package-parity gate for future tagged releases. This feature branch must not be advertised as an available published installer until a separately versioned package is produced and tested.
