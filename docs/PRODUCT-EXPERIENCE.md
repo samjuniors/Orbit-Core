@@ -69,3 +69,10 @@ Use **one** `orbit_project_action` alongside existing `orbit_project_resume` and
 | Unsupported code executor | Markdown plan/handoff; checks NOT RUN |
 
 **Not a process controller:** `pause/stop` never kills a host subagent or preview automatically. When approved, call existing `orbit_preview_stop` for one identified same-session managed preview. Record checkpoints through existing `orbit_project_checkpoint` with fresh revision. Prove actual QA in each supported host separately before claiming acceptance.
+
+
+### Maturity evidence and safe start/resume
+
+The router treats source/manifest filename signals separately from README/AGENTS.md and an empty `.git` directory. A documentation-only workspace still uses the new-project intake; a static `index.html`, native build manifest or source directory counts as a *possible* existing codebase. Neither means a deployable or production-ready product. A recorded unfinished build reports `in_progress`, and a completed SQLite record reports `completed_recorded` (not externally verified). Explicit `maturity` input is labeled `*_user_reported`; if someone reports a maintained, stalled, partially built or completed product but the selected workspace has no code/checkpoint, Orbit asks to locate the actual source rather than treating the claim as proven or overwriting a blank directory.
+
+The concise `orbit_project_action` result retains `observed_signals` for compatibility and adds `observed_code_signals`, `observed_docs_signals`, `maturity_evidence`, `doing`, and `needs_decision`. All evidence is bounded metadata; the host must still inspect actual Git/status/tests before acting. Plain-language new-project requests ("build a mobile app") and plural feature requests ("add features") route without dropping custom user intent.
