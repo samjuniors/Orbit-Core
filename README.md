@@ -1,117 +1,82 @@
-# ORBIT Core MCP — universal local agent orchestration
+# Orbit Core MCP
 
-**Development candidate: v0.24.0 (full testable local workflow)** · Python 3.10+ · local-first · no deployment required
+**Local-first, approval-driven agent orchestration for your own coding IDE.** Python 3.10+ · SQLite · **33 MCP tools** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
 
-This is the **standalone local MCP + cross-host installer** for the independent Orbit Workspace Orchestrator plugin. It contains the Python stdio MCP runtime, SQLite memory and task ledger, capability discovery, and host-specific agent/skill adapters for Antigravity, Codex, and Claude Code. The host AI/IDE—not this MCP—performs native model inference, subagent spawning, and code editing.
+Orbit helps an existing coding host turn plain-language requests into approved product decisions, researched architecture, reusable components, staged implementation tasks, checkpointed progress, and verifiable checks. **Orbit is not a standalone LLM, IDE, code editor or background worker**: the host performs reasoning, agent invocation, file edits and terminal commands. Model recommendations never switch providers or consume credits by themselves.
 
-This repository is intentionally **not** the separate `samjuniors/orbit` coding-agent CLI product and must not be merged into that source without a deliberate cross-product migration.
+> **Release status:** v0.24.1 is a **candidate** until tagged and published. GitHub CI is not a substitute for live Windows/IDE acceptance. Published releases are available at [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). This repository is separate from other Orbit-branded CLIs/plugins.
 
-## Install
+## Get started (install once)
 
-For Windows, download a tagged release ZIP, extract to a permanent folder, and double-click `install_orbit_gui.pyw` (requires Python 3.10+ with Tkinter and `.pyw` association). Select **This computer** or **One specific project**; review the actual paths before confirming. No third-party skills, remote servers, cloud keys, or arbitrary code are installed automatically.
+**Windows / Antigravity / Codex / Claude Code / VS Code**
 
-On macOS/Linux, run the installer preview and then an approved installation:
+1. Download `ORBIT-Universal-Setup-v0.24.1.zip` **and its `.sha256` checksum** from [the release page](https://github.com/samjuniors/Orbit-Core-MCP/releases) **after v0.24.1 is published**. Verify the checksum and extract the ZIP.
+2. Ensure Python 3.10+ with Tkinter is installed. From the extracted `orbit-universal-0.24.1` folder double-click `install_orbit_gui.pyw`, or run `py -3 install_orbit_gui.pyw`.
+3. Select **This computer** (recommended if you want Orbit in every project) or **One project**, and choose your IDEs. The wizard detects likely hosts; detection is not a live connection test. **Preview changes → Install Orbit**. The installer preserves owner docs, other MCP entries, SQLite and existing projects. Unrecognized customized files require manual review, never a forced overwrite.
+4. Restart/refresh the selected IDE's MCP servers; confirm `orbit-core-native` exposes 33 tools and call `orbit_project_scan` in an approved project.
 
-```bash
-python3 installer.py --scope machine
-python3 installer.py --scope machine --install
-```
-
-For a project-specific installation see [original installation guide](docs/INSTALLATION-ORIGINAL.md). Claude Desktop standard chat requires the separately packaged `.mcpb` desktop extension; it does not provide native coding-agent delegation.
-
-## Repository layout
-
-- `source/runtime/orbit_mcp.py`: JSON-RPC stdio MCP server, 33 tools in this experimental branch (24 in original v0.24 baseline).
-- `source/runtime/orbit_tasks.py`: SQLite project task ledger and policies.
-- `source/runtime/orbit_capabilities.py`: read-only skills/MCP discovery and selection.
-- `source/agents/`, `source/skills/`: host-adapted Orbit lead/specialist instructions.
-- `installer.py`, `install_orbit_gui.pyw`: preview-first global/project installation.
-- `tests/`: local unit and protocol tests.
-- `docs/`: architecture, release, security and installation guidance.
-- `.github/workflows/ci.yml`: automated GitHub tests and release-package verification.
-
-## Development
+**macOS/Linux**: extract the verified release archive, then in its root run:
 
 ```bash
-python3 -m unittest discover -s tests -v
-python3 scripts/check_version.py
-python3 scripts/build_release.py
+python3 installer.py --scope machine --hosts codex
+python3 installer.py --scope machine --hosts codex --install
 ```
 
-Run tests on a disposable checkout first. The test suite uses temporary directories. Never store SQLite memory databases, user-specific MCP configuration, credentials or transcripts in Git.
+Replace `codex` with your selected host; `--scope project --project /absolute/path` installs to only one trusted workspace. No sudo, external model CLI or `pip install` is needed for the MCP server itself. **Python Playwright is optional** and only required for Orbit's built-in browser QA.
 
-## Versioning and release policy
+For normal Claude Desktop chat, install the matching `ORBIT-Claude-Desktop-v0.24.1.mcpb` extension from the verified release. It provides MCP tools, not Claude Code terminal or native subagent execution.
 
-SemVer `MAJOR.MINOR.PATCH`, with `VERSION`, `installer.py`, `source/runtime/orbit_mcp.py` and release manifest aligned. The existing downloadable v0.23.0 ZIP is a preserved historical artifact, not a guarantee of production readiness. Each new change starts on a feature branch, is reviewed through a PR, must pass CI, and is tagged only after verification.
+## Update without reinstalling manually
 
-See [GitHub publication guide](docs/GITHUB-SETUP.md), [release policy](docs/RELEASE-PROCESS.md), [architecture](docs/ARCHITECTURE.md), and [changelog](CHANGELOG.md).
+After the first installation, use the stable local Orbit launcher. GitHub **0.x releases are labeled candidates**, so the default update channel is `candidate`. All update actions preview first, fetch official published assets, verify SHA256, check ZIP paths and back up recognized stock files.
 
-## Current limits
+```powershell
+& "$HOME\.orbit-universal\bin\orbit.cmd" doctor
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --check
+& "$HOME\.orbit-universal\bin\orbit.cmd" update
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --apply
+```
 
-`orbit_capability_select` does **not** download or install new skills; native delegation requires actual host support and user-approved execution; the SQLite ledger alone does not enforce filesystem permissions. Host-specific integration and cloud-free shared public preview URLs are not yet end-to-end verified. The v0.24 preview manager runs only localhost dev servers with explicit permission and checks their HTTP readiness; native browser QA, persistent cross-session stop/control and remote sharing are still planned, not shipped.
+Use `update --channel stable` only when a stable release exists. `orbit update` works without the full path only if you **choose** to add the launcher folder to your user PATH. Orbit never modifies PATH or installs tools automatically. Local development ZIPs may be previewed with `update --from-zip <file> --sha256 <separately-trusted-digest>`; do not blindly install an unreviewed branch. If the updater reports a manual-review conflict, keep the file and investigate—do not delete it.
 
-Private source by default; no OSS license granted or implied.
+## How to use Orbit
 
-## Local app preview (feature-branch v0.24.0)
+Start a new approved project folder in your IDE and ask: **"Orbit, build a mobile habit tracker."** Orbit should propose **Scope first** or explicit **Build with sensible defaults**, then ask consequential questions *based on your last answer*. You can always type **Custom** requirements. After accepted intake, it researches existing code/libraries, shows an editable task plan for approval and runs the appropriate host-driven workflow.
 
-Use `orbit_preview_start` with a project root, preview ID, shell-free `command` array, localhost `port` and optional health path. Omitting `confirm_run` previews the proposed execution without running anything. The host must show the command and obtain approval before sending `confirm_run: true`. Use `orbit_preview_status` for HTTP readiness/logs, and `orbit_preview_stop` with `confirm_stop: true` to stop a process **within the same active MCP session**. For Vite, a sample approved command is `npm run dev -- --host 127.0.0.1 --port 5173`. No public URL, browser visual tests or deployment are claimed. See `docs/LOCAL-PREVIEW.md`.
+A new web build uses `RESEARCH → PLAN → IMPLEMENT → VERIFY → PREVIEW → BROWSER_QA → REVIEW → CHECKPOINT → DONE`. Native apps use native QA; SDK, CLI, API, MCP or platform work omits irrelevant web preview gates. Existing persisted builds retain their original stage. Architect, QA, writer and other specialist agents use host-native delegation **only when supported**. Models can be **recommended** by task from host-reported availability, not independently selected or billed by MCP.
 
-## Test local app-building workflow
-See [end-to-end acceptance run](docs/EMERGENT-LOCAL-WORKFLOW.md). The installed Playwright library + Chromium can perform bounded mobile/desktop browser checks and store private evidence; an IDE host must execute actual code-writing agents. SQLite build-stage state resumes after host restart; local preview processes themselves do not auto-reconnect. No cloud deployment or public sharing is provided.
+`orbit_project_resume` recovers the saved stage, next action and task ledger. `orbit_docs_audit` helps maintain useful canonical vision, architecture, roadmap and design documents as projects evolve. Orbit favors vetted installed components and libraries over unnecessary custom implementation; no library, skill, browser driver or MCP is installed without approval.
 
-### Browser QA on Windows without downloading Chromium
+## What is actually verified?
 
-The optional Python Playwright library must be installed in the **same Python
-interpreter** used by the Orbit MCP server. The browser tool now supports
-`browser: "auto"` (prefers installed Microsoft Edge/Chrome), `"msedge"`,
-`"chrome"`, and `"chromium"`. Existing Edge/Chrome can be controlled without
-installing a separate Chromium browser binary. See
-[`docs/EMERGENT-LOCAL-WORKFLOW.md`](docs/EMERGENT-LOCAL-WORKFLOW.md) for the
-explicit installation smoke test and the Antigravity-specific driver 404 warning.
+- Runtime: Python stdio JSON-RPC, persistent SQLite, bounded request validation, revision-gated project state, scope-aware task ledger and checkpoints.
+- Installer: preview-first per-user or per-project configuration, backed-up recognized stock upgrades, host detection, read-only diagnostics.
+- Tests: Python 3.10–3.13 Linux CI and Python 3.12 Windows CI, source-to-desktop-package parity, release version/ZIP checks. See [CI](https://github.com/samjuniors/Orbit-Core-MCP/actions).
+- **Limitations:** Model calls, subagent execution, host permissions, genuine browser/device QA, user approval and acceptance remain host-controlled. Preview process supervision is same-session; worktree isolation, evidence-to-commit binding, robust multi-process locking and managed deployment require further work. Do not treat `DONE` as independent production certification.
 
-## Optional Vercel Labs agent-browser MCP
+## Repository
 
-Orbit can discover a separately configured `agent-browser` MCP provider and recommend
-it for screenshot-driven, accessibility-tree browser testing through the host. It
-is **not bundled or auto-installed**. This provider does not replace the
-Orbit-owned Playwright QA gate in v0.24.0; host reports remain supplemental
-until an independently verified adapter is implemented. See
-[`docs/AGENT-BROWSER-OPTIONAL.md`](docs/AGENT-BROWSER-OPTIONAL.md).
+```text
+source/runtime/    Python MCP tools and decision/build/task modules
+source/agents/     Lead and specialist host-agent instructions
+source/skills/     Orbit skill and just-in-time references
+installer.py       Preview-first, scope-aware cross-host installer
+install_orbit_gui.pyw   Windows setup wizard
+orbit_cli.py       Installed updater, detect and doctor
+scripts/           Release build, extension sync and validation
+tests/             Protocol, updater, build, installation regressions
+docs/              Architecture, technical decisions, onboarding and roadmap
+```
 
-## Guided intake, right-sized documentation and compact context (development candidate)
+From a clean checkout:
 
-For new products, Orbit now guides the host to classify project type/complexity/maturity, interview the user with recommended options **before** stack selection, and map existing canonical docs before making a plan. It instructs an actual writer/architect host agent—or the lead sequentially—to create necessary product-appropriate vision, architecture, roadmap and design documentation. Installed host skills now carry the reference policies; source-only reference files were previously omitted by the installer. The host model compacts the agreed intent into a small brief and sends targeted context, not repeated transcripts. **This is host instruction guidance, not a new enforced MCP intake stage**. See [project discovery](docs/PROJECT-DISCOVERY.md).
+```bash
+python -m compileall -q source installer.py scripts tests
+python -m unittest discover -s tests -v
+python scripts/check_version.py
+python scripts/build_release.py --verify
+```
 
-## Persistent guided intake (development branch)
+See [architecture](docs/ARCHITECTURE.md), [release process](docs/RELEASE-PROCESS.md), [source/component decision matrix](docs/ADAPTIVE-DECISION-ENGINE.md), [installer choices](docs/MCP-INSTALLATION-OPTIONS.md), [security boundaries](SECURITY.md) and [honest roadmap](docs/NEXT-VERSION.md).
 
-New Orbit MCP projects must obtain an approved product classification and user answers before `orbit_build_begin` creates a build; a fresh build otherwise returns HOLD. Seven additional tools expose intake status, proposed questions, per-answer recording, conditional follow-ups, approved choices, autonomy review and repeatable documentation gap audits (33 total; including decision and model routing tools). Existing builds such as a prior Todo test are not retroactively blocked. Host-owned architect/writer agents create substantive missing docs only after reviewing owner canonical sources. No automated autonomy escalation or approval bypass is offered.
-
-## Install once; update and detect hosts (feature branch)
-
-The installer now writes a stable local launcher and a separate stdlib admin script,
-without silently editing PATH. On Windows, use
-\`& "$HOME\.orbit-universal\bin\orbit.cmd" detect\` or \`... update --check\`.
-To run simply \`orbit update\`, add \`%USERPROFILE%\.orbit-universal\bin\` to
-your *user* PATH after reviewing it. The updater checks official GitHub stable
-releases, downloads a versioned ZIP and release-sidecar SHA256, validates archive
-paths and contents, shows an installation diff, and requires \`--apply\`.
-\`orbit detect\` does not start IDEs or prove a server connection. For prerelease
-testing, use \`--from-zip <path> --sha256 <trusted digest>\`; never automatically
-execute an unreviewed branch build. New optional VS Code project or user
-installation writes its native \`servers\` JSON format; it leaves other servers
-untouched. Claude Desktop still needs its separate extension.
-
-
-## Experimental RESEARCH and VERIFY stages
-
-On the independent `fix/habit-reliability-research-skills` branch only, new builds start at RESEARCH and visit VERIFY after IMPLEMENT. Existing build records resume where they were. Specialists consult role-specific preferred skill names using `orbit_capability_select`, check installed/appropriate tools first, and fall back to the host without automatic installation. See [research, verification and reuse](docs/RESEARCH-VERIFY-SKILLS.md).
-
-
-## Product Kit v0.2 audit and bounded Orbit adoption
-
-The user's `product-kit-plugin-v0.2.zip` informed a **read-only persisted recover/continue briefing**, a smallest-complete-change ladder, milestone owner-test guidance, bounded no-progress retry stops and context-efficient checkpoint handoffs. Existing Orbit approvals, build/task SQLite ledgers, owner documentation and host-native tools stay authoritative. **No Product Kit Node runtime, detached CLI worker, automatic Git merge or Claude hook is bundled or installed.** See [Product Kit adoption audit](source/skills/orbit/references/PRODUCT-KIT-ADOPTION.md).
-
-
-## Adaptive custom choices, platform components and model tier suggestions
-
-This separate experimental branch adds 33 MCP tools: intake accepts bounded **custom, free-form answers** and answer-dependent followups; `orbit_decision_route` evaluates project-type platform flow and official-source component research candidates; `orbit_model_route` recommends exact **host-reported** model names by role, task and complexity but **does not switch models**. New native mobile/desktop builds use NATIVE_QA rather than browser-only stages; SDK/CLI/API/MCP/OS builds do not require irrelevant web preview/browser QA. Prior build rows keep their original persisted flow. Meta Astryx, shadcn, Radix, React Aria, Expo, Flutter, Jetpack Compose, SwiftUI, Context7, Impeccable and agent-browser have distinct roles and must be reviewed for compatibility; none is installed automatically. [Source-reviewed decision policy](docs/ADAPTIVE-DECISION-ENGINE.md).
+**License note:** This public repository has no general open-source license grant unless the owner adds one. Do not repackage or redistribute it under a guessed license.

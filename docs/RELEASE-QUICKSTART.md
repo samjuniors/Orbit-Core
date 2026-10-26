@@ -1,15 +1,23 @@
-# Publishing the first GitHub Release
+# Release and installation quickstart
 
-The repository source does **not** become a GitHub Release automatically when uploaded to `main`.
+**This page describes the v0.24.1 candidate.** Do not try to download it until a maintainer has published the tag and attached verified release assets.
 
-After the release automation pull request is merged:
+## User: install once
 
-1. Open https://github.com/samjuniors/Orbit-Core-MCP/actions/workflows/release.yml.
-2. Click **Run workflow**; select `main`, enter **`0.23.0`**, and click **Run workflow** again.
-3. Wait for the **Publish versioned release** job to finish successfully; review its test/build steps.
-4. Open https://github.com/samjuniors/Orbit-Core-MCP/releases and confirm **ORBIT Core MCP v0.23.0**, four downloadable assets, and pre-release designation.
-5. Open https://github.com/samjuniors/Orbit-Core-MCP/tags and confirm that **`v0.23.0`** exists. Future versions follow the same process after updating `VERSION`, source, and changelog on `main`.
+Download `ORBIT-Universal-Setup-v0.24.1.zip` plus its `.sha256` from [GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). Verify SHA256, extract, and run `py -3 install_orbit_gui.pyw` on Windows. Choose detected IDEs, preview changes, approve the installation and refresh the IDE's MCP list. Existing apps and SQLite records are preserved. Machine-wide means current OS user's host configuration, not Administrator-level installation.
 
-If **Run workflow** is missing, check that the release workflow is merged to the repository's default branch and GitHub Actions is enabled.
+Then run in PowerShell:
 
-Do not create Git history for older pre-baseline plugin versions. Do not reassign existing tags.
+```powershell
+& "$HOME\.orbit-universal\bin\orbit.cmd" doctor
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --check
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --apply
+```
+
+Default update channel is `candidate` for 0.x prereleases. No PATH edit is necessary. `--channel stable` is available when verified stable versions exist. Before `--apply`, `update` without that flag previews. Follow GUI/manual-review conflict instructions rather than deleting customized files.
+
+## Maintainer: publish an immutable candidate
+
+Merge reviewed tested code to `main`; then in GitHub **Actions → Publish versioned release** run the workflow from `main` with VERSION `0.24.1`. It verifies tests, builds ZIP, checks SHA256, creates immutable tag `v0.24.1` if necessary and publishes the ZIP, sidecar, Desktop `.mcpb` and sidecar. By policy 0.x releases are **prerelease candidates**. Do not publish or assert full production readiness without real host acceptance.
+
+See [full release policy](RELEASE-PROCESS.md) and [README](../README.md).

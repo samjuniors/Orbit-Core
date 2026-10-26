@@ -10,7 +10,7 @@ Orbit is a **local stdio MCP server plus optional host-specific skills and agent
 | OpenAI Codex CLI/Desktop | `codex mcp add` or `~/.codex/config.toml` / project `.codex/config.toml` | Installer writes scoped native TOML, skills and AGENTS.md guidance |
 | Anthropic Claude Code | `claude mcp add` or scoped MCP configuration, plus `.claude/skills` and agents | Installer preserves existing entries and installs local Orbit skill/agent definitions |
 | Visual Studio Code Copilot | MCP: Add Server / manifest, or `.vscode/mcp.json` with `servers` | Optional VS Code target, separate format and preservation of unrelated servers |
-| Claude Desktop (regular chat) | Desktop extension packaging | Separate `ORBIT-Claude-Desktop-v0.24.0.mcpb`, not native coding subagents |
+| Claude Desktop (regular chat) | Desktop extension packaging | Separate `ORBIT-Claude-Desktop-v0.24.1.mcpb`, not native coding subagents |
 
 Official references: https://antigravity.google/docs/mcp ; https://code.visualstudio.com/docs/agents/reference/mcp-configuration ; https://developers.openai.com/resources/docs-mcp ; https://support.claude.com/en/articles/14554922-claude-code-user-faq
 
@@ -45,3 +45,8 @@ MCP **tools** are registered through the host's MCP mechanism. Specialist **agen
 For a *new* project, the MCP's intake gate requires a proposed interview, user-accepted options (or explicitly delegated defaults), then a build plan. Reassess documentation using `orbit_docs_audit` after new features, APIs, data, security, releases, or architecture growth; this tool only identifies likely gaps and never overwrites owner documents. Approval of `guided`, `assisted`, or `trusted` mode is always explicit. No level waives high-risk host approvals.
 
 **Status:** These options are a v0.24 feature-branch candidate. They are not an already-published stable release, and they do not retroactively update an older Windows installer.
+
+
+## Fastest verified user path
+
+Use the published GitHub Release ZIP once, preview and install selected host integrations, then use `orbit doctor` and `orbit update --check` / `orbit update --apply` from the stable per-user launcher. 0.x uses the candidate channel by default; no repeated manual ZIP download is required after this setup. The updater never silently overwrites customized files. Read `README.md` and `RELEASE-QUICKSTART.md` for exact commands. Source branch ZIPs are development snapshots, **not** signed or published release assets.
