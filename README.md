@@ -21,7 +21,7 @@ For a project-specific installation see [original installation guide](docs/INSTA
 
 ## Repository layout
 
-- `source/runtime/orbit_mcp.py`: JSON-RPC stdio MCP server, 24 tools at v0.24.0.
+- `source/runtime/orbit_mcp.py`: JSON-RPC stdio MCP server, 33 tools in this experimental branch (24 in original v0.24 baseline).
 - `source/runtime/orbit_tasks.py`: SQLite project task ledger and policies.
 - `source/runtime/orbit_capabilities.py`: read-only skills/MCP discovery and selection.
 - `source/agents/`, `source/skills/`: host-adapted Orbit lead/specialist instructions.
@@ -84,7 +84,7 @@ For new products, Orbit now guides the host to classify project type/complexity/
 
 ## Persistent guided intake (development branch)
 
-New Orbit MCP projects must obtain an approved product classification and user answers before `orbit_build_begin` creates a build; a fresh build otherwise returns HOLD. Seven additional tools expose intake status, proposed questions, per-answer recording, conditional follow-ups, approved choices, autonomy review and repeatable documentation gap audits (31 total; including two incremental interview tools). Existing builds such as a prior Todo test are not retroactively blocked. Host-owned architect/writer agents create substantive missing docs only after reviewing owner canonical sources. No automated autonomy escalation or approval bypass is offered.
+New Orbit MCP projects must obtain an approved product classification and user answers before `orbit_build_begin` creates a build; a fresh build otherwise returns HOLD. Seven additional tools expose intake status, proposed questions, per-answer recording, conditional follow-ups, approved choices, autonomy review and repeatable documentation gap audits (33 total; including decision and model routing tools). Existing builds such as a prior Todo test are not retroactively blocked. Host-owned architect/writer agents create substantive missing docs only after reviewing owner canonical sources. No automated autonomy escalation or approval bypass is offered.
 
 ## Install once; update and detect hosts (feature branch)
 
@@ -110,3 +110,8 @@ On the independent `fix/habit-reliability-research-skills` branch only, new buil
 ## Product Kit v0.2 audit and bounded Orbit adoption
 
 The user's `product-kit-plugin-v0.2.zip` informed a **read-only persisted recover/continue briefing**, a smallest-complete-change ladder, milestone owner-test guidance, bounded no-progress retry stops and context-efficient checkpoint handoffs. Existing Orbit approvals, build/task SQLite ledgers, owner documentation and host-native tools stay authoritative. **No Product Kit Node runtime, detached CLI worker, automatic Git merge or Claude hook is bundled or installed.** See [Product Kit adoption audit](source/skills/orbit/references/PRODUCT-KIT-ADOPTION.md).
+
+
+## Adaptive custom choices, platform components and model tier suggestions
+
+This separate experimental branch adds 33 MCP tools: intake accepts bounded **custom, free-form answers** and answer-dependent followups; `orbit_decision_route` evaluates project-type platform flow and official-source component research candidates; `orbit_model_route` recommends exact **host-reported** model names by role, task and complexity but **does not switch models**. New native mobile/desktop builds use NATIVE_QA rather than browser-only stages; SDK/CLI/API/MCP/OS builds do not require irrelevant web preview/browser QA. Prior build rows keep their original persisted flow. Meta Astryx, shadcn, Radix, React Aria, Expo, Flutter, Jetpack Compose, SwiftUI, Context7, Impeccable and agent-browser have distinct roles and must be reviewed for compatibility; none is installed automatically. [Source-reviewed decision policy](docs/ADAPTIVE-DECISION-ENGINE.md).

@@ -46,3 +46,8 @@ User screenshots of Scram show **Scope first / Just start building**, a progress
 To stop a vague `PLAN PASS` from silently triggering implementation, newly created build rows carry `__orbit_policy: approval-v1`. Only those rows require structured PLAN evidence with title, summary, tasks, approval_method and a real user consent/delegation reference before the stage can pass. Old builds remain resumable without retroactive interruption; all consent is **host-reported, not cryptographically authenticated by MCP**. `orbit_build_status` includes a task ledger progress summary; no fabricated completion percentage when no tasks are registered.
 
 For token/quota efficiency, don't load all skill instructions or every project document. Use only current references, compact accepted project brief, checkpoint and affected sources. Research is proportional: quick existing-code search for tiny fixes; dependency/license and domain-reasoning research for architectural or risky new products. This is **selective retrieval, not avoidance of necessary thinking**.
+
+
+## Platform and model decision extension
+
+New separate read-only `orbit_decision_route` and `orbit_model_route` tools distinguish web/native/mobile/SDK/MCP/OS needs, keep custom component options, and recommend model tiers using only the names reported by the active host. Host model changes, installed libraries and iOS/Android device verification remain external and require actual supported tool invocation plus approvals. [Source-reviewed architecture and library matrix](ADAPTIVE-DECISION-ENGINE.md).
