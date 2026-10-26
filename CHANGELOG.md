@@ -6,6 +6,7 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 - Next: persistent OS process supervisor and optional secure sharing. Actual host autonomous coding and permissions remain host-owned.
 
 ## [0.24.0] — Unreleased (feature branch)
+- Browser QA compatibility: discover installed Microsoft Edge/Chrome and support explicit browser selection; avoids mandatory Chromium download on Windows.
 - Add three opt-in localhost preview MCP tools: start, status and stop.
 - Prevent automatic adoption of foreign processes; enforce approved, shell-free runtime commands and loopback HTTP readiness checks.
 - Bounded process logs and per-session lifecycle management; never start a public tunnel or deploy.

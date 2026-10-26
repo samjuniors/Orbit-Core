@@ -69,6 +69,29 @@ class BuildBrowserTests(unittest.TestCase):
         self.assertEqual(self.advance()['run']['stage'],'DONE')
         self.assertEqual(self.advance()['status'],'ALREADY_DONE')
 
+    def test_branded_browser_choices_and_no_download(self):
+        from unittest.mock import patch
+        edge = Path(self.temp.name) / 'program-files' / 'Microsoft' / 'Edge' / 'Application' / 'msedge.exe'
+        edge.parent.mkdir(parents=True)
+        edge.write_bytes(b'fake edge binary for discovery only; never execute')
+        env={'PROGRAMFILES': str(Path(self.temp.name) / 'program-files')}
+        with patch('orbit_browser.shutil.which', return_value=None):
+            self.assertTrue(orbit_browser.installed_channel('msedge', windows=True, env=env))
+            self.assertFalse(orbit_browser.installed_channel('chrome', windows=True, env=env))
+            self.assertFalse(orbit_browser.installed_channel('chrome', windows=False, env=env))
+            self.assertEqual(orbit_browser.browser_launch('msedge'),
+                             ({'headless':True, 'channel':'msedge'},'msedge'))
+            self.assertEqual(orbit_browser.browser_launch('chrome'),
+                             ({'headless':True, 'channel':'chrome'},'chrome'))
+            with self.assertRaises(ValueError): orbit_browser.browser_launch('javascript://remote')
+            with patch('orbit_browser.installed_channel', side_effect=lambda channel: channel=='msedge'):
+                self.assertEqual(orbit_browser.browser_launch('auto')[1],'msedge')
+            with patch('orbit_browser.installed_channel', return_value=False):
+                self.assertEqual(orbit_browser.browser_launch('auto')[1],'playwright-chromium')
+        schema=orbit_mcp.TOOL_MAP['orbit_browser_qa']
+        self.assertIn('browser', schema['properties'])
+        self.assertEqual(schema['properties']['browser']['enum'], ['auto','msedge','chrome','chromium'])
+
     def test_browser_input_validation(self):
         with self.assertRaises(ValueError):orbit_browser.validate_actions([{'op':'evaluate','selector':'body','value':'fetch()'}])
         with self.assertRaises(ValueError):orbit_browser.validate_actions([{'op':'click','selector':''}])

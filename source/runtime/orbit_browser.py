@@ -16,7 +16,55 @@ from urllib.parse import urlparse
 
 SIZES = {'desktop': (1280, 800), 'mobile': (390, 844)}
 ACTIONS = {'click', 'fill', 'press', 'expect_text', 'expect_visible', 'expect_count'}
+BROWSERS = ('auto', 'msedge', 'chrome', 'chromium')
 
+
+
+def installed_channel(channel, *, windows=None, env=None):
+    """Recognize installed branded browsers; never download or execute discovery commands.
+
+    Check common Windows install locations because msedge.exe/chrome.exe are not
+    typically on PATH. An explicit channel is still checked by Playwright itself.
+    """
+    if channel not in {'msedge', 'chrome'}:
+        return False
+    binary = 'msedge' if channel == 'msedge' else 'chrome'
+    if shutil.which(binary) or shutil.which(binary + '.exe'):
+        return True
+    if windows is None:
+        windows = os.name == 'nt'
+    if not windows:
+        return False
+    if env is None:
+        env = os.environ
+    suffix = ('Microsoft/Edge/Application/msedge.exe' if channel == 'msedge'
+              else 'Google/Chrome/Application/chrome.exe')
+    for key in ('PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA'):
+        base = env.get(key)
+        if base and (Path(base) / suffix).is_file():
+            return True
+    return False
+
+
+def browser_launch(browser='auto'):
+    """Resolve a transparent, local-only browser choice for Playwright.
+
+    On Windows, prefer already-installed Edge/Chrome over downloading Playwright
+    Chromium. Explicit selections never silently switch to another engine.
+    """
+    if browser not in BROWSERS:
+        raise ValueError('browser must be auto, msedge, chrome, or chromium')
+    if browser in {'msedge', 'chrome'}:
+        return {'headless': True, 'channel': browser}, browser
+    if browser == 'auto':
+        for channel in ('msedge', 'chrome'):
+            if installed_channel(channel):
+                return {'headless': True, 'channel': channel}, channel
+    executable = (shutil.which('chromium') or shutil.which('chromium-browser')
+                  or shutil.which('google-chrome'))
+    if executable:
+        return {'headless': True, 'executable_path': executable}, 'local-chromium'
+    return {'headless': True}, 'playwright-chromium'
 
 def artifact_folder(root):
     base = Path(os.getenv('ORBIT_QA_HOME') or Path.home() / '.orbit-universal' / 'qa-artifacts').expanduser().resolve()
@@ -59,19 +107,20 @@ def verify_request(root, a, preview):
 
 
 def run(root, a, preview):
+    launch_options, browser_label = browser_launch(a.get('browser', 'auto'))
     session, actions = verify_request(root,a,preview)
     if session is None:
         return {'status':'PREVIEW_NOT_READY', 'notice':'Start an Orbit-owned preview in this MCP session, then verify readiness.'}
     url = f"http://127.0.0.1:{session['port']}/"
     if a.get('confirm_run') is not True:
         return {'status':'PREVIEW_ONLY','url':url,'viewport':a.get('viewport','desktop'),
-                'actions':actions,'notice':'Browser automation may read visible app data and change local app state. Host approval required.'}
+                'actions':actions,'browser':browser_label,'notice':'Browser automation may read visible app data and change local app state. Host approval required.'}
     if actions and a.get('confirm_interactions') is not True:
         return {'status':'INTERACTIONS_NEED_APPROVAL','url':url,'actions_count':len(actions)}
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        return {'status':'DEPENDENCY_MISSING','notice':'Install trusted Python playwright and Chromium with separate approval; Orbit will not install them.'}
+        return {'status':'DEPENDENCY_MISSING','browser':browser_label,'notice':'Install the trusted Python playwright package into the same interpreter as Orbit with approval. If Edge/Chrome is already installed, no browser download is needed; otherwise Chromium is a separate approved install.'}
     viewport_name = a.get('viewport','desktop')
     width,height=SIZES[viewport_name]
     errors=[]
@@ -83,8 +132,7 @@ def run(root, a, preview):
     started=time.monotonic()
     try:
         with sync_playwright() as p:
-            executable = shutil.which('chromium') or shutil.which('chromium-browser') or shutil.which('google-chrome')
-            browser = p.chromium.launch(headless=True, executable_path=executable if executable else None)
+            browser = p.chromium.launch(**launch_options)
             try:
                 context=browser.new_context(viewport={'width':width,'height':height}, service_workers='block')
                 def intercept(route):
@@ -134,8 +182,8 @@ def run(root, a, preview):
     passed=not errors and not failures
     # Bounded reporting; never treat console or screenshot as proof of security compliance.
     result={'status':'PASS' if passed else 'FAIL','url':url,'viewport':viewport_name,
-            'title':title,'actions':results,'errors':errors[:10],'failures':failures[:10],
+            'title':title,'browser':browser_label,'actions':results,'errors':errors[:10],'failures':failures[:10],
             'blocked_remote_hosts':sorted(set(blocked))[:10],
             'screenshot':screenshot,'elapsed_ms':round((time.monotonic()-started)*1000),
-            'verified_by':'local Playwright Chromium','notice':'Browser functionality tested only as specified; no deployment or security audit.'}
+            'verified_by':'local Playwright (' + browser_label + ')','notice':'Browser functionality tested only as specified; no deployment or security audit.'}
     return result

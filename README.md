@@ -58,3 +58,13 @@ Use `orbit_preview_start` with a project root, preview ID, shell-free `command` 
 
 ## Test local app-building workflow
 See [end-to-end acceptance run](docs/EMERGENT-LOCAL-WORKFLOW.md). The installed Playwright library + Chromium can perform bounded mobile/desktop browser checks and store private evidence; an IDE host must execute actual code-writing agents. SQLite build-stage state resumes after host restart; local preview processes themselves do not auto-reconnect. No cloud deployment or public sharing is provided.
+
+### Browser QA on Windows without downloading Chromium
+
+The optional Python Playwright library must be installed in the **same Python
+interpreter** used by the Orbit MCP server. The browser tool now supports
+`browser: "auto"` (prefers installed Microsoft Edge/Chrome), `"msedge"`,
+`"chrome"`, and `"chromium"`. Existing Edge/Chrome can be controlled without
+installing a separate Chromium browser binary. See
+[`docs/EMERGENT-LOCAL-WORKFLOW.md`](docs/EMERGENT-LOCAL-WORKFLOW.md) for the
+explicit installation smoke test and the Antigravity-specific driver 404 warning.
