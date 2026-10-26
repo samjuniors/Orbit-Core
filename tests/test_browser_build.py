@@ -1,6 +1,7 @@
 """Durable build state and real (if present) headless browser QA tests."""
 from __future__ import annotations
 import os
+import importlib.util
 import shutil
 import socket
 import sqlite3
@@ -74,7 +75,7 @@ class BuildBrowserTests(unittest.TestCase):
         self.assertEqual(orbit_build.begin(self.db,self.root,{**self.meta,'objective':'Todo','confirm_write':False})['status'],'PREVIEW_ONLY')
         self.assertEqual(orbit_build.current(self.db,self.root,self.meta)['status'],'NOT_FOUND')
 
-    @unittest.skipUnless(shutil.which('chromium') or shutil.which('google-chrome'), 'System Chromium not installed')
+    @unittest.skipUnless(importlib.util.find_spec('playwright') and (shutil.which('chromium') or shutil.which('google-chrome')), 'Playwright and system Chromium both required for optional browser test')
     def test_real_browser_dom_without_network(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
@@ -88,7 +89,7 @@ class BuildBrowserTests(unittest.TestCase):
                 self.assertEqual(page.locator('#items li').inner_text(),'Real DOM interaction')
             finally: browser.close()
 
-    @unittest.skipUnless(shutil.which('chromium') or shutil.which('google-chrome'), 'System Chromium not installed')
+    @unittest.skipUnless(importlib.util.find_spec('playwright') and (shutil.which('chromium') or shutil.which('google-chrome')), 'Playwright and system Chromium both required for optional browser test')
     def test_real_chromium_todo_interaction_and_screenshot(self):
         orbit_build.begin(self.db,self.root,{**self.meta,'objective':'Todo','confirm_write':True})
         for _ in range(2): self.advance()

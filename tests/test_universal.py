@@ -112,6 +112,8 @@ class UniversalSetupTests(unittest.TestCase):
             self.assertIn('server/orbit_tasks.py',z.namelist())
             self.assertIn('server/orbit_capabilities.py',z.namelist())
             self.assertIn('server/orbit_preview.py',z.namelist())
+            self.assertIn('server/orbit_browser.py',z.namelist())
+            self.assertIn('server/orbit_build.py',z.namelist())
 
 
 
@@ -169,6 +171,8 @@ class UniversalSetupTests(unittest.TestCase):
         installer.install(installer.plan(self.project,['codex'],scope='project'))
         r = installer.runtime_folder()
         self.assertTrue((r/'orbit_preview.py').exists())
+        self.assertTrue((r/'orbit_browser.py').exists())
+        self.assertTrue((r/'orbit_build.py').exists())
         self.assertIn('0.24.0',str(r))
 
     def test_stock_v023_runtime_upgrade(self):
