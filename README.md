@@ -100,3 +100,8 @@ testing, use \`--from-zip <path> --sha256 <trusted digest>\`; never automaticall
 execute an unreviewed branch build. New optional VS Code project or user
 installation writes its native \`servers\` JSON format; it leaves other servers
 untouched. Claude Desktop still needs its separate extension.
+
+
+## Experimental RESEARCH and VERIFY stages
+
+On the independent `fix/habit-reliability-research-skills` branch only, new builds start at RESEARCH and visit VERIFY after IMPLEMENT. Existing build records resume where they were. Specialists consult role-specific preferred skill names using `orbit_capability_select`, check installed/appropriate tools first, and fall back to the host without automatic installation. See [research, verification and reuse](docs/RESEARCH-VERIFY-SKILLS.md).
