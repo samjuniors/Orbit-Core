@@ -21,7 +21,7 @@ For a project-specific installation see [original installation guide](docs/INSTA
 
 ## Repository layout
 
-- `source/runtime/orbit_mcp.py`: JSON-RPC stdio MCP server, 24 tools at v0.24.0.
+- `source/runtime/orbit_mcp.py`: JSON-RPC stdio MCP server, 29 tools in this v0.24.0 candidate.
 - `source/runtime/orbit_tasks.py`: SQLite project task ledger and policies.
 - `source/runtime/orbit_capabilities.py`: read-only skills/MCP discovery and selection.
 - `source/agents/`, `source/skills/`: host-adapted Orbit lead/specialist instructions.
@@ -38,6 +38,10 @@ python3 scripts/check_version.py
 python3 scripts/build_release.py
 ```
 
+After changing runtime source, first run `python3 scripts/build_desktop_extension.py`
+to refresh the tracked candidate desktop bundle. Tests reject a bundle whose
+runtime differs from canonical source. This command does not publish a release.
+
 Run tests on a disposable checkout first. The test suite uses temporary directories. Never store SQLite memory databases, user-specific MCP configuration, credentials or transcripts in Git.
 
 ## Versioning and release policy
@@ -48,7 +52,7 @@ See [GitHub publication guide](docs/GITHUB-SETUP.md), [release policy](docs/RELE
 
 ## Current limits
 
-`orbit_capability_select` does **not** download or install new skills; native delegation requires actual host support and user-approved execution; the SQLite ledger alone does not enforce filesystem permissions. Host-specific integration and cloud-free shared public preview URLs are not yet end-to-end verified. The v0.24 preview manager runs only localhost dev servers with explicit permission and checks their HTTP readiness; native browser QA, persistent cross-session stop/control and remote sharing are still planned, not shipped.
+`orbit_capability_select` does **not** download or install new skills; native delegation requires actual host support and user-approved execution; the SQLite ledger alone does not enforce filesystem permissions. Optional Playwright browser QA and persistent build stages are implemented. Full host integration still needs desktop acceptance evidence. Preview process control remains session-local, and remote sharing is not implemented. See the [architecture](docs/ARCHITECTURE.md) and [next milestones](docs/NEXT-VERSION.md) for boundaries and remaining work.
 
 Private source by default; no OSS license granted or implied.
 
@@ -80,7 +84,7 @@ until an independently verified adapter is implemented. See
 
 ## Guided intake, right-sized documentation and compact context (development candidate)
 
-For new products, Orbit now guides the host to classify project type/complexity/maturity, interview the user with recommended options **before** stack selection, and map existing canonical docs before making a plan. It instructs an actual writer/architect host agent—or the lead sequentially—to create necessary product-appropriate vision, architecture, roadmap and design documentation. Installed host skills now carry the reference policies; source-only reference files were previously omitted by the installer. The host model compacts the agreed intent into a small brief and sends targeted context, not repeated transcripts. **This is host instruction guidance, not a new enforced MCP intake stage**. See [project discovery](docs/PROJECT-DISCOVERY.md).
+For new products, Orbit guides the host to classify project type/complexity/maturity, interview the user with recommended options **before** stack selection, and map existing canonical docs before making a plan. The runtime blocks fresh builds until intake is recorded as approved; the host remains responsible for verifying the user's actual choices. Architect/writer host agents—or the lead sequentially—create substantive missing documents. Compact briefs and targeted context remain host instruction guidance. See [project discovery](docs/PROJECT-DISCOVERY.md).
 
 ## Persistent guided intake (development branch)
 
@@ -90,13 +94,13 @@ New Orbit MCP projects must obtain an approved product classification and user a
 
 The installer now writes a stable local launcher and a separate stdlib admin script,
 without silently editing PATH. On Windows, use
-\`& "$HOME\.orbit-universal\bin\orbit.cmd" detect\` or \`... update --check\`.
-To run simply \`orbit update\`, add \`%USERPROFILE%\.orbit-universal\bin\` to
+`& "$HOME\.orbit-universal\bin\orbit.cmd" detect` or `... update --check`.
+To run simply `orbit update`, add `%USERPROFILE%\.orbit-universal\bin` to
 your *user* PATH after reviewing it. The updater checks official GitHub stable
 releases, downloads a versioned ZIP and release-sidecar SHA256, validates archive
-paths and contents, shows an installation diff, and requires \`--apply\`.
-\`orbit detect\` does not start IDEs or prove a server connection. For prerelease
-testing, use \`--from-zip <path> --sha256 <trusted digest>\`; never automatically
+paths and contents, shows an installation diff, and requires `--apply`.
+`orbit detect` does not start IDEs or prove a server connection. For prerelease
+testing, use `--from-zip <path> --sha256 <trusted digest>`; never automatically
 execute an unreviewed branch build. New optional VS Code project or user
-installation writes its native \`servers\` JSON format; it leaves other servers
+installation writes its native `servers` JSON format; it leaves other servers
 untouched. Claude Desktop still needs its separate extension.

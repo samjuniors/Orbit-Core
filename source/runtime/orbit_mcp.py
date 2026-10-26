@@ -283,28 +283,43 @@ TOOLS += [
 TOOL_MAP = {x['name']:x['inputSchema'] for x in TOOLS}
 
 
+def validate_value(value, spec, path='arguments'):
+    """Validate the schema subset used by TOOLS; domain checks stay in handlers."""
+    typ = spec.get('type')
+    expected = {'string': str, 'integer': int, 'boolean': bool,
+                'array': list, 'object': dict}
+    if typ in expected and type(value) is not expected[typ]:
+        raise ValueError(f'Invalid {path}: expected {typ}')
+    if 'enum' in spec and value not in spec['enum']:
+        raise ValueError(f'Invalid {path}: unsupported value')
+    if typ == 'string':
+        if len(value) < spec.get('minLength', 0) or ('maxLength' in spec and len(value) > spec['maxLength']):
+            raise ValueError(f'Invalid {path}: text length')
+    elif typ == 'integer':
+        if ('minimum' in spec and value < spec['minimum']) or ('maximum' in spec and value > spec['maximum']):
+            raise ValueError(f'Invalid {path}: integer range')
+    elif typ == 'array':
+        if len(value) < spec.get('minItems', 0) or ('maxItems' in spec and len(value) > spec['maxItems']):
+            raise ValueError(f'Invalid {path}: array length')
+        if 'items' in spec:
+            for index, item in enumerate(value):
+                validate_value(item, spec['items'], f'{path}[{index}]')
+    elif typ == 'object':
+        properties = spec.get('properties', {})
+        if spec.get('additionalProperties') is False and set(value) - set(properties):
+            raise ValueError(f'Unexpected properties in {path}')
+        for key in spec.get('required', []):
+            if key not in value:
+                raise ValueError(f'Missing {path}.{key}')
+        for key, item in value.items():
+            if key in properties:
+                validate_value(item, properties[key], f'{path}.{key}')
+
+
 def validate(name, args):
-    s = TOOL_MAP.get(name)
-    if s is None or not isinstance(args,dict):
-        raise ValueError('Unknown tool or invalid arguments')
-    if set(args)-set(s['properties']):
-        raise ValueError('Unexpected arguments')
-    for key in s['required']:
-        if key not in args:
-            raise ValueError(f'Missing {key}')
-    for key, value in args.items():
-        t = s['properties'][key]
-        typ = t.get('type')
-        if typ == 'string' and (not isinstance(value,str) or len(value)>t.get('maxLength',100000) or (len(value)<t.get('minLength',0))):
-            raise ValueError(f'Invalid {key}')
-        if typ == 'integer' and (type(value) is not int or not t.get('minimum',-99999)<=value<=t.get('maximum',99999)):
-            raise ValueError(f'Invalid {key}')
-        if typ == 'boolean' and type(value) is not bool:
-            raise ValueError(f'Invalid {key}')
-        if typ == 'array' and (not isinstance(value,list) or len(value)<t.get('minItems',0)):
-            raise ValueError(f'Invalid {key}')
-        if 'enum' in t and value not in t['enum']:
-            raise ValueError(f'Invalid {key}')
+    if not isinstance(name, str) or name not in TOOL_MAP:
+        raise ValueError('Unknown tool')
+    validate_value(args, TOOL_MAP[name])
 
 
 def execute(conn, name, a):
@@ -370,6 +385,8 @@ def execute(conn, name, a):
 
 
 def handle(conn, message):
+    if not isinstance(message, dict):
+        return {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Expected object'}}
     mid=message.get('id')
     if message.get('jsonrpc') != '2.0' or not isinstance(message.get('method'),str):
         return {'jsonrpc':'2.0','id':mid,'error':{'code':-32600,'message':'Invalid request'}}
@@ -377,8 +394,11 @@ def handle(conn, message):
     method=message['method']
     try:
         if method=='initialize':
-            ver=message.get('params',{}).get('protocolVersion','2025-11-25')
-            if ver not in {'2025-11-25','2025-06-18','2025-03-26'}:
+            params=message.get('params',{})
+            if not isinstance(params, dict):
+                raise ValueError('Expected params object')
+            ver=params.get('protocolVersion','2025-11-25')
+            if not isinstance(ver, str) or ver not in {'2025-11-25','2025-06-18','2025-03-26'}:
                 raise ValueError('Unsupported protocol version')
             return {'jsonrpc':'2.0','id':mid,'result':{'protocolVersion':ver,'capabilities':{'tools':{'listChanged':False}},'serverInfo':{'name':'orbit-native-local','version':VERSION}}}
         if method=='ping': return {'jsonrpc':'2.0','id':mid,'result':{}}
@@ -399,14 +419,20 @@ def handle(conn, message):
 def main():
     conn=db_connect()
     try:
-        for raw in sys.stdin.buffer:
+        while True:
+            raw = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
+            if not raw:
+                break
             if len(raw)>MAX_REQUEST_BYTES:
+                # Drain this frame in bounded chunks so the next request stays aligned.
+                while raw and not raw.endswith(b'\n'):
+                    raw = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
                 response={'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Request too large'}}
             else:
                 try:
                     message=json.loads(raw)
                     response=handle(conn,message) if isinstance(message,dict) else {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Expected object'}}
-                except (UnicodeError,ValueError):
+                except (UnicodeError,ValueError,RecursionError):
                     response={'jsonrpc':'2.0','id':None,'error':{'code':-32700,'message':'Parse error'}}
             if response is not None:
                 sys.stdout.write(json.dumps(response,ensure_ascii=False,separators=(',',':'))+'\n')

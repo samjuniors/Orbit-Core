@@ -3,6 +3,9 @@
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+- Harden malformed initialize handling, enforce declared tool schema bounds and item/object types, and read oversized stdio frames in bounded chunks without losing the next request.
+- Add protocol recovery regressions and source-to-desktop-bundle runtime parity checks; provide a deterministic candidate bundle refresh script.
+- Reconcile architecture/current capability documentation and replace the outdated preview proposal with an evidence-based, gated IDE-agent roadmap.
 - Next: persistent OS process supervisor and optional secure sharing. Actual host autonomous coding and permissions remain host-owned.
 
 ## [0.24.0] — Unreleased (feature branch)

@@ -21,6 +21,8 @@ HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Exact v0.24 candidate runtime at 84ac7dd; preserve backup before upgrade.
+    'dc868f66a99093f6265dda89d30ea2a678db0319807baa96c3e5819b1e32de60',
     # Previous official Edge/Chrome QA candidate (c027e73) stock files.
     # Exact SHA256 only; unknown/customized content remains protected.
     '8fb102a9b367332ef92d9f1204e69996f6ef1bee033354dd1971735ccd46ba1a',  # source/runtime/orbit_mcp.py
