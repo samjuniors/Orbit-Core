@@ -142,6 +142,13 @@ def recovery_brief(conn, root, project):
         'CHECKPOINT':'Save the next step, blockers and verified result in Orbit-managed .orbit/STATE.md.',
     }
     ev=json.loads(selected['evidence_json'])
+    paused=ev.get('__orbit_control',{})
+    if isinstance(paused,dict) and paused.get('paused') is True:
+        return {'status':'RESUME','build_id':selected['build_id'],'stage':selected['stage'],
+                'revision':selected['revision'],'paused':True,
+                'next':'Resume this paused Orbit build with revision confirmation; verify Git/tests before continuing.',
+                'task_progress':progress,'pending_tasks':tasks,
+                'evidence_source':'persisted_local_sqlite'}
     blockers=[{'stage':stage,'outcome':v.get('outcome'),
                'evidence':str(v.get('evidence',''))[:200]}
               for stage,v in ev.items() if isinstance(v,dict) and
@@ -433,6 +440,13 @@ def experience_view(intake, recovery, run=None):
     stages=flow_for({'evidence_json':json.dumps(run.get('evidence',{})),
                      'stage':run['stage']})
     stage=run['stage']
+    paused=run.get('evidence',{}).get('__orbit_control',{})
+    if isinstance(paused,dict) and paused.get('paused') is True:
+        result.update(phase='PAUSED',headline='Build paused in Orbit',
+                      summary='Host work and preview processes are not controlled by this ledger.',
+                      next_action={'label':'Resume with the current build revision and inspect Git/tests',
+                                   'tool':'orbit_project_action'})
+        return result
     count=stages.index(stage) if stage in stages else 0
     result['progress']={'build_id':run['build_id'],'stage':stage,
                        'completed_stages':count,'total_stages':len(stages)-1,
@@ -486,7 +500,7 @@ def experience_view(intake, recovery, run=None):
             for x in pending[-4:]]
         if pending:
             result['attention'].insert(0,str(len(pending))+' user change request(s) need action.')
-            result['next_action']={'label':'Revise the existing Antigravity artifact and address requested changes',
+            result['next_action']={'label':'Revise the existing host artifact or Markdown plan and address requested changes',
                                    'tool':'orbit_build_feedback'}
             result['phase']='CHANGES_REQUESTED'
     result['attention'] += [
@@ -507,14 +521,44 @@ def begin(conn,root,a):
         raise ValueError('objective must be bounded text')
     row=get(conn,root,a)
     if row:return {'status':'EXISTS','run':public(row)}
-    flow=flow_for_project(conn,root,a)
+    kind=a.get('change_kind')
+    source_id=a.get('change_from')
+    baseline=a.get('baseline_reference')
+    if kind is not None and kind not in SCOPED_FLOWS:
+        raise ValueError('change_kind must be a supported scoped change')
+    if (source_id or baseline) and not kind:
+        raise ValueError('Scoped changes require change_kind')
+    if kind and bool(source_id)==bool(baseline):
+        raise ValueError('Supply exactly one of change_from or baseline_reference')
+    anchor=None
+    if source_id:
+        anchor=get(conn,root,{'project':a['project'],'build_id':source_id})
+        if not anchor or anchor['stage']!='DONE':
+            return {'status':'HOLD','reason':'change_from must reference a completed, immutable build in this project'}
+    if baseline:
+        if not isinstance(baseline,str) or not 8<=len(baseline.strip())<=240:
+            raise ValueError('baseline_reference must identify a host-inspected baseline')
+        markers=project_signals(root)
+        code={'package.json','pyproject.toml','setup.py','Cargo.toml','go.mod',
+              'pom.xml','build.gradle','pubspec.yaml','CMakeLists.txt',
+              'src/','app/','apps/','source/','lib/','android/','ios/'}
+        if not set(markers).intersection(code):
+            return {'status':'HOLD','reason':'No bounded code/manifest signals; inspect the repo and use approved intake if new'}
+    flow=SCOPED_FLOWS[kind] if kind else flow_for_project(conn,root,a)
+    stage=flow[0]
+    evidence={'__orbit_policy':'approval-v1','__orbit_flow':list(flow)}
+    if kind:
+        evidence['__orbit_change_kind']=kind
+        evidence['__orbit_anchor']={'build_id':source_id,'revision':anchor['revision']} if anchor else {
+            'host_reported_baseline':baseline.strip()}
     if a.get('confirm_write') is not True:
         return {'status':'PREVIEW_ONLY','project':a['project'],'root':str(root),'build_id':key,
-                'stage':'RESEARCH','stages':list(flow),
-                'next':'Research domain rules and reusable components before making the plan.'}
+                'stage':stage,'stages':list(flow),'anchor':evidence.get('__orbit_anchor'),
+                'next':'Inspect scoped impact and obtain plan approval where required.' if kind else
+                       'Research domain rules and reusable components before making the plan.'}
     with conn:
         conn.execute('INSERT INTO build_runs VALUES (?,?,?,?,?,?,?,?)',
-                     (a['project'],str(root),key,'RESEARCH',1,objective,json.dumps({'__orbit_policy':'approval-v1','__orbit_flow':list(flow)}),now()))
+                     (a['project'],str(root),key,stage,1,objective,json.dumps(evidence),now()))
     return {'status':'CREATED','run':public(get(conn,root,a))}
 
 def current(conn,root,a):
@@ -583,6 +627,8 @@ def advance(conn,root,a):
     if not isinstance(evidence,str) or not 1<=len(evidence)<=1600:
         raise ValueError('evidence must be bounded text')
     evidence_map=json.loads(row['evidence_json'])
+    if evidence_map.get('__orbit_control',{}).get('paused') is True:
+        return {'status':'HOLD','reason':'Build ledger is paused; resume with the current revision before advancing.'}
     flow=flow_for(row)
     if outcome=='PASS' and any(x.get('status')=='OPEN' for x in evidence_map.get('__orbit_feedback',[])
                                if isinstance(x,dict)):
