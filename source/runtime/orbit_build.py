@@ -237,6 +237,7 @@ LIFECYCLE_STEPS = {
     'start': ['Inspect project and selected checkpoint', 'Resume an unfinished build or use approved intake for a new project'],
     'resume': ['Select build if ambiguous', 'Reconcile checkpoint against current Git, files and tests', 'Continue only the verified next step'],
     'pause': ['Finish or safely interrupt the host task', 'Save an approved scoped checkpoint', 'Pause this Orbit build ledger only'],
+    'preview_stop': ['Identify an Orbit-owned same-session preview_id', 'Preview orbit_preview_stop and obtain explicit host consent', 'Call orbit_preview_stop(confirm_stop=true); never kill other processes'],
     'fix': ['Reproduce the symptom', 'Inspect affected code and choose minimal patch', 'Run focused and regression checks'],
     'feature': ['Inspect existing behavior and contracts', 'Draft scoped change and obtain plan approval', 'Implement and regression-test without changing the old DONE build'],
     'redesign': ['Review existing design, accessibility and API/data contracts', 'Compare reusable and custom components', 'Approve and verify scoped UI changes'],
@@ -252,6 +253,8 @@ def normalize_action(value):
     if not isinstance(value,str) or not 1 <= len(value.strip()) <= 240:
         raise ValueError('action must be 1–240 characters')
     term=' '.join(value.casefold().split())
+    if re.match(r'^(?:stop|pause|close|terminate) (?:the |my )?(?:local )?(?:dev )?(?:preview|server)\\b',term):
+        return 'preview_stop'
     exact={'stop':'pause','pause':'pause','hold':'pause','continue':'resume',
            'resume':'resume','restart':'resume','start':'start','begin':'start',
            'status':'status','inspect':'status','review':'review','test':'review',
@@ -292,7 +295,7 @@ def lifecycle_view(conn, root, a):
     maturity=('in_progress' if saved in ('RESUME','NEEDS_BUILD_SELECTION') else
               'completed_recorded' if saved=='ALL_DONE' else
               'existing' if signals else 'new')
-    if a.get('maturity') in ('stalled','maintained','partially_built'):
+    if a.get('maturity') in ('new','partially_built','existing','completed','maintained','stalled'):
         maturity=a['maturity']+'_user_reported'
     selected=None
     if a.get('build_id'):
@@ -318,6 +321,7 @@ def lifecycle_view(conn, root, a):
       'resume':('Confirm revision to resume the paused ledger.' if halted else
                 'Reconcile recorded stage with Git status, modified paths and tests.'),
       'pause':'Save a revision-guarded pause; separately checkpoint via orbit_project_checkpoint.',
+      'preview_stop':'Use orbit_preview_stop only with a known same-session preview_id and explicit approval.',
       'feature':'Anchor a new change build to a DONE build or an existing verified baseline.',
       'fix':'Reproduce, patch and test without mandatory new-project intake.',
       'redesign':'Inspect current UX and preserve existing API/data contracts.',
@@ -335,7 +339,8 @@ def lifecycle_view(conn, root, a):
                                'revision':selected['revision'],'paused':halted} if selected else None),
             'workflow':LIFECYCLE_STEPS[action],
             'next_action':next_action,'requires_git_test_verification':True,
-            'host_action_executed':False,'user_data_modified':False}
+            'host_action_executed':False,'user_data_modified':False,
+            'preview_stop_requires_separate_tool':action=='preview_stop'}
 
 def lifecycle_action(conn, root, a):
     """Only pause/unpause mutate, with explicit owner-host confirmation and CAS."""
