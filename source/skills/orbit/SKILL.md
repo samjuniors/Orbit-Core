@@ -15,3 +15,9 @@ Apply the `orbit` lead agent in `.agents/agents/orbit.md` and the specialist def
 - Memory is SQLite local only when MCP connected. No remote API, paid model, automatic agent process, cloud sync, or user data export is implied by skill installation.
 
 Read `references/TASK-LIFECYCLE.md` for the native agent ledger workflow and `references/HANDOFF.md` for a bounded handoff. Apply only when delegation is actually needed.
+
+## Local application preview (v0.24 feature candidate)
+
+For a new app, after approved implementation, inspect the actual package scripts, plan tests, and prefer the existing IDE browser. To preview the running app, call `orbit_preview_start` with `confirm_run: false` to show the **exact** shell-free argv and loopback URL. Re-run with `confirm_run: true` only after actual user/host permission to execute that project's code; use `orbit_preview_status` and inspect readiness and logs. Open the returned `http://127.0.0.1:<port>/` using an available host browser. Run real user interaction tests through the host browser or Playwright only when installed and permitted. Do not equate HTTP 200 with UI test success. Use `orbit_preview_stop` with `confirm_stop: true` to shut down the locally managed process when finished.
+
+No cloud deployment, public tunnel, remote sharing, third-party auto-install, or background AI agent execution is included in these MCP tools. The preview's process tracking lives only in the active MCP process; after a host/MCP restart it cannot safely adopt or stop previously spawned processes.

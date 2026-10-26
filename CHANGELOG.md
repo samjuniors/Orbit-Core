@@ -3,7 +3,14 @@
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
-- No features merged. Proposed v0.24.0: local preview manager, browser QA evidence, health/readiness checks, start/stop protections, and explicit approval before public tunnel exposure.
+- Next: persistent supervisor, automated browser QA, secure optional sharing; keep both out of this initial slice.
+
+## [0.24.0] — Unreleased (feature branch)
+- Add three opt-in localhost preview MCP tools: start, status and stop.
+- Prevent automatic adoption of foreign processes; enforce approved, shell-free runtime commands and loopback HTTP readiness checks.
+- Bounded process logs and per-session lifecycle management; never start a public tunnel or deploy.
+- Add real HTTP smoke tests and safe installer upgrades from stock v0.23.0 installations.
+- Cross-session supervisor, visual browser QA and one-prompt app building are not yet implemented; keep as explicit follow-up milestones.
 
 ## [0.23.0] — 2026-10-26
 - Baseline snapshot of the previously created ORBIT Universal Setup v0.23.0 source and installation package.

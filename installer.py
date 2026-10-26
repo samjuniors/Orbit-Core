@@ -15,15 +15,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
-VERSION = "0.23.0"
+VERSION = "0.24.0"
 SERVER = "orbit-core-native"
 HOSTS = ("antigravity", "codex", "claude-code")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    '36b2fda1614b658e7f15e3c80c63e50f6727e2b3f013e6b2d7ee30fb2768d6fd',
+    '063ff538079f946bfba162f610f5d10728485c77d6d8126cabaa95c8dfa98822',
     '096c989e51db5c0f123aee197e3c65456a0e5508ec7902a50ce8a5cb3aefc17e',
     '0ff44846a5d26607bbed8d1d3f506e898546e13a614b76962c6029a02e195c44',
     '10fa370a50e8cdc3032c40f5ddec3e221c2999656a7158f5585b053c0dbd67c9',
+    '17378035a0ced4e4f8589875ff69df8ae2d83b228f3b8c41674f027c9ab183db',
     '23c88ebcac418d20857737265a900c30c18851bfd0ef4fd27f77f76f6eb59439',
     '291f371c54a393ca37ed90b60a043dd7b61aae1c41ccbcc14624954c2c12f812',
     '2f47b90bc026ee0da72facd7781b6730246986b69226df7b4908493f4c3c4ca3',
@@ -33,25 +36,41 @@ OLD_STOCK_SHA256 = {
     '38e3094ab64cda3a81ff6d9d84c4dde26620e80f371e84a9fec82c25dcb8cc2d',
     '39ecb53621d44bf4e573cff5362b04250a1d3100f65d62c3ecb1c4573c9fcf23',
     '3c6965f344fd4e8536391f97ef7388c51ce6e3dd385498b467ebe43e8245ee79',
+    '408f244154cd9886f838e8c288e4d4e60ac82327c066263c2edb88400e1cc6f0',
     '4433fbbb27920a5a89e3c27a130bc3f921775687cafbdea5009f27181ef0bfc5',
+    '4710a7fa63678f3d8a75e68e49ac3e9142895d21e4b7624612d082f0d857663b',
     '4b0b06086e34eb3769fd09fcf05cb3a3d133ee2b3859822f3b26dc62aea702ef',
     '4e439caf19e4fffa036b60c13c346f7a6199cf20b5929948631286c6a5839a3e',
+    '5269a660c24014f3978d876193e56caa404496ac00701a3197b3616bd818a9b3',
     '56337132ae0887cb30eae7c0755563645fab1580e23119ad0ca7861d74893bac',
+    '5686839ccddc37932d98a68cd79fe7b673a86183ac6bea93d0e92a47e0bef55e',
+    '6adbe3688181d077fc33f04800b13e334ecb49a0a7450dc91b741ce2a61122b9',
+    '6c4d8d33a7503ffc18fa22460b9964af1a559c2a192e5090afeee57a58eb339a',
     '6d96b9f10655a1e8e711850f5403a7add8a8257d4f3bb5ba1f215b82b07f8099',
     '7db286c05dcd8bd77a4585f2ad387c04107aff132d84f394faa4ed6bfaf88314',
+    '81bcd52a57163a9b071212a02ca9421a4df832ef6cfbaee9ff62dc46dc19aaa1',
     '85a3599bc5c43dfdb22f14cf9b73655417292c6f4fe91961c9fe051b27f0c604',
     '86e14167e128f639fdbe8652607cf52e30bede136fbf556a20236b769421ed89',
+    '90b965281ac32b4ae86233fb8d555cccf3dcb424ca0e7123bf5cdf45f008c370',
     '95906cb1cda92139f4154303f319a0fbd489dd15d720edad3dd0fcf28591189f',
+    '99ee594c18af3e5a03209c395b59fa4573a9c75c42eb0a7ae9eff3e9c6cbdbf5',
+    'a3661107a54f45efdb4c5c24364e9e5939c2e42c49be91695675473a33b256aa',
     'a9db9aeeb44bef29a1d18918762b4155dbc9d5c2aee02b2a8561f9759e15ac02',
     'ac3c4581f27583552db2a74ed15622475ec0c384718b11888b1866dd98d3cd37',
+    'bdcdfa4f608ffdecc96be6fa03c2950836060f530a39605dfbd59f9140b31e4b',
     'c6664ae0e2e9d697ff2946b176a6e0b2e9c5b05c78e185117ddc997fd5803714',
+    'cbecb60f81d240f4941a329858e67bdb9ca17b2107134a430a486d1020e82911',
+    'ccb45ee7d77d780b2393011425acf4f9b7df4d92bb3ce4a7cce9ee600c26cf49',
+    'd258c8983def9b969d5a1ecaa6e02572f31ad9a3815c9d683170bf6455ce9443',
     'd691d0b30b5cc6fd40557f31de46c5c1963eff698dba630812f9a76a03f04c35',
     'de6e74a86bb3d7cd5909aa9143a11b3b57680e48360f7400d1deef60bdd6d075',
     'dec31c1a6657466fc11269e75f880bc09e65a9bd2b4a5b382c602387d2a063f3',
+    'e5fb9af237998b0691a88309f902f9d49ba36e1080746b489c23ed3848b68c70',
+    'ea012d2f45049bc7d3433c775da6aaff46955a1ff0827e4f311f120bde204d3f',
     'eac64b2c255bdcae6ee64d41708f3adf21d4b7b0623cd5ddb0c1281a2f148071',
     'eb98bde2a77696dbcdd9541f890ae5993017de4bab42acb979e1948c46ccbfc0',
     'f151a221c0a282a2a79cc3dcbfffe75aa9dbb635e3c7195c03bfdb025c41ca47',
-    'f19689b6d352ef5a34f165a99c8b4ac624a279e7c39ef5b3cb33f92122888b03' 
+    'f19689b6d352ef5a34f165a99c8b4ac624a279e7c39ef5b3cb33f92122888b03',
 }
 
 
@@ -131,6 +150,12 @@ You are the lead project orchestrator, using this host's current model and nativ
 
 Before delegating to a specialist, call `orbit_capability_select` with the real project path, task objective and host tools. Review installed skill compatibility/provenance. Prefer existing trusted skills and native host tools; if something is missing, research using the host's approved web search. The official Impeccable frontend design skill (https://impeccable.style/) is an optional candidate, never silently installed or treated as universally best. Third-party installation and adding MCP connections are user/host approval-gated. Review source/permissions first, then verify actual availability after approval. Specialists may recommend, not self-authorize or spawn more agents.
 
+
+
+## Local app previews (v0.24 candidate)
+
+Once implementation has been approved, invoke `orbit_preview_start` first without `confirm_run` to inspect the exact argv and loopback URL. Only call it with `confirm_run=true` after user/host permission for running the project code. Use `orbit_preview_status` to verify local HTTP readiness and inspect bounded logs; use `orbit_preview_stop` with `confirm_stop=true` before finishing when applicable. Each run is a local-only server: do not tunnel, deploy, expose public ports, or claim browser/visual tests ran unless the host browser or Playwright truly executed. Process stop is limited to the same active MCP process session; after an MCP restart the preview may require manual terminal cleanup.
+
 For a Todo Lab test, develop the app through milestones and explicitly report native delegation and MCP calls separately. A generated test report is not proof that a test ran: show command and exit code.
 '''
 
@@ -168,7 +193,7 @@ def same_or_create(changes: list[Change], dest: Path, data: bytes, root: Path|No
         if current != data:
             oldhash=hashlib.sha256(current).hexdigest()
             if oldhash in OLD_STOCK_SHA256:
-                changes.append(Change(dest,data,'UPGRADE',desc+' (v0.22 stock file; backup made)'))
+                changes.append(Change(dest,data,'UPGRADE',desc+' (recognized stock file; backup made)'))
             elif dest.name in {'AGENTS.md','CLAUDE.md'}:
                 # Existing owner guidance is authoritative; Orbit's skill remains available.
                 changes.append(Change(dest,current,'PRESERVE','Existing owner guidance retained'))
@@ -195,7 +220,7 @@ def merge_json(changes: list[Change], dest: Path, entry: dict, root: Path, desc:
         # Only migrate the exact previous stock server command shape, preserving other MCPs.
         if not (isinstance(prior,dict) and prior.get('command')==entry['command']
                 and isinstance(prior.get('args'),list) and len(prior['args'])==1
-                and '/0.22.0/' in str(prior['args'][0]).replace('\\','/')
+                and any('/'+version+'/' in str(prior['args'][0]).replace('\\','/') for version in ('0.22.0','0.23.0'))
                 and set(prior)==set(entry)):
             raise SetupError('Existing Orbit MCP registration differs; no overwrite: '+str(dest))
     obj={**old, 'mcpServers':{**servers,SERVER:entry}}
@@ -219,10 +244,10 @@ def merge_toml(changes: list[Change], dest: Path, python_cmd: str, runtime: Path
         match=re.search(r'(?ms)^\s*\[mcp_servers\.["\']orbit-core-native["\']\]\n(.*?)(?=^\s*\[|\Z)', old)
         if match:
             body=match.group(1)
-            if ('/0.22.0/' in body.replace('\\','/') and
+            if (any('/'+version+'/' in body.replace('\\','/') for version in ('0.22.0','0.23.0')) and
                 re.fullmatch(r'(?ms)\s*command\s*=\s*"[^"\n]+"\s*\nargs\s*=\s*\["[^"\n]+"\]\s*',body)):
                 next_body=old[:match.start()]+'\n'+section.strip()+'\n'+old[match.end():]
-                changes.append(Change(dest,next_body.encode('utf-8'),'APPEND','Codex migrate v0.22 MCP with backup'))
+                changes.append(Change(dest,next_body.encode('utf-8'),'APPEND','Codex migrate stock MCP with backup'))
                 return
         raise SetupError('Codex Orbit MCP table already exists and differs; review manually: '+str(dest))
     body=(old.rstrip()+ '\n'+ section if old.strip() else section.lstrip()).encode('utf-8')
@@ -239,7 +264,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
     runtime=runtime_folder()
     if any(p.is_symlink() for p in [runtime,runtime.parent]):raise SetupError('Runtime directory is a symlink')
     changes=[]
-    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py']:
+    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py']:
         p=src/'runtime'/name
         same_or_create(changes,runtime/name,p.read_bytes(),None,'Shared Orbit stdio MCP runtime')
     cmd=python_binary()

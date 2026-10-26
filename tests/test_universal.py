@@ -75,6 +75,7 @@ class UniversalSetupTests(unittest.TestCase):
             entry=json.loads(p.read_text())['mcpServers']['orbit-core-native']
             self.assertTrue(Path(entry['args'][0]).is_file())
             self.assertTrue(Path(entry['command']).is_file())
+            self.assertTrue((installer.runtime_folder()/'orbit_preview.py').is_file())
         self.assertEqual(len(list((self.project/'.claude/agents').glob('orbit-*.md'))),13)
         self.assertEqual(len(list((self.project/'.agents/agents').glob('*.md'))),13)
 
@@ -91,7 +92,7 @@ class UniversalSetupTests(unittest.TestCase):
         def req(i,method,params=None):return {'jsonrpc':'2.0','id':i,'method':method,'params':params or {}}
         def call(i,name,args):return req(i,'tools/call',{'name':name,'arguments':args})
         initial=rpc([req(1,'initialize',{'protocolVersion':'2025-11-25'}),req(2,'tools/list')])
-        self.assertEqual(len(initial[1]['result']['tools']),17)
+        self.assertEqual(len(initial[1]['result']['tools']),20)
         def tooldata(r):return json.loads(r['result']['content'][0]['text'])
         save_args={'project':'orbit-todo-lab','key':'goal','kind':'decision','summary':'Local SQLite API, no cloud sync','source':'test','confirm_write':True}
         result=rpc([call(3,'orbit_memory_save',save_args)])[0]
@@ -103,13 +104,14 @@ class UniversalSetupTests(unittest.TestCase):
 
     def test_mcpb_structure(self):
         import zipfile
-        with zipfile.ZipFile(ROOT/'ORBIT-Claude-Desktop-v0.23.0.mcpb') as z:
+        with zipfile.ZipFile(ROOT/'ORBIT-Claude-Desktop-v0.24.0.mcpb') as z:
             m=json.loads(z.read('manifest.json'))
             self.assertEqual(m['server']['type'],'python')
-            self.assertEqual(len(m['tools']),17)
+            self.assertEqual(len(m['tools']),20)
             self.assertIn('server/orbit_mcp.py',z.namelist())
             self.assertIn('server/orbit_tasks.py',z.namelist())
             self.assertIn('server/orbit_capabilities.py',z.namelist())
+            self.assertIn('server/orbit_preview.py',z.namelist())
 
 
 
@@ -162,6 +164,25 @@ class UniversalSetupTests(unittest.TestCase):
         self.assertEqual(result['recommended_action'],'BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL')
         self.assertEqual(result['external_research_candidates'][0]['name'],'impeccable')
         self.assertFalse((self.project/'.agents/skills/impeccable').exists())
+
+    def test_preview_runtime_is_installed_and_present(self):
+        installer.install(installer.plan(self.project,['codex'],scope='project'))
+        r = installer.runtime_folder()
+        self.assertTrue((r/'orbit_preview.py').exists())
+        self.assertIn('0.24.0',str(r))
+
+    def test_stock_v023_runtime_upgrade(self):
+        old = Path(__file__).resolve().parents[2]/'orbit-core-mcp-v0.23.0-git/source/runtime/orbit_mcp.py'
+        if not old.exists():
+            self.skipTest('Prior version source unavailable in this checkout')
+        runtime = installer.runtime_folder()
+        runtime.mkdir(parents=True)
+        (runtime/'orbit_mcp.py').write_bytes(old.read_bytes())
+        changes=installer.plan(self.project,['codex'],scope='project')
+        self.assertIn('UPGRADE',[c.action for c in changes])
+        installer.install(changes)
+        self.assertEqual((runtime/'orbit_mcp.py.orbit-backup').read_bytes(),old.read_bytes())
+        self.assertTrue((runtime/'orbit_preview.py').exists())
 
     def test_machine_config_preserves_other_servers(self):
         prior=os.environ.get('ORBIT_SETUP_HOME')

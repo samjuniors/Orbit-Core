@@ -12,10 +12,11 @@ import sqlite3
 import sys
 import orbit_tasks
 import orbit_capabilities
+import orbit_preview
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = '0.23.0'
+VERSION = '0.24.0'
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_STATE_BYTES = 24000
 KINDS = {'semantic', 'episodic', 'decision', 'procedural', 'checkpoint'}
@@ -257,7 +258,10 @@ TOOLS = [
 ]
 TOOLS += [
     {'name':'orbit_capability_discover','description':'Read-only local skill and MCP config metadata inventory; never downloads, installs or executes anything.','inputSchema':schema({'project_root':string(2000)},['project_root'])},
-    {'name':'orbit_capability_select','description':'Suggest reusable installed skill/tool matches and official research candidates for a task; external installs require owner review/approval.','inputSchema':schema({'project_root':string(2000),'objective':string(1500),'host_tools':{'type':'array','maxItems':80,'items':{'type':'string'}}},['project_root','objective'])}
+    {'name':'orbit_capability_select','description':'Suggest reusable installed skill/tool matches and official research candidates for a task; external installs require owner review/approval.','inputSchema':schema({'project_root':string(2000),'objective':string(1500),'host_tools':{'type':'array','maxItems':80,'items':{'type':'string'}}},['project_root','objective'])},
+    {'name':'orbit_preview_start','description':'PREVIEW or explicitly run a localhost dev server in this project; executes the supplied project command only with confirm_run. No public tunnel or deployment.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40),'command':{'type':'array','minItems':1,'maxItems':20,'items':{'type':'string'}},'port':{'type':'integer','minimum':1024,'maximum':65535},'health_path':string(100),'confirm_run':{'type':'boolean'}},['project_root','preview_id','command','port'])},
+    {'name':'orbit_preview_status','description':'Check running local preview readiness and bounded log tail for this MCP session. No browser simulation.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40)},['project_root','preview_id'])},
+    {'name':'orbit_preview_stop','description':'Stop only the locally spawned preview tracked by this MCP session, with explicit confirm_stop.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40),'confirm_stop':{'type':'boolean'}},['project_root','preview_id'])}
 ]
 TOOL_MAP = {x['name']:x['inputSchema'] for x in TOOLS}
 
@@ -288,6 +292,9 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name=='orbit_preview_start': return orbit_preview.start(project_root(a), a)
+    if name=='orbit_preview_status': return orbit_preview.status(project_root(a), a)
+    if name=='orbit_preview_stop': return orbit_preview.stop(project_root(a), a)
     if name=='orbit_capability_discover': return orbit_capabilities.discover(project_root(a))
     if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]))
     if name=='orbit_project_scan': return scan(a)
