@@ -268,6 +268,17 @@ def merge_json(changes: list[Change], dest: Path, entry: dict, root: Path, desc:
         changes.append(Change(dest,body,'CREATE' if not dest.exists() else 'MERGE',desc))
 
 
+def stock_codex_body(body,python_cmd,runtime):
+    """Accept only an exact existing stock TOML definition; reject custom fields."""
+    matched=re.fullmatch(r'(?ms)\s*command\s*=\s*("(?:\\\\.|[^"\\\\])*")\s*\nargs\s*=\s*\[\s*("(?:\\\\.|[^"\\\\])*")\s*\]\s*',body)
+    if not matched:return False
+    try:
+        return (json.loads(matched.group(1))==python_cmd and
+                stock_runtime_path(json.loads(matched.group(2)),str(runtime)))
+    except ValueError:
+        return False
+
+
 def merge_toml(changes: list[Change], dest: Path, python_cmd: str, runtime: Path, root: Path):
     check_dest(dest,root)
     old = dest.read_text('utf-8') if dest.exists() else ''
@@ -281,8 +292,7 @@ def merge_toml(changes: list[Change], dest: Path, python_cmd: str, runtime: Path
         match=re.search(r'(?ms)^\s*\[mcp_servers\.["\']orbit-core-native["\']\]\n(.*?)(?=^\s*\[|\Z)', old)
         if match:
             body=match.group(1)
-            if (stock_runtime_path(re.search(r'args\\s*=\\s*\\[\\s*(\"[^\"\\n]+\")',body).group(1).strip('\"'),str(runtime)) and
-                re.fullmatch(r'(?ms)\s*command\s*=\s*"[^"\n]+"\s*\nargs\s*=\s*\["[^"\n]+"\]\s*',body)):
+            if stock_codex_body(body,python_cmd,runtime):
                 next_body=old[:match.start()]+'\n'+section.strip()+'\n'+old[match.end():]
                 changes.append(Change(dest,next_body.encode('utf-8'),'APPEND','Codex migrate stock MCP with backup'))
                 return
@@ -420,11 +430,18 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--project',type=str)
     ap.add_argument('--scope',choices=SCOPES,default='machine')
-    ap.add_argument('--hosts',nargs='+',choices=HOSTS,default=list(HOSTS))
+    ap.add_argument('--hosts',nargs='+',choices=HOSTS+('auto',),default=['auto'])
     ap.add_argument('--install',action='store_true',help='Apply changes only with explicit flag (preview default)')
     a=ap.parse_args()
     try:
-        changes=plan(a.project,a.hosts,a.scope)
+        if a.hosts==['auto']:
+            from orbit_cli import detect
+            chosen=[item['host'] for item in detect(a.project) if item['detected'] and item['host'] in HOSTS]
+            if not chosen:raise SetupError('No hosts detected; use --hosts to select one explicitly')
+        else:
+            if 'auto' in a.hosts:raise SetupError('auto cannot be mixed with explicit hosts')
+            chosen=a.hosts
+        changes=plan(a.project,chosen,a.scope)
         for c in changes:print(f'{c.action:7} {c.target}')
         if a.install:
             paths=install(changes)
