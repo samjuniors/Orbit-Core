@@ -21,6 +21,13 @@ HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Previous official Edge/Chrome QA candidate (c027e73) stock files.
+    # Exact SHA256 only; unknown/customized content remains protected.
+    '8fb102a9b367332ef92d9f1204e69996f6ef1bee033354dd1971735ccd46ba1a',  # source/runtime/orbit_mcp.py
+    '56b544b943add6fe3a321ed74f694de0059b35a1fe1a497195d81560b6a7b31f',  # source/runtime/orbit_browser.py
+    '5310720aa06c6d44a4cd18065f2b6da74b1284e4478f12e7be7a5aba1679276f',  # source/runtime/orbit_build.py
+    '88ac4083b7fea0739355812f9f8c0d83c0e24591c23a96fdec025f8521c508a6',  # source/skills/orbit/references/HANDOFF.md
+    'de6db388c651f35cb4f93db887e7f27b5453ea37e0184a1717a933e1f40b560c',  # source/skills/orbit/references/TASK-LIFECYCLE.md
     # Recognized previous unmodified v0.24 files; upgrade after backup, never overwrite owner edits.
     'f6a4bd3c1e21d936403954b273d7e882dc897211e2da471ec8360e6639ee45a1',
     '0f929f83c43c11b46a666387dd3d7581e081876a4cf401e2f2928b1a3f97f85c',
