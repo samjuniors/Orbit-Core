@@ -1,4 +1,4 @@
-import sqlite3,sys,tempfile,unittest
+import json,sqlite3,sys,tempfile,unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'source/runtime'))
 import orbit_mcp,orbit_build,orbit_intake
@@ -10,6 +10,7 @@ class TestIntake(unittest.TestCase):
   self.root=Path(self.temp.name)/'todo';self.root.mkdir();self.root=self.root.resolve(strict=True)
   self.db=sqlite3.connect(':memory:');self.db.row_factory=sqlite3.Row;self.addCleanup(self.db.close)
   orbit_build.setup(self.db);orbit_intake.setup(self.db)
+  self.db.execute("CREATE TABLE memories (project TEXT, status TEXT, updated_at TEXT)")
   self.a={'project_root':str(self.root),'project':'todo'}
  def do(self,n,**kw):return orbit_mcp.execute(self.db,n,{**self.a,**kw})
  def test_new_build_is_blocked_until_accepted_interview(self):
@@ -203,8 +204,6 @@ class TestIntake(unittest.TestCase):
     self.assertEqual(begin['status'],'CREATED')
     desired=orbit_mcp.execute(database,'orbit_build_status',a)['stages']
     self.assertIn(next_qa,desired)
-    for stage in desired[1:-1]:
-     pass
     for stage in ['RESEARCH','PLAN','IMPLEMENT','VERIFY']:
      state=orbit_mcp.execute(database,'orbit_build_status',a)['run']
      self.assertEqual(state['stage'],stage)
