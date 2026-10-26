@@ -36,3 +36,8 @@ Require an agreed/explicitly-defaulted product brief, doc-purpose inventory, req
 ## Evidence-driven docs and reuse decisions
 
 When creating/updating architecture or the roadmap, link back to the **actual interview path** (question, user choice, resulting tradeoff) and the small dependency decision record: `component / existing option / selected library-or-native / reason / license/security/compatibility / install approval`. Don't claim a planned feature complete unless code and tests support it. Review semantic drift between docs and real implementation after substantial changes; checked roadmap milestones must reflect evidence, not the build report alone.
+
+
+## Document real reuse decisions, not just intent
+
+Record the accepted component choice and provenance in the existing architecture/roadmap docs where appropriate; explain maintenance, security, platform support and testing. Verify domain behavior and tests before checking a roadmap milestone. Re-audit docs after changes, but do not duplicate user-maintained canonical sources.

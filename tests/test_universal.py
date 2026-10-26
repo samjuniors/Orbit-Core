@@ -40,6 +40,16 @@ class UniversalSetupTests(unittest.TestCase):
                 self.assertIn(digest, installer.OLD_STOCK_SHA256)
         self.assertNotIn('0' * 64, installer.OLD_STOCK_SHA256)
 
+    def test_role_skill_preferences_have_safe_fallback(self):
+        from source.runtime import orbit_capabilities as cap
+        outcome=cap.select(self.project,'orbit-security: audit app security',[],home=self.home)
+        policy=outcome['role_skill_preferences']
+        self.assertEqual(policy['role'],'orbit-security')
+        self.assertIn('static-analysis',[r['name'] for r in policy['preferred_skills']])
+        self.assertIn('native host tools',policy['fallback'])
+        self.assertTrue(all(r['status']=='NOT_INSTALLED' for r in policy['preferred_skills']))
+        self.assertFalse((self.project/'.agents/skills/static-analysis').exists())
+
     def test_recognizes_prior_v024_stock_runtime(self):
         # We do not store previous binary distributions in test fixtures, but
         # these digests identify precisely the published v0.24 test candidate.
