@@ -1,0 +1,139 @@
+name: Publish versioned release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing VERSION value to publish (for example 0.23.0)'
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Test, tag and publish
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out full history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate requested version and provenance
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'VERSION must contain strict stable SemVer (MAJOR.MINOR.PATCH)' >&2
+            exit 1
+          fi
+          tag="v${version}"
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
+            if [[ "$GITHUB_REF" != 'refs/heads/main' ]]; then
+              echo 'Run manual releases from the main branch only' >&2
+              exit 1
+            fi
+            if [[ "$REQUESTED_VERSION" != "$version" ]]; then
+              echo "Requested version $REQUESTED_VERSION differs from VERSION $version" >&2
+              exit 1
+            fi
+          else
+            if [[ "$GITHUB_REF" != "refs/tags/$tag" ]]; then
+              echo "Tag $GITHUB_REF does not match VERSION $version" >&2
+              exit 1
+            fi
+            git fetch --no-tags origin main
+            if ! git merge-base --is-ancestor HEAD origin/main; then
+              echo 'Tagged commit is not present on main' >&2
+              exit 1
+            fi
+          fi
+          echo "ORBIT_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "ORBIT_RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+      - name: Compile code
+        run: python -m compileall -q source installer.py scripts tests
+      - name: Run unit and MCP protocol tests
+        run: python -m unittest discover -s tests -v
+      - name: Verify consistent package versions
+        run: python scripts/check_version.py
+      - name: Build and verify reproducible release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_release.py --verify
+          (cd dist && sha256sum --check "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256")
+      - name: Generate version-specific release notes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os, re
+          version = os.environ['ORBIT_RELEASE_VERSION']
+          notes = Path('CHANGELOG.md').read_text(encoding='utf-8')
+          match = re.search(r'(?ms)^## \[' + re.escape(version) + r'\][^\n]*\n(.*?)(?=^## |\Z)', notes)
+          if not match:
+              raise SystemExit(f'CHANGELOG.md must contain a ## [{version}] entry')
+          content = f'## ORBIT Core MCP v{version}\n\n' + match.group(1).strip() + '\n\n'
+          content += 'Built from a tested commit on the `main` branch. Read `SECURITY.md` and `README.md` before installing. Local MCP and agent integrations require host-specific setup.\n'
+          Path(os.environ['RUNNER_TEMP'], 'release-notes.md').write_text(content, encoding='utf-8')
+          PY
+      - name: Confirm tag is immutable or create it
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git show-ref --verify --quiet "refs/tags/$ORBIT_RELEASE_TAG"; then
+            tagged_commit="$(git rev-list -n 1 "refs/tags/$ORBIT_RELEASE_TAG")"
+            if [[ "$tagged_commit" != "$GITHUB_SHA" ]]; then
+              echo "Existing tag $ORBIT_RELEASE_TAG points to another commit; refusing to move it" >&2
+              exit 1
+            fi
+            echo 'Existing tag matches this commit; reusing it'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git tag -a "$ORBIT_RELEASE_TAG" -m "ORBIT Core MCP $ORBIT_RELEASE_TAG"
+            git push origin "refs/tags/$ORBIT_RELEASE_TAG"
+          fi
+      - name: Add checksum for desktop extension
+        shell: bash
+        run: |
+          sha256sum "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb" > "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256"
+      - name: Publish GitHub Release with installation assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub Release $ORBIT_RELEASE_TAG already exists; leaving it unchanged"
+            exit 0
+          fi
+          flags=()
+          if [[ "${ORBIT_RELEASE_VERSION%%.*}" == '0' ]]; then flags+=(--prerelease); fi
+          gh release create "$ORBIT_RELEASE_TAG" \
+            "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip" \
+            "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
+            "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb" \
+            "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "ORBIT Core MCP v${ORBIT_RELEASE_VERSION}" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            "${flags[@]}"
