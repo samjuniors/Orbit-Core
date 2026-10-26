@@ -105,3 +105,8 @@ untouched. Claude Desktop still needs its separate extension.
 ## Experimental RESEARCH and VERIFY stages
 
 On the independent `fix/habit-reliability-research-skills` branch only, new builds start at RESEARCH and visit VERIFY after IMPLEMENT. Existing build records resume where they were. Specialists consult role-specific preferred skill names using `orbit_capability_select`, check installed/appropriate tools first, and fall back to the host without automatic installation. See [research, verification and reuse](docs/RESEARCH-VERIFY-SKILLS.md).
+
+
+## Product Kit v0.2 audit and bounded Orbit adoption
+
+The user's `product-kit-plugin-v0.2.zip` informed a **read-only persisted recover/continue briefing**, a smallest-complete-change ladder, milestone owner-test guidance, bounded no-progress retry stops and context-efficient checkpoint handoffs. Existing Orbit approvals, build/task SQLite ledgers, owner documentation and host-native tools stay authoritative. **No Product Kit Node runtime, detached CLI worker, automatic Git merge or Claude hook is bundled or installed.** See [Product Kit adoption audit](source/skills/orbit/references/PRODUCT-KIT-ADOPTION.md).

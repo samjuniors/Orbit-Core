@@ -90,6 +90,15 @@ class UniversalSetupTests(unittest.TestCase):
         self.assertIn('[mcp_servers."orbit-core-native"]',p.read_text())
         self.assertTrue((p.with_name('config.toml.orbit-backup')).exists())
 
+    def test_product_kit_adoption_reference_is_installed_without_its_runner(self):
+        installer.install(installer.plan(self.project,scope='project'))
+        for parent in ('.agents/skills', '.claude/skills'):
+            dest=self.project/parent/'orbit'/'references'/'PRODUCT-KIT-ADOPTION.md'
+            self.assertTrue(dest.is_file())
+            self.assertIn('recover',dest.read_text(encoding='utf-8'))
+        self.assertFalse((self.project/'.agents/product-kit').exists())
+        self.assertFalse((self.project/'.agents/product-kit/kit.mjs').exists())
+
     def test_fresh_install_includes_guided_intake_and_doc_references(self):
         installer.install(installer.plan(self.project,scope='project'))
         for host_dir in ('.agents/skills', '.claude/skills'):

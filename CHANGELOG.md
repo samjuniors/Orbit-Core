@@ -3,6 +3,8 @@
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+- Integrate selected Product Kit v0.2 patterns: bounded SQLite-driven recovery briefing, milestone owner QA guidance, lean change/reuse ladder, no-progress retry stop and documented boundaries; no new runtime, unapproved CLI spawning or Git mutations.
+
 - Isolated experimental branch: new-build RESEARCH/VERIFY stage gates with structured host evidence, legacy-build compatibility and curated role-specific skill preferences (native fallbacks; no auto install).
 
 - Next: persistent OS process supervisor and optional secure sharing. Actual host autonomous coding and permissions remain host-owned.
