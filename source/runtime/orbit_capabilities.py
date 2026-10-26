@@ -175,7 +175,7 @@ def select(project_root, objective, host_tools=None, *, home=None):
                 if agent_browser_visible else 'Review official source and request explicit consent before installing or adding its MCP configuration.'),
         'orbit_browser_qa_gate':'Separate Orbit-recorded Playwright PASS still required; third-party MCP screenshots never bypass a blocked gate.',
     }
-    role=next((r for r in ROLE_SKILLS if r in objective.lower()),None)
+    role=next((r for r in sorted(ROLE_SKILLS,key=len,reverse=True) if objective.lower().startswith(r+':') or objective.lower().startswith(r+' ')),None)
     if not role:
         aliases={'frontend':'orbit-frontend','backend':'orbit-backend','qa':'orbit-qa',
                  'security':'orbit-security','devops':'orbit-devops'}
