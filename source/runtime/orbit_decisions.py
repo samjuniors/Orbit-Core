@@ -123,7 +123,7 @@ def components(product_type,platforms,stack,preference):
         if 'any' not in permitted and not wants.intersection(permitted):continue
         if product_type in {'sdk-library','cli','api-service','plugin-mcp','os-platform','data-automation'} and kind in {'UI components','UI primitives','mobile framework','native mobile UI','browser QA'}:continue
         if ident=='astryx':
-            status='INCOMPATIBLE_STACK' if re.search(r'\\breact\\s*(?:1[0-8]|[1-9])\\b',lower) else 'REVIEW_MATCH' if flags['react'] else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
+            status='INCOMPATIBLE_STACK' if re.search(r'\breact\s*(?:1[0-8]|[1-9])\b',lower) else 'REVIEW_MATCH' if flags['react'] else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
         elif ident in {'shadcn-ui','radix-primitives','react-aria'}:
             status='REVIEW_MATCH' if flags['react'] and (ident!='shadcn-ui' or flags['tailwind']) else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
         elif ident=='native-web':
