@@ -126,7 +126,7 @@ class UniversalSetupTests(unittest.TestCase):
         def req(i,method,params=None):return {'jsonrpc':'2.0','id':i,'method':method,'params':params or {}}
         def call(i,name,args):return req(i,'tools/call',{'name':name,'arguments':args})
         initial=rpc([req(1,'initialize',{'protocolVersion':'2025-11-25'}),req(2,'tools/list')])
-        self.assertEqual(len(initial[1]['result']['tools']),29)
+        self.assertEqual(len(initial[1]['result']['tools']),31)
         def tooldata(r):return json.loads(r['result']['content'][0]['text'])
         save_args={'project':'orbit-todo-lab','key':'goal','kind':'decision','summary':'Local SQLite API, no cloud sync','source':'test','confirm_write':True}
         result=rpc([call(3,'orbit_memory_save',save_args)])[0]
@@ -141,7 +141,7 @@ class UniversalSetupTests(unittest.TestCase):
         with zipfile.ZipFile(ROOT/'ORBIT-Claude-Desktop-v0.24.0.mcpb') as z:
             m=json.loads(z.read('manifest.json'))
             self.assertEqual(m['server']['type'],'python')
-            self.assertEqual(len(m['tools']),29)
+            self.assertEqual(len(m['tools']),31)
             self.assertIn('server/orbit_mcp.py',z.namelist())
             self.assertIn('server/orbit_tasks.py',z.namelist())
             self.assertIn('server/orbit_capabilities.py',z.namelist())
