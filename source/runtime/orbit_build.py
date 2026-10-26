@@ -262,8 +262,11 @@ def normalize_action(value):
            'refactor':'refactor','new':'new','new project':'new',
            'add feature':'feature','feature':'feature','custom':'custom'}
     if term in exact:return exact[term]
+    # Explicit new-product requests still require baseline inspection by the host.
+    if re.match(r'^(?:create|build|make) (?:me |us )?(?:a |an |new )?(?:mobile app|web app|android app|ios app|desktop app|website|application|app|project|product|api|cli|library)\b',term):
+        return 'new'
     prefixes=((r'^(?:debug|fix|repair|diagnose)\b','fix'),
-              (r'^(?:add|implement|build) (?:a |an |new )?feature\b','feature'),
+              (r'^(?:add|implement|build) (?:a |an |new )?features?\b','feature'),
               (r'^redesign\b','redesign'),(r'^refactor\b','refactor'),
               (r'^(?:review|test|audit)\b','review'),
               (r'^(?:continue|resume)\b','resume'),
@@ -276,9 +279,10 @@ def project_signals(root):
     """Bounded name-only local inventory, never reads/runs an owner's source."""
     signals=[]
     known={'package.json','pyproject.toml','setup.py','Cargo.toml','go.mod',
-           'pom.xml','build.gradle','pubspec.yaml','CMakeLists.txt','README.md',
-           'requirements.txt','AGENTS.md','Makefile'}
-    roots={'src','app','apps','source','lib','tests','test','android','ios','.git'}
+           'pom.xml','build.gradle','build.gradle.kts','pubspec.yaml','CMakeLists.txt',
+           'requirements.txt','Makefile','index.html','main.py','README.md','AGENTS.md'}
+    roots={'src','app','apps','source','lib','server','client','api','packages',
+           'tests','test','android','ios','.git'}
     for child in root.iterdir():
         if child.is_symlink():continue
         if child.name in known and child.is_file(): signals.append(child.name)
@@ -291,12 +295,17 @@ def lifecycle_view(conn, root, a):
     action=normalize_action(a.get('action','status'))
     recovery=recovery_brief(conn,root,a['project'])
     signals=project_signals(root)
+    # Owner documentation and empty Git folders do not establish existing code.
+    non_code={'README.md','AGENTS.md','.git/'}
+    code_signals=[x for x in signals if x not in non_code]
+    docs_signals=[x for x in signals if x in non_code]
     saved=recovery['status']
-    maturity=('in_progress' if saved in ('RESUME','NEEDS_BUILD_SELECTION') else
+    inferred=('in_progress' if saved in ('RESUME','NEEDS_BUILD_SELECTION') else
               'completed_recorded' if saved=='ALL_DONE' else
-              'existing' if signals else 'new')
-    if a.get('maturity') in ('new','partially_built','existing','completed','maintained','stalled'):
-        maturity=a['maturity']+'_user_reported'
+              'existing' if code_signals else 'new')
+    declared=a.get('maturity')
+    user_reported=declared in ('new','partially_built','existing','completed','maintained','stalled')
+    maturity=declared+'_user_reported' if user_reported else inferred
     selected=None
     if a.get('build_id'):
         selected=get(conn,root,a)
@@ -313,13 +322,22 @@ def lifecycle_view(conn, root, a):
            if selected else {})
     if not isinstance(pause,dict):pause={}
     halted=pause.get('paused') is True
+    missing_baseline=user_reported and declared in (
+        'partially_built','existing','completed','maintained','stalled') and not (
+        code_signals or saved!='NO_BUILD')
     next_action={
       'start':('Resume the existing build after checking current Git/tests.'
                if selected and selected['stage']!='DONE' else
+               'Locate and inspect the reported project code before changing or creating files.'
+               if missing_baseline else
                'Inspect the existing repo; use a scoped build with baseline_reference for changes.'
-               if signals else 'Use approved adaptive intake for the new goal.'),
+               if code_signals else 'Use approved adaptive intake for the new goal.'),
       'resume':('Confirm revision to resume the paused ledger.' if halted else
-                'Reconcile recorded stage with Git status, modified paths and tests.'),
+                'Reconcile recorded stage with Git status, modified paths and tests.'
+                if selected else
+                'No saved build; inspect existing code, Git and checkpoint before continuing.'
+                if code_signals else
+                'Locate project code/checkpoint first; no safe saved build to resume.'),
       'pause':'Save a revision-guarded pause; separately checkpoint via orbit_project_checkpoint.',
       'preview_stop':'Use orbit_preview_stop only with a known same-session preview_id and explicit approval.',
       'feature':'Anchor a new change build to a DONE build or an existing verified baseline.',
@@ -328,17 +346,26 @@ def lifecycle_view(conn, root, a):
       'refactor':'Verify behavioral baseline and preserve public contracts.',
       'review':'Review actual source/test evidence; do not invent a PASS.',
       'status':'Compare this read-only state with current Git and test evidence.',
-      'new':'Use approved project intake; do not overwrite any existing repo.',
+      'new':('Inspect existing code before proposing a new project; do not overwrite it.'
+             if code_signals else 'Use approved project intake; preserve any owner documents.'),
       'custom':'Use the host model to interpret this exact user intent proportionately.'
     }[action]
     return {'status':'PAUSED' if halted else 'READY','project':a['project'],
             'action':action,'raw_intent':a.get('action','status'),
-            'maturity':maturity,'maturity_is_inferred':maturity.endswith(('existing','new','in_progress','completed_recorded')),
-            'observed_signals':signals,'recovery':recovery,
+            'maturity':maturity,'maturity_is_inferred':not user_reported,
+            'maturity_evidence':'persisted_build_stage' if saved!='NO_BUILD' else
+                                'code_or_manifest_names' if code_signals else 'no_code_markers',
+            'observed_signals':signals,'observed_code_signals':code_signals,
+            'observed_docs_signals':docs_signals,'recovery':recovery,
             'selected_build':({'build_id':selected['build_id'],'stage':selected['stage'],
                                'revision':selected['revision'],'paused':halted} if selected else None),
             'workflow':LIFECYCLE_STEPS[action],
-            'next_action':next_action,'requires_git_test_verification':True,
+            'next_action':next_action,'needs_decision':(
+                'Choose an unfinished build' if saved=='NEEDS_BUILD_SELECTION' else
+                'Locate the reported source folder' if missing_baseline else None),
+            'doing':('Paused — resume requires confirmation' if halted else
+                     selected['stage'] if selected else 'No saved active build'),
+            'requires_git_test_verification':True,
             'host_action_executed':False,'user_data_modified':False,
             'preview_stop_requires_separate_tool':action=='preview_stop'}
 
