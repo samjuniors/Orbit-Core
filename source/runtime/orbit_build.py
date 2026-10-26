@@ -6,9 +6,37 @@ across MCP restarts. A reported code/test result is not independently verified.
 from __future__ import annotations
 import json
 import sqlite3
+import orbit_decisions
 from datetime import datetime,timezone
 
 STAGES=('RESEARCH','PLAN','IMPLEMENT','VERIFY','PREVIEW','BROWSER_QA','REVIEW','CHECKPOINT','DONE')
+# Old build rows retain STAGES exactly. New approved product types persist an
+# explicit frozen per-build flow so later interview edits cannot rewrite history.
+FLOWS=orbit_decisions.FLOWS
+
+def flow_for(row):
+    if row is None:return STAGES
+    try:
+        value=json.loads(row['evidence_json']).get('__orbit_flow')
+    except (KeyError,TypeError,ValueError):
+        return STAGES
+    if isinstance(value,list) and tuple(value) in FLOWS.values() and row['stage'] in value:
+        return tuple(value)
+    return STAGES
+
+def flow_for_project(conn,root,a):
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='orbit_project_intake'").fetchone():
+        return STAGES
+    r=conn.execute("SELECT status,profile_json FROM orbit_project_intake WHERE project=? AND root=?",
+                   (a['project'],str(root))).fetchone()
+    if not r or r['status']!='APPROVED':return STAGES
+    try:kind=json.loads(r['profile_json'])['type']
+    except (KeyError,ValueError,TypeError):return STAGES
+    category=('native' if kind in {'mobile-app','desktop-app'} else
+              'library' if kind in {'cli','sdk-library','plugin-mcp','api-service','data-automation'} else
+              'platform' if kind=='os-platform' else 'web')
+    return FLOWS[category]
+
 
 def now(): return datetime.now(timezone.utc).isoformat(timespec='seconds')
 
@@ -135,22 +163,40 @@ def begin(conn,root,a):
         raise ValueError('objective must be bounded text')
     row=get(conn,root,a)
     if row:return {'status':'EXISTS','run':public(row)}
+    flow=flow_for_project(conn,root,a)
     if a.get('confirm_write') is not True:
         return {'status':'PREVIEW_ONLY','project':a['project'],'root':str(root),'build_id':key,
-                'stage':'RESEARCH','next':'Research domain rules and reusable components before making the plan.'}
+                'stage':'RESEARCH','stages':list(flow),
+                'next':'Research domain rules and reusable components before making the plan.'}
     with conn:
         conn.execute('INSERT INTO build_runs VALUES (?,?,?,?,?,?,?,?)',
-                     (a['project'],str(root),key,'RESEARCH',1,objective,json.dumps({'__orbit_policy':'approval-v1'}),now()))
+                     (a['project'],str(root),key,'RESEARCH',1,objective,json.dumps({'__orbit_policy':'approval-v1','__orbit_flow':list(flow)}),now()))
     return {'status':'CREATED','run':public(get(conn,root,a))}
 
 def current(conn,root,a):
     row=get(conn,root,a)
-    return {'status':'FOUND','run':public(row),'stages':list(STAGES),
+    return {'status':'FOUND','run':public(row),'stages':list(flow_for(row)),
             'task_progress':task_progress(conn,a['project'],root),
             'evidence_policy':'host-reported-except-recorded-browser-qa'} if row else {'status':'NOT_FOUND'}
 
 
 def valid_stage_evidence(stage, evidence):
+    if stage=='NATIVE_QA':
+        try: report=json.loads(evidence)
+        except (ValueError,TypeError):return False
+        if not isinstance(report,dict) or set(report)!={'platforms','commands','interactions','accessibility'}:
+            return False
+        platforms=report['platforms']
+        if not isinstance(platforms,list) or not 1<=len(platforms)<=3 or any(
+            x not in {'android','ios','macos','windows','linux'} for x in platforms):return False
+        commands=report['commands']
+        if not isinstance(commands,list) or not 1<=len(commands)<=8 or any(
+            not isinstance(c,dict) or set(c)!={'command','exit_code'}
+            or not isinstance(c['command'],str) or len(c['command'])<3
+            or type(c['exit_code']) is not int or c['exit_code']!=0 for c in commands):return False
+        return all(isinstance(report[k],list) and 1<=len(report[k])<=8 and
+                   all(isinstance(item,str) and 5<=len(item)<=240 for item in report[k])
+                   for k in ('interactions','accessibility'))
     if stage not in ('RESEARCH','VERIFY'):
         return True
     try:
@@ -193,6 +239,8 @@ def advance(conn,root,a):
     if not isinstance(evidence,str) or not 1<=len(evidence)<=1600:
         raise ValueError('evidence must be bounded text')
     evidence_map=json.loads(row['evidence_json'])
+    flow=flow_for(row)
+    if row['stage'] not in flow:return {'status':'HOLD','reason':'Persisted build flow is inconsistent; review stored state before continuing'}
     # Only newly created builds carry this marker; legacy PLAN-stage builds
     # must resume without a surprise migration or retroactive approval gate.
     if (row['stage']=='PLAN' and outcome=='PASS'
@@ -219,7 +267,7 @@ def advance(conn,root,a):
         if not rec or rec['status']!='PASS' or not recorded.get('actions'):
             return {'status':'HOLD','reason':'No recorded passing interactive Playwright browser QA result for this build'}
     if a.get('confirm_write') is not True:
-        return {'status':'PREVIEW_ONLY','stage':row['stage'], 'next_stage':STAGES[STAGES.index(row['stage'])+1] if outcome=='PASS' else row['stage']}
+        return {'status':'PREVIEW_ONLY','stage':row['stage'], 'next_stage':flow[flow.index(row['stage'])+1] if outcome=='PASS' else row['stage']}
     evidence_map[row['stage']]={'outcome':outcome,'evidence':evidence,'updated_at':now(),
                                 'verification':'browser-tool' if row['stage']=='BROWSER_QA' and outcome=='PASS' else 'caller-reported-not-attested'}
     new_stage=STAGES[STAGES.index(row['stage'])+1] if outcome=='PASS' else row['stage']
