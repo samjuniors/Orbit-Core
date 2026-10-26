@@ -177,7 +177,10 @@ def feedback(conn,root,a):
             raise ValueError('Feedback requires 5–600 characters of text')
         if not isinstance(ref,str) or not 8<=len(ref)<=200:
             raise ValueError('Real user artifact/comment reference required')
-        if sum(item['status']=='OPEN' for item in items)>=8:
+        if any(x.get('status')=='OPEN' and x.get('reference')==ref and
+               x.get('source')==a.get('source','plan') for x in items):
+            return {'status':'ALREADY_RECORDED','reason':'This user comment already has an open request; do not duplicate it.'}
+        if sum(item.get('status')=='OPEN' for item in items)>=8:
             return {'status':'HOLD','reason':'Resolve existing feedback before adding more requests'}
         item={'id':'f'+str(evidence.get('__orbit_feedback_seq',0)+1),
               'status':'OPEN','stage':row['stage'],'source':a.get('source','plan'),
@@ -255,6 +258,10 @@ def experience_view(intake, recovery, run=None):
     result['task_cards']=[{'task_key':t['task_key'],'status':t['status'],
                            'goal':t.get('goal','')[:120]}
                           for t in recovery.get('pending_tasks',[])[:5]]
+    # Explicit orbit_build_status(build_id=...) is already a build selection.
+    # Never prompt to select again, nor show a different active build's stage.
+    if run is not None:
+        status='RESUME'
     if status=='NEEDS_BUILD_SELECTION':
         result.update(phase='CHOOSE_BUILD',headline='Which unfinished build should Orbit continue?',
                       approval_required=True,
@@ -291,8 +298,22 @@ def experience_view(intake, recovery, run=None):
        'BROWSER_QA':'Testing real browser interactions',
        'NATIVE_QA':'Testing the native experience','REVIEW':'Reviewing the work',
        'CHECKPOINT':'Saving progress','DONE':'Build completed'}.get(stage,'Continue Orbit build')
-    result['next_action']={'label':str(recovery.get('next','Continue the current stage'))[:160],
-                           'tool':'orbit_build_status' if stage=='PLAN' else 'orbit_build_advance'}
+    selected_here=(recovery.get('build_id')==run['build_id'])
+    next_text=recovery.get('next') if selected_here else None
+    if not next_text:
+        next_text={'RESEARCH':'Research existing components and risks for this build.',
+                   'PLAN':'Show this build\'s editable plan and request approval.',
+                   'IMPLEMENT':'Continue this build\'s approved implementation tasks.',
+                   'VERIFY':'Run and review tests for this build.',
+                   'PREVIEW':'Check the local preview for this build.',
+                   'BROWSER_QA':'Run authorized browser checks for this build.',
+                   'NATIVE_QA':'Run device/platform QA for this build.',
+                   'REVIEW':'Review this build\'s changes and acceptance evidence.',
+                   'CHECKPOINT':'Persist this build\'s verified checkpoint.',
+                   'DONE':'Review the completed build or start a new change request.'}.get(stage,'Inspect current stage.')
+    result['next_action']={'label':str(next_text)[:160],
+                           'tool':'orbit_project_resume' if stage=='DONE' else
+                                  'orbit_build_status' if stage=='PLAN' else 'orbit_build_advance'}
     if stage=='PLAN':
         result['approval_required']=True
         result['attention'].append('Present an editable plan and get real owner approval; approval cannot be inferred from this status.')
