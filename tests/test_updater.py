@@ -34,4 +34,28 @@ class TestUpdater(unittest.TestCase):
   h=Path(self.temp.name)/'.orbit-universal'
   self.assertTrue((h/'orbit_cli.py').is_file())
   self.assertTrue((h/'bin'/('orbit.cmd' if os.name=='nt' else 'orbit')).is_file())
+
+    def test_release_channel_prioritizes_highest_valid_asset(self):
+        from unittest.mock import patch
+        import json
+        base='https://github.com/samjuniors/Orbit-Core-MCP/releases/download/'
+        def release(v,pre,draft=False,assets=True):
+            name='ORBIT-Universal-Setup-v'+v+'.zip'
+            items=[{'name':name,'browser_download_url':base+'v'+v+'/'+name},
+                   {'name':name+'.sha256','browser_download_url':base+'v'+v+'/'+name+'.sha256'}] if assets else []
+            return {'tag_name':'v'+v,'draft':draft,'prerelease':pre,'assets':items,'html_url':base+'v'+v}
+        choices=[release('0.24.0',True),release('0.23.0',True),release('1.0.0',False),
+                 release('0.24.1',True,draft=True),release('0.24.2',True,assets=False)]
+        with patch.object(orbit_cli,'download',return_value=json.dumps(choices).encode()):
+            self.assertEqual(orbit_cli.latest('candidate')['version'],'0.24.0')
+            self.assertEqual(orbit_cli.latest('stable')['version'],'1.0.0')
+
+    def test_update_default_channel_is_candidate_and_no_side_effect(self):
+        from unittest.mock import patch
+        with patch.object(orbit_cli,'latest') as found:
+            found.return_value={'version':'0.24.0','zip':'https://github.com/z','sha':'https://github.com/s','url':'https://github.com/release'}
+            with patch.object(orbit_cli,'version',return_value='0.24.0'):
+                self.assertEqual(orbit_cli.main(['update','--check']),0)
+            found.assert_called_once_with('candidate')
+
 if __name__=='__main__':unittest.main()
