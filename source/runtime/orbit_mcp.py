@@ -364,7 +364,13 @@ def execute(conn, name, a):
         return orbit_build.begin(conn,root,a)
     if name=='orbit_build_status':
         a={**a,'project':project_key(a)}
-        return orbit_build.current(conn,project_root(a),a)
+        root=project_root(a)
+        response=orbit_build.current(conn,root,a)
+        if response['status']=='FOUND':
+            response['experience']=orbit_build.experience_view(
+                orbit_intake.status(conn,root,a),
+                orbit_build.recovery_brief(conn,root,a['project']),response['run'])
+        return response
     if name=='orbit_build_advance':
         a={**a,'project':project_key(a)}
         return orbit_build.advance(conn,project_root(a),a)
@@ -390,6 +396,15 @@ def execute(conn, name, a):
         status['memories']=memory_recall(conn,{'project':status['project'],'limit':5})
         status['intake']=orbit_intake.status(conn,project_root(a),a)
         status['recovery']=orbit_build.recovery_brief(conn,project_root(a),project_key(a))
+        selected=status['recovery']
+        current_run=None
+        if selected['status']=='RESUME':
+            saved=orbit_build.get(conn,project_root(a),
+                {'project':status['project'],'build_id':selected['build_id']})
+            if saved:
+                current_run=orbit_build.public(saved)
+        status['experience']=orbit_build.experience_view(
+            status['intake'],selected,current_run)
         status['context_strategy']='Load current checkpoint and agreed brief, then only stage-specific docs and changed source files; do not reread all reference documents.'
         return status
     if name=='orbit_memory_save': return memory_save(conn,a)

@@ -80,3 +80,8 @@ python scripts/build_release.py --verify
 See [architecture](docs/ARCHITECTURE.md), [release process](docs/RELEASE-PROCESS.md), [source/component decision matrix](docs/ADAPTIVE-DECISION-ENGINE.md), [installer choices](docs/MCP-INSTALLATION-OPTIONS.md), [security boundaries](SECURITY.md) and [honest roadmap](docs/NEXT-VERSION.md).
 
 **License note:** This public repository has no general open-source license grant unless the owner adds one. Do not repackage or redistribute it under a guessed license.
+
+
+## Product experience (development branch)
+
+The `feat/product-experience-v1` branch adds a read-only one-glance `experience` summary to `orbit_project_resume` and `orbit_build_status` (next decision, real stage/task progress, approval and blocker hints). It also fixes non-web build flows being advanced with the web stage sequence. This is **not included in the published 0.24.1 release** until reviewed/merged, and does not claim a separate IDE visual panel. See [product experience specification](docs/PRODUCT-EXPERIENCE.md).

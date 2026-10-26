@@ -147,4 +147,84 @@ class TestIntake(unittest.TestCase):
   self.assertNotIn('BROWSER_QA',flow)
   self.assertNotIn('NATIVE_QA',flow)
 
+ def test_experience_guides_first_run_and_real_custom_answers(self):
+  empty=self.do('orbit_project_resume')
+  self.assertEqual(empty['experience']['phase'],'DISCOVERY')
+  self.assertEqual(empty['experience']['task_cards'],[])
+  self.assertIsNone(empty['experience']['plan'])
+  self.do('orbit_intake_propose',profile=P,questions=Q,confirm_write=True)
+  proposed=self.do('orbit_project_resume')['experience']
+  self.assertTrue(proposed['approval_required'])
+  self.assertEqual(proposed['decision']['prompt'],Q[0]['prompt'])
+  self.assertTrue(proposed['decision']['custom_allowed'])
+  custom='Only for my Android tablet, entirely offline'
+  self.do('orbit_intake_answer',expected_revision=1,question_id='target',choice=custom,
+          user_reference='user-specified-tablet-app',confirm_write=True)
+  answered=self.do('orbit_project_resume')['experience']
+  self.assertIsNone(answered['decision'])
+  self.assertEqual(answered['next_action']['tool'],'orbit_intake_approve')
+
+ def test_experience_plan_review_and_build_stage_progress(self):
+  self.do('orbit_intake_propose',profile=P,questions=Q,confirm_write=True)
+  self.do('orbit_intake_approve',expected_revision=1,answers={'target':'Personal'},
+          answer_source='user_choices',user_reference='owner-accepted-brief',confirm_write=True)
+  self.assertEqual(self.do('orbit_project_resume')['experience']['phase'],'READY')
+  self.do('orbit_build_begin',build_id='exp-1',objective='Build a Todo app',confirm_write=True)
+  start=self.do('orbit_project_resume')['experience']
+  self.assertEqual(start['phase'],'BUILDING')
+  self.assertEqual(start['progress']['stage'],'RESEARCH')
+  self.assertEqual(start['progress']['completed_stages'],0)
+  research=json.dumps({'task':'Build Todo app','candidates':['existing DOM','vanilla JS'],
+     'decision':'Use accessible native HTML','sources':['README.md'],'risks':['data persistence']})
+  from_research=self.do('orbit_build_advance',build_id='exp-1',expected_revision=1,
+      outcome='PASS',evidence=research,confirm_write=True)
+  self.assertEqual(from_research['run']['stage'],'PLAN')
+  active=self.do('orbit_build_status',build_id='exp-1')['experience']
+  self.assertEqual(active['phase'],'PLAN_REVIEW')
+  self.assertTrue(active['approval_required'])
+  self.assertIsNone(active['plan'])
+  self.assertEqual(active['progress']['completed_stages'],1)
+  self.assertIn('editable plan',active['attention'][0])
+
+ def test_native_and_sdk_advance_using_frozen_product_flow(self):
+  for name,kind,next_qa in [('mobile','mobile-app','NATIVE_QA'),
+                            ('sdk','sdk-library','REVIEW')]:
+   with self.subTest(kind=kind):
+    database=sqlite3.connect(':memory:');database.row_factory=sqlite3.Row
+    self.addCleanup(database.close);orbit_build.setup(database);orbit_intake.setup(database)
+    root=self.root/(name);root.mkdir()
+    args={'project_root':str(root),'project':name}
+    database.execute("""INSERT INTO orbit_project_intake VALUES
+    (?, ?, 1, 'APPROVED', ?, '[]', '{}', 'guided', 'user-approved', 'now')""",
+      (name,str(root),json.dumps({**P,'type':kind})))
+    database.commit()
+    a={**args,'build_id':name,'objective':'Build correct product'}
+    begin=orbit_mcp.execute(database,'orbit_build_begin',{**a,'confirm_write':True})
+    self.assertEqual(begin['status'],'CREATED')
+    desired=orbit_mcp.execute(database,'orbit_build_status',a)['stages']
+    self.assertIn(next_qa,desired)
+    for stage in desired[1:-1]:
+     pass
+    for stage in ['RESEARCH','PLAN','IMPLEMENT','VERIFY']:
+     state=orbit_mcp.execute(database,'orbit_build_status',a)['run']
+     self.assertEqual(state['stage'],stage)
+     if stage=='RESEARCH':
+      evidence=json.dumps({'task':'Build correct product','candidates':['existing code'],'decision':'Reuse stable components',
+          'sources':['README.md'],'risks':['missing tests']})
+     elif stage=='PLAN':
+      evidence=json.dumps({'title':'Approved product plan','summary':'Implement selected platform product',
+        'tasks':['Implement main application','Run domain tests'],
+        'approval_method':'user_approved_plan','approval_reference':'owner-confirmed-plan'})
+     elif stage=='VERIFY':
+      evidence=json.dumps({'commands':[{'command':'python -m unittest','exit_code':0}],
+        'edge_cases':['missing input'], 'security':['bad input safely rejected']})
+     else:
+      evidence='Files changed and implementation tested'
+     response=orbit_mcp.execute(database,'orbit_build_advance',{**a,'expected_revision':state['revision'],
+            'outcome':'PASS','evidence':evidence,'confirm_write':True})
+     self.assertEqual(response['status'],'ADVANCED')
+    check=orbit_mcp.execute(database,'orbit_build_status',a)
+    self.assertEqual(check['run']['stage'],next_qa)
+    self.assertEqual(check['experience']['progress']['stage'],next_qa)
+
 if __name__=='__main__':unittest.main()
