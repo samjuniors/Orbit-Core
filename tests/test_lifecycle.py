@@ -75,6 +75,48 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(custom['action'], 'custom')
         self.assertIn('novel hardware', custom['raw_intent'])
 
+    def test_docs_only_folder_does_not_get_mistaken_for_coded_product(self):
+        (self.root/'README.md').write_text('Existing project idea, not implementation')
+        (self.root/'AGENTS.md').write_text('Existing owner instructions')
+        (self.root/'.git').mkdir()
+        before = {p.name: (p.read_bytes() if p.is_file() else None)
+                  for p in self.root.iterdir()}
+        route=self.inspect('start')
+        self.assertEqual(route['maturity'],'new')
+        self.assertEqual(route['maturity_evidence'],'no_code_markers')
+        self.assertEqual(route['observed_code_signals'],[])
+        self.assertIn('README.md',route['observed_docs_signals'])
+        self.assertIn('intake',route['next_action'])
+        self.assertEqual(before,{p.name: (p.read_bytes() if p.is_file() else None)
+                                 for p in self.root.iterdir()})
+
+    def test_existing_static_site_and_partially_built_user_stage(self):
+        (self.root/'index.html').write_text('<main>Existing site</main>')
+        route=self.inspect('continue',maturity='partially_built')
+        self.assertEqual(route['action'],'resume')
+        self.assertEqual(route['maturity'],'partially_built_user_reported')
+        self.assertFalse(route['maturity_is_inferred'])
+        self.assertEqual(route['maturity_evidence'],'code_or_manifest_names')
+        self.assertIn('index.html',route['observed_code_signals'])
+        self.assertIn('inspect existing code',route['next_action'])
+
+    def test_unverified_finished_or_stalled_project_requires_baseline(self):
+        for stage in ('completed','stalled','maintained'):
+            with self.subTest(stage=stage):
+                result=self.inspect('start',maturity=stage)
+                self.assertEqual(result['maturity'],stage+'_user_reported')
+                self.assertEqual(result['needs_decision'],
+                                 'Locate the reported source folder')
+                self.assertIn('Locate and inspect',result['next_action'])
+                self.assertEqual(list(self.root.iterdir()),[])
+
+    def test_plain_language_new_project_and_plural_features(self):
+        self.assertEqual(self.inspect('build a mobile app')['action'],'new')
+        self.assertEqual(self.inspect('create a website')['action'],'new')
+        self.assertEqual(self.inspect('add features to the existing app')['action'],
+                         'feature')
+        self.assertEqual(self.inspect('stop preview')['action'],'preview_stop')
+
     def test_scoped_fix_skips_new_project_plan_but_requires_tests(self):
         (self.root/'src').mkdir()
         run=self.call('orbit_build_begin', build_id='repair-export',
