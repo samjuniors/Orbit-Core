@@ -58,4 +58,32 @@ class TestIntake(unittest.TestCase):
             answers={'target':'Personal','storage':'Local only'},answer_source='user_choices',
             user_reference='user-approved-full-brief',confirm_write=True)['status'],'APPROVED')
   self.assertEqual(self.do('orbit_build_begin',build_id='adaptive',objective='Habit',confirm_write=True)['status'],'CREATED')
+ def test_freeform_answer_and_dependent_custom_question(self):
+  x=self.do('orbit_intake_propose',profile=P,questions=Q,confirm_write=True)
+  self.assertEqual(x['status'],'PROPOSED')
+  self.assertEqual(self.do('orbit_intake_answer',expected_revision=1,question_id='target',
+     choice='Custom',user_reference='user-wants-custom',confirm_write=True)['status'],'HOLD')
+  custom='Offline Android and iOS app with voice-only interaction and our own habit card'
+  a=self.do('orbit_intake_answer',expected_revision=1,question_id='target',
+     choice=custom,user_reference='user-specified-custom-goal',confirm_write=True)
+  self.assertEqual(a['status'],'ANSWER_RECORDED')
+  self.assertEqual(a['choice_type'],'CUSTOM')
+  self.assertEqual(a['intake']['answers']['target'],custom)
+  follow={'id':'voice_access','prompt':'Should voice input work entirely offline?',
+     'options':['Yes offline','Online acceptable'],'recommended':'Yes offline'}
+  result=self.do('orbit_intake_followup',expected_revision=2,based_on_id='target',
+     based_on_choice=custom,question=follow,rationale='An offline voice-only native app needs local speech APIs.',
+     confirm_write=True)
+  self.assertEqual(result['status'],'FOLLOWUP_PROPOSED')
+  self.assertEqual(self.do('orbit_intake_approve',expected_revision=3,
+     answers={'target':custom,'voice_access':'Yes offline'},answer_source='user_choices',
+     user_reference='user-accepted-custom-voice-scope',confirm_write=True)['status'],'APPROVED')
+  self.assertEqual(self.do('orbit_intake_status')['answers']['target'],custom)
+
+ def test_custom_answers_cannot_be_silently_substituted_for_delegated_defaults(self):
+  self.do('orbit_intake_propose',profile=P,questions=Q,confirm_write=True)
+  with self.assertRaises(ValueError):
+   self.do('orbit_intake_approve',expected_revision=1,answers={'target':'iOS custom native'},
+      answer_source='user_delegated_defaults',user_reference='user-approved-defaults',confirm_write=True)
+
 if __name__=='__main__':unittest.main()
