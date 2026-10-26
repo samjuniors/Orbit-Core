@@ -54,3 +54,7 @@ Before IMPLEMENT show the **plan**: title, purpose, key user journeys, reusable 
 ## Free-form answers supported in the MCP
 
 Every recommended question offers `Use recommended`, named choices **and Custom — enter your own words**. A user can describe a new native platform, unusual hardware, bespoke reusable component or nonstandard workflow. The assistant records exactly that string with `orbit_intake_answer` (max 500 chars); a bare `Custom` means ask for the actual user description first, not approve the literal word. Answer-dependent followups can compare custom answers by exact stored value. Only source-verified user answers or explicit delegated defaults can approve intake. If someone asks for fully custom components, do not discard established accessibility, privacy or QA checks. No artificial extra questioning when the user's free-form answer already resolves the decision.
+
+## Antigravity artifacts are the visible plan and approval UI
+
+Prefer host-native Implementation Plan review with inline comments, Proceed/Review and a Task List. User may request edits before consent. Use `orbit_build_feedback` to retain real requests (reference the host artifact/comment), revise that *same* plan, resolve only when revised, and obtain fresh approval for the actual revised plan before `orbit_build_advance`. Orbit's SQLite is a stage/task checkpoint, not an independent duplicate of the artifact. When that UI is unavailable, a Markdown plan and explicit text approval are valid fallbacks.

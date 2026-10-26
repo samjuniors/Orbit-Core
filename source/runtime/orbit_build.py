@@ -153,6 +153,64 @@ def recovery_brief(conn, root, project):
             'note':'Never treat saved caller-reported evidence as an independently executed check.'}
 
 
+def feedback(conn,root,a):
+    """Persist user feedback separately from stage PASS/FAIL.
+
+    Native IDE artifacts remain the editable source of truth. A host-reported
+    feedback reference records only the request and its acknowledged resolution.
+    """
+    row=get(conn,root,a)
+    if not row:raise ValueError('Build not found')
+    if row['revision']!=a['expected_revision']:
+        return {'status':'STALE_REVISION','revision':row['revision'],'stage':row['stage']}
+    if row['stage']=='DONE':
+        return {'status':'HOLD','reason':'Completed builds need a new approved change request, not a retroactive mutation'}
+    action=a['action']
+    if action not in {'request','resolve'}:raise ValueError('Invalid feedback action')
+    evidence=json.loads(row['evidence_json'])
+    items=evidence.get('__orbit_feedback',[])
+    if not isinstance(items,list):raise ValueError('Invalid persisted feedback')
+    if action=='request':
+        note=a.get('note','')
+        ref=a.get('user_reference','')
+        if not isinstance(note,str) or not 5<=len(note.strip())<=600:
+            raise ValueError('Feedback requires 5–600 characters of text')
+        if not isinstance(ref,str) or not 8<=len(ref)<=200:
+            raise ValueError('Real user artifact/comment reference required')
+        if sum(item['status']=='OPEN' for item in items)>=8:
+            return {'status':'HOLD','reason':'Resolve existing feedback before adding more requests'}
+        item={'id':'f'+str(evidence.get('__orbit_feedback_seq',0)+1),
+              'status':'OPEN','stage':row['stage'],'source':a.get('source','plan'),
+              'note':note.strip(),'reference':ref,'created_at':now()}
+        updated=[x for x in items if x['status']=='OPEN']+[
+            x for x in items if x['status']=='RESOLVED'][-8:]
+        updated.append(item)
+        result='FEEDBACK_RECORDED'
+    else:
+        fid=a.get('feedback_id','')
+        matches=[x for x in items if x['id']==fid and x['status']=='OPEN']
+        if len(matches)!=1:return {'status':'HOLD','reason':'Feedback id is missing or already resolved'}
+        resolution=a.get('resolution_evidence','')
+        if not isinstance(resolution,str) or not 8<=len(resolution.strip())<=600:
+            raise ValueError('Resolution needs actual changed artifact/test evidence')
+        updated=[{**x,'status':'RESOLVED','resolution':resolution.strip(),
+                  'resolved_at':now()} if x['id']==fid else x for x in items]
+        result='FEEDBACK_RESOLVED'
+    if a.get('confirm_write') is not True:
+        return {'status':'PREVIEW_ONLY','action':action,'build_id':row['build_id'],
+                'note':'No feedback state was written'}
+    evidence['__orbit_feedback']=updated
+    if action=='request':evidence['__orbit_feedback_seq']=int(item['id'][1:])
+    with conn:
+        cur=conn.execute('''UPDATE build_runs SET revision=revision+1,
+              evidence_json=?,updated_at=? WHERE project=? AND root=? AND build_id=? AND revision=?''',
+              (json.dumps(evidence),now(),a['project'],str(root),row['build_id'],row['revision']))
+    if cur.rowcount!=1:return {'status':'STALE_REVISION'}
+    return {'status':result,'run':public(get(conn,root,a)),
+            'open_feedback':sum(x['status']=='OPEN' for x in updated),
+            'note':'Host must re-check the actual artifact/changes and obtain owner approval when required.'}
+
+
 def experience_view(intake, recovery, run=None):
     """Host-renderable, read-only summary of *existing* persisted facts.
 
@@ -165,6 +223,7 @@ def experience_view(intake, recovery, run=None):
             'summary':'Choose how much guidance you want; Orbit will not choose consequential requirements silently.',
             'next_action':{'label':'Choose scope-first or approved defaults','tool':'orbit_intake_propose'},
             'decision':None,'plan':None,'progress':None,'task_cards':[],
+            'feedback':[],'open_feedback':0,
             'attention':[],'approval_required':False,
             'evidence_note':'Display data is derived from persisted host-reported state; no model or user approval is inferred.'}
     if intake.get('autonomy') in {'guided','assisted','trusted'}:
@@ -249,6 +308,18 @@ def experience_view(intake, recovery, run=None):
                                 'approval_reported_by_host':True}
         except (TypeError,ValueError,KeyError):
             pass
+    comments=run.get('evidence',{}).get('__orbit_feedback',[])
+    if isinstance(comments,list):
+        pending=[x for x in comments if isinstance(x,dict) and x.get('status')=='OPEN']
+        result['open_feedback']=len(pending)
+        result['feedback']=[{'id':x['id'],'source':x.get('source'),
+             'note':x.get('note','')[:240],'stage':x.get('stage')}
+            for x in pending[-4:]]
+        if pending:
+            result['attention'].insert(0,str(len(pending))+' user change request(s) need action.')
+            result['next_action']={'label':'Revise the existing Antigravity artifact and address requested changes',
+                                   'tool':'orbit_build_feedback'}
+            result['phase']='CHANGES_REQUESTED'
     result['attention'] += [
         'Recorded '+str(x.get('stage',''))+': '+str(x.get('outcome',''))+
         '. Review actual evidence before retrying.'
@@ -344,6 +415,9 @@ def advance(conn,root,a):
         raise ValueError('evidence must be bounded text')
     evidence_map=json.loads(row['evidence_json'])
     flow=flow_for(row)
+    if outcome=='PASS' and any(x.get('status')=='OPEN' for x in evidence_map.get('__orbit_feedback',[])
+                               if isinstance(x,dict)):
+        return {'status':'HOLD','reason':'Open user feedback must be addressed and recorded as resolved before advancing this stage'}
     if row['stage'] not in flow:return {'status':'HOLD','reason':'Persisted build flow is inconsistent; review stored state before continuing'}
     # Only newly created builds carry this marker; legacy PLAN-stage builds
     # must resume without a surprise migration or retroactive approval gate.

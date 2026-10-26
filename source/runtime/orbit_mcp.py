@@ -272,6 +272,7 @@ TOOLS += [
     {'name':'orbit_browser_qa','description':'Perform approved loopback-only Playwright browser QA with installed Edge/Chrome or Chromium; bounded DOM actions, private screenshots and build gate results. Requires Python playwright; never downloads software.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'preview_id':string(40),'viewport':{'type':'string','enum':['desktop','mobile']},'browser':{'type':'string','enum':['auto','msedge','chrome','chromium']},'actions':{'type':'array','maxItems':20,'items':{'type':'object'}},'confirm_run':{'type':'boolean'},'confirm_interactions':{'type':'boolean'}},['project_root','project','build_id','preview_id'])},
     {'name':'orbit_build_begin','description':'Preview or create durable app-building gates (RESEARCH, PLAN, IMPLEMENT, VERIFY, PREVIEW, BROWSER_QA, REVIEW, CHECKPOINT, DONE). Does not start AI agents.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'objective':string(1500),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','objective'])},
     {'name':'orbit_build_status','description':'Read persistent app build stage and evidence, across host/MCP restarts.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40)},['project_root','project','build_id'])},
+    {'name':'orbit_build_feedback','description':'Record or resolve a genuine user change request linked to a native plan/walkthrough artifact. Does not edit host artifact or self-approve changes.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'action':{'type':'string','enum':['request','resolve']},'source':{'type':'string','enum':['plan','preview','walkthrough','other']},'note':string(600),'user_reference':string(200),'feedback_id':string(40),'resolution_evidence':string(600),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','build_id','action','expected_revision'])},
     {'name':'orbit_build_advance','description':'Revision-guarded explicit stage advance; browser QA PASS requires a real Orbit-recorded Playwright PASS.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['PASS','FAIL','BLOCKED']},'evidence':string(1600),'preview_id':string(40),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','expected_revision','outcome','evidence'])}
 ]
 TOOLS += [
@@ -371,6 +372,9 @@ def execute(conn, name, a):
                 orbit_intake.status(conn,root,a),
                 orbit_build.recovery_brief(conn,root,a['project']),response['run'])
         return response
+    if name=='orbit_build_feedback':
+        a={**a,'project':project_key(a)}
+        return orbit_build.feedback(conn,project_root(a),a)
     if name=='orbit_build_advance':
         a={**a,'project':project_key(a)}
         return orbit_build.advance(conn,project_root(a),a)

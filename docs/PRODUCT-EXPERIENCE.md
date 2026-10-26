@@ -45,3 +45,11 @@ At PLAN, `plan: null` is intentional: the host must create a draft and obtain a 
 - Native Android/iOS and SDK: advance stage correctly without web-only gates.
 - Distinguish "Waiting for my approval" from implementation progress or browser QA.
 - Host-native visual plan/task panel remains future work. Avoid writing an IDE extension until the target host SDK can support it with demonstrated demand.
+
+## Native IDE plans and durable feedback loop
+
+Official Antigravity docs confirm interactive **Implementation Plan artifacts**, inline comments, Proceed/Review, a **Task List** and reviewable walkthroughs. Orbit therefore reuses the host interface, rather than building a separate, overlapping editor.
+
+New `orbit_build_feedback` records `request` (owner comment + actual reference) and `resolve` (actual revised artifact/test evidence) with expected revision and explicit write confirmation. It uses the existing build evidence record in SQLite; no new docs or databases. `orbit_project_resume.experience` and `orbit_build_status.experience` show up to four unresolved notes, a count, and `CHANGES_REQUESTED` priority. Open requests block stage PASS; PLAN still requires genuine owner approval after revised artifacts are reviewed. Since the MCP cannot inspect Antigravity's internal comment objects, all comment/approval references remain **host-reported**, not authenticated.
+
+See https://www.antigravity.google/docs/ide-implementation-plan and https://codelabs.developers.google.com/getting-started-agy-ide for documented host behavior. Do not conflate this with an Orbit-provided IDE visual panel.
