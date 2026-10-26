@@ -21,6 +21,11 @@ HOSTS = ("antigravity", "codex", "claude-code")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Exact previously distributed v0.24.0 test candidate used in the user's
+    # Windows installation. Only these immutable hashes are eligible for an
+    # automatic backed-up replacement. Customized files still halt setup.
+    '1e384ca291c3fe20cc2a866f103abbc3139c1c5feffc250c3e6999975dc3754a',  # orbit_browser.py
+    '508186df8c690bb3c64b147a5163399e42824ac251543a82f5482c427331171a',  # orbit_mcp.py
     # Exact official 0.24 candidate files for backed-up in-place upgrade.
     '17378035a0ced4e4f8589875ff69df8ae2d83b228f3b8c41674f027c9ab183db',
     '5e738a0eafc8e3c553f3f85815c41d573d39bfab5dd4977f3eeb9722393b2b96',

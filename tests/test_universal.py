@@ -25,6 +25,13 @@ class UniversalSetupTests(unittest.TestCase):
         if self.old is None:os.environ.pop('ORBIT_UNIVERSAL_HOME',None)
         else:os.environ['ORBIT_UNIVERSAL_HOME']=self.old
 
+    def test_recognizes_prior_v024_stock_runtime(self):
+        # We do not store previous binary distributions in test fixtures, but
+        # these digests identify precisely the published v0.24 test candidate.
+        hashes = installer.OLD_STOCK_SHA256
+        self.assertIn('1e384ca291c3fe20cc2a866f103abbc3139c1c5feffc250c3e6999975dc3754a', hashes)
+        self.assertIn('508186df8c690bb3c64b147a5163399e42824ac251543a82f5482c427331171a', hashes)
+
     def test_preview_does_not_write(self):
         changes=installer.plan(self.project,scope='project')
         self.assertGreater(len(changes),28)
