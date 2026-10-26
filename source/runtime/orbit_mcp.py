@@ -1,4 +1,4 @@
-"""ORBIT Antigravity native local MCP (stdio); no AI model runtime or agent spawner.
+"""ORBIT host-neutral local MCP (stdio); no AI model runtime or agent spawner.
 
 Standalone, dependency-free local project memory/checkpoint tools. Uses the
 existing Orbit Core SQLite table shape and OS default database path.
@@ -257,7 +257,7 @@ TOOLS = [
     {'name':'orbit_task_plan','description':'Preview/register one scoped specialist task. Does NOT launch agents.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'step':string(100),'role':{'type':'string','enum':sorted(orbit_tasks.ROLES)},'goal':string(1500),'reason':string(500),'write_paths':{'type':'array','maxItems':24,'items':{'type':'string'}},'depends_on':{'type':'array','maxItems':8,'items':{'type':'string'}},'confirm_write':{'type':'boolean'}},['project_root','project','task_key','step','role','goal','reason'])},
     {'name':'orbit_task_list','description':'List scoped task registry (read-only).','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':40},'status':string(25)},['project_root','project'])},
     {'name':'orbit_task_reserve','description':'After actual host/user approval, reserve one native subagent slot. NO agent is spawned. Advisory caller approval reference; independent host permission still required.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'approval_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','approval_reference'])},
-    {'name':'orbit_task_started','description':'Mark RESERVED task RUNNING only AFTER Antigravity confirms actual invoke_subagent and returns its reference. Does not invoke host.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'host_session':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','host_session'])},
+    {'name':'orbit_task_started','description':'Mark RESERVED task RUNNING only AFTER the authorized host confirms an actual subagent invocation and returns its reference. Does not invoke host.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'host_session':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','host_session'])},
     {'name':'orbit_task_release','description':'Cancel a reservation only when native invocation did NOT start; cannot terminate a running agent.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'reason':string(500),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','reason'])},
     {'name':'orbit_task_scope_check','description':'Check caller-supplied changed file paths against registered writable scope; independently inspect Git diff.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'changed_paths':{'type':'array','maxItems':60,'items':{'type':'string'}}},['project_root','project','task_key','changed_paths'])},
     {'name':'orbit_task_report','description':'Record result reported by a native subagent; do NOT assume test evidence is verified.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['REPORTED_DONE','FAILED','BLOCKED','CANCELLED']},'evidence':string(1600),'changed_paths':{'type':'array','maxItems':60,'items':{'type':'string'}},'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','outcome','evidence'])},
@@ -270,7 +270,8 @@ TOOLS += [
     {'name':'orbit_preview_status','description':'Check running local preview readiness and bounded log tail for this MCP session. No browser simulation.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40)},['project_root','preview_id'])},
     {'name':'orbit_preview_stop','description':'Stop only the locally spawned preview tracked by this MCP session, with explicit confirm_stop.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40),'confirm_stop':{'type':'boolean'}},['project_root','preview_id'])},
     {'name':'orbit_browser_qa','description':'Perform approved loopback-only Playwright browser QA with installed Edge/Chrome or Chromium; bounded DOM actions, private screenshots and build gate results. Requires Python playwright; never downloads software.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'preview_id':string(40),'viewport':{'type':'string','enum':['desktop','mobile']},'browser':{'type':'string','enum':['auto','msedge','chrome','chromium']},'actions':{'type':'array','maxItems':20,'items':{'type':'object'}},'confirm_run':{'type':'boolean'},'confirm_interactions':{'type':'boolean'}},['project_root','project','build_id','preview_id'])},
-    {'name':'orbit_build_begin','description':'Preview or create durable app-building gates (RESEARCH, PLAN, IMPLEMENT, VERIFY, PREVIEW, BROWSER_QA, REVIEW, CHECKPOINT, DONE). Does not start AI agents.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'objective':string(1500),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','objective'])},
+    {'name':'orbit_build_begin','description':'Preview/create a new approved build or scoped change anchored to an existing code baseline or DONE build; old builds stay unchanged. No agent launches.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'objective':string(1500),'change_kind':{'type':'string','enum':sorted(orbit_build.SCOPED_FLOWS)},'change_from':string(40),'baseline_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','objective'])},
+    {'name':'orbit_project_action','description':'Host-neutral, situation-based lifecycle intent/status router; read-only except approved revision-guarded pause/resume of one selected Orbit build. Does not stop host agents/previews.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'action':string(240),'build_id':string(40),'maturity':{'type':'string','enum':['new','partially_built','existing','completed','maintained','stalled']},'reason':{'type':'string','maxLength':400},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','action'])},
     {'name':'orbit_build_status','description':'Read persistent app build stage and evidence, across host/MCP restarts.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40)},['project_root','project','build_id'])},
     {'name':'orbit_build_feedback','description':'Record or resolve a genuine user change request linked to a native plan/walkthrough artifact. Does not edit host artifact or self-approve changes.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'action':{'type':'string','enum':['request','resolve']},'source':{'type':'string','enum':['plan','preview','walkthrough','other']},'note':string(600),'user_reference':string(200),'feedback_id':string(40),'resolution_evidence':string(600),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','build_id','action','expected_revision'])},
     {'name':'orbit_build_advance','description':'Revision-guarded explicit stage advance; browser QA PASS requires a real Orbit-recorded Playwright PASS.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['PASS','FAIL','BLOCKED']},'evidence':string(1600),'preview_id':string(40),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','expected_revision','outcome','evidence'])}
@@ -356,10 +357,14 @@ def execute(conn, name, a):
                   'orbit_autonomy_review':orbit_intake.autonomy,
                   'orbit_docs_audit':orbit_intake.docs_audit}
         return handlers[name](conn,root,a)
+    if name=='orbit_project_action':
+        a={**a,'project':project_key(a)}
+        root=project_root(a)
+        return orbit_build.lifecycle_action(conn,root,a)
     if name=='orbit_build_begin':
         a={**a,'project':project_key(a)}
         root=project_root(a)
-        if not orbit_build.get(conn,root,a) and orbit_intake.status(conn,root,a)['status']!='APPROVED':
+        if not a.get('change_kind') and not orbit_build.get(conn,root,a) and orbit_intake.status(conn,root,a)['status']!='APPROVED':
             return {'status':'HOLD','reason':'Fresh project requires a completed interview before build planning',
                     'next':['orbit_intake_propose','ask the user or obtain explicit delegation of defaults','orbit_intake_approve']}
         return orbit_build.begin(conn,root,a)
@@ -400,6 +405,8 @@ def execute(conn, name, a):
         status['memories']=memory_recall(conn,{'project':status['project'],'limit':5})
         status['intake']=orbit_intake.status(conn,project_root(a),a)
         status['recovery']=orbit_build.recovery_brief(conn,project_root(a),project_key(a))
+        status['lifecycle']=orbit_build.lifecycle_view(conn,project_root(a),
+            {'project':status['project'],'action':'status'})
         selected=status['recovery']
         current_run=None
         if selected['status']=='RESUME':
@@ -409,6 +416,13 @@ def execute(conn, name, a):
                 current_run=orbit_build.public(saved)
         status['experience']=orbit_build.experience_view(
             status['intake'],selected,current_run)
+        if (selected['status']=='NO_BUILD' and
+                status['lifecycle']['maturity']=='existing' and
+                status['intake']['status']=='NOT_STARTED'):
+            status['experience'].update(phase='EXISTING_PROJECT',headline='Existing project detected',
+                summary='Code/manifest names exist; inspect actual implementation before choosing a workflow.',
+                next_action={'label':'Inspect affected source, current Git and tests',
+                             'tool':'orbit_project_action'})
         status['context_strategy']='Load current checkpoint and agreed brief, then only stage-specific docs and changed source files; do not reread all reference documents.'
         return status
     if name=='orbit_memory_save': return memory_save(conn,a)
