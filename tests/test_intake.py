@@ -33,4 +33,29 @@ class TestIntake(unittest.TestCase):
  def test_existing_build_not_retroactively_blocked(self):
   orbit_build.begin(self.db,self.root,{**self.a,'build_id':'legacy','objective':'existing','confirm_write':True})
   self.assertEqual(self.do('orbit_build_begin',build_id='legacy',objective='existing',confirm_write=True)['status'],'EXISTS')
+
+ def test_incremental_question_tracks_prior_answer_and_requires_real_branch(self):
+  x=self.do('orbit_intake_propose',profile=P,questions=Q,confirm_write=True)
+  self.assertEqual(x['status'],'PROPOSED')
+  second={'id':'storage','prompt':'Where should the personal data live?',
+          'options':['Local only','Cloud sync'],'recommended':'Local only'}
+  base={'question':second,'based_on_id':'target','based_on_choice':'Personal',
+        'rationale':'Personal use permits offline storage without team accounts'}
+  self.assertEqual(self.do('orbit_intake_followup',expected_revision=1,**base,confirm_write=True)['status'],'HOLD')
+  a=self.do('orbit_intake_answer',expected_revision=1,question_id='target',choice='Personal',
+            user_reference='user-answered-personal',confirm_write=True)
+  self.assertEqual(a['status'],'ANSWER_RECORDED')
+  self.assertEqual(self.do('orbit_intake_followup',expected_revision=1,**base,confirm_write=True)['status'],'STALE_REVISION')
+  self.assertEqual(self.do('orbit_intake_followup',expected_revision=2,
+            **{**base,'based_on_choice':'Team'},confirm_write=True)['status'],'HOLD')
+  b=self.do('orbit_intake_followup',expected_revision=2,**base,confirm_write=True)
+  self.assertEqual(b['status'],'FOLLOWUP_PROPOSED')
+  self.assertEqual(b['intake']['questions'][-1]['based_on'],'target')
+  with self.assertRaises(ValueError):
+   self.do('orbit_intake_approve',expected_revision=3,answers={'target':'Team','storage':'Local only'},
+           answer_source='user_choices',user_reference='user-approved-full-brief',confirm_write=True)
+  self.assertEqual(self.do('orbit_intake_approve',expected_revision=3,
+            answers={'target':'Personal','storage':'Local only'},answer_source='user_choices',
+            user_reference='user-approved-full-brief',confirm_write=True)['status'],'APPROVED')
+  self.assertEqual(self.do('orbit_build_begin',build_id='adaptive',objective='Habit',confirm_write=True)['status'],'CREATED')
 if __name__=='__main__':unittest.main()

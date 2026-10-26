@@ -276,6 +276,8 @@ TOOLS += [
 TOOLS += [
  {'name':'orbit_intake_status','description':'Read guided product intake and progressive autonomy.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
  {'name':'orbit_intake_propose','description':'Save proposed product classification and interview questions, not user acceptance.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'profile':{'type':'object'},'questions':{'type':'array','maxItems':6},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','profile','questions'])},
+ {'name':'orbit_intake_answer','description':'Record one actual answer with revision guard; then decide whether a dependent question is needed.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'question_id':string(40),'choice':string(120),'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','question_id','choice','user_reference'])},
+ {'name':'orbit_intake_followup','description':'Add ONE conditional question based on an already recorded answer; cannot pre-answer it.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'based_on_id':string(40),'based_on_choice':string(120),'question':{'type':'object'},'rationale':string(500),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','based_on_id','based_on_choice','question','rationale'])},
  {'name':'orbit_intake_approve','description':'Record selected options or explicitly delegated recommended defaults; user consent is host-attested.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'answers':{'type':'object'},'answer_source':{'type':'string','enum':['user_choices','user_delegated_defaults']},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','answers','answer_source','user_reference'])},
  {'name':'orbit_autonomy_review','description':'Recommend maturity-based guided/assisted/trusted mode; no automatic promotion.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'level':{'type':'string','enum':['guided','assisted','trusted']},'expected_revision':{'type':'integer','minimum':1},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project'])},
  {'name':'orbit_docs_audit','description':'Read-only, repeatable project documentation inventory and growth signals.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'signals':{'type':'array','maxItems':8,'items':{'type':'string'}}},['project_root','project'])},
@@ -309,11 +311,12 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
-    if name in {'orbit_intake_status','orbit_intake_propose','orbit_intake_approve','orbit_autonomy_review','orbit_docs_audit'}:
+    if name in {'orbit_intake_status','orbit_intake_propose','orbit_intake_answer','orbit_intake_followup','orbit_intake_approve','orbit_autonomy_review','orbit_docs_audit'}:
         a={**a,'project':project_key(a)}
         root=project_root(a)
         handlers={'orbit_intake_status':orbit_intake.status,
                   'orbit_intake_propose':orbit_intake.propose,
+                  'orbit_intake_answer':orbit_intake.answer,'orbit_intake_followup':orbit_intake.followup,
                   'orbit_intake_approve':orbit_intake.approve,
                   'orbit_autonomy_review':orbit_intake.autonomy,
                   'orbit_docs_audit':orbit_intake.docs_audit}

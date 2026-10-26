@@ -31,3 +31,8 @@ This reduces repeated **future context**, not past token charges or guaranteed u
 ## Pre-implementation review
 
 Require an agreed/explicitly-defaulted product brief, doc-purpose inventory, required missing docs created or specifically deferred, coherent architecture and roadmap, and an applicable plan before implementation. The Orbit **v0.24 MCP does not yet enforce** this intake gate mechanically; the host instructions must be tested. Do not reset existing builds or checkpoints when introducing the policy.
+
+
+## Evidence-driven docs and reuse decisions
+
+When creating/updating architecture or the roadmap, link back to the **actual interview path** (question, user choice, resulting tradeoff) and the small dependency decision record: `component / existing option / selected library-or-native / reason / license/security/compatibility / install approval`. Don't claim a planned feature complete unless code and tests support it. Review semantic drift between docs and real implementation after substantial changes; checked roadmap milestones must reflect evidence, not the build report alone.

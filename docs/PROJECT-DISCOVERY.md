@@ -25,3 +25,10 @@ See `source/skills/orbit/references/PROJECT-INTAKE.md` and `DOCS-AND-CONTEXT.md`
 - Fresh installs deliver skill reference files to Antigravity, Codex and Claude Code; the installer previews and backs up recognized stock upgrades.
 - If host-native writer is unavailable, sequential host writes the docs with an honest execution report.
 - No additional model, external tool install, deployment, Git push or public endpoint is automatic.
+
+
+## Adaptive question and reuse policy
+
+The first interview question resolves the costliest unknown. After the user selects an option, `orbit_intake_answer` persists that choice and `orbit_intake_followup` can append one consequential branch question **only when linked to a stored answer**; the host supplies rationale and its decision-based recommendation. The host must stop asking once scope can be planned safely, rather than automatically presenting all predefined questions. Intake revision guards and the original `orbit_intake_approve` gate remain in place; existing builds are not reset. The host performs reasoning: MCP does not secretly run another model.
+
+Before implementation, compare existing host/project code, standard APIs and maintained prebuilt packages and choose the simplest reliable route after security/license/runtime review and owner approval for installs. The user-supplied `agent-browser` is a visual browser-QA provider, not a UI component library. Evaluate it only when connected and permitted; existing Orbit Playwright QA evidence remains mandatory for its current formal gate.

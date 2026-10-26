@@ -70,7 +70,66 @@ def propose(conn,root,a):
           profile_json=excluded.profile_json,questions_json=excluded.questions_json,
           answers_json=excluded.answers_json,updated_at=excluded.updated_at''',
           (a['project'],str(root),json.dumps(p),json.dumps(q),'{}',now()))
-    return {'status':'PROPOSED','intake':status(conn,root,a),'next':'Ask the user or obtain explicit delegation of recommended defaults.'}
+    return {'status':'PROPOSED','intake':status(conn,root,a),'next':'Ask the FIRST highest-impact question. After the response, use orbit_intake_answer then conditionally ask another, or obtain explicit defaults.'}
+
+def answer(conn,root,a):
+    """Persist one actually supplied user choice; no implicit default acceptance."""
+    old=row(conn,root,a['project'])
+    if not old or old['status']!='PROPOSED':
+        return {'status':'HOLD','reason':'An active proposed interview is required'}
+    if old['revision']!=a['expected_revision']:
+        return {'status':'STALE_REVISION','intake':public(old)}
+    if not isinstance(a.get('user_reference'),str) or not 8<=len(a['user_reference'])<=240:
+        raise ValueError('Host must provide a real user answer reference')
+    questions=json.loads(old['questions_json'])
+    matches=[q for q in questions if q['id']==a['question_id']]
+    if len(matches)!=1 or a['choice'] not in matches[0]['options']:
+        raise ValueError('Choice must match the active question options')
+    answers=json.loads(old['answers_json'])
+    if a['question_id'] in answers:
+        if answers[a['question_id']]!=a['choice']:
+            return {'status':'HOLD','reason':'An existing decision cannot be silently changed; use a reviewed new intake'}
+        return {'status':'ALREADY_ANSWERED','intake':public(old)}
+    if a.get('confirm_write') is not True:
+        return {'status':'PREVIEW_ONLY','question_id':a['question_id'],'choice':a['choice']}
+    answers[a['question_id']]=a['choice']
+    with conn:
+        update=conn.execute('''UPDATE orbit_project_intake SET answers_json=?,revision=revision+1,
+          updated_at=? WHERE project=? AND root=? AND revision=?''',
+          (json.dumps(answers),now(),a['project'],str(root),old['revision']))
+        if update.rowcount!=1:raise ValueError('Concurrent intake decision conflict')
+    return {'status':'ANSWER_RECORDED','intake':status(conn,root,a),
+            'next':'Analyze this actual choice and either propose a conditional follow-up or request final approval.'}
+
+def followup(conn,root,a):
+    """Append exactly one question tied to an already recorded parent answer."""
+    old=row(conn,root,a['project'])
+    if not old or old['status']!='PROPOSED':
+        return {'status':'HOLD','reason':'An active proposed interview is required'}
+    if old['revision']!=a['expected_revision']:
+        return {'status':'STALE_REVISION','intake':public(old)}
+    q=json.loads(old['questions_json'])
+    answers=json.loads(old['answers_json'])
+    parent=a['based_on_id']
+    if parent not in answers or answers[parent]!=a['based_on_choice']:
+        return {'status':'HOLD','reason':'Follow-up must depend on an actually recorded answer'}
+    if len(q)>=6:return {'status':'HOLD','reason':'Interview question cap reached; choose safe scope or seek explicit exception'}
+    if any(item['id']==a['question']['id'] for item in q):
+        raise ValueError('Follow-up id already used')
+    validate_questions([a['question']])
+    if not isinstance(a['rationale'],str) or not 12<=len(a['rationale'])<=500:
+        raise ValueError('Describe why the previous choice changes the next decision')
+    new_q={**a['question'],'based_on':parent,'because_choice':a['based_on_choice'],
+           'rationale':a['rationale']}
+    if a.get('confirm_write') is not True:
+        return {'status':'PREVIEW_ONLY','question':new_q}
+    with conn:
+        update=conn.execute('''UPDATE orbit_project_intake SET questions_json=?,revision=revision+1,
+           updated_at=? WHERE project=? AND root=? AND revision=?''',
+           (json.dumps(q+[new_q]),now(),a['project'],str(root),old['revision']))
+        if update.rowcount!=1:raise ValueError('Concurrent interview question conflict')
+    return {'status':'FOLLOWUP_PROPOSED','intake':status(conn,root,a),
+            'next':'Ask this dependent question; do not pre-fill the answer.'}
 
 def approve(conn,root,a):
     old=row(conn,root,a['project'])
@@ -80,6 +139,9 @@ def approve(conn,root,a):
     q=json.loads(old['questions_json']);ans=a['answers']
     if not isinstance(ans,dict) or set(ans)!={x['id'] for x in q}:raise ValueError('All questions require answers')
     if any(ans[x['id']] not in x['options'] for x in q):raise ValueError('Answer must match an offered option')
+    recorded=json.loads(old['answers_json'])
+    if any(ans[k]!=v for k,v in recorded.items()):
+        raise ValueError('Final approval cannot silently override previously recorded choices')
     if a['answer_source'] not in {'user_choices','user_delegated_defaults'}:raise ValueError('Invalid answer source')
     if a['answer_source']=='user_delegated_defaults' and any(ans[x['id']]!=x['recommended'] for x in q):
         raise ValueError('Delegated defaults must be the recommended choices')
