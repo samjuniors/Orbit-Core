@@ -20,7 +20,7 @@ def flow_for(row):
         value=json.loads(row['evidence_json']).get('__orbit_flow')
     except (KeyError,TypeError,ValueError):
         return STAGES
-    if isinstance(value,list) and tuple(value) in FLOWS.values() and row['stage'] in value:
+    if isinstance(value,list) and tuple(value) in ALL_FLOWS and row['stage'] in value:
         return tuple(value)
     return STAGES
 
@@ -213,6 +213,154 @@ def feedback(conn,root,a):
             'open_feedback':sum(x['status']=='OPEN' for x in updated),
             'note':'Host must re-check the actual artifact/changes and obtain owner approval when required.'}
 
+
+
+# Issue #7: a small host-neutral lifecycle router over the existing build ledger.
+# This module never executes Git, agents, models, tests or arbitrary project code.
+import re
+
+SCOPED_FLOWS = {
+    'fix': ('IMPLEMENT','VERIFY','REVIEW','CHECKPOINT','DONE'),
+    'feature': ('PLAN','IMPLEMENT','VERIFY','REVIEW','CHECKPOINT','DONE'),
+    'redesign': ('PLAN','IMPLEMENT','VERIFY','REVIEW','CHECKPOINT','DONE'),
+    'refactor': ('PLAN','IMPLEMENT','VERIFY','REVIEW','CHECKPOINT','DONE'),
+}
+ALL_FLOWS = tuple(FLOWS.values()) + tuple(SCOPED_FLOWS.values())
+LIFECYCLE_STEPS = {
+    'start': ['Inspect project and selected checkpoint', 'Resume an unfinished build or use approved intake for a new project'],
+    'resume': ['Select build if ambiguous', 'Reconcile checkpoint against current Git, files and tests', 'Continue only the verified next step'],
+    'pause': ['Finish or safely interrupt the host task', 'Save an approved scoped checkpoint', 'Pause this Orbit build ledger only'],
+    'fix': ['Reproduce the symptom', 'Inspect affected code and choose minimal patch', 'Run focused and regression checks'],
+    'feature': ['Inspect existing behavior and contracts', 'Draft scoped change and obtain plan approval', 'Implement and regression-test without changing the old DONE build'],
+    'redesign': ['Review existing design, accessibility and API/data contracts', 'Compare reusable and custom components', 'Approve and verify scoped UI changes'],
+    'refactor': ['Establish behavior baseline', 'Refactor within stable contracts', 'Run regression and compatibility checks'],
+    'review': ['Inspect changed files, tests and security impact', 'Record findings with evidence, no implied PASS'],
+    'status': ['Read selected build and checkpoint', 'Verify Git state and tests before relying on saved evidence'],
+    'new': ['Clarify the goal using adaptive intake', 'Approve an editable plan before implementation'],
+    'custom': ['Interpret the user wording with the host model', 'Inspect only relevant existing project facts', 'Ask only if material ambiguity remains'],
+}
+
+def normalize_action(value):
+    """Route common words conservatively; custom wording is never discarded."""
+    if not isinstance(value,str) or not 1 <= len(value.strip()) <= 240:
+        raise ValueError('action must be 1–240 characters')
+    term=' '.join(value.casefold().split())
+    exact={'stop':'pause','pause':'pause','hold':'pause','continue':'resume',
+           'resume':'resume','restart':'resume','start':'start','begin':'start',
+           'status':'status','inspect':'status','review':'review','test':'review',
+           'debug':'fix','fix':'fix','repair':'fix','redesign':'redesign',
+           'refactor':'refactor','new':'new','new project':'new',
+           'add feature':'feature','feature':'feature','custom':'custom'}
+    if term in exact:return exact[term]
+    prefixes=((r'^(?:debug|fix|repair|diagnose)\b','fix'),
+              (r'^(?:add|implement|build) (?:a |an |new )?feature\b','feature'),
+              (r'^redesign\b','redesign'),(r'^refactor\b','refactor'),
+              (r'^(?:review|test|audit)\b','review'),
+              (r'^(?:continue|resume)\b','resume'),
+              (r'^pause\b','pause'),(r'^stop\b','pause'),
+              (r'^(?:start|open) (?:this |the )?project\b','start'),
+              (r'^(?:status|inspect|where are we)\b','status'))
+    return next((kind for pattern,kind in prefixes if re.search(pattern,term)), 'custom')
+
+def project_signals(root):
+    """Bounded name-only local inventory, never reads/runs an owner's source."""
+    signals=[]
+    known={'package.json','pyproject.toml','setup.py','Cargo.toml','go.mod',
+           'pom.xml','build.gradle','pubspec.yaml','CMakeLists.txt','README.md',
+           'requirements.txt','AGENTS.md','Makefile'}
+    roots={'src','app','apps','source','lib','tests','test','android','ios','.git'}
+    for child in root.iterdir():
+        if child.is_symlink():continue
+        if child.name in known and child.is_file(): signals.append(child.name)
+        elif child.name in roots and child.is_dir():signals.append(child.name+'/')
+        if len(signals)>=12:break
+    return sorted(signals)
+
+def lifecycle_view(conn, root, a):
+    """Read-only intent suggestion. The host owns reasoning, execution and approval."""
+    action=normalize_action(a.get('action','status'))
+    recovery=recovery_brief(conn,root,a['project'])
+    signals=project_signals(root)
+    saved=recovery['status']
+    maturity=('in_progress' if saved in ('RESUME','NEEDS_BUILD_SELECTION') else
+              'completed_recorded' if saved=='ALL_DONE' else
+              'existing' if signals else 'new')
+    if a.get('maturity') in ('stalled','maintained','partially_built'):
+        maturity=a['maturity']+'_user_reported'
+    selected=None
+    if a.get('build_id'):
+        selected=get(conn,root,a)
+        if selected is None:return {'status':'BUILD_NOT_FOUND','action':action,'build_id':a['build_id']}
+    elif saved=='RESUME':
+        selected=get(conn,root,{'project':a['project'],'build_id':recovery['build_id']})
+    if saved=='NEEDS_BUILD_SELECTION' and not selected and action in ('resume','pause','start'):
+        return {'status':'NEEDS_BUILD_SELECTION','action':action,
+                'builds':recovery['builds'],'next_action':'Select build_id; never guess between unfinished builds.'}
+    if selected and selected['stage']=='DONE' and action in ('pause','resume'):
+        return {'status':'ALREADY_DONE','action':action,'build_id':selected['build_id'],
+                'next_action':'Create a separately identified change request if further work is needed.'}
+    pause=(json.loads(selected['evidence_json']).get('__orbit_control',{})
+           if selected else {})
+    if not isinstance(pause,dict):pause={}
+    halted=pause.get('paused') is True
+    next_action={
+      'start':('Resume the existing build after checking current Git/tests.'
+               if selected and selected['stage']!='DONE' else
+               'Inspect the existing repo; use a scoped build with baseline_reference for changes.'
+               if signals else 'Use approved adaptive intake for the new goal.'),
+      'resume':('Confirm revision to resume the paused ledger.' if halted else
+                'Reconcile recorded stage with Git status, modified paths and tests.'),
+      'pause':'Save a revision-guarded pause; separately checkpoint via orbit_project_checkpoint.',
+      'feature':'Anchor a new change build to a DONE build or an existing verified baseline.',
+      'fix':'Reproduce, patch and test without mandatory new-project intake.',
+      'redesign':'Inspect current UX and preserve existing API/data contracts.',
+      'refactor':'Verify behavioral baseline and preserve public contracts.',
+      'review':'Review actual source/test evidence; do not invent a PASS.',
+      'status':'Compare this read-only state with current Git and test evidence.',
+      'new':'Use approved project intake; do not overwrite any existing repo.',
+      'custom':'Use the host model to interpret this exact user intent proportionately.'
+    }[action]
+    return {'status':'PAUSED' if halted else 'READY','project':a['project'],
+            'action':action,'raw_intent':a.get('action','status'),
+            'maturity':maturity,'maturity_is_inferred':maturity.endswith(('existing','new','in_progress','completed_recorded')),
+            'observed_signals':signals,'recovery':recovery,
+            'selected_build':({'build_id':selected['build_id'],'stage':selected['stage'],
+                               'revision':selected['revision'],'paused':halted} if selected else None),
+            'workflow':LIFECYCLE_STEPS[action],
+            'next_action':next_action,'requires_git_test_verification':True,
+            'host_action_executed':False,'user_data_modified':False}
+
+def lifecycle_action(conn, root, a):
+    """Only pause/unpause mutate, with explicit owner-host confirmation and CAS."""
+    view=lifecycle_view(conn,root,a)
+    action=view['action']
+    if action not in ('pause','resume') or view['status'] in ('ALREADY_DONE','BUILD_NOT_FOUND','NEEDS_BUILD_SELECTION'):
+        return view
+    selected=view.get('selected_build')
+    if not selected:return {**view,'status':'NO_UNFINISHED_BUILD'}
+    paused=selected['paused']
+    requested=action=='pause'
+    if paused==requested:return {**view,'status':'ALREADY_PAUSED' if paused else 'NOT_PAUSED'}
+    if a.get('expected_revision')!=selected['revision']:
+        return {**view,'status':'STALE_REVISION'}
+    reason=a.get('reason','')
+    if reason and (not isinstance(reason,str) or len(reason)>400):
+        raise ValueError('reason must be at most 400 characters')
+    if a.get('confirm_write') is not True:
+        return {**view,'status':'PREVIEW_ONLY',
+                'proposed_pause':requested,'requires_confirmation':True}
+    run=get(conn,root,{'project':a['project'],'build_id':selected['build_id']})
+    evidence=json.loads(run['evidence_json'])
+    evidence['__orbit_control']={'paused':requested,'updated_at':now(),
+                                 'reason':reason[:400],'verified':False}
+    with conn:
+        cur=conn.execute('''UPDATE build_runs SET evidence_json=?,revision=revision+1,updated_at=?
+           WHERE project=? AND root=? AND build_id=? AND revision=?''',
+           (json.dumps(evidence),now(),a['project'],str(root),run['build_id'],run['revision']))
+    if cur.rowcount!=1:return {**view,'status':'STALE_REVISION'}
+    return {**view,'status':'PAUSED' if requested else 'RESUMED',
+            'revision':run['revision']+1,'user_data_modified':True,
+            'note':'Only the Orbit build ledger changed; host agents, previews and deployed processes were not stopped or started.'}
 
 def experience_view(intake, recovery, run=None):
     """Host-renderable, read-only summary of *existing* persisted facts.
