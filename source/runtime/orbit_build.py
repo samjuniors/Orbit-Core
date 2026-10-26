@@ -253,7 +253,7 @@ def normalize_action(value):
     if not isinstance(value,str) or not 1 <= len(value.strip()) <= 240:
         raise ValueError('action must be 1–240 characters')
     term=' '.join(value.casefold().split())
-    if re.match(r'^(?:stop|pause|close|terminate) (?:the |my )?(?:local )?(?:dev )?(?:preview|server)\\b',term):
+    if re.match(r'^(?:stop|pause|close|terminate) (?:the |my )?(?:local )?(?:dev )?(?:preview|server)\b',term):
         return 'preview_stop'
     exact={'stop':'pause','pause':'pause','hold':'pause','continue':'resume',
            'resume':'resume','restart':'resume','start':'start','begin':'start',
