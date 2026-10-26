@@ -17,7 +17,7 @@ from pathlib import Path
 PACKAGE = Path(__file__).resolve().parent
 VERSION = "0.24.0"
 SERVER = "orbit-core-native"
-HOSTS = ("antigravity", "codex", "claude-code")
+HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
@@ -294,6 +294,15 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
         for ref in sorted((src/'skills/orbit/references').glob('*.md')):
             same_or_create(changes,dest/'references'/ref.name,ref.read_bytes(),boundary,
                            'Orbit guided workflow reference '+ref.name)
+    # Stable installer-independent update launcher. Does not alter PATH automatically.
+    same_or_create(changes,home/'.orbit-universal/orbit_cli.py',(PACKAGE/'orbit_cli.py').read_bytes(),None,'Orbit command-line updater and host detection')
+    if os.name=='nt':
+        launcher=home/'.orbit-universal/bin/orbit.cmd'
+        body=b'@echo off\r\npy -3 "%~dp0..\\orbit_cli.py" %*\r\n'
+    else:
+        launcher=home/'.orbit-universal/bin/orbit'
+        body=b'#!/bin/sh\nexec python3 "$(dirname "$0")/../orbit_cli.py" "$@"\n'
+    same_or_create(changes,launcher,body,None,'Orbit stable update launcher; PATH modification is manual opt-in')
     cmd=python_binary()
     script=runtime/'orbit_mcp.py'
     common={'command':cmd,'args':[str(script)]}
@@ -328,7 +337,30 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
             same_or_create(changes,agents/p.name,agent_claude(p.read_text('utf-8')).encode(),root or home,'Claude Code agent '+p.stem)
         config=(root/'.mcp.json') if root else (home/'.claude.json')
         merge_json(changes,config,{**common,'type':'stdio'},root or home,'Claude Code MCP configuration')
+    if 'vscode' in hosts:
+        if root:cfg=root/'.vscode/mcp.json'
+        elif os.name=='nt':cfg=Path(os.environ.get('APPDATA',home/'AppData/Roaming'))/'Code/User/mcp.json'
+        elif sys.platform=='darwin':cfg=home/'Library/Application Support/Code/User/mcp.json'
+        else:cfg=home/'.config/Code/User/mcp.json'
+        merge_vscode(changes,cfg,{'type':'stdio',**common},root or home)
     return changes
+
+
+def merge_vscode(changes,dest,entry,boundary):
+    check_dest(dest,boundary)
+    if dest.exists():
+        if dest.is_symlink() or not dest.is_file():raise SetupError('Unsafe VS Code config')
+        try:old=json.loads(dest.read_text(encoding='utf-8'))
+        except (ValueError,UnicodeError) as exc:raise SetupError('Invalid VS Code MCP JSON') from exc
+    else:old={}
+    if not isinstance(old,dict) or not isinstance(old.get('servers',{}),dict):
+        raise SetupError('VS Code config must contain a servers object')
+    original=old.get('servers',{}).get(SERVER)
+    if original is not None and original!=entry:raise SetupError('Existing VS Code Orbit server differs; manual audit required')
+    updated={**old,'servers':{**old.get('servers',{}),SERVER:entry}}
+    body=(json.dumps(updated,ensure_ascii=False,indent=2)+'\n').encode('utf-8')
+    action='SKIP' if dest.exists() and dest.read_bytes()==body else 'MERGE' if dest.exists() else 'CREATE'
+    changes.append(Change(dest,body,action,'VS Code native stdio MCP config, preserving unrelated servers'))
 
 
 def install(changes: list[Change]) -> list[str]:

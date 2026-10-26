@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from installer import plan, install, SetupError
 
-r=tk.Tk();r.title('Orbit Universal Setup v0.23.0');r.geometry('860x630')
+r=tk.Tk();r.title('Orbit Universal Setup v0.24.0');r.geometry('860x630')
 tk.Label(r,text='ORBIT — one-click universal setup',font=('Arial',17,'bold')).pack(anchor='w',padx=18,pady=(12,5))
 tk.Label(r,text='Choose availability everywhere on this computer, or only in one selected project. Uses existing coding host models; no other AI CLI.',wraplength=790,justify='left').pack(anchor='w',padx=18)
 scope=tk.StringVar(value='machine');section=tk.Frame(r);section.pack(anchor='w',padx=18,pady=8)
@@ -17,9 +17,9 @@ def update_scope(*_):
     x=scope.get()=='project';entry.config(state='normal' if x else 'disabled');btn.config(state='normal' if x else 'disabled')
 scope.trace_add('write',update_scope);update_scope()
 tk.Label(r,text='Select supported hosts (Claude Desktop regular chat uses a separate optional extension):').pack(anchor='w',padx=18)
-selection={h:tk.BooleanVar(value=True) for h in ('antigravity','codex','claude-code')}
+selection={h:tk.BooleanVar(value=True) for h in ('antigravity','codex','claude-code','vscode')}
 choices=tk.Frame(r);choices.pack(anchor='w',padx=18,pady=4)
-for key,title in [('antigravity','Antigravity'),('codex','Codex'),('claude-code','Claude Code')]:tk.Checkbutton(choices,text=title,variable=selection[key]).pack(side='left',padx=8)
+for key,title in [('antigravity','Antigravity'),('codex','Codex'),('claude-code','Claude Code'),('vscode','VS Code')]:tk.Checkbutton(choices,text=title,variable=selection[key]).pack(side='left',padx=8)
 log=tk.Text(r,height=23,wrap='none');log.pack(padx=18,pady=8,fill='both',expand=True)
 status=tk.StringVar(value='Ready. A safety confirmation is required before writing files.');tk.Label(r,textvariable=status,anchor='w').pack(fill='x',padx=18)
 state={'preview':None,'choices':None}

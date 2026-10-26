@@ -6,6 +6,7 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 - Next: persistent OS process supervisor and optional secure sharing. Actual host autonomous coding and permissions remain host-owned.
 
 ## [0.24.0] — Unreleased (feature branch)
+- Add stable local Orbit CLI with read-only host detection and checksum-verified release updates (preview default, explicit apply). Add opt-in native VS Code MCP configuration.
 - Add five SQLite-backed intake/autonomy/doc-audit tools, enforce interview acceptance before new MCP build creation, preserve earlier build runs. Tool count 29; host UI still owns real consent and writing.
 - Add guided fresh-project intake interview (recommended answer options), type/complexity/maturity classification, right-sized canonical docs policy and compact prompt/hand-off contract in installed host references. This guidance is host-executed; no new MCP stage gate is claimed.
 - Ensure installer delivers Orbit skill references to Antigravity, Codex and Claude Code, with preview/backup-aware upgrades; enable writer's native file tools when supported.

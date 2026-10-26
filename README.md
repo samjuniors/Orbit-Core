@@ -85,3 +85,18 @@ For new products, Orbit now guides the host to classify project type/complexity/
 ## Persistent guided intake (development branch)
 
 New Orbit MCP projects must obtain an approved product classification and user answers before `orbit_build_begin` creates a build; a fresh build otherwise returns HOLD. Five additional tools expose intake status, proposals, approved choices, autonomy review and repeatable documentation gap audits (29 total). Existing builds such as a prior Todo test are not retroactively blocked. Host-owned architect/writer agents create substantive missing docs only after reviewing owner canonical sources. No automated autonomy escalation or approval bypass is offered.
+
+## Install once; update and detect hosts (feature branch)
+
+The installer now writes a stable local launcher and a separate stdlib admin script,
+without silently editing PATH. On Windows, use
+\`& "$HOME\.orbit-universal\bin\orbit.cmd" detect\` or \`... update --check\`.
+To run simply \`orbit update\`, add \`%USERPROFILE%\.orbit-universal\bin\` to
+your *user* PATH after reviewing it. The updater checks official GitHub stable
+releases, downloads a versioned ZIP and release-sidecar SHA256, validates archive
+paths and contents, shows an installation diff, and requires \`--apply\`.
+\`orbit detect\` does not start IDEs or prove a server connection. For prerelease
+testing, use \`--from-zip <path> --sha256 <trusted digest>\`; never automatically
+execute an unreviewed branch build. New optional VS Code project or user
+installation writes its native \`servers\` JSON format; it leaves other servers
+untouched. Claude Desktop still needs its separate extension.
