@@ -228,6 +228,20 @@ def same_or_create(changes: list[Change], dest: Path, data: bytes, root: Path|No
         changes.append(Change(dest,data,'CREATE',desc))
 
 
+def stock_runtime_path(prior_path, next_path):
+    """Validate an existing versioned Orbit runtime without trusting foreign paths."""
+    try:
+        prior=Path(prior_path).expanduser()
+        target=Path(next_path).expanduser()
+        return (prior.name=='orbit_mcp.py' and target.name=='orbit_mcp.py'
+                and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',prior.parent.name) is not None
+                and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',target.parent.name) is not None
+                and prior.parent.parent.resolve()==target.parent.parent.resolve()
+                and prior.is_file() and not prior.is_symlink() and not prior.parent.is_symlink())
+    except (OSError,ValueError):
+        return False
+
+
 def merge_json(changes: list[Change], dest: Path, entry: dict, root: Path, desc: str):
     check_dest(dest,root)
     old={}
@@ -243,7 +257,7 @@ def merge_json(changes: list[Change], dest: Path, entry: dict, root: Path, desc:
         # Only migrate the exact previous stock server command shape, preserving other MCPs.
         if not (isinstance(prior,dict) and prior.get('command')==entry['command']
                 and isinstance(prior.get('args'),list) and len(prior['args'])==1
-                and any('/'+version+'/' in str(prior['args'][0]).replace('\\','/') for version in ('0.22.0','0.23.0'))
+                and stock_runtime_path(prior['args'][0],entry['args'][0])
                 and set(prior)==set(entry)):
             raise SetupError('Existing Orbit MCP registration differs; no overwrite: '+str(dest))
     obj={**old, 'mcpServers':{**servers,SERVER:entry}}
@@ -267,7 +281,7 @@ def merge_toml(changes: list[Change], dest: Path, python_cmd: str, runtime: Path
         match=re.search(r'(?ms)^\s*\[mcp_servers\.["\']orbit-core-native["\']\]\n(.*?)(?=^\s*\[|\Z)', old)
         if match:
             body=match.group(1)
-            if (any('/'+version+'/' in body.replace('\\','/') for version in ('0.22.0','0.23.0')) and
+            if (stock_runtime_path(re.search(r'args\\s*=\\s*\\[\\s*(\"[^\"\\n]+\")',body).group(1).strip('\"'),str(runtime)) and
                 re.fullmatch(r'(?ms)\s*command\s*=\s*"[^"\n]+"\s*\nargs\s*=\s*\["[^"\n]+"\]\s*',body)):
                 next_body=old[:match.start()]+'\n'+section.strip()+'\n'+old[match.end():]
                 changes.append(Change(dest,next_body.encode('utf-8'),'APPEND','Codex migrate stock MCP with backup'))
@@ -356,7 +370,12 @@ def merge_vscode(changes,dest,entry,boundary):
     if not isinstance(old,dict) or not isinstance(old.get('servers',{}),dict):
         raise SetupError('VS Code config must contain a servers object')
     original=old.get('servers',{}).get(SERVER)
-    if original is not None and original!=entry:raise SetupError('Existing VS Code Orbit server differs; manual audit required')
+    if original is not None and original!=entry:
+        if not (isinstance(original,dict) and original.get('type')=='stdio'
+                and original.get('command')==entry['command'] and set(original)==set(entry)
+                and isinstance(original.get('args'),list) and len(original['args'])==1
+                and stock_runtime_path(original['args'][0],entry['args'][0])):
+            raise SetupError('Existing VS Code Orbit server differs; manual audit required')
     updated={**old,'servers':{**old.get('servers',{}),SERVER:entry}}
     body=(json.dumps(updated,ensure_ascii=False,indent=2)+'\n').encode('utf-8')
     action='SKIP' if dest.exists() and dest.read_bytes()==body else 'MERGE' if dest.exists() else 'CREATE'
@@ -379,12 +398,20 @@ def install(changes: list[Change]) -> list[str]:
             # Existing configuration is only modified after preview. Backup first.
             if not c.target.is_file():raise SetupError('Config disappeared since preview: '+str(c.target))
             backup=c.target.with_name(c.target.name+'.orbit-backup')
-            if backup.exists():raise SetupError('Backup already exists: '+str(backup))
+            if backup.exists():
+                digest=hashlib.sha256(c.target.read_bytes()).hexdigest()[:12]
+                index=0
+                while backup.exists():
+                    index+=1
+                    if index>100:raise SetupError('Too many existing backup copies')
+                    backup=c.target.with_name(c.target.name+'.orbit-backup-'+digest+'-'+str(index))
             with backup.open('xb') as b:b.write(c.target.read_bytes())
             tmp=c.target.with_name(c.target.name+'.orbit-new')
             with tmp.open('xb') as f:f.write(c.data)
             tmp.replace(c.target)
             applied.append(str(backup))
+        if os.name!='nt' and c.target.name=='orbit' and c.target.parent.name=='bin' and c.target.parent.parent.name=='.orbit-universal':
+            c.target.chmod(0o700)
         applied.append(str(c.target))
     return applied
 
