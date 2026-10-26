@@ -32,7 +32,10 @@ class ProductFeedbackTests(unittest.TestCase):
                          'objective':'Build reviewed product','confirm_write':True})
 
     def call(self,name,**options):
-        return orbit_mcp.execute(self.db,name,{**self.a,**options})
+        args={**self.a,**options}
+        if name=='orbit_project_resume':
+            args.pop('build_id',None)
+        return orbit_mcp.execute(self.db,name,args)
 
     def revision(self):
         return self.call('orbit_build_status')['run']['revision']
