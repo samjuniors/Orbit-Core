@@ -4,7 +4,7 @@ description: Draft missing project documentation based on verified project evide
 model: inherit
 mainAgent: false
 subagent: true
-commandExecutionPolicy: sandbox
+commandExecutionPolicy: off
 tools:
   - view_file
   - grep_search
