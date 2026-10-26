@@ -13,6 +13,8 @@ import sys
 import orbit_tasks
 import orbit_capabilities
 import orbit_preview
+import orbit_browser
+import orbit_build
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -99,6 +101,8 @@ def db_connect():
         PRIMARY KEY (project, key))''')
     conn.commit()
     orbit_tasks.setup(conn)
+    orbit_build.setup(conn)
+    orbit_build.setup_browser(conn)
     if os.name != 'nt':
         try: path.chmod(0o600)
         except OSError: pass
@@ -261,7 +265,11 @@ TOOLS += [
     {'name':'orbit_capability_select','description':'Suggest reusable installed skill/tool matches and official research candidates for a task; external installs require owner review/approval.','inputSchema':schema({'project_root':string(2000),'objective':string(1500),'host_tools':{'type':'array','maxItems':80,'items':{'type':'string'}}},['project_root','objective'])},
     {'name':'orbit_preview_start','description':'PREVIEW or explicitly run a localhost dev server in this project; executes the supplied project command only with confirm_run. No public tunnel or deployment.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40),'command':{'type':'array','minItems':1,'maxItems':20,'items':{'type':'string'}},'port':{'type':'integer','minimum':1024,'maximum':65535},'health_path':string(100),'confirm_run':{'type':'boolean'}},['project_root','preview_id','command','port'])},
     {'name':'orbit_preview_status','description':'Check running local preview readiness and bounded log tail for this MCP session. No browser simulation.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40)},['project_root','preview_id'])},
-    {'name':'orbit_preview_stop','description':'Stop only the locally spawned preview tracked by this MCP session, with explicit confirm_stop.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40),'confirm_stop':{'type':'boolean'}},['project_root','preview_id'])}
+    {'name':'orbit_preview_stop','description':'Stop only the locally spawned preview tracked by this MCP session, with explicit confirm_stop.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40),'confirm_stop':{'type':'boolean'}},['project_root','preview_id'])},
+    {'name':'orbit_browser_qa','description':'Perform real, approved, loopback-only Playwright Chromium QA on an Orbit-owned running preview; optionally execute bounded DOM actions, capture a private screenshot and record a build gate result. Never installs browsers.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'preview_id':string(40),'viewport':{'type':'string','enum':['desktop','mobile']},'actions':{'type':'array','maxItems':20,'items':{'type':'object'}},'confirm_run':{'type':'boolean'},'confirm_interactions':{'type':'boolean'}},['project_root','project','build_id','preview_id'])},
+    {'name':'orbit_build_begin','description':'Preview or create durable app-building gates (PLAN, IMPLEMENT, PREVIEW, BROWSER_QA, REVIEW, CHECKPOINT, DONE). Does not start AI agents.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'objective':string(1500),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','objective'])},
+    {'name':'orbit_build_status','description':'Read persistent app build stage and evidence, across host/MCP restarts.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40)},['project_root','project','build_id'])},
+    {'name':'orbit_build_advance','description':'Revision-guarded explicit stage advance; browser QA PASS requires a real Orbit-recorded Playwright PASS.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['PASS','FAIL','BLOCKED']},'evidence':string(1600),'preview_id':string(40),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','expected_revision','outcome','evidence'])}
 ]
 TOOL_MAP = {x['name']:x['inputSchema'] for x in TOOLS}
 
@@ -292,6 +300,26 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name=='orbit_build_begin':
+        a={**a,'project':project_key(a)}
+        return orbit_build.begin(conn,project_root(a),a)
+    if name=='orbit_build_status':
+        a={**a,'project':project_key(a)}
+        return orbit_build.current(conn,project_root(a),a)
+    if name=='orbit_build_advance':
+        a={**a,'project':project_key(a)}
+        return orbit_build.advance(conn,project_root(a),a)
+    if name=='orbit_browser_qa':
+        a={**a,'project':project_key(a)}
+        root=project_root(a)
+        orbit_build.validate_key(a['build_id'])
+        run=orbit_build.get(conn,root,a)
+        if not run or run['stage']!='BROWSER_QA':
+            return {'status':'HOLD','reason':'Create the build and reach BROWSER_QA stage before automated verification.'}
+        result=orbit_browser.run(root,a,orbit_preview)
+        if result['status'] in {'PASS','FAIL'}:
+            orbit_build.save_browser(conn,root,a,result)
+        return result
     if name=='orbit_preview_start': return orbit_preview.start(project_root(a), a)
     if name=='orbit_preview_status': return orbit_preview.status(project_root(a), a)
     if name=='orbit_preview_stop': return orbit_preview.stop(project_root(a), a)

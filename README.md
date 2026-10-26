@@ -1,6 +1,6 @@
 # ORBIT Core MCP — universal local agent orchestration
 
-**Development candidate: v0.24.0** · Python 3.10+ · local-first · no deployment required
+**Development candidate: v0.24.0 (full testable local workflow)** · Python 3.10+ · local-first · no deployment required
 
 This is the **standalone local MCP + cross-host installer** for the independent Orbit Workspace Orchestrator plugin. It contains the Python stdio MCP runtime, SQLite memory and task ledger, capability discovery, and host-specific agent/skill adapters for Antigravity, Codex, and Claude Code. The host AI/IDE—not this MCP—performs native model inference, subagent spawning, and code editing.
 
@@ -21,7 +21,7 @@ For a project-specific installation see [original installation guide](docs/INSTA
 
 ## Repository layout
 
-- `source/runtime/orbit_mcp.py`: JSON-RPC stdio MCP server, 20 tools at v0.24.0.
+- `source/runtime/orbit_mcp.py`: JSON-RPC stdio MCP server, 24 tools at v0.24.0.
 - `source/runtime/orbit_tasks.py`: SQLite project task ledger and policies.
 - `source/runtime/orbit_capabilities.py`: read-only skills/MCP discovery and selection.
 - `source/agents/`, `source/skills/`: host-adapted Orbit lead/specialist instructions.
@@ -55,3 +55,6 @@ Private source by default; no OSS license granted or implied.
 ## Local app preview (feature-branch v0.24.0)
 
 Use `orbit_preview_start` with a project root, preview ID, shell-free `command` array, localhost `port` and optional health path. Omitting `confirm_run` previews the proposed execution without running anything. The host must show the command and obtain approval before sending `confirm_run: true`. Use `orbit_preview_status` for HTTP readiness/logs, and `orbit_preview_stop` with `confirm_stop: true` to stop a process **within the same active MCP session**. For Vite, a sample approved command is `npm run dev -- --host 127.0.0.1 --port 5173`. No public URL, browser visual tests or deployment are claimed. See `docs/LOCAL-PREVIEW.md`.
+
+## Test local app-building workflow
+See [end-to-end acceptance run](docs/EMERGENT-LOCAL-WORKFLOW.md). The installed Playwright library + Chromium can perform bounded mobile/desktop browser checks and store private evidence; an IDE host must execute actual code-writing agents. SQLite build-stage state resumes after host restart; local preview processes themselves do not auto-reconnect. No cloud deployment or public sharing is provided.

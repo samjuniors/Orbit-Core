@@ -1,0 +1,141 @@
+"""Approved local browser verification using an already installed Playwright.
+
+No downloads, no non-loopback page traffic and no arbitrary JavaScript execution.
+Screenshots/reports are private local artifacts outside the user's repository.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import shutil
+import time
+from pathlib import Path
+from urllib.parse import urlparse
+
+SIZES = {'desktop': (1280, 800), 'mobile': (390, 844)}
+ACTIONS = {'click', 'fill', 'press', 'expect_text', 'expect_visible', 'expect_count'}
+
+
+def artifact_folder(root):
+    base = Path(os.getenv('ORBIT_QA_HOME') or Path.home() / '.orbit-universal' / 'qa-artifacts').expanduser().resolve()
+    dest = base / hashlib.sha256(str(root).encode()).hexdigest()[:20]
+    if dest.is_symlink():
+        raise ValueError('Symlink QA folder forbidden')
+    dest.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if os.name != 'nt':
+        dest.chmod(0o700)
+    return dest
+
+
+def validate_actions(actions):
+    if not isinstance(actions, list) or len(actions) > 20:
+        raise ValueError('actions must be a list of 0–20 operations')
+    for a in actions:
+        if not isinstance(a, dict) or a.get('op') not in ACTIONS or set(a) - {'op','selector','value'}:
+            raise ValueError('Invalid browser QA action')
+        if not isinstance(a.get('selector'), str) or not 1 <= len(a['selector']) <= 180:
+            raise ValueError('Browser selector must be 1–180 characters')
+        value = a.get('value')
+        if a['op'] in {'fill','press','expect_text'} and (not isinstance(value, str) or len(value)>300):
+            raise ValueError('Browser action requires bounded string value')
+        if a['op']=='expect_count' and (type(value) is not int or not 0<=value<=50):
+            raise ValueError('expect_count needs an integer from 0 to 50')
+    return actions
+
+
+def verify_request(root, a, preview):
+    if a.get('viewport', 'desktop') not in SIZES:
+        raise ValueError('viewport must be desktop or mobile')
+    actions=validate_actions(a.get('actions', []))
+    session=preview.SESSIONS.get(preview.preview_key(root,a['preview_id']))
+    if not session or session['proc'].poll() is not None:
+        return None, actions
+    health = preview.http_probe(session['port'],session['health_path'])
+    if not health['healthy']:
+        return None, actions
+    return session, actions
+
+
+def run(root, a, preview):
+    session, actions = verify_request(root,a,preview)
+    if session is None:
+        return {'status':'PREVIEW_NOT_READY', 'notice':'Start an Orbit-owned preview in this MCP session, then verify readiness.'}
+    url = f"http://127.0.0.1:{session['port']}/"
+    if a.get('confirm_run') is not True:
+        return {'status':'PREVIEW_ONLY','url':url,'viewport':a.get('viewport','desktop'),
+                'actions':actions,'notice':'Browser automation may read visible app data and change local app state. Host approval required.'}
+    if actions and a.get('confirm_interactions') is not True:
+        return {'status':'INTERACTIONS_NEED_APPROVAL','url':url,'actions_count':len(actions)}
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return {'status':'DEPENDENCY_MISSING','notice':'Install trusted Python playwright and Chromium with separate approval; Orbit will not install them.'}
+    viewport_name = a.get('viewport','desktop')
+    width,height=SIZES[viewport_name]
+    errors=[]
+    blocked=[]
+    results=[]
+    failures=[]
+    title=''
+    screenshot=None
+    started=time.monotonic()
+    try:
+        with sync_playwright() as p:
+            executable = shutil.which('chromium') or shutil.which('chromium-browser') or shutil.which('google-chrome')
+            browser = p.chromium.launch(headless=True, executable_path=executable if executable else None)
+            try:
+                context=browser.new_context(viewport={'width':width,'height':height}, service_workers='block')
+                def intercept(route):
+                    target=urlparse(route.request.url)
+                    if (target.scheme in {'http','https'} and target.hostname in {'127.0.0.1','localhost','::1'}) or target.scheme in {'data','blob','about'}:
+                        route.continue_()
+                    else:
+                        blocked.append(target.hostname or target.scheme)
+                        route.abort()
+                context.route('**/*',intercept)
+                page=context.new_page()
+                page.on('pageerror', lambda error: errors.append(str(error)[:240]))
+                page.on('console', lambda msg: errors.append(msg.text[:240]) if msg.type=='error' else None)
+                page.goto(url, wait_until='domcontentloaded', timeout=12000)
+                title=page.title()[:180]
+                for i,action in enumerate(actions):
+                    name=action['op']
+                    try:
+                        locator=page.locator(action['selector'])
+                        if name=='click': locator.first.click(timeout=4000)
+                        elif name=='fill': locator.first.fill(action['value'], timeout=4000)
+                        elif name=='press': locator.first.press(action['value'], timeout=4000)
+                        elif name=='expect_text':
+                            text=locator.first.inner_text(timeout=4000)
+                            if action['value'] not in text: raise AssertionError('Expected text not found')
+                        elif name=='expect_visible':
+                            if not locator.first.is_visible(timeout=4000): raise AssertionError('Element not visible')
+                        elif name=='expect_count':
+                            if locator.count()!=action['value']: raise AssertionError('Element count mismatch')
+                        results.append({'step':i+1,'op':name,'status':'PASS'})
+                    except Exception as exc:
+                        failures.append({'step':i+1,'op':name,'message':str(exc).splitlines()[0][:160]})
+                        results.append({'step':i+1,'op':name,'status':'FAIL'})
+                        break
+                artifact=artifact_folder(root)
+                slug=a['preview_id']
+                nonce=f"{int(time.time()*1000)}-{os.getpid()}"
+                screenshot_path=artifact/f'{slug}-{viewport_name}-{nonce}.png'
+                page.screenshot(path=str(screenshot_path),full_page=True,timeout=10000)
+                if os.name!='nt': screenshot_path.chmod(0o600)
+                screenshot=str(screenshot_path)
+                context.close()
+            finally:
+                browser.close()
+    except Exception as exc:
+        failures.append({'step':0,'op':'browser','message':str(exc).splitlines()[0][:240]})
+    passed=not errors and not failures
+    # Bounded reporting; never treat console or screenshot as proof of security compliance.
+    result={'status':'PASS' if passed else 'FAIL','url':url,'viewport':viewport_name,
+            'title':title,'actions':results,'errors':errors[:10],'failures':failures[:10],
+            'blocked_remote_hosts':sorted(set(blocked))[:10],
+            'screenshot':screenshot,'elapsed_ms':round((time.monotonic()-started)*1000),
+            'verified_by':'local Playwright Chromium','notice':'Browser functionality tested only as specified; no deployment or security audit.'}
+    return result

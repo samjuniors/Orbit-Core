@@ -1,4 +1,4 @@
-"""Orbit Universal local project setup 0.23.0.
+"""Orbit Universal local project setup 0.24.0.
 
 No agent CLI is spawned. No project code or Git is modified. Local MCP uses
 Python stdio; file/config edits are previewed and require explicit confirmation.
@@ -21,6 +21,16 @@ HOSTS = ("antigravity", "codex", "claude-code")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Exact official 0.24 candidate files for backed-up in-place upgrade.
+    '17378035a0ced4e4f8589875ff69df8ae2d83b228f3b8c41674f027c9ab183db',
+    '5e738a0eafc8e3c553f3f85815c41d573d39bfab5dd4977f3eeb9722393b2b96',
+    '526a73c0441248c44a1355d59311bf2e0adfb3312152fe0357ea12e80bb4d063',
+    '7290549872effa8d2cf533b7bd5ba6e34a1d7eb710afd3f7d8f1c28ff3bda267',
+    'c2c9c7a9d93f6d3788ebf309ad67054d75f82c5d67e9c65e016a207f0a31e482',
+    '75c22c8fc6100605940b210eab5d3e0f23006db5c0baeb41566f08c6ff659992',
+    '5b2ec9bbbfd3fc5910c6bc2648b670e4a91c131c2f32df7c6fe67614ffa90095',
+    '670b6b91414af8ce40c9f521d487776daef2d92a4dcaa461b55d8b1e7f35658f',
+
     '36b2fda1614b658e7f15e3c80c63e50f6727e2b3f013e6b2d7ee30fb2768d6fd',
     '063ff538079f946bfba162f610f5d10728485c77d6d8126cabaa95c8dfa98822',
     '096c989e51db5c0f123aee197e3c65456a0e5508ec7902a50ce8a5cb3aefc17e',
@@ -154,7 +164,9 @@ Before delegating to a specialist, call `orbit_capability_select` with the real 
 
 ## Local app previews (v0.24 candidate)
 
-Once implementation has been approved, invoke `orbit_preview_start` first without `confirm_run` to inspect the exact argv and loopback URL. Only call it with `confirm_run=true` after user/host permission for running the project code. Use `orbit_preview_status` to verify local HTTP readiness and inspect bounded logs; use `orbit_preview_stop` with `confirm_stop=true` before finishing when applicable. Each run is a local-only server: do not tunnel, deploy, expose public ports, or claim browser/visual tests ran unless the host browser or Playwright truly executed. Process stop is limited to the same active MCP process session; after an MCP restart the preview may require manual terminal cleanup.
+Once implementation has been approved, invoke `orbit_preview_start` first without `confirm_run` to inspect the exact argv and loopback URL. Only call it with `confirm_run=true` after user/host permission for running the project code. Use `orbit_preview_status` to verify local HTTP readiness and inspect bounded logs; use `orbit_preview_stop` with `confirm_stop=true` before finishing when applicable. Each run is a local-only server: do not tunnel, deploy, expose public ports, or claim browser/visual tests ran unless the host browser or Playwright truly executed. Preview process control remains active-session-only; after an MCP restart, the build stage resumes from SQLite but OS preview processes need manual cleanup.
+
+For app-building, create or resume a durable run using `orbit_build_begin` / `orbit_build_status` before task delegation. Record objective and advance PLAN, IMPLEMENT, PREVIEW, BROWSER_QA, REVIEW and CHECKPOINT via revision-guarded `orbit_build_advance`. Only report PLAN/IMPLEMENT as caller-reported evidence. PREVIEW requires a ready Orbit-managed local server. BROWSER_QA requires an actual recorded interactive pass from `orbit_browser_qa` after explicit approval; it produces a private screenshot and bounded console errors using installed Playwright Chromium. If browser tooling is unavailable, use the host browser but keep the Orbit browser QA gate on HOLD; never manufacture a pass. CHECKPOINT requires real `.orbit/STATE.md`. The host owns the iterative build/repair loop; MCP tools do not independently decide, generate, or run agents.
 
 For a Todo Lab test, develop the app through milestones and explicitly report native delegation and MCP calls separately. A generated test report is not proof that a test ran: show command and exit code.
 '''
@@ -264,7 +276,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
     runtime=runtime_folder()
     if any(p.is_symlink() for p in [runtime,runtime.parent]):raise SetupError('Runtime directory is a symlink')
     changes=[]
-    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py']:
+    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py']:
         p=src/'runtime'/name
         same_or_create(changes,runtime/name,p.read_bytes(),None,'Shared Orbit stdio MCP runtime')
     cmd=python_binary()
