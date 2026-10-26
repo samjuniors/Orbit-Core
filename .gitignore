@@ -1,0 +1,35 @@
+# Local runtime/private data
+*.sqlite
+*.sqlite3
+*.db
+*.db-*
+*-wal
+*-shm
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+credentials.json
+**/.orbit-backup/**
+.orbit/
+# Python, editors, caches, build products
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+build/
+dist/
+.coverage
+*.log
+# Avoid storing local host overrides from user's home
+.mcp.json
+mcp_config.json
+.claude.json

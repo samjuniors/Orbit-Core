@@ -1,0 +1,189 @@
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+import installer
+
+
+class UniversalSetupTests(unittest.TestCase):
+    def setUp(self):
+        self.t=tempfile.TemporaryDirectory()
+        self.addCleanup(self.t.cleanup)
+        self.home=Path(self.t.name)/'home'
+        self.old=os.environ.get('ORBIT_UNIVERSAL_HOME')
+        os.environ['ORBIT_UNIVERSAL_HOME']=str(self.home)
+        self.addCleanup(self.restore)
+        self.project=Path(self.t.name)/'orbit-todo-lab';self.project.mkdir()
+
+    def restore(self):
+        if self.old is None:os.environ.pop('ORBIT_UNIVERSAL_HOME',None)
+        else:os.environ['ORBIT_UNIVERSAL_HOME']=self.old
+
+    def test_preview_does_not_write(self):
+        changes=installer.plan(self.project,scope='project')
+        self.assertGreater(len(changes),28)
+        self.assertEqual(list(self.project.iterdir()),[])
+        self.assertFalse(self.home.exists())
+
+    def test_install_and_repeat_skip(self):
+        ch=installer.plan(self.project,scope='project')
+        installer.install(ch)
+        self.assertTrue((self.project/'.agents/agents/orbit.md').exists())
+        self.assertTrue((self.project/'.claude/agents/orbit-frontend.md').exists())
+        self.assertTrue((self.project/'.codex/config.toml').exists())
+        self.assertEqual(set(c.action for c in installer.plan(self.project,scope='project')),{'SKIP'})
+
+    def test_existing_customization_refused(self):
+        p=self.project/'.agents/agents/orbit.md';p.parent.mkdir(parents=True);p.write_text('customized')
+        with self.assertRaises(installer.SetupError):installer.plan(self.project,scope='project')
+        self.assertEqual(p.read_text(),'customized')
+
+    def test_merge_json_preserves_other_servers(self):
+        p=self.project/'.mcp.json';p.write_text(json.dumps({'mcpServers':{'other':{'command':'something'}}}))
+        installer.install(installer.plan(self.project,scope='project'))
+        cfg=json.loads(p.read_text())
+        self.assertIn('other',cfg['mcpServers']);self.assertIn('orbit-core-native',cfg['mcpServers'])
+        self.assertTrue((self.project/'.mcp.json.orbit-backup').exists())
+
+    def test_codex_toml_preserves_existing_settings(self):
+        p=self.project/'.codex/config.toml';p.parent.mkdir();p.write_text('model = "gpt-6"\n')
+        installer.install(installer.plan(self.project,scope='project'))
+        self.assertIn('model = "gpt-6"',p.read_text())
+        self.assertIn('[mcp_servers."orbit-core-native"]',p.read_text())
+        self.assertTrue((p.with_name('config.toml.orbit-backup')).exists())
+
+    def test_only_selected_host(self):
+        installer.install(installer.plan(self.project,['codex'],scope='project'))
+        self.assertTrue((self.project/'.agents/skills/orbit/SKILL.md').exists())
+        self.assertFalse((self.project/'.claude').exists())
+        self.assertFalse((self.project/'.agents/agents').exists())
+
+    def test_reject_root_and_symlink(self):
+        with self.assertRaises(installer.SetupError):installer.plan(self.project.anchor,scope='project')
+        p=Path(self.t.name)/'linked';p.symlink_to(self.project,target_is_directory=True)
+        with self.assertRaises(installer.SetupError):installer.plan(p,scope='project')
+
+    def test_project_manifest_configs_valid(self):
+        installer.install(installer.plan(self.project,scope='project'))
+        for p in [self.project/'.mcp.json',self.project/'.agents/mcp_config.json']:
+            entry=json.loads(p.read_text())['mcpServers']['orbit-core-native']
+            self.assertTrue(Path(entry['args'][0]).is_file())
+            self.assertTrue(Path(entry['command']).is_file())
+        self.assertEqual(len(list((self.project/'.claude/agents').glob('orbit-*.md'))),13)
+        self.assertEqual(len(list((self.project/'.agents/agents').glob('*.md'))),13)
+
+    def test_mcp_process_and_shared_db(self):
+        ch=installer.plan(self.project,['codex'],scope='project');installer.install(ch)
+        exe=installer.python_binary();server=installer.runtime_folder()/'orbit_mcp.py'
+        db=Path(self.t.name)/'test-shared.sqlite'
+        def rpc(msgs):
+            lines=''.join(json.dumps(x)+'\n' for x in msgs)
+            run=subprocess.run([exe,str(server)],input=lines,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,
+                env={**os.environ,'ORBIT_LOCAL_DB':str(db)},timeout=12)
+            self.assertEqual(run.returncode,0,run.stderr)
+            return [json.loads(x) for x in run.stdout.splitlines()]
+        def req(i,method,params=None):return {'jsonrpc':'2.0','id':i,'method':method,'params':params or {}}
+        def call(i,name,args):return req(i,'tools/call',{'name':name,'arguments':args})
+        initial=rpc([req(1,'initialize',{'protocolVersion':'2025-11-25'}),req(2,'tools/list')])
+        self.assertEqual(len(initial[1]['result']['tools']),17)
+        def tooldata(r):return json.loads(r['result']['content'][0]['text'])
+        save_args={'project':'orbit-todo-lab','key':'goal','kind':'decision','summary':'Local SQLite API, no cloud sync','source':'test','confirm_write':True}
+        result=rpc([call(3,'orbit_memory_save',save_args)])[0]
+        self.assertFalse(result['result']['isError'])
+        later=rpc([call(4,'orbit_memory_recall',{'project':'orbit-todo-lab'})])[0]
+        self.assertIn('Local SQLite API',str(tooldata(later)))
+        other=rpc([call(5,'orbit_memory_recall',{'project':'other-project'})])[0]
+        self.assertNotIn('Local SQLite API',str(tooldata(other)))
+
+    def test_mcpb_structure(self):
+        import zipfile
+        with zipfile.ZipFile(ROOT/'ORBIT-Claude-Desktop-v0.23.0.mcpb') as z:
+            m=json.loads(z.read('manifest.json'))
+            self.assertEqual(m['server']['type'],'python')
+            self.assertEqual(len(m['tools']),17)
+            self.assertIn('server/orbit_mcp.py',z.namelist())
+            self.assertIn('server/orbit_tasks.py',z.namelist())
+            self.assertIn('server/orbit_capabilities.py',z.namelist())
+
+
+
+    def test_machine_install_all_hosts_idempotent(self):
+        before=os.environ.get('ORBIT_SETUP_HOME')
+        os.environ['ORBIT_SETUP_HOME']=str(Path(self.t.name)/'user')
+        self.addCleanup(lambda: os.environ.pop('ORBIT_SETUP_HOME',None) if before is None else os.environ.__setitem__('ORBIT_SETUP_HOME',before))
+        c=installer.plan(scope='machine')
+        self.assertGreater(len(c),25)
+        installer.install(c)
+        home=Path(os.environ['ORBIT_SETUP_HOME'])
+        self.assertTrue((home/'.gemini/config/agents/orbit-frontend.md').exists())
+        self.assertTrue((home/'.gemini/config/skills/orbit/SKILL.md').exists())
+        self.assertTrue((home/'.agents/skills/orbit/SKILL.md').exists())
+        self.assertTrue((home/'.claude/skills/orbit/SKILL.md').exists())
+        self.assertTrue((home/'.claude/agents/orbit-backend.md').exists())
+        self.assertTrue((home/'.gemini/config/mcp_config.json').exists())
+        self.assertTrue((home/'.codex/config.toml').exists())
+        self.assertTrue((home/'.claude.json').exists())
+        self.assertEqual({x.action for x in installer.plan(scope='machine')},{'SKIP'})
+        self.assertEqual(list(self.project.iterdir()),[])
+
+    def test_existing_owner_guidance_preserved(self):
+        (self.project/'AGENTS.md').write_text('my personal rules')
+        (self.project/'CLAUDE.md').write_text('my other rules')
+        c=installer.plan(self.project,scope='project')
+        self.assertEqual(sum(x.action=='PRESERVE' for x in c),2)
+        installer.install(c)
+        self.assertEqual((self.project/'AGENTS.md').read_text(),'my personal rules')
+        self.assertEqual((self.project/'CLAUDE.md').read_text(),'my other rules')
+
+    def test_capability_selector_finds_vetted_local_and_external_candidate(self):
+        from source.runtime import orbit_capabilities as cap
+        skill=self.project/'.agents/skills/ui-polish/SKILL.md'
+        skill.parent.mkdir(parents=True)
+        skill.write_text('---\nname: ui-polish\ndescription: Improve frontend UI design and layout with accessibility\n---\n# Local skill\n')
+        report=cap.select(self.project,'Improve our frontend UI layout and design',[],home=self.home)
+        self.assertEqual(report['installed_matches'][0]['name'],'ui-polish')
+        self.assertTrue(any(x['name']=='impeccable' for x in report['external_research_candidates']))
+        self.assertIn('REUSE',report['recommended_action'])
+        self.assertEqual(len(list((self.project/'.agents/skills/ui-polish').iterdir())),1)
+
+    def test_capability_tool_stdio_and_no_auto_install(self):
+        installer.install(installer.plan(self.project,['codex'],scope='project'))
+        exe=installer.python_binary();server=installer.runtime_folder()/'orbit_mcp.py'
+        msgs=[{'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'orbit_capability_select','arguments':{'project_root':str(self.project),'objective':'polish frontend design'}}}]
+        p=subprocess.run([exe,str(server)],input=json.dumps(msgs[0])+'\n',text=True,capture_output=True,timeout=12,env={**os.environ,'ORBIT_LOCAL_DB':str(Path(self.t.name)/'test2.sqlite')})
+        self.assertEqual(p.returncode,0,p.stderr)
+        result=json.loads(json.loads(p.stdout)['result']['content'][0]['text'])
+        self.assertEqual(result['recommended_action'],'BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL')
+        self.assertEqual(result['external_research_candidates'][0]['name'],'impeccable')
+        self.assertFalse((self.project/'.agents/skills/impeccable').exists())
+
+    def test_machine_config_preserves_other_servers(self):
+        prior=os.environ.get('ORBIT_SETUP_HOME')
+        os.environ['ORBIT_SETUP_HOME']=str(Path(self.t.name)/'usr')
+        self.addCleanup(lambda: os.environ.pop('ORBIT_SETUP_HOME',None) if prior is None else os.environ.__setitem__('ORBIT_SETUP_HOME',prior))
+        conf=Path(os.environ['ORBIT_SETUP_HOME'])/'.claude.json';conf.parent.mkdir(parents=True)
+        conf.write_text(json.dumps({'mcpServers':{'other':{'command':'my-existing'}}}))
+        installer.install(installer.plan(scope='machine'))
+        data=json.loads(conf.read_text())
+        self.assertIn('other',data['mcpServers'])
+        self.assertIn('orbit-core-native',data['mcpServers'])
+
+    def test_exact_v022_stock_upgrade_does_not_delete_project(self):
+        old=Path(__file__).resolve().parent/'fixtures/v0.22.0'
+        if not old.is_dir():self.skipTest('No v0.22 stock test fixture')
+        stock=(old/'source/agents/orbit-frontend.md').read_bytes()
+        dest=self.project/'.agents/agents/orbit-frontend.md';dest.parent.mkdir(parents=True)
+        dest.write_bytes(stock)
+        planned=installer.plan(self.project,scope='project')
+        self.assertIn('UPGRADE',[x.action for x in planned])
+        installer.install(planned)
+        self.assertNotEqual(dest.read_bytes(),stock)
+        self.assertEqual((dest.with_name(dest.name+'.orbit-backup')).read_bytes(),stock)
+
+if __name__=='__main__':unittest.main()

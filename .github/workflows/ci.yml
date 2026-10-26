@@ -1,0 +1,29 @@
+name: CI
+on:
+  push:
+    branches: [main, 'feat/**', 'fix/**', 'release/**']
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile Python sources
+        run: python -m compileall -q source installer.py scripts tests
+      - name: Unit and MCP protocol tests
+        run: python -m unittest discover -s tests -v
+      - name: Version consistency
+        run: python scripts/check_version.py
+      - name: Rebuild ZIP and check layout
+        run: python scripts/build_release.py --verify
