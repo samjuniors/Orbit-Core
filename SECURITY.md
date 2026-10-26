@@ -8,3 +8,7 @@
 - Avoid running live test automation against existing user projects without separate approval.
 - Release packages require tests and content review; GitHub Actions are **not** proof of host-specific Gemini/Claude/Codex execution.
 - Report security issues privately to the repository owner. Do not open a public issue disclosing secrets or vulnerabilities.
+
+## Local preview process execution
+
+The v0.24 development branch adds `orbit_preview_start` with an explicit `confirm_run` flag. This executes the caller's project script, which can be unsafe even without an OS shell. The user must inspect the exact command/project and grant real host permission. The server itself cannot independently authenticate a conversational approval and does not sandbox app code; do not run untrusted repositories. Orbit probes only loopback, but external frameworks may bind differently if they ignore the supplied `HOST` setting. Verify network binding before permitting a command. No tunnels or deployments are included. Logs may contain sensitive output; keep them local and out of Git.

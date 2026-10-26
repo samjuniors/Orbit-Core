@@ -6,7 +6,7 @@ Orbit Core MCP uses Semantic Versioning `MAJOR.MINOR.PATCH`. `VERSION` is author
 
 1. Create a feature/release branch from `main`, review the diff in a pull request, and update `VERSION`, runtime/installer version declarations, the release extension, and `CHANGELOG.md` together. Do not generate a fake historic release.
 2. Run `python -m unittest discover -s tests -v`, `python scripts/check_version.py`, and `python scripts/build_release.py --verify`. Check the installation package on a disposable project. CI also tests supported Python versions.
-3. Merge the reviewed pull request into `main` when tests and owner approval are complete.
+3. Merge the reviewed pull request into `main` when Linux/Windows CI passes, source/archive parity holds, and owner approval is complete. Live desktop/browser acceptance is separately required for production claims.
 4. In **GitHub → Actions → Publish versioned release → Run workflow**, select `main`, enter the exact value of `VERSION` (for the baseline, `0.23.0`), and run it. No local Git CLI required. The workflow retests source, builds artifacts, creates an **annotated tag** `vMAJOR.MINOR.PATCH` on the tested commit if missing, and creates a GitHub Release.
 5. Alternatively, an authorized maintainer may push a new `vMAJOR.MINOR.PATCH` tag pointing at a commit already on `main`. This triggers the same tested publication path. A tag pushed by the workflow's `GITHUB_TOKEN` does not trigger another workflow; manual publication completes within that original run.
 6. Verify the GitHub **Releases** and **Tags** pages, CI execution, ZIP and `.mcpb` downloads, and their `.sha256` checksums. Only after verification, publish any separately managed ChatGPT plugin version in Plugin Creator.
@@ -19,7 +19,7 @@ Orbit Core MCP uses Semantic Versioning `MAJOR.MINOR.PATCH`. `VERSION` is author
 - `ORBIT-Claude-Desktop-vX.Y.Z.mcpb.sha256` — checksum.
 - GitHub's automatically generated source archives for the immutable tag.
 
-The release body is generated from the matching section `## [X.Y.Z]` in `CHANGELOG.md`. Releases for version `0.x` are marked **pre-release** until production readiness has been separately verified. This is not a claim of live host compatibility.
+The release body is generated from the matching section `## [X.Y.Z]` in `CHANGELOG.md`. Releases for version `0.x` are marked **pre-release candidates** until live host acceptance has been separately verified. The installed Orbit updater defaults to the explicit `candidate` channel for these 0.x assets. A stable channel is opt-in with `--channel stable`, and no production suitability is implied.
 
 ## Safety and consistency rules
 

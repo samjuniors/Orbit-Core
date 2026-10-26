@@ -12,10 +12,15 @@ import sqlite3
 import sys
 import orbit_tasks
 import orbit_capabilities
+import orbit_preview
+import orbit_browser
+import orbit_build
+import orbit_intake
+import orbit_decisions
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = '0.23.0'
+VERSION = '0.24.1'
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_STATE_BYTES = 24000
 KINDS = {'semantic', 'episodic', 'decision', 'procedural', 'checkpoint'}
@@ -98,6 +103,9 @@ def db_connect():
         PRIMARY KEY (project, key))''')
     conn.commit()
     orbit_tasks.setup(conn)
+    orbit_build.setup(conn)
+    orbit_intake.setup(conn)
+    orbit_build.setup_browser(conn)
     if os.name != 'nt':
         try: path.chmod(0o600)
         except OSError: pass
@@ -257,43 +265,132 @@ TOOLS = [
 ]
 TOOLS += [
     {'name':'orbit_capability_discover','description':'Read-only local skill and MCP config metadata inventory; never downloads, installs or executes anything.','inputSchema':schema({'project_root':string(2000)},['project_root'])},
-    {'name':'orbit_capability_select','description':'Suggest reusable installed skill/tool matches and official research candidates for a task; external installs require owner review/approval.','inputSchema':schema({'project_root':string(2000),'objective':string(1500),'host_tools':{'type':'array','maxItems':80,'items':{'type':'string'}}},['project_root','objective'])}
+    {'name':'orbit_capability_select','description':'Suggest reusable installed skill/tool matches and official research candidates for a task; external installs require owner review/approval.','inputSchema':schema({'project_root':string(2000),'objective':string(1500),'host_tools':{'type':'array','maxItems':80,'items':{'type':'string'}}},['project_root','objective'])},
+    {'name':'orbit_preview_start','description':'PREVIEW or explicitly run a localhost dev server in this project; executes the supplied project command only with confirm_run. No public tunnel or deployment.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40),'command':{'type':'array','minItems':1,'maxItems':20,'items':{'type':'string'}},'port':{'type':'integer','minimum':1024,'maximum':65535},'health_path':string(100),'confirm_run':{'type':'boolean'}},['project_root','preview_id','command','port'])},
+    {'name':'orbit_preview_status','description':'Check running local preview readiness and bounded log tail for this MCP session. No browser simulation.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40)},['project_root','preview_id'])},
+    {'name':'orbit_preview_stop','description':'Stop only the locally spawned preview tracked by this MCP session, with explicit confirm_stop.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40),'confirm_stop':{'type':'boolean'}},['project_root','preview_id'])},
+    {'name':'orbit_browser_qa','description':'Perform approved loopback-only Playwright browser QA with installed Edge/Chrome or Chromium; bounded DOM actions, private screenshots and build gate results. Requires Python playwright; never downloads software.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'preview_id':string(40),'viewport':{'type':'string','enum':['desktop','mobile']},'browser':{'type':'string','enum':['auto','msedge','chrome','chromium']},'actions':{'type':'array','maxItems':20,'items':{'type':'object'}},'confirm_run':{'type':'boolean'},'confirm_interactions':{'type':'boolean'}},['project_root','project','build_id','preview_id'])},
+    {'name':'orbit_build_begin','description':'Preview or create durable app-building gates (RESEARCH, PLAN, IMPLEMENT, VERIFY, PREVIEW, BROWSER_QA, REVIEW, CHECKPOINT, DONE). Does not start AI agents.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'objective':string(1500),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','objective'])},
+    {'name':'orbit_build_status','description':'Read persistent app build stage and evidence, across host/MCP restarts.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40)},['project_root','project','build_id'])},
+    {'name':'orbit_build_advance','description':'Revision-guarded explicit stage advance; browser QA PASS requires a real Orbit-recorded Playwright PASS.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['PASS','FAIL','BLOCKED']},'evidence':string(1600),'preview_id':string(40),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','expected_revision','outcome','evidence'])}
+]
+TOOLS += [
+ {'name':'orbit_intake_status','description':'Read guided product intake and progressive autonomy.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
+ {'name':'orbit_intake_propose','description':'Save proposed product classification and interview questions, not user acceptance.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'profile':{'type':'object'},'questions':{'type':'array','maxItems':6},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','profile','questions'])},
+ {'name':'orbit_intake_answer','description':'Record one actual answer with revision guard; then decide whether a dependent question is needed.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'question_id':string(40),'choice':string(500),'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','question_id','choice','user_reference'])},
+ {'name':'orbit_intake_followup','description':'Add ONE conditional question based on an already recorded answer; cannot pre-answer it.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'based_on_id':string(40),'based_on_choice':string(500),'question':{'type':'object'},'rationale':string(500),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','based_on_id','based_on_choice','question','rationale'])},
+ {'name':'orbit_intake_approve','description':'Record selected options or explicitly delegated recommended defaults; user consent is host-attested.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'answers':{'type':'object'},'answer_source':{'type':'string','enum':['user_choices','user_delegated_defaults']},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','answers','answer_source','user_reference'])},
+ {'name':'orbit_autonomy_review','description':'Recommend maturity-based guided/assisted/trusted mode; no automatic promotion.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'level':{'type':'string','enum':['guided','assisted','trusted']},'expected_revision':{'type':'integer','minimum':1},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project'])},
+ {'name':'orbit_docs_audit','description':'Read-only, repeatable project documentation inventory and growth signals.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'signals':{'type':'array','maxItems':8,'items':{'type':'string'}}},['project_root','project'])},
+    {'name':'orbit_decision_route','description':'Read-only, platform-specific workflow and reviewed component/library research candidates; permits custom designs.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']}},['project_root','project'])},
+    {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
 ]
 TOOL_MAP = {x['name']:x['inputSchema'] for x in TOOLS}
 
 
+def validate_value(value, spec, path='arguments'):
+    """Validate the schema subset used by TOOLS; domain checks stay in handlers."""
+    typ = spec.get('type')
+    expected = {'string': str, 'integer': int, 'boolean': bool,
+                'array': list, 'object': dict}
+    if typ in expected and type(value) is not expected[typ]:
+        raise ValueError(f'Invalid {path}: expected {typ}')
+    if 'enum' in spec and value not in spec['enum']:
+        raise ValueError(f'Invalid {path}: unsupported value')
+    if typ == 'string':
+        if len(value) < spec.get('minLength', 0) or ('maxLength' in spec and len(value) > spec['maxLength']):
+            raise ValueError(f'Invalid {path}: text length')
+    elif typ == 'integer':
+        if ('minimum' in spec and value < spec['minimum']) or ('maximum' in spec and value > spec['maximum']):
+            raise ValueError(f'Invalid {path}: integer range')
+    elif typ == 'array':
+        if len(value) < spec.get('minItems', 0) or ('maxItems' in spec and len(value) > spec['maxItems']):
+            raise ValueError(f'Invalid {path}: array length')
+        if 'items' in spec:
+            for index, item in enumerate(value):
+                validate_value(item, spec['items'], f'{path}[{index}]')
+    elif typ == 'object':
+        properties = spec.get('properties', {})
+        if spec.get('additionalProperties') is False and set(value) - set(properties):
+            raise ValueError(f'Unexpected properties in {path}')
+        for key in spec.get('required', []):
+            if key not in value:
+                raise ValueError(f'Missing {path}.{key}')
+        for key, item in value.items():
+            if key in properties:
+                validate_value(item, properties[key], f'{path}.{key}')
+
+
 def validate(name, args):
-    s = TOOL_MAP.get(name)
-    if s is None or not isinstance(args,dict):
-        raise ValueError('Unknown tool or invalid arguments')
-    if set(args)-set(s['properties']):
-        raise ValueError('Unexpected arguments')
-    for key in s['required']:
-        if key not in args:
-            raise ValueError(f'Missing {key}')
-    for key, value in args.items():
-        t = s['properties'][key]
-        typ = t.get('type')
-        if typ == 'string' and (not isinstance(value,str) or len(value)>t.get('maxLength',100000) or (len(value)<t.get('minLength',0))):
-            raise ValueError(f'Invalid {key}')
-        if typ == 'integer' and (type(value) is not int or not t.get('minimum',-99999)<=value<=t.get('maximum',99999)):
-            raise ValueError(f'Invalid {key}')
-        if typ == 'boolean' and type(value) is not bool:
-            raise ValueError(f'Invalid {key}')
-        if typ == 'array' and (not isinstance(value,list) or len(value)<t.get('minItems',0)):
-            raise ValueError(f'Invalid {key}')
-        if 'enum' in t and value not in t['enum']:
-            raise ValueError(f'Invalid {key}')
+    if not isinstance(name, str) or name not in TOOL_MAP:
+        raise ValueError('Unknown tool')
+    validate_value(args, TOOL_MAP[name])
 
 
 def execute(conn, name, a):
     validate(name,a)
+    if name in {'orbit_decision_route','orbit_model_route'}:
+        project=project_key(a)
+        root=project_root(a)
+        saved=orbit_intake.status(conn,root,{'project':project})
+        profile=saved.get('profile',{}) if saved.get('status')=='APPROVED' else {}
+        if name=='orbit_decision_route':
+            kind=a.get('product_type') or profile.get('type')
+            if not kind:
+                return {'status':'NEEDS_PROJECT_CLASSIFICATION','next':'Ask project type or propose an intake before choosing a framework.'}
+            result=orbit_decisions.components(kind,a.get('platforms',[]),
+                     a.get('existing_stack',profile.get('stack','')),a.get('component_preference','balanced'))
+            return {'status':'RECOMMENDATION_ONLY','project':project,**result,
+                    'selection_applied':False,'host_validation_required':True}
+        complexity=a.get('complexity') or profile.get('complexity','moderate')
+        return orbit_decisions.model_route(a['role'],a['task'],complexity,
+                   a.get('available_models',[]),a['host'],a.get('budget','economy'))
+    if name in {'orbit_intake_status','orbit_intake_propose','orbit_intake_answer','orbit_intake_followup','orbit_intake_approve','orbit_autonomy_review','orbit_docs_audit'}:
+        a={**a,'project':project_key(a)}
+        root=project_root(a)
+        handlers={'orbit_intake_status':orbit_intake.status,
+                  'orbit_intake_propose':orbit_intake.propose,
+                  'orbit_intake_answer':orbit_intake.answer,'orbit_intake_followup':orbit_intake.followup,
+                  'orbit_intake_approve':orbit_intake.approve,
+                  'orbit_autonomy_review':orbit_intake.autonomy,
+                  'orbit_docs_audit':orbit_intake.docs_audit}
+        return handlers[name](conn,root,a)
+    if name=='orbit_build_begin':
+        a={**a,'project':project_key(a)}
+        root=project_root(a)
+        if not orbit_build.get(conn,root,a) and orbit_intake.status(conn,root,a)['status']!='APPROVED':
+            return {'status':'HOLD','reason':'Fresh project requires a completed interview before build planning',
+                    'next':['orbit_intake_propose','ask the user or obtain explicit delegation of defaults','orbit_intake_approve']}
+        return orbit_build.begin(conn,root,a)
+    if name=='orbit_build_status':
+        a={**a,'project':project_key(a)}
+        return orbit_build.current(conn,project_root(a),a)
+    if name=='orbit_build_advance':
+        a={**a,'project':project_key(a)}
+        return orbit_build.advance(conn,project_root(a),a)
+    if name=='orbit_browser_qa':
+        a={**a,'project':project_key(a)}
+        root=project_root(a)
+        orbit_build.validate_key(a['build_id'])
+        run=orbit_build.get(conn,root,a)
+        if not run or run['stage']!='BROWSER_QA':
+            return {'status':'HOLD','reason':'Create the build and reach BROWSER_QA stage before automated verification.'}
+        result=orbit_browser.run(root,a,orbit_preview)
+        if result['status'] in {'PASS','FAIL'}:
+            orbit_build.save_browser(conn,root,a,result)
+        return result
+    if name=='orbit_preview_start': return orbit_preview.start(project_root(a), a)
+    if name=='orbit_preview_status': return orbit_preview.status(project_root(a), a)
+    if name=='orbit_preview_stop': return orbit_preview.stop(project_root(a), a)
     if name=='orbit_capability_discover': return orbit_capabilities.discover(project_root(a))
     if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]))
     if name=='orbit_project_scan': return scan(a)
     if name=='orbit_project_resume':
         status=scan(a)
         status['memories']=memory_recall(conn,{'project':status['project'],'limit':5})
+        status['intake']=orbit_intake.status(conn,project_root(a),a)
+        status['recovery']=orbit_build.recovery_brief(conn,project_root(a),project_key(a))
+        status['context_strategy']='Load current checkpoint and agreed brief, then only stage-specific docs and changed source files; do not reread all reference documents.'
         return status
     if name=='orbit_memory_save': return memory_save(conn,a)
     if name=='orbit_memory_recall': return memory_recall(conn,a)
@@ -312,6 +409,8 @@ def execute(conn, name, a):
 
 
 def handle(conn, message):
+    if not isinstance(message, dict):
+        return {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Expected object'}}
     mid=message.get('id')
     if message.get('jsonrpc') != '2.0' or not isinstance(message.get('method'),str):
         return {'jsonrpc':'2.0','id':mid,'error':{'code':-32600,'message':'Invalid request'}}
@@ -319,8 +418,11 @@ def handle(conn, message):
     method=message['method']
     try:
         if method=='initialize':
-            ver=message.get('params',{}).get('protocolVersion','2025-11-25')
-            if ver not in {'2025-11-25','2025-06-18','2025-03-26'}:
+            params=message.get('params',{})
+            if not isinstance(params, dict):
+                raise ValueError('Expected params object')
+            ver=params.get('protocolVersion','2025-11-25')
+            if not isinstance(ver, str) or ver not in {'2025-11-25','2025-06-18','2025-03-26'}:
                 raise ValueError('Unsupported protocol version')
             return {'jsonrpc':'2.0','id':mid,'result':{'protocolVersion':ver,'capabilities':{'tools':{'listChanged':False}},'serverInfo':{'name':'orbit-native-local','version':VERSION}}}
         if method=='ping': return {'jsonrpc':'2.0','id':mid,'result':{}}
@@ -341,14 +443,20 @@ def handle(conn, message):
 def main():
     conn=db_connect()
     try:
-        for raw in sys.stdin.buffer:
+        while True:
+            raw = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
+            if not raw:
+                break
             if len(raw)>MAX_REQUEST_BYTES:
+                # Drain this frame in bounded chunks so the next request stays aligned.
+                while raw and not raw.endswith(b'\n'):
+                    raw = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
                 response={'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Request too large'}}
             else:
                 try:
                     message=json.loads(raw)
                     response=handle(conn,message) if isinstance(message,dict) else {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Expected object'}}
-                except (UnicodeError,ValueError):
+                except (UnicodeError,ValueError,RecursionError):
                     response={'jsonrpc':'2.0','id':None,'error':{'code':-32700,'message':'Parse error'}}
             if response is not None:
                 sys.stdout.write(json.dumps(response,ensure_ascii=False,separators=(',',':'))+'\n')

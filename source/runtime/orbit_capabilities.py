@@ -7,14 +7,68 @@ from pathlib import Path
 TRIGGERS = {
     'frontend': {'frontend','ui','ux','interface','design','responsive','component','layout','accessibility','visual','polish'},
     'backend': {'backend','api','database','auth','server','schema','sql','endpoint','persistence'},
-    'qa': {'test','testing','browser','e2e','regression','quality','playwright'},
+    'qa': {'test','testing','browser','e2e','regression','quality','playwright','screenshot','screenshots','visual'},
     'security': {'security','secrets','threat','vulnerability','privacy'},
     'devops': {'deploy','ci','release','docker','pipeline','operations'},
 }
 # Curated *research* targets, not bundled/installable code or blanket endorsements.
 CATALOG = [
  {'name':'impeccable', 'category':'frontend', 'description':'Official Impeccable UI/design skill for critique, polish and design systems', 'official_url':'https://impeccable.style/', 'publisher':'pbakaus', 'kind':'skill', 'execution':'external_install_requires_review'},
+ {'name':'agent-browser', 'category':'qa', 'description':'Vercel Labs optional agent-friendly browser CLI and MCP provider; interactive snapshots and screenshot testing', 'official_url':'https://github.com/vercel-labs/agent-browser', 'publisher':'vercel-labs', 'kind':'mcp', 'execution':'external_install_requires_review'},
 ]
+
+# Curated official names are task-specific preferences, not automatic installs.
+ROLE_SKILLS = {
+    'orbit': ('trailmark','skill-creator'),
+    'orbit-architect': ('trailmark','mcp-builder'),
+    'orbit-frontend': ('react-best-practices','web-design-guidelines','frontend-design'),
+    'orbit-backend': ('modern-python','mcp-builder'),
+    'orbit-data': ('modern-python','property-based-testing'),
+    'orbit-security': ('static-analysis','insecure-defaults','supply-chain-risk-auditor'),
+    'orbit-qa': ('webapp-testing','property-based-testing','agent-browser'),
+    'orbit-devops': ('open-sourcing','supply-chain-risk-auditor'),
+    'orbit-ux': ('frontend-design','web-design-guidelines','impeccable'),
+    'orbit-writer': ('writing-guidelines','doc-coauthoring'),
+    'orbit-research': ('trailmark','static-analysis'),
+    'orbit-reviewer': ('spec-to-code-compliance','code-improver'),
+    'orbit-integrator': ('spec-to-code-compliance','property-based-testing'),
+}
+SOURCES = {
+    'react-best-practices': ('https://github.com/vercel-labs/agent-skills','React/Next.js only'),
+    'web-design-guidelines': ('https://github.com/vercel-labs/agent-skills','Web interface QA'),
+    'writing-guidelines': ('https://github.com/vercel-labs/agent-skills','Documentation review'),
+    'frontend-design': ('https://github.com/anthropics/skills','Product UI design; inspect license'),
+    'webapp-testing': ('https://github.com/anthropics/skills','Webapp behavior tests'),
+    'doc-coauthoring': ('https://github.com/anthropics/skills','Document writing'),
+    'mcp-builder': ('https://github.com/anthropics/skills','MCP-specific projects only'),
+    'skill-creator': ('https://github.com/anthropics/skills','Creating reusable skills'),
+    'modern-python': ('https://github.com/trailofbits/skills','Python projects only'),
+    'static-analysis': ('https://github.com/trailofbits/skills','Code security analysis'),
+    'insecure-defaults': ('https://github.com/trailofbits/skills','Unsafe default detection'),
+    'supply-chain-risk-auditor': ('https://github.com/trailofbits/skills','Dependency auditing'),
+    'property-based-testing': ('https://github.com/trailofbits/skills','Domain edge-case testing'),
+    'spec-to-code-compliance': ('https://github.com/trailofbits/skills','Spec vs source verification'),
+    'code-improver': ('https://github.com/trailofbits/skills','Scoped code quality review'),
+    'trailmark': ('https://github.com/trailofbits/skills','Code graph/context research'),
+    'open-sourcing': ('https://github.com/trailofbits/skills','Only explicit OSS publication'),
+    'agent-browser': ('https://github.com/vercel-labs/agent-browser','Optional browser QA MCP'),
+    'impeccable': ('https://impeccable.style/','Optional design polish'),
+}
+def skill_policy(role,available):
+    names=ROLE_SKILLS.get(role,())
+    installed={x['name']:x for x in available['skills']}
+    configured={x['name'] for x in available['mcp_servers']}
+    return {'role':role, 'preferred_skills':[
+        {'name':name,'official_source':SOURCES[name][0],
+         'use_when':SOURCES[name][1],
+         'status':('INSTALLED_REVIEW_REQUIRED' if name in installed else
+                   'CONFIGURED_NOT_CONNECTED' if name in configured else 'NOT_INSTALLED'),
+         'installed_path':installed[name]['path'] if name in installed else None}
+         for name in names],
+         'fallback':'Use native host tools and tested project code; no extra package required.',
+         'install_policy':'REVIEW_OFFICIAL_SOURCE_AND_REQUEST_USER_APPROVAL',
+         'note':'Do not require unrelated skills or claim they are active just because configured.'}
+
 MAX_ITEMS = 120
 
 def _parse_skill(path):
@@ -108,6 +162,26 @@ def select(project_root, objective, host_tools=None, *, home=None):
     for item in CATALOG:
         if item['category'] in categories and item['name'] not in existing_names:
             research.append({**item,'status':'RESEARCH_CANDIDATE_NOT_INSTALLED', 'next':'browse official source, review permissions and request installation approval'})
-    return {'objective':objective,'categories':categories,'installed_matches':candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
+    # Configuration is an inventory, not proof a provider connected or ran QA.
+    agent_browser_configured = any(x['name']=='agent-browser' for x in available['mcp_servers'])
+    agent_browser_visible = any(x.startswith('agent_browser_') for x in host_tools)
+    browser_provider = {
+        'name':'agent-browser', 'kind':'optional_external_mcp',
+        'status':('HOST_REPORTED_TOOL_VISIBLE' if agent_browser_visible
+                  else 'CONFIGURED_UNVERIFIED' if agent_browser_configured
+                  else 'NOT_CONFIGURED'),
+        'official_url':'https://github.com/vercel-labs/agent-browser',
+        'next':('Check permissions and execute one read-only agent_browser_snapshot in the host before trusting the connection.'
+                if agent_browser_visible else 'Review official source and request explicit consent before installing or adding its MCP configuration.'),
+        'orbit_browser_qa_gate':'Separate Orbit-recorded Playwright PASS still required; third-party MCP screenshots never bypass a blocked gate.',
+    }
+    role=next((r for r in sorted(ROLE_SKILLS,key=len,reverse=True) if objective.lower().startswith(r+':') or objective.lower().startswith(r+' ')),None)
+    if not role:
+        aliases={'frontend':'orbit-frontend','backend':'orbit-backend','qa':'orbit-qa',
+                 'security':'orbit-security','devops':'orbit-devops'}
+        role=next((aliases[c] for c in categories if c in aliases),'orbit')
+    recommended=skill_policy(role,available)
+    return {'objective':objective,'role_skill_preferences':recommended,'categories':categories,'installed_matches':candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
+            'optional_browser_provider':browser_provider,
         'recommended_action':'REUSE_AND_VERIFY_INSTALLED' if candidates else ('BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL' if research else 'USE_EXISTING_HOST_CAPABILITIES'),
         'policy':['Prefer current built-in host abilities and already installed vetted skills.', 'If a needed capability is missing, the agent may web-search reputable official sources using host tools. Never claim MCP performed the search.', 'Never execute npx/curl/script, install packages, add MCP connections, grant OAuth/scopes, or modify agent rules without reviewing source and obtaining applicable host/user approval.', 'Use the minimal permission and project scope; re-check actual tool availability after approved install; no best-in-class guarantee.']}
