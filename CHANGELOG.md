@@ -6,6 +6,7 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 - Next: persistent OS process supervisor and optional secure sharing. Actual host autonomous coding and permissions remain host-owned.
 
 ## [0.24.0] — Unreleased (feature branch)
+- Recognize the optional Vercel Labs `agent-browser` MCP provider in capability selection; add opt-in host integration instructions and trust-status reporting. No binary bundling, automatic installs, or third-party QA gate bypass.
 - Browser QA compatibility: discover installed Microsoft Edge/Chrome and support explicit browser selection; avoids mandatory Chromium download on Windows.
 - Add three opt-in localhost preview MCP tools: start, status and stop.
 - Prevent automatic adoption of foreign processes; enforce approved, shell-free runtime commands and loopback HTTP readiness checks.

@@ -163,6 +163,26 @@ class UniversalSetupTests(unittest.TestCase):
         self.assertIn('REUSE',report['recommended_action'])
         self.assertEqual(len(list((self.project/'.agents/skills/ui-polish').iterdir())),1)
 
+    def test_optional_agent_browser_provider_is_discovered_without_install(self):
+        from source.runtime import orbit_capabilities as cap
+        report=cap.select(self.project,'Run browser E2E screenshots',[],home=self.home)
+        self.assertEqual(report['optional_browser_provider']['status'],'NOT_CONFIGURED')
+        self.assertTrue(any(x['name']=='agent-browser' and x['kind']=='mcp'
+                            for x in report['external_research_candidates']))
+        self.assertFalse((self.project/'.agents/skills/agent-browser').exists())
+        cfg=self.project/'.mcp.json'
+        cfg.write_text(json.dumps({'mcpServers':{'agent-browser':{'command':'agent-browser','args':['mcp']}}}))
+        reported=cap.select(self.project,'Run browser E2E screenshots',[],home=self.home)
+        self.assertEqual(reported['optional_browser_provider']['status'],'CONFIGURED_UNVERIFIED')
+        self.assertEqual(reported['configured_mcp_servers'][0]['name'],'agent-browser')
+        visible=cap.select(self.project,'Test Todo interactions', ['agent_browser_snapshot'], home=self.home)
+        self.assertEqual(visible['optional_browser_provider']['status'],'HOST_REPORTED_TOOL_VISIBLE')
+        self.assertIn('Playwright PASS',visible['optional_browser_provider']['orbit_browser_qa_gate'])
+
+    def test_optional_provider_upgrade_hashes_recognized(self):
+        self.assertIn('0f929f83c43c11b46a666387dd3d7581e081876a4cf401e2f2928b1a3f97f85c',installer.OLD_STOCK_SHA256)
+        self.assertIn('81bcd52a57163a9b071212a02ca9421a4df832ef6cfbaee9ff62dc46dc19aaa1',installer.OLD_STOCK_SHA256)
+
     def test_capability_tool_stdio_and_no_auto_install(self):
         installer.install(installer.plan(self.project,['codex'],scope='project'))
         exe=installer.python_binary();server=installer.runtime_folder()/'orbit_mcp.py'

@@ -48,3 +48,14 @@ Edge smoke test passes. Do not populate Antigravity's internal driver cache from
 unverified third-party scripts. Restart the host after updating Orbit; start an
 approved Orbit-owned preview in the new MCP session, then re-run `orbit_browser_qa`
 with `browser:"msedge"`. The SQLite build gate stays BLOCKED until a real PASS.
+
+## Optional agent-browser MCP provider
+
+If the host has connected the official Vercel Labs `agent-browser` MCP, Orbit's
+`orbit_capability_select` can recognize the configured provider and any
+host-reported `agent_browser_*` tool names. Verify the actual tool executes
+before treating it as operational. Native browser snapshots and screenshots
+are useful for UI review, but the current Orbit BROWSER_QA stage is not a
+self-attested status: only a recorded PASS from `orbit_browser_qa` advances
+it. Do not mark `build-001` complete using an external tool's unverified report.
+Full safety and opt-in configuration: [`AGENT-BROWSER-OPTIONAL.md`](AGENT-BROWSER-OPTIONAL.md).

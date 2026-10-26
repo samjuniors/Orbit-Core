@@ -7,13 +7,14 @@ from pathlib import Path
 TRIGGERS = {
     'frontend': {'frontend','ui','ux','interface','design','responsive','component','layout','accessibility','visual','polish'},
     'backend': {'backend','api','database','auth','server','schema','sql','endpoint','persistence'},
-    'qa': {'test','testing','browser','e2e','regression','quality','playwright'},
+    'qa': {'test','testing','browser','e2e','regression','quality','playwright','screenshot','screenshots','visual'},
     'security': {'security','secrets','threat','vulnerability','privacy'},
     'devops': {'deploy','ci','release','docker','pipeline','operations'},
 }
 # Curated *research* targets, not bundled/installable code or blanket endorsements.
 CATALOG = [
  {'name':'impeccable', 'category':'frontend', 'description':'Official Impeccable UI/design skill for critique, polish and design systems', 'official_url':'https://impeccable.style/', 'publisher':'pbakaus', 'kind':'skill', 'execution':'external_install_requires_review'},
+ {'name':'agent-browser', 'category':'qa', 'description':'Vercel Labs optional agent-friendly browser CLI and MCP provider; interactive snapshots and screenshot testing', 'official_url':'https://github.com/vercel-labs/agent-browser', 'publisher':'vercel-labs', 'kind':'mcp', 'execution':'external_install_requires_review'},
 ]
 MAX_ITEMS = 120
 
@@ -108,6 +109,20 @@ def select(project_root, objective, host_tools=None, *, home=None):
     for item in CATALOG:
         if item['category'] in categories and item['name'] not in existing_names:
             research.append({**item,'status':'RESEARCH_CANDIDATE_NOT_INSTALLED', 'next':'browse official source, review permissions and request installation approval'})
+    # Configuration is an inventory, not proof a provider connected or ran QA.
+    agent_browser_configured = any(x['name']=='agent-browser' for x in available['mcp_servers'])
+    agent_browser_visible = any(x.startswith('agent_browser_') for x in host_tools)
+    browser_provider = {
+        'name':'agent-browser', 'kind':'optional_external_mcp',
+        'status':('HOST_REPORTED_TOOL_VISIBLE' if agent_browser_visible
+                  else 'CONFIGURED_UNVERIFIED' if agent_browser_configured
+                  else 'NOT_CONFIGURED'),
+        'official_url':'https://github.com/vercel-labs/agent-browser',
+        'next':('Check permissions and execute one read-only agent_browser_snapshot in the host before trusting the connection.'
+                if agent_browser_visible else 'Review official source and request explicit consent before installing or adding its MCP configuration.'),
+        'orbit_browser_qa_gate':'Separate Orbit-recorded Playwright PASS still required; third-party MCP screenshots never bypass a blocked gate.',
+    }
     return {'objective':objective,'categories':categories,'installed_matches':candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
+            'optional_browser_provider':browser_provider,
         'recommended_action':'REUSE_AND_VERIFY_INSTALLED' if candidates else ('BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL' if research else 'USE_EXISTING_HOST_CAPABILITIES'),
         'policy':['Prefer current built-in host abilities and already installed vetted skills.', 'If a needed capability is missing, the agent may web-search reputable official sources using host tools. Never claim MCP performed the search.', 'Never execute npx/curl/script, install packages, add MCP connections, grant OAuth/scopes, or modify agent rules without reviewing source and obtaining applicable host/user approval.', 'Use the minimal permission and project scope; re-check actual tool availability after approved install; no best-in-class guarantee.']}

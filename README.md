@@ -68,3 +68,12 @@ interpreter** used by the Orbit MCP server. The browser tool now supports
 installing a separate Chromium browser binary. See
 [`docs/EMERGENT-LOCAL-WORKFLOW.md`](docs/EMERGENT-LOCAL-WORKFLOW.md) for the
 explicit installation smoke test and the Antigravity-specific driver 404 warning.
+
+## Optional Vercel Labs agent-browser MCP
+
+Orbit can discover a separately configured `agent-browser` MCP provider and recommend
+it for screenshot-driven, accessibility-tree browser testing through the host. It
+is **not bundled or auto-installed**. This provider does not replace the
+Orbit-owned Playwright QA gate in v0.24.0; host reports remain supplemental
+until an independently verified adapter is implemented. See
+[`docs/AGENT-BROWSER-OPTIONAL.md`](docs/AGENT-BROWSER-OPTIONAL.md).
