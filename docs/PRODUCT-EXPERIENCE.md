@@ -53,3 +53,19 @@ Official Antigravity docs confirm interactive **Implementation Plan artifacts**,
 New `orbit_build_feedback` records `request` (owner comment + actual reference) and `resolve` (actual revised artifact/test evidence) with expected revision and explicit write confirmation. It uses the existing build evidence record in SQLite; no new docs or databases. `orbit_project_resume.experience` and `orbit_build_status.experience` show up to four unresolved notes, a count, and `CHANGES_REQUESTED` priority. Open requests block stage PASS; PLAN still requires genuine owner approval after revised artifacts are reviewed. Since the MCP cannot inspect Antigravity's internal comment objects, all comment/approval references remain **host-reported**, not authenticated.
 
 See https://www.antigravity.google/docs/ide-implementation-plan and https://codelabs.developers.google.com/getting-started-agy-ide for documented host behavior. Do not conflate this with an Orbit-provided IDE visual panel.
+
+## Issue #7 — maturity-aware actions (feature branch, unreleased)
+
+Use **one** `orbit_project_action` alongside existing `orbit_project_resume` and `orbit_build_*` tools. Input is a user's real language, not a fixed questionnaire. The router emits `action`, `maturity` (explicitly inferred or user-reported), observed safe file/manifest names, recorded build selection, status, proportionate steps and one next action. It is *advice only*, except for confirmed pause/unpause of one selected persisted build. Project labels do not certify deployment, completeness, test success or owner intent. Empty projects prompt intake; existing code paths avoid redundant onboarding.
+
+| State/action | Contract |
+| --- | --- |
+| Empty/start | Guided intake and approved plan; no files written on inspection |
+| Existing/continue | Inspect code, Git and tests; reuse checkpoint; select build if ambiguous |
+| Paused/resume | Revision-guarded ledger change; host work remains host-controlled |
+| Existing/fix | Optional new scoped build beginning at IMPLEMENT, then VERIFY/REVIEW/checkpoint |
+| Existing/redesign/refactor/feature | New scoped build beginning at PLAN; owner reviews impacted contracts |
+| DONE/add feature | New build anchored to DONE record, completed history untouched |
+| Unsupported code executor | Markdown plan/handoff; checks NOT RUN |
+
+**Not a process controller:** `pause/stop` never kills a host subagent or preview automatically. When approved, call existing `orbit_preview_stop` for one identified same-session managed preview. Record checkpoints through existing `orbit_project_checkpoint` with fresh revision. Prove actual QA in each supported host separately before claiming acceptance.
