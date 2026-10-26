@@ -86,4 +86,36 @@ class TestIntake(unittest.TestCase):
    self.do('orbit_intake_approve',expected_revision=1,answers={'target':'iOS custom native'},
       answer_source='user_delegated_defaults',user_reference='user-approved-defaults',confirm_write=True)
 
+ def test_platform_router_custom_components_and_model_limits(self):
+  self.assertEqual(self.do('orbit_decision_route')['status'],'NEEDS_PROJECT_CLASSIFICATION')
+  self.do('orbit_intake_propose',profile=P,questions=Q,confirm_write=True)
+  self.do('orbit_intake_approve',expected_revision=1,answers={'target':'Personal'},answer_source='user_choices',user_reference='user-picked-personal',confirm_write=True)
+  web=self.do('orbit_decision_route',product_type='web-app',platforms=['web'],
+              existing_stack='React 19 StyleX',component_preference='custom')
+  self.assertEqual(web['status'],'RECOMMENDATION_ONLY')
+  self.assertEqual(web['workflow_profile'],'web')
+  self.assertTrue(web['custom_component_allowed'])
+  self.assertEqual(next(x for x in web['candidates'] if x['id']=='astryx')['status'],'REVIEW_MATCH')
+  android=self.do('orbit_decision_route',product_type='mobile-app',platforms=['android'],
+                  existing_stack='Kotlin',component_preference='reuse')
+  self.assertEqual(android['workflow_profile'],'native')
+  self.assertIn('NATIVE_QA',android['recommended_stages'])
+  self.assertNotIn('BROWSER_QA',android['recommended_stages'])
+  self.assertEqual(next(x for x in android['candidates'] if x['id']=='jetpack-compose')['status'],'REVIEW_MATCH')
+  sdk=self.do('orbit_decision_route',product_type='sdk-library')
+  self.assertNotIn('PREVIEW',sdk['recommended_stages'])
+  self.assertNotIn('BROWSER_QA',sdk['recommended_stages'])
+  self.assertFalse(any(x['id']=='astryx' for x in sdk['candidates']))
+  easy=self.do('orbit_model_route',role='orbit-writer',task='documentation',host='claude-code',
+              available_models=['Claude Opus 5.5','Claude Haiku 5.5','Claude Sonnet 5.5'],budget='economy')
+  self.assertEqual(easy['recommended_model'],'Claude Haiku 5.5')
+  self.assertTrue(easy['no_switch_executed'])
+  deep=self.do('orbit_model_route',role='orbit-security',task='security',host='codex',
+              available_models=['fast-small','deep-reasoning'],complexity='high-assurance',budget='quality')
+  self.assertEqual(deep['desired_tier'],'deep')
+  self.assertEqual(deep['recommended_model'],'deep-reasoning')
+  unknown=self.do('orbit_model_route',role='orbit-frontend',task='implementation',host='antigravity')
+  self.assertIsNone(unknown['recommended_model'])
+  self.assertEqual(unknown['selection_status'],'INHERIT_HOST_MODEL')
+
 if __name__=='__main__':unittest.main()

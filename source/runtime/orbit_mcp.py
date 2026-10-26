@@ -16,6 +16,7 @@ import orbit_preview
 import orbit_browser
 import orbit_build
 import orbit_intake
+import orbit_decisions
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -282,6 +283,8 @@ TOOLS += [
  {'name':'orbit_autonomy_review','description':'Recommend maturity-based guided/assisted/trusted mode; no automatic promotion.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'level':{'type':'string','enum':['guided','assisted','trusted']},'expected_revision':{'type':'integer','minimum':1},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project'])},
  {'name':'orbit_docs_audit','description':'Read-only, repeatable project documentation inventory and growth signals.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'signals':{'type':'array','maxItems':8,'items':{'type':'string'}}},['project_root','project'])},
 ]
+    {'name':'orbit_decision_route','description':'Read-only, platform-specific workflow and reviewed component/library research candidates; permits custom designs.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']}},['project_root','project'])},
+    {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
 TOOL_MAP = {x['name']:x['inputSchema'] for x in TOOLS}
 
 
@@ -311,6 +314,22 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name in {'orbit_decision_route','orbit_model_route'}:
+        project=project_key(a)
+        root=project_root(a)
+        saved=orbit_intake.status(conn,root,{'project':project})
+        profile=saved.get('profile',{}) if saved.get('status')=='APPROVED' else {}
+        if name=='orbit_decision_route':
+            kind=a.get('product_type') or profile.get('type')
+            if not kind:
+                return {'status':'NEEDS_PROJECT_CLASSIFICATION','next':'Ask project type or propose an intake before choosing a framework.'}
+            result=orbit_decisions.components(kind,a.get('platforms',[]),
+                     a.get('existing_stack',profile.get('stack','')),a.get('component_preference','balanced'))
+            return {'status':'RECOMMENDATION_ONLY','project':project,**result,
+                    'selection_applied':False,'host_validation_required':True}
+        complexity=a.get('complexity') or profile.get('complexity','moderate')
+        return orbit_decisions.model_route(a['role'],a['task'],complexity,
+                   a.get('available_models',[]),a['host'],a.get('budget','economy'))
     if name in {'orbit_intake_status','orbit_intake_propose','orbit_intake_answer','orbit_intake_followup','orbit_intake_approve','orbit_autonomy_review','orbit_docs_audit'}:
         a={**a,'project':project_key(a)}
         root=project_root(a)
