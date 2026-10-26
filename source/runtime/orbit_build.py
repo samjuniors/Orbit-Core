@@ -153,6 +153,202 @@ def recovery_brief(conn, root, project):
             'note':'Never treat saved caller-reported evidence as an independently executed check.'}
 
 
+def feedback(conn,root,a):
+    """Persist user feedback separately from stage PASS/FAIL.
+
+    Native IDE artifacts remain the editable source of truth. A host-reported
+    feedback reference records only the request and its acknowledged resolution.
+    """
+    row=get(conn,root,a)
+    if not row:raise ValueError('Build not found')
+    if row['revision']!=a['expected_revision']:
+        return {'status':'STALE_REVISION','revision':row['revision'],'stage':row['stage']}
+    if row['stage']=='DONE':
+        return {'status':'HOLD','reason':'Completed builds need a new approved change request, not a retroactive mutation'}
+    action=a['action']
+    if action not in {'request','resolve'}:raise ValueError('Invalid feedback action')
+    evidence=json.loads(row['evidence_json'])
+    items=evidence.get('__orbit_feedback',[])
+    if not isinstance(items,list):raise ValueError('Invalid persisted feedback')
+    if action=='request':
+        note=a.get('note','')
+        ref=a.get('user_reference','')
+        if not isinstance(note,str) or not 5<=len(note.strip())<=600:
+            raise ValueError('Feedback requires 5–600 characters of text')
+        if not isinstance(ref,str) or not 8<=len(ref)<=200:
+            raise ValueError('Real user artifact/comment reference required')
+        if any(x.get('status')=='OPEN' and x.get('reference')==ref and
+               x.get('source')==a.get('source','plan') for x in items):
+            return {'status':'ALREADY_RECORDED','reason':'This user comment already has an open request; do not duplicate it.'}
+        if sum(item.get('status')=='OPEN' for item in items)>=8:
+            return {'status':'HOLD','reason':'Resolve existing feedback before adding more requests'}
+        item={'id':'f'+str(evidence.get('__orbit_feedback_seq',0)+1),
+              'status':'OPEN','stage':row['stage'],'source':a.get('source','plan'),
+              'note':note.strip(),'reference':ref,'created_at':now()}
+        updated=[x for x in items if x['status']=='OPEN']+[
+            x for x in items if x['status']=='RESOLVED'][-8:]
+        updated.append(item)
+        result='FEEDBACK_RECORDED'
+    else:
+        fid=a.get('feedback_id','')
+        matches=[x for x in items if x['id']==fid and x['status']=='OPEN']
+        if len(matches)!=1:return {'status':'HOLD','reason':'Feedback id is missing or already resolved'}
+        resolution=a.get('resolution_evidence','')
+        if not isinstance(resolution,str) or not 8<=len(resolution.strip())<=600:
+            raise ValueError('Resolution needs actual changed artifact/test evidence')
+        updated=[{**x,'status':'RESOLVED','resolution':resolution.strip(),
+                  'resolved_at':now()} if x['id']==fid else x for x in items]
+        result='FEEDBACK_RESOLVED'
+    if a.get('confirm_write') is not True:
+        return {'status':'PREVIEW_ONLY','action':action,'build_id':row['build_id'],
+                'note':'No feedback state was written'}
+    evidence['__orbit_feedback']=updated
+    if action=='request':evidence['__orbit_feedback_seq']=int(item['id'][1:])
+    with conn:
+        cur=conn.execute('''UPDATE build_runs SET revision=revision+1,
+              evidence_json=?,updated_at=? WHERE project=? AND root=? AND build_id=? AND revision=?''',
+              (json.dumps(evidence),now(),a['project'],str(root),row['build_id'],row['revision']))
+    if cur.rowcount!=1:return {'status':'STALE_REVISION'}
+    return {'status':result,'run':public(get(conn,root,a)),
+            'open_feedback':sum(x['status']=='OPEN' for x in updated),
+            'note':'Host must re-check the actual artifact/changes and obtain owner approval when required.'}
+
+
+def experience_view(intake, recovery, run=None):
+    """Host-renderable, read-only summary of *existing* persisted facts.
+
+    This does not make LLM calls, approve decisions, advance a stage or claim an
+    IDE panel is installed. All host actions still need permission and evidence.
+    """
+    state=intake.get('status','NOT_STARTED')
+    result={'version':1,'mode':'guided','phase':'DISCOVERY',
+            'headline':'Tell Orbit what you want to build',
+            'summary':'Choose how much guidance you want; Orbit will not choose consequential requirements silently.',
+            'next_action':{'label':'Choose scope-first or approved defaults','tool':'orbit_intake_propose'},
+            'decision':None,'plan':None,'progress':None,'task_cards':[],
+            'feedback':[],'open_feedback':0,
+            'attention':[],'approval_required':False,
+            'evidence_note':'Display data is derived from persisted host-reported state; no model or user approval is inferred.'}
+    if intake.get('autonomy') in {'guided','assisted','trusted'}:
+        result['mode']=intake['autonomy']
+    if state=='PROPOSED':
+        questions=intake.get('questions',[])
+        answers=intake.get('answers',{})
+        pending=next((q for q in questions if q.get('id') not in answers),None)
+        result['phase']='DISCOVERY'
+        result['headline']='A decision is needed' if pending else 'Review your project decisions'
+        result['summary']='Answers are remembered; ask a follow-up only if the previous answer makes it necessary.'
+        result['approval_required']=True
+        if pending:
+            result['decision']={'id':pending['id'],'prompt':pending['prompt'],
+                'options':pending['options'][:5], 'recommended':pending['recommended'],
+                'custom_allowed':True,'based_on':pending.get('based_on'),
+                'reason':pending.get('rationale')}
+            result['next_action']={'label':'Answer or type your own choice','tool':'orbit_intake_answer'}
+        else:
+            result['next_action']={'label':'Confirm the agreed brief','tool':'orbit_intake_approve'}
+    elif state=='APPROVED':
+        profile=intake.get('profile',{})
+        result['summary']=str(profile.get('goal','Approved product decisions'))[:240]
+        result['headline']='Decisions recorded'
+        result['phase']='READY'
+        result['next_action']={'label':'Research or resume the agreed build','tool':'orbit_build_begin'}
+
+    status=recovery.get('status','NO_BUILD')
+    result['task_cards']=[{'task_key':t['task_key'],'status':t['status'],
+                           'goal':t.get('goal','')[:120]}
+                          for t in recovery.get('pending_tasks',[])[:5]]
+    # Explicit orbit_build_status(build_id=...) is already a build selection.
+    # Never prompt to select again, nor show a different active build's stage.
+    if run is not None:
+        status='RESUME'
+    if status=='NEEDS_BUILD_SELECTION':
+        result.update(phase='CHOOSE_BUILD',headline='Which unfinished build should Orbit continue?',
+                      approval_required=True,
+                      next_action={'label':'Select a build before continuing','tool':'orbit_build_status'})
+        result['decision']={'prompt':'Select an existing build','options':[
+            x['build_id'] for x in recovery.get('builds',[])[:8]],
+            'recommended':None,'custom_allowed':False}
+        return result
+    if status=='ALL_DONE':
+        result.update(phase='COMPLETED',headline='No unfinished builds',
+                      next_action={'label':'Review the result or request a new change','tool':'orbit_project_resume'})
+        result['summary']='Latest completed build: '+str(recovery.get('last_completed_build',''))
+        return result
+    if status!='RESUME':
+        return result
+    if not run:
+        result.update(phase='RESUME',headline='Resume saved work',
+                      next_action={'label':str(recovery.get('next','Resume current build'))[:160],
+                                   'tool':'orbit_build_status'})
+        return result
+    stages=flow_for({'evidence_json':json.dumps(run.get('evidence',{})),
+                     'stage':run['stage']})
+    stage=run['stage']
+    count=stages.index(stage) if stage in stages else 0
+    result['progress']={'build_id':run['build_id'],'stage':stage,
+                       'completed_stages':count,'total_stages':len(stages)-1,
+                       'revision':run['revision'],'kind':'recorded-stage-not-quality-percentage'}
+    result['phase']='PLAN_REVIEW' if stage=='PLAN' else ('BUILDING' if stage in {'IMPLEMENT','RESEARCH'}
+                        else 'CHECKING' if stage in {'VERIFY','PREVIEW','BROWSER_QA','NATIVE_QA','REVIEW','CHECKPOINT'}
+                        else 'COMPLETED')
+    result['headline']={'RESEARCH':'Researching the best approach',
+       'PLAN':'Review the plan before building','IMPLEMENT':'Building the agreed product',
+       'VERIFY':'Checking behavior and edge cases','PREVIEW':'Preparing local preview',
+       'BROWSER_QA':'Testing real browser interactions',
+       'NATIVE_QA':'Testing the native experience','REVIEW':'Reviewing the work',
+       'CHECKPOINT':'Saving progress','DONE':'Build completed'}.get(stage,'Continue Orbit build')
+    selected_here=(recovery.get('build_id')==run['build_id'])
+    next_text=recovery.get('next') if selected_here else None
+    if not next_text:
+        next_text={'RESEARCH':'Research existing components and risks for this build.',
+                   'PLAN':'Show this build\'s editable plan and request approval.',
+                   'IMPLEMENT':'Continue this build\'s approved implementation tasks.',
+                   'VERIFY':'Run and review tests for this build.',
+                   'PREVIEW':'Check the local preview for this build.',
+                   'BROWSER_QA':'Run authorized browser checks for this build.',
+                   'NATIVE_QA':'Run device/platform QA for this build.',
+                   'REVIEW':'Review this build\'s changes and acceptance evidence.',
+                   'CHECKPOINT':'Persist this build\'s verified checkpoint.',
+                   'DONE':'Review the completed build or start a new change request.'}.get(stage,'Inspect current stage.')
+    result['next_action']={'label':str(next_text)[:160],
+                           'tool':'orbit_project_resume' if stage=='DONE' else
+                                  'orbit_build_status' if stage=='PLAN' else 'orbit_build_advance'}
+    if stage=='PLAN':
+        result['approval_required']=True
+        result['attention'].append('Present an editable plan and get real owner approval; approval cannot be inferred from this status.')
+    record=run.get('evidence',{}).get('PLAN',{})
+    if isinstance(record,dict) and record.get('outcome')=='PASS':
+        try:
+            plan=json.loads(record['evidence'])
+            if valid_approved_plan(record['evidence']):
+                result['plan']={'title':plan['title'],
+                                'summary':plan['summary'],
+                                'tasks':plan['tasks'][:12],
+                                'approval_method':plan['approval_method'],
+                                'approval_reported_by_host':True}
+        except (TypeError,ValueError,KeyError):
+            pass
+    comments=run.get('evidence',{}).get('__orbit_feedback',[])
+    if isinstance(comments,list):
+        pending=[x for x in comments if isinstance(x,dict) and x.get('status')=='OPEN']
+        result['open_feedback']=len(pending)
+        result['feedback']=[{'id':x['id'],'source':x.get('source'),
+             'note':x.get('note','')[:240],'stage':x.get('stage')}
+            for x in pending[-4:]]
+        if pending:
+            result['attention'].insert(0,str(len(pending))+' user change request(s) need action.')
+            result['next_action']={'label':'Revise the existing Antigravity artifact and address requested changes',
+                                   'tool':'orbit_build_feedback'}
+            result['phase']='CHANGES_REQUESTED'
+    result['attention'] += [
+        'Recorded '+str(x.get('stage',''))+': '+str(x.get('outcome',''))+
+        '. Review actual evidence before retrying.'
+        for x in recovery.get('blockers',[])[:3]]
+    result['attention']=result['attention'][:4]
+    return result
+
+
 def public(row):
     return {**{k:v for k,v in row.items() if k!='evidence_json'},'evidence':json.loads(row['evidence_json'])}
 
@@ -240,6 +436,9 @@ def advance(conn,root,a):
         raise ValueError('evidence must be bounded text')
     evidence_map=json.loads(row['evidence_json'])
     flow=flow_for(row)
+    if outcome=='PASS' and any(x.get('status')=='OPEN' for x in evidence_map.get('__orbit_feedback',[])
+                               if isinstance(x,dict)):
+        return {'status':'HOLD','reason':'Open user feedback must be addressed and recorded as resolved before advancing this stage'}
     if row['stage'] not in flow:return {'status':'HOLD','reason':'Persisted build flow is inconsistent; review stored state before continuing'}
     # Only newly created builds carry this marker; legacy PLAN-stage builds
     # must resume without a surprise migration or retroactive approval gate.
@@ -270,7 +469,7 @@ def advance(conn,root,a):
         return {'status':'PREVIEW_ONLY','stage':row['stage'], 'next_stage':flow[flow.index(row['stage'])+1] if outcome=='PASS' else row['stage']}
     evidence_map[row['stage']]={'outcome':outcome,'evidence':evidence,'updated_at':now(),
                                 'verification':'browser-tool' if row['stage']=='BROWSER_QA' and outcome=='PASS' else 'caller-reported-not-attested'}
-    new_stage=STAGES[STAGES.index(row['stage'])+1] if outcome=='PASS' else row['stage']
+    new_stage=flow[flow.index(row['stage'])+1] if outcome=='PASS' else row['stage']
     with conn:
         cursor=conn.execute('''UPDATE build_runs SET stage=?,revision=revision+1,evidence_json=?,updated_at=?
              WHERE project=? AND root=? AND build_id=? AND revision=?''',
