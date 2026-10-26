@@ -157,7 +157,7 @@ class UniversalSetupTests(unittest.TestCase):
 
     def test_mcpb_structure(self):
         import zipfile
-        with zipfile.ZipFile(ROOT/'ORBIT-Claude-Desktop-v0.24.0.mcpb') as z:
+        with zipfile.ZipFile(ROOT/f'ORBIT-Claude-Desktop-v{installer.VERSION}.mcpb') as z:
             m=json.loads(z.read('manifest.json'))
             self.assertEqual(m['server']['type'],'python')
             self.assertEqual(len(m['tools']),33)
@@ -247,7 +247,7 @@ class UniversalSetupTests(unittest.TestCase):
         self.assertTrue((r/'orbit_preview.py').exists())
         self.assertTrue((r/'orbit_browser.py').exists())
         self.assertTrue((r/'orbit_build.py').exists())
-        self.assertIn('0.24.0',str(r))
+        self.assertIn(installer.VERSION,str(r))
 
     def test_stock_v023_runtime_upgrade(self):
         old = Path(__file__).resolve().parents[2]/'orbit-core-mcp-v0.23.0-git/source/runtime/orbit_mcp.py'

@@ -7,7 +7,7 @@ Q=[{'id':'target','prompt':'Who should use the app?','options':['Personal','Team
 class TestIntake(unittest.TestCase):
  def setUp(self):
   self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
-  self.root=Path(self.temp.name)/'todo';self.root.mkdir()
+  self.root=Path(self.temp.name)/'todo';self.root.mkdir();self.root=self.root.resolve(strict=True)
   self.db=sqlite3.connect(':memory:');self.db.row_factory=sqlite3.Row;self.addCleanup(self.db.close)
   orbit_build.setup(self.db);orbit_intake.setup(self.db)
   self.a={'project_root':str(self.root),'project':'todo'}

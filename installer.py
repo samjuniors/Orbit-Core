@@ -378,7 +378,12 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
         merge_json(changes,config,{**common,'type':'stdio'},root or home,'Claude Code MCP configuration')
     if 'vscode' in hosts:
         if root:cfg=root/'.vscode/mcp.json'
-        elif os.name=='nt':cfg=Path(os.environ.get('APPDATA',home/'AppData/Roaming'))/'Code/User/mcp.json'
+        elif os.name=='nt':
+            # A test-controlled user home must never write to the real Windows
+            # roaming APPDATA outside its explicit home boundary.
+            roaming=(home/'AppData/Roaming' if os.environ.get('ORBIT_SETUP_HOME')
+                     else Path(os.environ.get('APPDATA',home/'AppData/Roaming')))
+            cfg=roaming/'Code/User/mcp.json'
         elif sys.platform=='darwin':cfg=home/'Library/Application Support/Code/User/mcp.json'
         else:cfg=home/'.config/Code/User/mcp.json'
         merge_vscode(changes,cfg,{'type':'stdio',**common},root or home)
