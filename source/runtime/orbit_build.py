@@ -55,6 +55,10 @@ def valid_approved_plan(evidence):
 def task_progress(conn,project,root):
     """Summary of persisted task ledger; never imply a host agent executed anything."""
     counts={}
+    # The build ledger can be used stand-alone by test harnesses and earlier
+    # installs before the specialist task table has been initialized.
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='orbit_agent_tasks'").fetchone():
+        return {'registered':0,'finished':0,'counts':{},'completion_percent':None}
     for row in conn.execute(
         'SELECT status,COUNT(*) AS n FROM orbit_agent_tasks WHERE project=? AND project_root=? GROUP BY status',
         (project,str(root))):
@@ -62,7 +66,7 @@ def task_progress(conn,project,root):
     if not counts:
         return {'registered':0,'finished':0,'counts':{},'completion_percent':None}
     total=sum(counts.values())
-    finished=counts.get('APPROVED',0)
+    finished=counts.get('REVIEW_ACCEPTED',0)
     return {'registered':total,'finished':finished,'counts':counts,
             'completion_percent':round(finished*100/total)}
 
