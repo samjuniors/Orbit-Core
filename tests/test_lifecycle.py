@@ -157,6 +157,17 @@ class LifecycleTests(unittest.TestCase):
             baseline_reference='git:abc12345',confirm_write=True)
         self.assertEqual(no_signal['status'],'HOLD')
 
+    def test_stop_preview_never_pauses_a_build_or_kills_a_process(self):
+        self.create()
+        before=self.current()
+        route=self.inspect('stop preview',build_id='base',
+                           expected_revision=1,confirm_write=True)
+        self.assertEqual(route['action'],'preview_stop')
+        self.assertTrue(route['preview_stop_requires_separate_tool'])
+        self.assertFalse(route['user_data_modified'])
+        self.assertEqual(self.current(),before)
+        self.assertIn('orbit_preview_stop',route['next_action'])
+
     def test_legacy_build_flow_survives_without_schema_migration(self):
         self.create()
         self.conn.execute("UPDATE build_runs SET evidence_json=? WHERE project=? AND root=? AND build_id=?",
