@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -18,6 +19,11 @@ import urllib.request
 from pathlib import Path
 
 MAX_RUNNING = 3
+# Interpreter options that run inline code, preload arbitrary code, or open debug ports.
+NODE_BLOCKED = re.compile(r'^(?:-e|-p|-r|--eval|--print|--require|--import|--loader|--experimental-loader|--inspect(?:-brk|-wait)?(?:=.*)?|--input-type(?:=.*)?)$')
+PYTHON_CLUSTER_C = re.compile(r'^-[A-Za-z]*c[A-Za-z]*$')
+PUBLIC_BIND = re.compile(r'(?:^|[=:\s,])(?:0\.0\.0\.0|\[?::\]?)(?:$|[:/\s,])')
+SECRET_ENV = re.compile(r'SECRET|TOKEN|PASSW|CREDENTIAL|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|AUTH|SESSION', re.I)
 ALLOWED_EXES = {'python', 'python3', 'python.exe', 'python3.exe', 'node', 'node.exe',
                 'npm', 'npm.cmd', 'pnpm', 'pnpm.cmd', 'yarn', 'yarn.cmd', 'bun', 'bun.exe'}
 SESSIONS = {}
@@ -57,14 +63,31 @@ def check_command(argv):
         for x in argv
     ):
         raise ValueError('command must be a list of 1–20 nonempty arguments')
+    if Path(argv[0]).name != argv[0] and not Path(argv[0]).is_absolute():
+        raise ValueError('Use a bare runtime name from PATH or an absolute interpreter path, not a relative path')
     binary = Path(argv[0]).name.lower()
     if binary not in ALLOWED_EXES:
         raise ValueError('Only known local development runtimes are allowed; use IDE terminal for others')
-    if binary.startswith('python') and ('-c' in argv or '-I' in argv and '-c' in argv):
-        raise ValueError('python -c is not an approved preview command')
+    if any(PUBLIC_BIND.search(x) for x in argv[1:]):
+        raise ValueError('Preview must bind to loopback only; wildcard addresses are not approved')
+    if binary.startswith('python'):
+        # Inspect only interpreter options (everything before the script or -m target).
+        for item in argv[1:]:
+            if item == '-m' or not item.startswith('-'):
+                break
+            if PYTHON_CLUSTER_C.match(item):
+                raise ValueError('python -c is not an approved preview command')
+    if binary.startswith('node') or binary.startswith('bun'):
+        for item in argv[1:]:
+            if not item.startswith('-'):
+                break
+            if NODE_BLOCKED.match(item):
+                raise ValueError('Inline-code, preload and debugger options are not approved preview commands')
     if binary.startswith('npm') or binary.startswith('pnpm') or binary.startswith('yarn'):
         if len(argv) < 3 or argv[1:3] not in (['run', 'dev'], ['run', 'start'], ['run', 'preview']):
             raise ValueError('Package-manager commands must be run dev/start/preview')
+        if any(x.startswith(('--script-shell', '--shell', '--prefix', '--userconfig', '--globalconfig')) for x in argv[3:]):
+            raise ValueError('Package-manager shell/config overrides are not approved')
     return argv
 
 
@@ -112,6 +135,12 @@ def start(root, a):
         return {'status':'PREVIEW_ONLY', 'project_root':str(root), 'preview_id':key[1],
                 'command':command, 'url':f'http://127.0.0.1:{port}{path}',
                 'notice':'Starting this command executes project code. Review it and explicitly approve first.'}
+    resolved = command[0] if Path(command[0]).is_absolute() else shutil.which(command[0])
+    if not resolved:
+        raise ValueError('Runtime not found on PATH: '+command[0])
+    inside = Path(resolved).resolve()
+    if inside == Path(root).resolve() or Path(root).resolve() in inside.parents:
+        raise ValueError('Runtime resolves inside the project folder; refusing project-local executable')
     if occupied(port):
         return {'status':'PORT_IN_USE', 'port':port, 'notice':'Orbit will not adopt or terminate another process.'}
     active = sum(row['proc'].poll() is None for row in SESSIONS.values())
@@ -125,15 +154,17 @@ def start(root, a):
     with logfile.open('ab') as log:
         log.write((f'\n--- Orbit preview {time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime())} ---\n').encode())
         log.flush()
+        env = {k: v for k, v in os.environ.items()
+               if os.environ.get('ORBIT_PREVIEW_INHERIT_ENV') == '1' or not SECRET_ENV.search(k)}
+        env.update({'PORT': str(port), 'HOST': '127.0.0.1'})
         kwargs = {'cwd':str(root), 'stdin':subprocess.DEVNULL, 'stdout':log,
-                  'stderr':subprocess.STDOUT, 'shell':False,
-                  'env':{**os.environ, 'PORT':str(port), 'HOST':'127.0.0.1'}}
+                  'stderr':subprocess.STDOUT, 'shell':False, 'env':env}
         if os.name == 'nt':
             kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             kwargs['start_new_session'] = True
         try:
-            proc = subprocess.Popen(command, **kwargs)
+            proc = subprocess.Popen([resolved, *command[1:]], **kwargs)
         except OSError as exc:
             return {'status':'START_FAILED','error':str(exc)[:200]}
     session = {'proc':proc,'root':str(root),'preview_id':key[1], 'port':port,'health_path':path,
@@ -203,3 +234,27 @@ def stop(root,a):
     result={'status':'STOPPED','pid':proc.pid,'exit_code':proc.poll(),'preview_id':key[1]}
     del SESSIONS[key]
     return result
+
+
+def shutdown_all():
+    """Best-effort cleanup of previews owned by this MCP process (called when the session ends).
+
+    Without this, a host that restarts the MCP leaves unmanaged servers holding the port.
+    Set ORBIT_PREVIEW_KEEP_ALIVE=1 to keep previews running after the session.
+    """
+    if os.environ.get('ORBIT_PREVIEW_KEEP_ALIVE') == '1':
+        return
+    for session in list(SESSIONS.values()):
+        proc = session['proc']
+        if proc.poll() is not None:
+            continue
+        try:
+            if os.name == 'nt':
+                proc.terminate()
+            else:
+                os.killpg(proc.pid, signal.SIGTERM)
+            proc.wait(timeout=3)
+        except (OSError, subprocess.TimeoutExpired):
+            try: proc.kill()
+            except OSError: pass
+    SESSIONS.clear()
