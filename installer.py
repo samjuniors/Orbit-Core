@@ -354,6 +354,16 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
         launcher=home/'.orbit-universal/bin/orbit'
         body=b'#!/bin/sh\nexec python3 "$(dirname "$0")/../orbit_cli.py" "$@"\n'
     same_or_create(changes,launcher,body,None,'Orbit stable update launcher; PATH modification is manual opt-in')
+    # A persistent clickable manager launcher means future updates don't require
+    # hunting for the original extracted setup ZIP.
+    if os.name=='nt':
+        manager_launcher=home/'.orbit-universal/bin/Orbit Update Manager.cmd'
+        manager_body=b'@echo off\r\npy -3 "%~dp0..\\orbit_cli.py" manager\r\n'
+    else:
+        manager_launcher=home/'.orbit-universal/bin/orbit-manager'
+        manager_body=b'#!/bin/sh\nexec python3 "$(dirname "$0")/../orbit_cli.py" manager\n'
+    same_or_create(changes,manager_launcher,manager_body,None,
+                   'Stable local Orbit Update Manager launcher; no PATH mutation')
     cmd=python_binary()
     script=runtime/'orbit_mcp.py'
     common={'command':cmd,'args':[str(script)]}
@@ -452,7 +462,7 @@ def install(changes: list[Change]) -> list[str]:
             with tmp.open('xb') as f:f.write(c.data)
             tmp.replace(c.target)
             applied.append(str(backup))
-        if os.name!='nt' and c.target.name=='orbit' and c.target.parent.name=='bin' and c.target.parent.parent.name=='.orbit-universal':
+        if os.name!='nt' and c.target.name in {'orbit','orbit-manager'} and c.target.parent.name=='bin' and c.target.parent.parent.name=='.orbit-universal':
             c.target.chmod(0o700)
         applied.append(str(c.target))
     return applied
