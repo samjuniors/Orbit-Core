@@ -3,6 +3,9 @@
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] — post-v0.25.0 fixes
+- Add read-only, asynchronous, cached published-release notification on Orbit MCP startup and `orbit_project_resume` (one day cadence, `ORBIT_UPDATE_CHECK=0` opt-out). Add an explicit `orbit_update_status` tool (36 total).
+- Add persistent local Orbit Update Manager with a real Install button, version-pinned approved updates and a launcher available without re-downloading setup; one selected machine-user or project install scope at a time. No silent code execution, automatic upgrade or native IDE popup guarantees.
+- Keep SHA256, signed-publisher limitation, customized owner file/SQLite protection and versioned-runtime backup rules; preserve distinct Claude Desktop and hosted ChatGPT plugin update channels.
 - The next patch target is tracked in `NEXT_VERSION`; no subsequent release has been published.
 
 ## [0.25.0] — Candidate source merged; NOT PUBLISHED
