@@ -153,9 +153,14 @@ def context(conn, root: Path, project: str, args):
             type(budget) is not int or not 600 <= budget <= 4500:
         raise ValueError("Invalid context limit or max_chars")
     terms = _words(objective)
+    # A JSON-escaped bound, not a Python-character bound: emoji and controls
+    # otherwise multiply the encoded size of a supposedly compact response.
+    echoed = objective[:160]
+    while len(json.dumps(echoed, ensure_ascii=True)) > 164:
+        echoed = echoed[:-1]
     # A generic stopword-only request must not dump the entire research library.
     base = {"status": "NO_RELEVANT_REFERENCES", "project": project,
-            "objective": objective[:160], "objective_truncated": len(objective) > 160,
+            "objective": echoed, "objective_truncated": len(objective) > len(echoed),
             "sources": [],
             "source_trust": TRUST,
             "network_access": False, "external_documents_written": False,
