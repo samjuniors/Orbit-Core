@@ -20,6 +20,12 @@
 - **Other OS users / shared computers:** updates apply to the current OS user/profile and approved workspace, not other OS accounts or administrator-managed installations.
 - **Machine-wide local installation** is per-user *configuration across projects*, not privilege-elevated installation for all accounts.
 
+## What's New and older versions
+
+- On update availability, Orbit shows the **official published release notes** before installation in its local Update Manager, including a bounded preview in the confirmation dialog. `orbit update --check` also displays a bounded, control-character-safe release description, and MCP `orbit_update_status` may supply an abbreviated `whats_new` field as **untrusted display-only data**. If published notes are missing, show that fact rather than invented feature benefits.
+- **Older versions** in the manager and `orbit versions` open the official GitHub Releases archive, where v0.23.0 and v0.24.1 remain downloadable with checksums. This button/command must not execute downgrades, replace installed files or automatically change update channels.
+- **Default:** update to the newest approved published version in the chosen channel. Older versions are an optional user-controlled recovery path, not the default. Before an older version is installed, explicitly review compatibility with SQLite/checkpoints, back up projects/user data and verify the older archive/checksum. There is currently no automatic data-schema downgrade or click-to-rollback guarantee.
+
 ## Channels and preferences
 
 - `ORBIT_UPDATE_CHECK=0` disables automatic MCP update metadata checks and notices. The user can still open the manager manually.
