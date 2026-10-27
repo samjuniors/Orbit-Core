@@ -23,7 +23,11 @@ MAX_RUNNING = 3
 NODE_BLOCKED = re.compile(r'^(?:-e|-p|-r|--eval|--print|--require|--import|--loader|--experimental-loader|--inspect(?:-brk|-wait)?(?:=.*)?|--input-type(?:=.*)?)$')
 PYTHON_CLUSTER_C = re.compile(r'^-[A-Za-z]*c[A-Za-z]*$')
 PUBLIC_BIND = re.compile(r'(?:^|[=:\s,])(?:0\.0\.0\.0|\[?::\]?)(?:$|[:/\s,])')
-SECRET_ENV = re.compile(r'SECRET|TOKEN|PASSW|CREDENTIAL|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|AUTH|SESSION', re.I)
+# Explicitly forward only ordinary process/runtime settings by default.
+# An environment denylist cannot discover secrets called DATABASE_URL, etc.
+SAFE_ENV_NAMES = {'PATH','HOME','USER','USERNAME','SYSTEMROOT','WINDIR','TEMP','TMP',
+                  'TMPDIR','LANG','LANGUAGE','TERM','COMSPEC','PATHEXT','APPDATA',
+                  'LOCALAPPDATA','XDG_RUNTIME_DIR','NODE_ENV','VIRTUAL_ENV'}
 ALLOWED_EXES = {'python', 'python3', 'python.exe', 'python3.exe', 'node', 'node.exe',
                 'npm', 'npm.cmd', 'pnpm', 'pnpm.cmd', 'yarn', 'yarn.cmd', 'bun', 'bun.exe'}
 SESSIONS = {}
@@ -154,8 +158,11 @@ def start(root, a):
     with logfile.open('ab') as log:
         log.write((f'\n--- Orbit preview {time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime())} ---\n').encode())
         log.flush()
+        # Inherit arbitrary values only when the owner explicitly opted in
+        # outside MCP via ORBIT_PREVIEW_INHERIT_ENV=1 (unsafe for untrusted apps).
+        inherit = os.environ.get('ORBIT_PREVIEW_INHERIT_ENV') == '1'
         env = {k: v for k, v in os.environ.items()
-               if os.environ.get('ORBIT_PREVIEW_INHERIT_ENV') == '1' or not SECRET_ENV.search(k)}
+               if inherit or k.upper() in SAFE_ENV_NAMES or k.upper().startswith('LC_')}
         env.update({'PORT': str(port), 'HOST': '127.0.0.1'})
         kwargs = {'cwd':str(root), 'stdin':subprocess.DEVNULL, 'stdout':log,
                   'stderr':subprocess.STDOUT, 'shell':False, 'env':env}
