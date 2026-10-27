@@ -160,13 +160,24 @@ def launch():
                 events.put(("apply_done", rc, log.getvalue(), pinned))
             except Exception as exc:
                 events.put(("apply_fail", type(exc).__name__ + ": " + str(exc)))
-        threading.Thread(target=run, name="orbit-gui-approved-updater", daemon=True).start()
+        # Applying a release writes multiple backed-up files; do not abandon a
+        # partially applied upgrade if the user closes the manager window.
+        threading.Thread(target=run, name="orbit-gui-approved-updater", daemon=False).start()
 
     check_btn = tk.Button(controls, text="Check for updates", width=22, command=check)
     check_btn.pack(side="left", padx=8)
     apply_btn = tk.Button(controls, text="Install update", width=22, command=apply, state="disabled")
     apply_btn.pack(side="left", padx=8)
-    tk.Button(controls, text="Close", width=12, command=app.destroy).pack(side="left", padx=8)
+    def close():
+        if state["busy"]:
+            messagebox.showinfo("Orbit updater busy",
+                                "An update check or installation is still running. "
+                                "Keep this window open until it finishes.")
+            return
+        app.destroy()
+
+    tk.Button(controls, text="Close", width=12, command=close).pack(side="left", padx=8)
+    app.protocol("WM_DELETE_WINDOW", close)
 
     def poll():
         try:
