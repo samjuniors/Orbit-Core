@@ -43,7 +43,7 @@ Create a blank folder called **orbit-todo-lab**. Install Orbit Universal into **
 
 | Check | What to look for | PASS/FAIL |
 |---|---|---|
-| MCP | `orbit-core-native` connected with **15** tools |  |
+| MCP | `orbit-core-native` connected; **35 tools in current main source** (published v0.24.1 bundle has 33). Verify the actual host tool list rather than assuming count. |  |
 | Lead agent | Host recognizes Orbit skill/instructions and reads real project |  |
 | Planning | Roadmap covers UI, API/data, security, tests; current gate explicit |  |
 | Reservation | `orbit_task_plan` -> approved `orbit_task_reserve`, max 2 |  |
