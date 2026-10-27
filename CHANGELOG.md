@@ -3,6 +3,8 @@
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] — post-v0.25.1 work
+- **M2 host-native delegation handoff (development):** a read-only `orbit_task_handoff` produces source-scoped, approval-aware packets only for reserved tasks with a matching *reported* native IDE agent tool. Native invocation, session evidence and execution still belong entirely to the connected host; safe HOLD/serial fallback when unavailable. No extra model CLI or automatic agent spawning.
+
 - **Orbit Evidence Lens (merged source, not published):** original folder+project-scoped SQLite research source pointers with preview-first, revision-guarded review; bounded objective-relevant context pack and untrusted-source warnings. No automatic crawler, source execution, Git research notes, global cross-project sharing or new model service. Existing local memory retained; requires real IDE/local install acceptance.
 - **Research/context milestones:** approved M1–M5 roadmap for scoped research memory, native-agent handoffs, evidence authentic QA, adaptive skills/context and optional verified learning, without adopting ECC's runtime or a universal auto-learning hook system.
 
