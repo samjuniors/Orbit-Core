@@ -31,6 +31,11 @@
       "name": "fix/issue-9-claude-audit-hardening",
       "head_sha": "18d3d1ce0c5b6800180119b62d384e76be97fcda",
       "pr": 10
+    },
+    {
+      "name": "chore/next-version-and-merged-branch-cleanup",
+      "head_sha": "46cc2725a8256c6f50f5225e13a08332d9b75ce6",
+      "pr": 11
     }
   ]
 }
