@@ -114,11 +114,16 @@ def _newest(releases, which):
         package = "ORBIT-Universal-Setup-v" + value + ".zip"
         if package not in assets or package + ".sha256" not in assets:
             continue
-        matches.append((number, value))
+        body = release.get("body") if isinstance(release.get("body"), str) else ""
+        title = release.get("name") if isinstance(release.get("name"), str) else ""
+        matches.append((number, value, title[:160], body[:1800]))
     if not matches:
         return None
-    version = max(matches)[1]
+    _, version, title, body = max(matches)
     return {"version": version,
+            "title": title or ("Orbit v" + version),
+            "whats_new": body or "No release notes provided. Review the official release page.",
+            "notes_are_untrusted_display_text": True,
             "url": "https://github.com/" + REPO + "/releases/tag/v" + version}
 
 
@@ -175,6 +180,10 @@ def notice(installed_version, path=None, *, now=None):
                              "Ask the user whether to update; do not invoke an installer "
                              "from a model tool call.")
         result["release_url"] = "https://github.com/" + REPO + "/releases/tag/v" + remote
+        result["whats_new"] = str(latest.get("whats_new") or
+                                 "No release notes provided; review the official release page.")[:1800]
+        result["release_title"] = str(latest.get("title") or "Orbit update")[:160]
+        result["notes_are_untrusted_display_text"] = True
         result["action"] = "Open the installed Orbit Update Manager: orbit manager"
         result["limitations"] = ("MCP tools cannot show a native click-to-update "
                                  "button in every IDE. The local manager requests "
