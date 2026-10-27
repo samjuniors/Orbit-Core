@@ -12,9 +12,9 @@ The focus is **a trustworthy local orchestrator inside existing coding IDEs**, n
 - Support project- and folder-level isolation, duplicate identity updates, malicious URLs and stale-revision tests; retain existing local SQLite and legacy memories. A trusted local IDE user manually imports the previously prepared 9-link research packet after connecting, not a Git checkout or ChatGPT cloud session.
 - **Gate:** Linux/Windows tests + disposable installer/stdio smoke pass from reviewed PR #16; real IDE-local source saving and read-back remain NOT RUN. No claim of public-release or host permission acceptance.
 
-### M2 — P0: Reliable real-host delegation and handoff (host-neutral packet implementation in review)
+### M2 — P0: Reliable real-host delegation and handoff (packet merged; real native-host invocation acceptance pending)
 - Add a read-only `orbit_task_handoff` adapter contract: checked task/reservation/dependencies, exact supported native host tool names (caller-reported), limited file ownership, optional minimal Evidence Lens links, safe HOLD/serial fallback. The host **must** actually invoke its native tool; a packet is not an agent run. Real host session references and changed-file/test inspection remain prerequisites; the MCP never spawns an agent.
-- **Gate:** verify CLI protocol and safe fallbacks in CI; then complete a tiny new-project build and an existing-project scoped feature/debug flow in two real hosts, with explicit consent, real subagent session IDs and clear fallback. Keep milestone OPEN until both real hosts pass.
+- **Gate:** verified source/CLI protocol and safe fallbacks in PR #17 CI; **real-host acceptance is NOT RUN**. Complete a tiny new-project build and an existing-project scoped feature/debug flow in two actual hosts, with explicit consent, real subagent session IDs, reviewed diffs/tests and fallback. Keep milestone OPEN until both live hosts pass.
 
 ### M3 — P1: Independent QA, permissions and scoped recovery
 - Bind test reports to code revision and acceptance case. Gate commands/files on real host permissions; review/rework integration and safe cancellation/rollback. Preserve Issue #9 security limitations.
