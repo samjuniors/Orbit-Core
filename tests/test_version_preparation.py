@@ -29,7 +29,7 @@ class VersionPreparationTests(unittest.TestCase):
         self.assertEqual(self.old.read_bytes(), self.previous_bytes)
         with zipfile.ZipFile(target) as bundle:
             self.assertEqual(json.loads(bundle.read("manifest.json"))["version"], "0.25.0")
-            self.assertEqual(bundle.read("server/orbit_mcp.py"), b"VERSION = '0.25.0'\n")
+            self.assertEqual(bundle.read("server/orbit_mcp.py").decode().splitlines(), ["VERSION = '0.25.0'"])
             self.assertEqual(bundle.read("icon.png"), b"illustrative-image-bytes")
         before = target.read_bytes()
         build(self.root)
