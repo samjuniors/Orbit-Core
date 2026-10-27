@@ -346,6 +346,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
                            'Orbit guided workflow reference '+ref.name)
     # Stable installer-independent update launcher. Does not alter PATH automatically.
     same_or_create(changes,home/'.orbit-universal/orbit_cli.py',(PACKAGE/'orbit_cli.py').read_bytes(),None,'Orbit command-line updater and host detection')
+    same_or_create(changes,home/'.orbit-universal/orbit_update_gui.py',(PACKAGE/'orbit_update_gui.py').read_bytes(),None,'Optional local update manager (no auto-install)')
     if os.name=='nt':
         launcher=home/'.orbit-universal/bin/orbit.cmd'
         body=b'@echo off\r\npy -3 "%~dp0..\\orbit_cli.py" %*\r\n'
