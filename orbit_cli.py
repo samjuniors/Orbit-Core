@@ -108,6 +108,8 @@ def update(a):
             v=z.read(next(n for n in z.namelist() if re.fullmatch(r'orbit-universal-[0-9.]+/VERSION',n))).decode().strip()
     else:
         info=latest(a.channel);v=info['version'];print('Installed:',version(),'Available:',v,info['url'])
+        if getattr(a,'expect_version',None) and v!=a.expect_version:
+            raise ValueError('Published release changed since approval; check again before updating')
         if version()!='unknown' and tuple(map(int,v.split('.'))) <= tuple(map(int,version().split('.'))) and not a.force:
             print('No newer '+a.channel+' release.');return 0
         if a.check:return 0
@@ -181,6 +183,7 @@ def main(argv=None):
     p=argparse.ArgumentParser(prog='orbit')
     sub=p.add_subparsers(dest='command',required=True)
     sub.add_parser('status',help='Show installed Orbit version')
+    sub.add_parser('manager',help='Open the optional approval-based Orbit Update Manager GUI')
     check=sub.add_parser('doctor',help='Read-only installation and host diagnostic')
     check.add_argument('--project')
     d=sub.add_parser('detect',help='Read-only probable CLI/desktop host detection')
@@ -195,9 +198,14 @@ def main(argv=None):
     u.add_argument('--from-zip')
     u.add_argument('--sha256')
     u.add_argument('--force',action='store_true')
+    u.add_argument('--expect-version',help='Pin published version presented by Update Manager')
     a=p.parse_args(argv)
     try:
         if a.command=='status':print('Orbit version:',version());return 0
+        if a.command=='manager':
+            import orbit_update_gui
+            orbit_update_gui.launch()
+            return 0
         if a.command=='detect':print(json.dumps(detect(a.project),indent=2));return 0
         if a.command=='doctor':return doctor(a.project)
         return update(a)
