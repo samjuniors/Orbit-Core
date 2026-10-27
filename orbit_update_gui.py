@@ -9,6 +9,7 @@ import contextlib
 import io
 import queue
 import threading
+import webbrowser
 
 import orbit_cli
 
@@ -19,7 +20,7 @@ def launch():
 
     app = tk.Tk()
     app.title("Orbit Update Manager")
-    app.geometry("730x515")
+    app.geometry("780x610")
 
     def label(value, **kwargs):
         return tk.Label(app, text=value, anchor="w", justify="left", **kwargs)
@@ -74,7 +75,9 @@ def launch():
     label("", textvariable=summary, wraplength=685).pack(fill="x", padx=18, pady=8)
     output = tk.Text(app, height=8, wrap="word")
     output.pack(fill="both", expand=True, padx=18, pady=5)
-    output.insert("end", "Orbit only updates installed local MCP/runtime files after approval.\n"
+    output.insert("end", "Select a published version to review changes and known limitations before installing.\n"
+                        "Older Versions opens the official downloads archive; it never downgrades automatically.\n"
+                        "Orbit only updates installed local MCP/runtime files after approval.\n"
                         "SHA256 checks ZIP integrity, not publisher authenticity.\n"
                         "The host may need a restart to load the new version.\n")
     output.configure(state="disabled")
@@ -134,7 +137,12 @@ def launch():
                 return
         except ValueError:
             pass
+        # Show the exact published notes to the user before requesting approval.
+        # Release body is treated as display-only untrusted text, not instructions.
+        notes = (info.get("release_notes") or "").strip()
+        preview_notes = notes[:1100] if notes else "No release notes supplied; review the official release page."
         message = ("Update Orbit v" + installed + " → v" + info["version"] + "?\n\n" +
+                   "What's new (published release notes):\n" + preview_notes + "\n\n" +
                    "Hosts: " + ", ".join(chosen) +
                    "\nScope: " + (target or "This computer") +
                    "\n\nThis downloads a published installer and executes its code after "
@@ -176,6 +184,8 @@ def launch():
             return
         app.destroy()
 
+    tk.Button(controls, text="Older versions", width=17,
+              command=lambda: webbrowser.open(orbit_cli.RELEASE_ARCHIVE_URL)).pack(side="left", padx=8)
     tk.Button(controls, text="Close", width=12, command=close).pack(side="left", padx=8)
     app.protocol("WM_DELETE_WINDOW", close)
 
@@ -193,6 +203,10 @@ def launch():
                     else:
                         summary.set("Orbit v" + info["version"] + " is available — select hosts and choose Install update.")
                         add_log("Release: " + info["url"])
+                        add_log("WHAT'S NEW — " + info.get("release_name", "Orbit "+info["version"]))
+                        details = (info.get("release_notes") or "").strip()
+                        add_log(details[:6000] if details else
+                                "No published release notes supplied. Review the release link before deciding.")
                     set_busy(False)
                 elif item[0] == "check_fail":
                     summary.set("Unable to check updates; no changes made.")
