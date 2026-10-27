@@ -82,6 +82,15 @@ def latest(channel='candidate'):
     if matched:return max(matched,key=lambda x:x[0])[1]
     raise ValueError('No published '+channel+' release with verified ZIP and SHA256 asset')
 
+def display_release_notes(info, limit=3000):
+    """Display only: cleanse terminal control characters and bound published notes."""
+    raw = info.get('release_notes') if isinstance(info,dict) else None
+    if not isinstance(raw,str) or not raw.strip():
+        return 'No release notes supplied. Review the official release page before updating.'
+    clean = ''.join(ch if ch in '\n\t' or ch.isprintable() else ' ' for ch in raw)
+    return clean[:limit].strip()
+
+
 def validate_zip(data,v):
     z=zipfile.ZipFile(io.BytesIO(data))
     root='orbit-universal-'+v+'/'
@@ -111,6 +120,8 @@ def update(a):
             v=z.read(next(n for n in z.namelist() if re.fullmatch(r'orbit-universal-[0-9.]+/VERSION',n))).decode().strip()
     else:
         info=latest(a.channel);v=info['version'];print('Installed:',version(),'Available:',v,info['url'])
+        print("WHAT'S NEW (publisher's release description; informational only):")
+        print(display_release_notes(info, limit=2000))
         if getattr(a,'expect_version',None) and v!=a.expect_version:
             raise ValueError('Published release changed since approval; check again before updating')
         if version()!='unknown' and tuple(map(int,v.split('.'))) <= tuple(map(int,version().split('.'))) and not a.force:
