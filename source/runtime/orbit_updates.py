@@ -175,7 +175,7 @@ def notice(installed_version, path=None, *, now=None):
                              "Ask the user whether to update; do not invoke an installer "
                              "from a model tool call.")
         result["release_url"] = "https://github.com/" + REPO + "/releases/tag/v" + remote
-        result["action"] = "Open the installed Orbit Update Manager: orbit update --gui"
+        result["action"] = "Open the installed Orbit Update Manager: orbit manager"
         result["limitations"] = ("MCP tools cannot show a native click-to-update "
                                  "button in every IDE. The local manager requests "
                                  "the user's approval and does not guarantee code-signing.")
