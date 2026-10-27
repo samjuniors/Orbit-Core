@@ -32,9 +32,9 @@ def test_upgrade(previous_root, candidate_root=ROOT):
     candidate_root = Path(candidate_root).resolve(strict=True)
     old_version = (previous_root / "VERSION").read_text(encoding="utf-8").strip()
     new_version = (candidate_root / "VERSION").read_text(encoding="utf-8").strip()
-    if (old_version, new_version) != ("0.24.1", "0.25.0"):
-        raise RuntimeError("Only reviewed v0.24.1 → v0.25.0 upgrade may be exercised")
-    archive = candidate_root / "dist" / "ORBIT-Universal-Setup-v0.25.0.zip"
+    if old_version != "0.24.1" or new_version not in {"0.25.0", "0.25.1"}:
+        raise RuntimeError("Only reviewed v0.24.1 → v0.25.0/v0.25.1 upgrades may be exercised")
+    archive = candidate_root / "dist" / ("ORBIT-Universal-Setup-v" + new_version + ".zip")
 
     with tempfile.TemporaryDirectory(prefix="orbit-old-stock-upgrade-") as folder:
         base = Path(folder)
