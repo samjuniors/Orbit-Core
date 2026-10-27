@@ -236,7 +236,7 @@ class PreviewTests(Harness):
         root = self.project('envapp')
         (root / 'dump.py').write_text(
             'import os,json,time\nopen("env.json","w").write(json.dumps(dict(os.environ)))\ntime.sleep(3)\n')
-        with mock.patch.dict(os.environ, {'MY_SERVICE_API_KEY': 'sk-secret', 'GITHUB_TOKEN': 'ghp-secret', 'HARMLESS': 'ok'}):
+        with mock.patch.dict(os.environ, {'MY_SERVICE_API_KEY': 'sk-secret', 'GITHUB_TOKEN': 'ghp-secret', 'DATABASE_URL': 'postgres://secret', 'HARMLESS': 'ok'}):
             result = orbit_preview.start(root, {'preview_id': 'envapp', 'command': [sys.executable, 'dump.py'],
                                                 'port': free_port(), 'confirm_run': True})
         try:
@@ -246,7 +246,9 @@ class PreviewTests(Harness):
             child = json.loads((root / 'env.json').read_text())
             self.assertNotIn('MY_SERVICE_API_KEY', child)
             self.assertNotIn('GITHUB_TOKEN', child)
-            self.assertEqual(child['HARMLESS'], 'ok')
+            self.assertNotIn('DATABASE_URL', child)
+            self.assertNotIn('HARMLESS', child)
+            self.assertIn('PATH', child)
             self.assertTrue(child['PORT'].isdigit())
         finally:
             orbit_preview.stop(root, {'preview_id': 'envapp', 'confirm_stop': True})
@@ -277,6 +279,24 @@ class PreviewTests(Harness):
             os.kill(pid, 9)
         self.assertFalse(alive, 'preview process leaked after the MCP session ended')
 
+
+class WorkspaceTrustTests(Harness):
+    def test_home_credentials_cannot_be_selected_as_workspace(self):  # AUD-25 defense
+        fake_home=self.base/'home'
+        target=fake_home/'.ssh'
+        target.mkdir(parents=True)
+        with mock.patch.object(Path,'home',return_value=fake_home):
+            with self.assertRaises(ValueError):
+                orbit_mcp.project_root({'project_root':str(target)})
+        self.assertFalse((target/'.orbit').exists())
+
+    def test_explicit_host_allowlist_can_restrict_roots(self):  # AUD-25
+        allowed=self.project('allowed')
+        forbidden=self.project('forbidden')
+        with mock.patch.dict(os.environ,{'ORBIT_TRUSTED_ROOTS':str(allowed)}):
+            self.assertEqual(orbit_mcp.project_root({'project_root':str(allowed)}),allowed)
+            with self.assertRaises(ValueError):
+                orbit_mcp.project_root({'project_root':str(forbidden)})
 
 class TaskLedgerTests(Harness):
     def setUp(self):
