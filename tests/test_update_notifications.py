@@ -110,6 +110,27 @@ class UpdateNotificationsTests(unittest.TestCase):
                 self.assertEqual(orbit_cli.main(["update", "--apply",
                     "--expect-version", "0.25.1", "--hosts", "codex"]), 1)
 
+    def test_manager_command_launches_local_ui_without_auto_apply(self):
+        with patch("orbit_update_gui.launch") as launch:
+            self.assertEqual(orbit_cli.main(["manager"]), 0)
+            launch.assert_called_once_with()
+
+    def test_cached_daily_check_does_not_spawn_background_network_worker(self):
+        target_home = Path(self.temp.name) / "user"
+        cached = target_home / ".orbit-universal/update-status.json"
+        cached.parent.mkdir(parents=True)
+        cached.write_text(json.dumps({
+            "checked_at": 1000, "channel": "candidate",
+            "latest": {"version": "0.25.1"},
+            "status": "OK"}), encoding="utf-8")
+        with patch.dict(os.environ, {"ORBIT_UPDATE_HOME": str(target_home),
+                                     "ORBIT_UPDATE_CHECK": "1",
+                                     "ORBIT_UPDATE_CHANNEL": "candidate"}):
+            with patch("orbit_updates.time.time", return_value=1001):
+                with patch("orbit_updates.threading.Thread") as thread:
+                    self.assertFalse(orbit_updates.start_background_check())
+                    thread.assert_not_called()
+
     def test_installer_packages_stable_manager_and_notification_module(self):
         with patch.dict(os.environ, {"ORBIT_SETUP_HOME": self.temp.name}):
             project = Path(self.temp.name) / "project"
