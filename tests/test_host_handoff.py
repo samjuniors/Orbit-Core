@@ -45,8 +45,8 @@ class HostHandoffTests(unittest.TestCase):
 
     def reserve(self, key="frontend"):
         task = self.db.execute(
-            "SELECT revision FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?",
-            ("todo", str(self.root), key)).fetchone()
+            "SELECT revision FROM orbit_agent_tasks WHERE project=? AND task_key=?",
+            ("todo", key)).fetchone()
         return self.call("orbit_task_reserve", task_key=key,
                          expected_revision=task["revision"],
                          approval_reference="host-approved-plan-123",
