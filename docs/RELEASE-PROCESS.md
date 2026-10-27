@@ -2,6 +2,14 @@
 
 Orbit Core MCP uses Semantic Versioning `MAJOR.MINOR.PATCH`. `VERSION` is authoritative; `installer.py`, `source/runtime/orbit_mcp.py`, the Claude Desktop `.mcpb` filename/manifest, and release assets must agree. The repository's first Git baseline is **v0.23.0**. Older ChatGPT-plugin ZIP iterations are not retroactively represented as Git tags or commits.
 
+## Published versus planned versions
+
+- `VERSION` is the **currently packaged** release baseline (`0.24.1` until a fully consistent release PR changes it); `NEXT_VERSION` is the **proposed** next SemVer (`0.25.0`), never a claim that an installer or tag exists. The main source may contain fixes not included in the published desktop bundle.
+- Never change `VERSION` alone. On a reviewed release branch, update `VERSION`, `NEXT_VERSION` (to the next planned version), `installer.py`, `source/runtime/orbit_mcp.py`, and add the release's `CHANGELOG.md` entry together.
+- Build the new MCPB **without modifying any prior version**: `python scripts/build_desktop_extension.py --template-version 0.24.1` (substitute the actual previous published version). The script copies non-code extension resources/metadata from the old bundle, updates manifest.version, and packages only canonical `source/runtime/*.py` runtime modules. Commit the newly built `ORBIT-Claude-Desktop-vX.Y.Z.mcpb` on the release PR, after reviewing its generated manifest and exact SHA/contents.
+- Explicitly verify upgrade compatibility with customized user installs, including stock digest allowlist updates; an unknown file must stay protected. Do **not** delete old versioned bundles, Git tags, owner documents or other work to make a new version appear clean.
+- A release workflow now requires `python scripts/check_version.py --strict-bundle` before tagging/publishing. Source/desktop mismatch is allowed on ordinary development CI, but **not** when publishing a release.
+
 ## Prepare a release
 
 1. Create a feature/release branch from `main`, review the diff in a pull request, and update `VERSION`, runtime/installer version declarations, the release extension, and `CHANGELOG.md` together. Do not generate a fake historic release.
