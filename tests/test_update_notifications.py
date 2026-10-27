@@ -41,7 +41,7 @@ class UpdateNotificationsTests(unittest.TestCase):
     def test_read_only_notice_from_cache_and_new_version(self):
         with patch.dict(os.environ, {"ORBIT_UPDATE_CHECK": "1",
                                      "ORBIT_UPDATE_CHANNEL": "candidate"}):
-            result = orbit_updates.check_now(self.cache, fetch=lambda: [release("0.25.1")], now=100)
+            result = orbit_updates.check_now(self.cache, fetch=lambda: [release("0.25.2")], now=100)
             self.assertEqual(result["status"], "OK")
             notification = orbit_updates.notice("0.25.1", self.cache, now=120)
             self.assertEqual(notification["status"], "UPDATE_AVAILABLE")
