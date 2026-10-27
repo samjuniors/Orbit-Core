@@ -1,6 +1,6 @@
 # Orbit Core MCP
 
-**Local-first, approval-driven orchestration for your own coding IDE.** Python 3.10+ · SQLite · **39 MCP tools on the M2 feature branch (38 in the merged v0.25.1 source; 33 in the published v0.24.1 desktop bundle)** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
+**Local-first, approval-driven orchestration for your own coding IDE.** Python 3.10+ · SQLite · **39 MCP tools in current merged v0.25.1 source; 33 in published v0.24.1 desktop bundle** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
 
 Orbit helps an existing coding host turn plain-language requests into approved product decisions, researched architecture, reusable components, staged implementation tasks, checkpointed progress, and verifiable checks. **Orbit is not a standalone LLM, IDE, code editor or background worker**: the host performs reasoning, agent invocation, file edits and terminal commands. Model recommendations never switch providers or consume credits by themselves.
 
@@ -59,7 +59,7 @@ After the first installation, use the stable local Orbit launcher. GitHub **0.x 
 
 Use `update --channel stable` only when a stable release exists. `orbit update` works without the full path only if you **choose** to add the launcher folder to your user PATH. Orbit never modifies PATH or installs tools automatically. Local development ZIPs may be previewed with `update --from-zip <file> --sha256 <separately-trusted-digest>`; do not blindly install an unreviewed branch. If the updater reports a manual-review conflict, keep the file and investigate—do not delete it.
 
-## M2 native delegation handoff (feature branch only)
+## M2 native delegation handoff (merged source; live host tests pending)
 
 `orbit_task_handoff` prepares a **read-only handoff**, not an agent process. The host calls its real native subagent tool after a reserved task passes prerequisite checks and genuine user/host permission. It accepts the active host's *reported* tool inventory, never asserts that a listed native tool or returned handoff independently verifies execution. If no supported native tool is actually exposed, it returns a HOLD and a serial fallback with instructions to release the unused reservation; it does **not** use an external AI CLI. After genuine invocation, track the real session ID with `orbit_task_started`, inspect actual Git diffs/tests before `orbit_task_report` and separate review. Two-host live acceptance remains a gate. Native delegation is not available by merely selecting Claude Desktop.
 
