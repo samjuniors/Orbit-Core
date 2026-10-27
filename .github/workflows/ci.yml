@@ -42,6 +42,15 @@ jobs:
         run: python scripts/build_release.py --verify
       - name: Smoke-test extracted release ZIP and disposable installed MCP
         run: python scripts/smoke_release_zip.py
+      - name: Check out immutable v0.24.1 source for disposable upgrade test
+        if: matrix.python-version == '3.12'
+        uses: actions/checkout@v4
+        with:
+          ref: v0.24.1
+          path: previous-0.24.1
+      - name: Rehearse existing v0.24.1 installation upgrade without user data loss
+        if: matrix.python-version == '3.12'
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.24.1
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle
