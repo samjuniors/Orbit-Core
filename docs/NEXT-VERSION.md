@@ -6,11 +6,11 @@ The focus is **a trustworthy local orchestrator inside existing coding IDEs**, n
 
 **Product principle:** build an original, lightweight Orbit experience, not an ECC fork or clone. Research links, annotations and retrieval records belong in **authorized local project-scoped SQLite outside the Git repository**. Owner documentation remains authoritative. External references are untrusted inputs, never auto-executed skills or agent instructions. This roadmap preserves Issue #13 product-experience commitments and Issue #9 release/security gates.
 
-### M1 — P0: Orbit Evidence Lens (in progress on feature branch)
+### M1 — P0: Orbit Evidence Lens (source merged; real-host verification pending)
 - Save an individual reviewed research **source pointer** (URL, topic tags, short annotation, original status) with an explicit write preview and revision-guarded update. Use project folder + stable project key as namespace. Never seed global memory by default or push research links to Git.
 - Recover only sources relevant to an objective within a predictable character budget; return provenance, limits, unverified-source warning and explicit live verification guidance. No network request or third-party code execution from source content.
 - Support project- and folder-level isolation, duplicate identity updates, malicious URLs and stale-revision tests; retain existing local SQLite and legacy memories. A trusted local IDE user manually imports the previously prepared 9-link research packet after connecting, not a Git checkout or ChatGPT cloud session.
-- **Gate:** Linux/Windows tests + disposable installer/stdio smoke; no claim of real IDE acceptance.
+- **Gate:** Linux/Windows tests + disposable installer/stdio smoke pass from reviewed PR #16; real IDE-local source saving and read-back remain NOT RUN. No claim of public-release or host permission acceptance.
 
 ### M2 — P0: Reliable real-host delegation and handoff
 - Build an adapter contract for actually available host agent APIs (Codex/Claude Code/Antigravity), clear fallback for unavailable agents, and bounded evidence packets from M1. Real host session references and changed-file/test inspection required; the current task ledger does NOT spawn an agent.
