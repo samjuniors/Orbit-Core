@@ -58,10 +58,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12' && (github.event_name == 'pull_request' || startsWith(github.ref_name, 'release/'))
         uses: actions/upload-artifact@v4
         with:
-          name: orbit-v0.25.0-host-acceptance
+          name: orbit-v0.25.1-host-acceptance
           path: |
-            ORBIT-Claude-Desktop-v0.25.0.mcpb
-            dist/ORBIT-Universal-Setup-v0.25.0.zip
-            dist/ORBIT-Universal-Setup-v0.25.0.zip.sha256
+            ORBIT-Claude-Desktop-v0.25.1.mcpb
+            dist/ORBIT-Universal-Setup-v0.25.1.zip
+            dist/ORBIT-Universal-Setup-v0.25.1.zip.sha256
           if-no-files-found: error
           retention-days: 14
