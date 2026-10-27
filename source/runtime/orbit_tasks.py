@@ -1,21 +1,27 @@
 """ORBIT native-agent task ledger. Pure bookkeeping; never spawns or merges.
 
-SQLite coordination for Antigravity host-native subagents. All approval/session,
+SQLite coordination for host-native subagents (any MCP-capable host). All approval/session,
 changed-file, and test evidence is CALLER-REPORTED; MCP does not authenticate the
 human principal, inspect Git, or enforce the host's sandbox. Permission remains
-with Antigravity, and review requires separate actual source/test inspection.
+with the host, and review requires separate actual source/test inspection.
 """
 from __future__ import annotations
 
 import json
 import re
 import sqlite3
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 ROLES = {'frontend','backend','architect','data','devops','qa','security','ux',
          'research','reviewer','writer','integrator'}
 ACTIVE = ('RESERVED','RUNNING')
+RETRYABLE = ('PLANNED','REWORK','FAILED','BLOCKED')
+# Agent/host control files are persistence vectors for prompt injection; humans edit them directly.
+PROTECTED_SEGMENTS = {'.git','.orbit','.agents','.env','id_rsa','id_ed25519','credentials.json',
+                      '.claude','.codex','.gemini','.cursor','.vscode','.mcp.json',
+                      'claude.md','agents.md','gemini.md'}
 MAX_CONCURRENT = 2
 MAX_PER_STEP = 3
 MAX_PER_DAY = 12
@@ -54,7 +60,11 @@ def key(a):
     return v
 
 
-def _scopes(items, *, limit=24):
+def _norm(path):
+    return unicodedata.normalize('NFC',path).casefold()
+
+
+def _scopes(items, *, limit=24, allow_protected=False):
     if not isinstance(items,list) or len(items)>limit:
         raise ValueError('Paths must be a bounded array')
     result=[]
@@ -66,7 +76,9 @@ def _scopes(items, *, limit=24):
         segments=bare.split('/')
         if any(s in ('','.','..') for s in segments) or bare.startswith('/') or ':' in bare:
             raise ValueError('Absolute, traversal and empty path segments are forbidden')
-        if any(s.lower() in ('.git','.orbit','.agents','.env','id_rsa','id_ed25519','credentials.json') or s.lower().startswith('.env.') for s in segments):
+        # Windows ignores trailing dots/spaces, so '.git ' addresses '.git'.
+        guarded=[unicodedata.normalize('NFC',s).rstrip(' .').casefold() for s in segments]
+        if not allow_protected and any(g in PROTECTED_SEGMENTS or g.startswith('.env.') for g in guarded):
             raise ValueError('Cannot assign protected repository/control/credential paths')
         canonical='/'.join(segments) + ('/' if directory else '')
         if canonical not in result: result.append(canonical)
@@ -74,6 +86,7 @@ def _scopes(items, *, limit=24):
 
 
 def _overlaps(x,y):
+    x,y=_norm(x),_norm(y)
     if x==y: return True
     xdir=x.endswith('/'); ydir=y.endswith('/')
     return (xdir and y.startswith(x)) or (ydir and x.startswith(y))
@@ -116,6 +129,20 @@ def spec(a):
     return project,step,role,goal,reason,paths,deps
 
 
+def _creates_cycle(conn,project,root,task,deps):
+    """True when any dependency already (transitively) depends on this task."""
+    seen=set(); stack=list(deps)
+    while stack:
+        cur=stack.pop()
+        if cur==task: return True
+        if cur in seen: continue
+        seen.add(cur)
+        row=conn.execute('SELECT depends_on FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
+                         (project,str(root),cur)).fetchone()
+        if row: stack.extend(json.loads(row['depends_on']))
+    return False
+
+
 def _serialize(x):
     return json.dumps(x,sort_keys=True,separators=(',',':'))
 
@@ -131,6 +158,8 @@ def plan(conn,a,root):
         if all(payload[k]==old[k] for k in payload):
             return {'status':'ALREADY_REGISTERED','task':old}
         return {'status':'CONFLICT','message':'Existing task key has a different specification; never overwrite it','task':old}
+    if _creates_cycle(conn,project,root,key(a),deps):
+        raise ValueError('Dependency cycle: a listed dependency already depends on this task')
     if a.get('confirm_write') is not True:
         return {'status':'PREVIEW_ONLY','proposed_task':payload,'agent_spawned':False}
     t=utc_now()
@@ -185,7 +214,7 @@ def reserve(conn,a,root):
         old=_row(conn,a,root)
         conflict=_revision(a,old)
         if conflict: conn.rollback();return conflict
-        if old['status']!='PLANNED': raise ValueError('Only PLANNED tasks can reserve')
+        if old['status'] not in RETRYABLE: raise ValueError('Only PLANNED, REWORK, FAILED or BLOCKED tasks can reserve')
         for dep in json.loads(old['depends_on']):
             item=conn.execute('SELECT status FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                               (old['project'],old['project_root'],dep)).fetchone()
@@ -196,17 +225,17 @@ def reserve(conn,a,root):
         for other in active:
             conflicts=_collisions(json.loads(old['write_paths']),json.loads(other['write_paths']))
             if conflicts: raise ValueError(f'Overlapping writable scopes with {other["task_key"]}: {conflicts}')
-        stepcount=conn.execute('SELECT COUNT(*) FROM orbit_agent_tasks WHERE project=? AND project_root=? AND step=? AND status<>\'PLANNED\'',
+        stepcount=conn.execute('SELECT COUNT(*) FROM orbit_agent_tasks WHERE project=? AND project_root=? AND step=? AND status<>\'PLANNED\' AND NOT (status=\'CANCELLED\' AND host_session=\'\')',
                                (old['project'],str(root),old['step'])).fetchone()[0]
         if stepcount>=MAX_PER_STEP: raise ValueError('Per-step agent budget exhausted (3)')
         today=utc_now()[:10]
-        daycount=conn.execute('SELECT COUNT(*) FROM orbit_agent_tasks WHERE project_root=? AND substr(reserved_at,1,10)=? AND status<>\'PLANNED\'',
+        daycount=conn.execute('SELECT COUNT(*) FROM orbit_agent_tasks WHERE project_root=? AND substr(reserved_at,1,10)=? AND status<>\'PLANNED\' AND NOT (status=\'CANCELLED\' AND host_session=\'\')',
                               (str(root),today)).fetchone()[0]
         if daycount>=MAX_PER_DAY: raise ValueError('Daily agent budget exhausted (12)')
         out=_update(conn,old,'RESERVED',approval_reference=approval,reserved_at=utc_now())
         conn.commit()
         return {'status':'RESERVED','task':public(out),'agent_spawned':False,
-                'next':'Invoke the native subagent through Antigravity HOST tools, then mark_started using the real host session reference. Release this reservation if invocation fails.',
+                'next':'Invoke the native subagent through the host native subagent tools, then mark_started using the real host session reference. Release this reservation if invocation fails.',
                 'permission_note':'approval_reference is caller-supplied, not cryptographically authenticated by MCP.'}
     except Exception:
         conn.rollback();raise
@@ -231,14 +260,14 @@ def release(conn,a,root):
         old=_row(conn,a,root)
         conflict=_revision(a,old)
         if conflict:return conflict
-        if old['status']!='RESERVED': raise ValueError('Only unused RESERVED tasks can release; running tasks must be stopped in Antigravity')
+        if old['status'] not in ('PLANNED','RESERVED'): raise ValueError('Only unused PLANNED or RESERVED tasks can release; running tasks must be stopped in the host')
         out=_update(conn,old,'CANCELLED',note=why)
     return {'status':'CANCELLED','task':public(out),'agent_stopped_by_mcp':False}
 
 
 def scope_report(assigned,changed):
-    changes=_scopes(changed,limit=60)
-    violation=[p for p in changes if not any(p==s or (s.endswith('/') and p.startswith(s)) for s in assigned)]
+    changes=_scopes(changed,limit=60,allow_protected=True)
+    violation=[p for p in changes if not any(_norm(p)==_norm(s) or (s.endswith('/') and _norm(p).startswith(_norm(s))) for s in assigned)]
     return {'allowed':not violation,'changed_paths':changes,'outside_scope':violation,
             'note':'Caller-supplied changed_paths; inspect the actual Git diff independently.'}
 
@@ -254,7 +283,7 @@ def reported(conn,a,root):
     if outcome not in ('REPORTED_DONE','FAILED','BLOCKED','CANCELLED'):
         raise ValueError('Outcome must be REPORTED_DONE, FAILED, BLOCKED or CANCELLED')
     evidence=text(a,'evidence',1600,12)
-    paths=_scopes(a.get('changed_paths',[]),limit=60)
+    paths=_scopes(a.get('changed_paths',[]),limit=60,allow_protected=True)
     with conn:
         old=_row(conn,a,root)
         conflict=_revision(a,old)
