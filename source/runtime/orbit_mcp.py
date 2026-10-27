@@ -20,6 +20,7 @@ import orbit_intake
 import orbit_decisions
 import orbit_updates
 import orbit_evidence
+import orbit_delegation
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -331,6 +332,7 @@ TOOLS = [
     {'name':'orbit_gate_evaluate','description':'Evaluate caller-supplied criteria (not independent test verification).','inputSchema':schema({'checks':{'type':'array','minItems':1,'items':{'type':'object'}}},['checks'])},
     # Product Kit-inspired native task ledger; no Git actions, model spawning or implicit approvals.
     {'name':'orbit_task_plan','description':'Preview/register one scoped specialist task. Does NOT launch agents.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'step':string(100),'role':{'type':'string','enum':sorted(orbit_tasks.ROLES)},'goal':string(1500),'reason':string(500),'write_paths':{'type':'array','maxItems':24,'items':{'type':'string'}},'depends_on':{'type':'array','maxItems':8,'items':{'type':'string'}},'confirm_write':{'type':'boolean'}},['project_root','project','task_key','step','role','goal','reason'])},
+    {'name':'orbit_task_handoff','description':'Read-only per-task host-native delegation packet. Requires a real reservation, accepted dependencies, and a native host tool explicitly reported as available; never spawns agents or authenticates approval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},'include_research':{'type':'boolean'}},['project_root','project','task_key','host'])},
     {'name':'orbit_task_list','description':'List scoped task registry (read-only).','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':40},'status':string(25)},['project_root','project'])},
     {'name':'orbit_task_reserve','description':'After actual host/user approval, reserve one native subagent slot. NO agent is spawned. Advisory caller approval reference; independent host permission still required.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'approval_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','approval_reference'])},
     {'name':'orbit_task_started','description':'Mark RESERVED task RUNNING only AFTER the authorized host confirms an actual subagent invocation and returns its reference. Does not invoke host.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'host_session':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','host_session'])},
@@ -364,7 +366,7 @@ TOOLS += [
     {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
 ]
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
-    'orbit_task_list','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
+    'orbit_task_list','orbit_task_handoff','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
     'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
@@ -537,7 +539,7 @@ def execute(conn, name, a):
     if name.startswith('orbit_task_'):
         root = project_root(a)
         a = {**a, 'project': project_key(a)}
-        handlers = {'orbit_task_plan':orbit_tasks.plan,'orbit_task_list':orbit_tasks.read_tasks,
+        handlers = {'orbit_task_handoff':orbit_delegation.handoff,'orbit_task_plan':orbit_tasks.plan,'orbit_task_list':orbit_tasks.read_tasks,
                     'orbit_task_reserve':orbit_tasks.reserve,'orbit_task_started':orbit_tasks.started,
                     'orbit_task_release':orbit_tasks.release,'orbit_task_scope_check':orbit_tasks.scope_check,
                     'orbit_task_report':orbit_tasks.reported,'orbit_task_review':orbit_tasks.review}
