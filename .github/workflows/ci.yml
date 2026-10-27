@@ -40,6 +40,8 @@ jobs:
         run: python scripts/check_version.py
       - name: Rebuild ZIP and check layout
         run: python scripts/build_release.py --verify
+      - name: Smoke-test extracted release ZIP and disposable installed MCP
+        run: python scripts/smoke_release_zip.py
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle
