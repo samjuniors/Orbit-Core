@@ -43,19 +43,19 @@ class UpdateNotificationsTests(unittest.TestCase):
                                      "ORBIT_UPDATE_CHANNEL": "candidate"}):
             result = orbit_updates.check_now(self.cache, fetch=lambda: [release("0.25.1")], now=100)
             self.assertEqual(result["status"], "OK")
-            notification = orbit_updates.notice("0.25.0", self.cache, now=120)
+            notification = orbit_updates.notice("0.25.1", self.cache, now=120)
             self.assertEqual(notification["status"], "UPDATE_AVAILABLE")
             self.assertIn("orbit manager", notification["action"].replace("update --gui", "manager"))
             self.assertTrue(notification["install_requires_explicit_user_action"])
             self.assertFalse(notification["cache_stale"])
-            self.assertEqual(orbit_updates.notice("0.25.1", self.cache, now=120)["status"], "UP_TO_DATE")
-            self.assertTrue(orbit_updates.notice("0.25.0", self.cache, now=100000)["cache_stale"])
+            self.assertEqual(orbit_updates.notice("0.25.2", self.cache, now=120)["status"], "UP_TO_DATE")
+            self.assertTrue(orbit_updates.notice("0.25.1", self.cache, now=100000)["cache_stale"])
 
     def test_no_auto_install_or_code_download(self):
         with patch.dict(os.environ, {"ORBIT_UPDATE_CHECK": "1",
                                      "ORBIT_UPDATE_CHANNEL": "candidate"}):
             with patch("orbit_updates.urllib.request.urlopen", side_effect=AssertionError("should not fetch")):
-                self.assertEqual(orbit_updates.notice("0.25.0", self.cache)["status"], "NOT_CHECKED")
+                self.assertEqual(orbit_updates.notice("0.25.1", self.cache)["status"], "NOT_CHECKED")
             with patch("orbit_updates._fetch", return_value=[release("0.25.2")]):
                 result = orbit_updates.check_now(self.cache, now=10)
             self.assertEqual(result["status"], "OK")
@@ -63,7 +63,7 @@ class UpdateNotificationsTests(unittest.TestCase):
 
     def test_opt_out_disables_automatic_checks(self):
         with patch.dict(os.environ, {"ORBIT_UPDATE_CHECK": "0"}):
-            self.assertEqual(orbit_updates.notice("0.25.0", self.cache)["status"], "DISABLED")
+            self.assertEqual(orbit_updates.notice("0.25.1", self.cache)["status"], "DISABLED")
             self.assertFalse(orbit_updates.start_background_check())
             self.assertFalse(self.cache.exists())
 
@@ -88,7 +88,7 @@ class UpdateNotificationsTests(unittest.TestCase):
             state = orbit_updates.check_now(self.cache,
                 fetch=lambda: (_ for _ in ()).throw(OSError("offline")), now=100)
             self.assertEqual(state["status"], "CHECK_FAILED")
-            self.assertEqual(orbit_updates.notice("0.25.0", self.cache, now=100)["status"],
+            self.assertEqual(orbit_updates.notice("0.25.1", self.cache, now=100)["status"],
                              "CHECK_FAILED")
 
     def test_mcp_tool_is_read_only_status_and_no_workspace_argument(self):
@@ -98,7 +98,7 @@ class UpdateNotificationsTests(unittest.TestCase):
                           return_value={"status": "UP_TO_DATE"}) as notice:
             self.assertEqual(orbit_mcp.execute(None, "orbit_update_status", {}),
                              {"status": "UP_TO_DATE"})
-            notice.assert_called_once_with("0.25.0")
+            notice.assert_called_once_with("0.25.1")
         with self.assertRaises(ValueError):
             orbit_mcp.validate("orbit_update_status", {"confirm_write": True})
 
