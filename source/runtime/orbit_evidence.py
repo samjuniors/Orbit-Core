@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import sqlite3
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,7 +49,7 @@ def _url(value):
         host = p.hostname
         if p.scheme != "https" or not host or p.username is not None or \
                 p.password is not None or p.port not in (None, 443) or \
-                p.fragment or not p.path.startswith(("/", "")):
+                p.fragment:
             raise ValueError("Only public HTTPS research URLs without credentials/fragments")
         if host.lower() in {"localhost", "localhost.localdomain"} or \
                 host.lower().endswith((".local", ".internal", ".localhost")) or "." not in host:
@@ -133,7 +134,7 @@ def save(conn, root: Path, project: str, args):
                   VALUES(?,?,?,?,?,?,?,?,?)""",
                   (str(root), project, key, url, title, json.dumps(sorted(tags)),
                    note, now, now))
-    except __import__("sqlite3").IntegrityError:
+    except sqlite3.IntegrityError:
         return {"status": "STALE_REVISION", "source": current(conn, root, project, key)}
     return {"status": "SAVED", "source": current(conn, root, project, key),
             "consent_is_caller_reported": True}
@@ -157,7 +158,9 @@ def context(conn, root: Path, project: str, args):
             "objective": objective, "sources": [],
             "source_trust": TRUST,
             "network_access": False, "external_documents_written": False,
-            "next": "Verify selected links against live primary sources in the host before decisions"}
+            "next": "Verify selected links against live primary sources in the host before decisions",
+            "matched_in_window": 0, "returned": 0,
+            "retrieval_scope": "this resolved folder and this project key only"
     if not terms:
         return base
     rows = conn.execute("""SELECT * FROM orbit_research_sources
@@ -173,6 +176,7 @@ def context(conn, root: Path, project: str, args):
         if score:
             ranked.append((score, record["updated_at"], record["source_key"], record))
     ranked.sort(key=lambda item: (-item[0], item[1], item[2]))
+    base["matched_in_window"] = len(ranked)
     for score, _, _, row in ranked:
         item = {"key": row["source_key"], "title": row["title"], "url": row["url"],
                 "tags": row["tags"], "note": row["note"][:500], "relevance": score,
@@ -188,7 +192,5 @@ def context(conn, root: Path, project: str, args):
             break
     if base["sources"]:
         base["status"] = "RELEVANT_REFERENCES"
-    base["matched_in_window"] = len(ranked)
     base["returned"] = len(base["sources"])
-    base["retrieval_scope"] = "this resolved folder and this project key only"
     return base
