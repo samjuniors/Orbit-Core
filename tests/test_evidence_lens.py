@@ -133,7 +133,7 @@ class EvidenceLensTests(unittest.TestCase):
             with self.subTest(tags=tags):
                 with self.assertRaises(ValueError):
                     self.call("orbit_research_source_save", self.example(tags=tags))
-        with self.assertRaises(ValueError):
+        with self.assertRaises(FileNotFoundError):
             self.call("orbit_research_source_save",
                       self.example(root=Path(self.folder.name) / "does-not-exist"))
         with patch.dict(os.environ, {"ORBIT_TRUSTED_ROOTS": str(self.two)}):
