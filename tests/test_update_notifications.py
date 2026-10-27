@@ -65,6 +65,17 @@ class UpdateNotificationsTests(unittest.TestCase):
         self.assertIn("safe user data preservation", found["release_notes"])
         self.assertEqual(found["release_name"], "What's new in Orbit 0.25.2")
 
+    def test_release_notes_are_bounded_and_terminal_safe(self):
+        info = {"release_notes": "Added quick fixes.\x1b[2J\rImportant security note."}
+        notes = orbit_cli.display_release_notes(info, limit=80)
+        self.assertIn("Added quick fixes.", notes)
+        self.assertNotIn("\x1b", notes)
+        self.assertNotIn("\r", notes)
+        self.assertIn("Important security note.", notes)
+        self.assertEqual(orbit_cli.display_release_notes({}, limit=40),
+                         "No release notes supplied. Review the official release page before updating.")
+        self.assertEqual(len(orbit_cli.display_release_notes({"release_notes": "X"*8000}, limit=500)), 500)
+
     def test_older_versions_command_never_downloads_or_downgrades(self):
         self.assertEqual(
             orbit_cli.RELEASE_ARCHIVE_URL,
