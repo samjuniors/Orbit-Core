@@ -155,7 +155,8 @@ def context(conn, root: Path, project: str, args):
     terms = _words(objective)
     # A generic stopword-only request must not dump the entire research library.
     base = {"status": "NO_RELEVANT_REFERENCES", "project": project,
-            "objective": objective, "sources": [],
+            "objective": objective[:160], "objective_truncated": len(objective) > 160,
+            "sources": [],
             "source_trust": TRUST,
             "network_access": False, "external_documents_written": False,
             "next": "Verify selected links against live primary sources in the host before decisions",
@@ -192,5 +193,8 @@ def context(conn, root: Path, project: str, args):
             break
     if base["sources"]:
         base["status"] = "RELEVANT_REFERENCES"
+    elif ranked:
+        base["status"] = "MATCHES_EXCEED_CONTEXT_BUDGET"
+        base["next"] = "Increase max_chars or narrow the topic; no source omitted from another project"
     base["returned"] = len(base["sources"])
     return base
