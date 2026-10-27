@@ -53,6 +53,19 @@ def test_upgrade(previous_root, candidate_root=ROOT):
             raise RuntimeError("Old installer did not install versioned runtime")
         old_runtime_digest = hashlib.sha256(old_runtime.read_bytes()).hexdigest()
 
+        # These paths are vendor-created by the checked-out immutable v0.24.1
+        # installer. Print only public stock hashes (never private user data)
+        # to support an exact, narrow upgrade allowlist review.
+        stock_roots = [
+            home / ".orbit-universal" / "orbit_cli.py",
+            project / ".agents" / "skills" / "orbit" / "SKILL.md",
+        ]
+        stock_roots.extend(sorted((project / ".agents" / "skills" / "orbit" / "references").glob("*.md")))
+        stock_files = [{"file": str(p.relative_to(home)) if p.is_relative_to(home)
+                        else str(p.relative_to(project)), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                       for p in stock_roots if p.is_file()]
+        print("PREVIOUS_OFFICIAL_STOCK_HASHES " + json.dumps(stock_files, sort_keys=True), flush=True)
+
         # Existing owner guidance/docs and checkpoint files must survive an
         # upgrade without silently replacing them.
         owner_note = project / "AGENTS.md"
