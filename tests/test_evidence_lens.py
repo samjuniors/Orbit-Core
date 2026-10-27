@@ -118,6 +118,15 @@ class EvidenceLensTests(unittest.TestCase):
         self.assertLessEqual(len(context["sources"]), 6)
         self.assertGreaterEqual(len(context["sources"]), 1)
 
+    def test_long_objective_still_fits_context_budget(self):
+        self.call("orbit_research_source_save", self.example(confirm_write=True))
+        objective = "memory " * 95
+        output = self.call("orbit_research_context",
+                           {"project_root": str(self.one), "project": "orbit",
+                            "objective": objective, "max_chars": 600})
+        self.assertTrue(output["objective_truncated"])
+        self.assertLessEqual(len(__import__("json").dumps(output, ensure_ascii=True)), 600)
+
     def test_reject_untrusted_url_forms(self):
         for value in ("http://github.com/a/b", "https://localhost/foo",
                       "https://127.0.0.1/x", "https://user:pass@example.com/a",
