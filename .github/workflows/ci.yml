@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Prepare reproducible desktop bundle for current source version
+        run: python scripts/prepare_release_candidate.py
       - name: Compile Python sources
         run: python -m compileall -q source installer.py scripts tests
       - name: Unit and MCP protocol tests
@@ -38,3 +40,17 @@ jobs:
         run: python scripts/check_version.py
       - name: Rebuild ZIP and check layout
         run: python scripts/build_release.py --verify
+      - name: Strict source and desktop bundle parity for release candidate
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: python scripts/check_version.py --strict-bundle
+      - name: Upload non-published candidate installers for host acceptance
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12' && (github.event_name == 'pull_request' || startsWith(github.ref_name, 'release/'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbit-v0.25.0-host-acceptance
+          path: |
+            ORBIT-Claude-Desktop-v0.25.0.mcpb
+            dist/ORBIT-Universal-Setup-v0.25.0.zip
+            dist/ORBIT-Universal-Setup-v0.25.0.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
