@@ -127,6 +127,14 @@ class EvidenceLensTests(unittest.TestCase):
         self.assertTrue(output["objective_truncated"])
         self.assertLessEqual(len(__import__("json").dumps(output, ensure_ascii=True)), 600)
 
+    def test_emoji_objective_stays_below_json_encoded_budget(self):
+        obj = "📚" * 110 + " agent research"
+        output = self.call("orbit_research_context",
+                           {"project_root": str(self.one), "project": "orbit",
+                            "objective": obj, "max_chars": 600})
+        self.assertTrue(output["objective_truncated"])
+        self.assertLessEqual(len(__import__("json").dumps(output, ensure_ascii=True)), 600)
+
     def test_reject_untrusted_url_forms(self):
         for value in ("http://github.com/a/b", "https://localhost/foo",
                       "https://127.0.0.1/x", "https://user:pass@example.com/a",
