@@ -1,4 +1,4 @@
-# Orbit Core roadmap — next planned v0.25.0 candidate
+# Orbit Core roadmap — v0.25.0 release candidate acceptance
 
 The focus is **a trustworthy local orchestrator inside existing coding IDEs**, not duplicating an entire cloud app-building platform. This is a prioritized engineering backlog, not an automated promise of completed features.
 
@@ -6,7 +6,7 @@ The focus is **a trustworthy local orchestrator inside existing coding IDEs**, n
 
 - Validate Windows Antigravity/Codex/Claude Code setup from **downloaded, signed-in, authorized machines**, including preview/backup of customized files, restart, actual tool discovery and user decision flow.
 - Run real Windows Edge/Chrome browser QA and native Android/iOS flows where applicable; optional Playwright tests may be skipped in CI and **must not** be described as live acceptance.
-- Prepare candidate **v0.25.0** from audited main source only after release ZIP and Claude Desktop MCPB parity, version changelog and host approval; test fresh install → v0.24.1-to-v0.25.0 update → resume an old SQLite build. The old `v0.24.1` prerelease is already published and must remain immutable.
+- Build the unpublished **v0.25.0** candidate ZIP and desktop bundle in CI with strict runtime parity; download the Actions artifacts into a disposable host and verify fresh install, backed-up v0.24.1-to-v0.25.0 update, and resumed older SQLite build. The old `v0.24.1` prerelease remains immutable. See [release acceptance](RELEASE-ACCEPTANCE-v0.25.0.md).
 
 ## P1: reliability and evidence authenticity
 
