@@ -1,6 +1,6 @@
 # Orbit Core MCP
 
-**Local-first, approval-driven orchestration for your own coding IDE.** Python 3.10+ · SQLite · **35 MCP tools in the current v0.25.0 source; 33 in the published v0.24.1 desktop bundle** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
+**Local-first, approval-driven orchestration for your own coding IDE.** Python 3.10+ · SQLite · **36 MCP tools on the update-notification branch (35 on current `main`; 33 in published v0.24.1 desktop bundle)** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
 
 Orbit helps an existing coding host turn plain-language requests into approved product decisions, researched architecture, reusable components, staged implementation tasks, checkpointed progress, and verifiable checks. **Orbit is not a standalone LLM, IDE, code editor or background worker**: the host performs reasoning, agent invocation, file edits and terminal commands. Model recommendations never switch providers or consume credits by themselves.
 
@@ -31,6 +31,14 @@ python3 installer.py --scope machine --hosts codex --install
 Replace `codex` with your selected host; `--scope project --project /absolute/path` installs to only one trusted workspace. No sudo, external model CLI or `pip install` is needed for the MCP server itself. **Python Playwright is optional** and only required for Orbit's built-in browser QA.
 
 For normal Claude Desktop chat, install the matching `ORBIT-Claude-Desktop-v0.24.1.mcpb` extension from the verified release. It provides MCP tools, not Claude Code terminal or native subagent execution.
+
+## Install once, then update through Orbit
+
+**Upcoming feature branch — not in the published v0.24.1 release yet.** Orbit adds a **built-in Update Manager** and read-only update notices. After this code is released, the local Orbit MCP checks **published** candidate or stable release metadata on startup in the background, no more than once daily. If a newer version exists, `orbit_project_resume` includes `update_notice`. A supported IDE can surface an **Update / Later** prompt; other hosts display a normal text notice. Orbit never downloads or executes an installer just because an agent resumed a project.
+
+Open the existing stable Orbit launcher using `orbit manager` (or **Manage updates** in the bundled setup GUI). The manager shows installed/latest versions, chooses machine scope versus one project, and lets you select Antigravity, Codex, Claude Code and VS Code host configurations. Click **Install update** and approve its confirmation to run the existing backup-first, SHA256-checked updater. Restart the IDE's Orbit MCP server afterward. No fresh manual ZIP download or installer wizard is needed for a normal local host update.
+
+**Important limitations:** the first upgrade from v0.24.1 to a version containing this manager remains a one-time manual/CLI transition; the previous published installer cannot magically acquire a future UI. No standalone background service or unsolicited OS popups exist. Separate Claude Desktop `.mcpb` extensions and hosted ChatGPT connectors follow their own platform update/publishing path and are **not** silently replaced by this local manager. Updates apply only to the current OS account and selected host/project scope, not all user accounts or every registered project. `ORBIT_UPDATE_CHECK=0` disables automatic metadata checks. A GitHub ZIP checksum is not cryptographic publisher authenticity. See [Update experience and per-host limitations](docs/UPDATE-EXPERIENCE.md) and [release-security gate](https://github.com/samjuniors/Orbit-Core-MCP/issues/9).
 
 ## Update without reinstalling manually
 
