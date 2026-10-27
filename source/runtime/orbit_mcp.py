@@ -64,7 +64,7 @@ def project_root(obj):
     # the MCP. Refuse well-known credential/host settings folders by default.
     home = Path.home().resolve()
     sensitive = {'.ssh','.aws','.gnupg','.kube','.config','.local','.claude',
-                 '.codex','.gemini','.cursor','.vscode','.npm','appdata'}
+                 '.codex','.gemini','.cursor','.vscode','.npm'}
     if p.is_relative_to(home):
         relative = p.relative_to(home)
         if relative.parts and relative.parts[0].casefold() in sensitive:
