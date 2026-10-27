@@ -202,4 +202,17 @@ def context(conn, root: Path, project: str, args):
         base["status"] = "MATCHES_EXCEED_CONTEXT_BUDGET"
         base["next"] = "Increase max_chars or narrow the topic; no source omitted from another project"
     base["returned"] = len(base["sources"])
+    # Recheck the *final* envelope, including status/next text. JSON string
+    # escaping and budget-exceeded guidance can grow after source selection.
+    while len(json.dumps(base, ensure_ascii=True)) > budget and base["objective"]:
+        base["objective"] = base["objective"][:-16]
+        base["objective_truncated"] = True
+    if len(json.dumps(base, ensure_ascii=True)) > budget:
+        base["next"] = "Verify current original sources before use"
+    while len(json.dumps(base, ensure_ascii=True)) > budget and base["sources"]:
+        base["sources"].pop()
+        base["returned"] = len(base["sources"])
+        base["status"] = "MATCHES_EXCEED_CONTEXT_BUDGET"
+    if len(json.dumps(base, ensure_ascii=True)) > budget:
+        raise ValueError("Context metadata cannot fit the requested budget")
     return base
