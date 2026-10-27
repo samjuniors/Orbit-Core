@@ -1,19 +1,19 @@
 # Orbit Core MCP
 
-**Local-first, approval-driven agent orchestration for your own coding IDE.** Python 3.10+ · SQLite · **35 MCP tools on this feature branch (34 on main, 33 in published v0.24.1)** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
+**Local-first, approval-driven orchestration for your own coding IDE.** Python 3.10+ · SQLite · **35 tools in the current main source; 33 in the published v0.24.1 desktop bundle** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
 
 Orbit helps an existing coding host turn plain-language requests into approved product decisions, researched architecture, reusable components, staged implementation tasks, checkpointed progress, and verifiable checks. **Orbit is not a standalone LLM, IDE, code editor or background worker**: the host performs reasoning, agent invocation, file edits and terminal commands. Model recommendations never switch providers or consume credits by themselves.
 
-> **Release status:** v0.24.1 is **published as a prerelease candidate**. The unmerged product-experience updates are not part of that release. GitHub CI is not a substitute for live Windows/IDE acceptance. Published releases are available at [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). This repository is separate from other Orbit-branded CLIs/plugins.
+> **Release status:** v0.24.1 is **published as a prerelease candidate**. The newer lifecycle and adversarial-audit source fixes are merged to `main`, but **not included in the published v0.24.1 installer**. `NEXT_VERSION` identifies the next planned candidate, currently `0.25.0`. GitHub CI is not a substitute for live Windows/IDE acceptance. Published releases are available at [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). This repository is separate from other Orbit-branded CLIs/plugins.
 
 ## Get started (install once)
 
 **Windows / Antigravity / Codex / Claude Code / VS Code**
 
-1. Download `ORBIT-Universal-Setup-v0.24.1.zip` **and its `.sha256` checksum** from [the release page](https://github.com/samjuniors/Orbit-Core-MCP/releases) **after v0.24.1 is published**. Verify the checksum and extract the ZIP.
+1. Download `ORBIT-Universal-Setup-v0.24.1.zip` **and its `.sha256` checksum** from [the release page](https://github.com/samjuniors/Orbit-Core-MCP/releases). Verify the checksum and extract the ZIP.
 2. Ensure Python 3.10+ with Tkinter is installed. From the extracted `orbit-universal-0.24.1` folder double-click `install_orbit_gui.pyw`, or run `py -3 install_orbit_gui.pyw`.
 3. Select **This computer** (recommended if you want Orbit in every project) or **One project**, and choose your IDEs. The wizard detects likely hosts; detection is not a live connection test. **Preview changes → Install Orbit**. The installer preserves owner docs, other MCP entries, SQLite and existing projects. Unrecognized customized files require manual review, never a forced overwrite.
-4. Restart/refresh the selected IDE's MCP servers; confirm `orbit-core-native` exposes 33 tools and call `orbit_project_scan` in an approved project.
+4. Restart/refresh the selected IDE's MCP servers; confirm the **published v0.24.1** `orbit-core-native` exposes 33 tools (the newer main source exposes 35) and call `orbit_project_scan` in an approved project.
 
 **macOS/Linux**: extract the verified release archive, then in its root run:
 
