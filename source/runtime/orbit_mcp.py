@@ -19,6 +19,7 @@ import orbit_build
 import orbit_intake
 import orbit_decisions
 import orbit_updates
+import orbit_evidence
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -124,6 +125,7 @@ def db_connect():
         archived_at TEXT, archive_reason TEXT,
         PRIMARY KEY (project, key))''')
     conn.commit()
+    orbit_evidence.setup(conn)
     orbit_tasks.setup(conn)
     orbit_build.setup(conn)
     orbit_intake.setup(conn)
@@ -320,6 +322,8 @@ TOOLS = [
     {'name':'orbit_project_scan','description':'Read-only bounded project checkpoint and document metadata.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
     {'name':'orbit_project_resume','description':'Load current project state, project-scoped SQLite memories and a cached published-release update notice. Caller checks Git/tests separately.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
     {'name':'orbit_update_status','description':'Read-only update notice; optional refresh fetches only published GitHub release metadata. It NEVER downloads code, executes an installer or changes a project. User opens Orbit Update Manager to approve installation.', 'inputSchema':schema({'refresh':{'type':'boolean'}},[])}, 
+    {'name':'orbit_research_source_save','description':'Preview or save one reviewed external research pointer in folder+project-scoped SQLite; revision-guarded, no downloads, skills, Git writes or independent approval attestation.','inputSchema':schema({'project_root':string(2000),'project':string(80),'source_key':string(80),'url':string(500),'title':string(140),'tags':{'type':'array','minItems':1,'maxItems':8,'items':string(32)},'note':string(1100),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','source_key','url','title','tags','note'])},
+    {'name':'orbit_research_context','description':'Read a tiny objective-relevant pack of saved source pointers from this exact project folder+key. No network calls, no execution, no bulk document retrieval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'objective':string(600),'limit':{'type':'integer','minimum':1,'maximum':6},'max_chars':{'type':'integer','minimum':600,'maximum':4500}},['project_root','project','objective'])},
     {'name':'orbit_memory_save','description':'Preview/save one approved project-scoped memory; explicit confirm_write for persistence.', 'inputSchema':schema({'project':string(80),'key':string(160),'kind':{'type':'string','enum':sorted(KINDS)},'summary':string(4000),'source':string(1000),'evidence':{'type':'string','maxLength':4000},'importance':{'type':'integer','minimum':1,'maximum':5},'confirm_write':{'type':'boolean'}},['project','key','kind','summary','source'])},
     {'name':'orbit_memory_recall','description':'Read project-scoped SQLite memories, no cross-project recall.', 'inputSchema':schema({'project':string(80),'query':{'type':'string','maxLength':300},'limit':{'type':'integer','minimum':1,'maximum':20},'include_archived':{'type':'boolean'}},['project'])},
     {'name':'orbit_memory_archive','description':'Non-destructively archive a record on explicit approval.', 'inputSchema':schema({'project':string(80),'key':string(160),'reason':string(500),'confirm_write':{'type':'boolean'}},['project','key','reason'])},
@@ -362,7 +366,7 @@ TOOLS += [
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
     'orbit_task_list','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
-    'orbit_decision_route','orbit_model_route','orbit_update_status'}
+    'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
 for _tool in TOOLS:
     _name=_tool['name']
@@ -415,6 +419,12 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name in {'orbit_research_source_save','orbit_research_context'}:
+        root = project_root(a)
+        project = project_key(a)
+        if name=='orbit_research_source_save':
+            return orbit_evidence.save(conn,root,project,a)
+        return orbit_evidence.context(conn,root,project,a)
     if name=='orbit_update_status':
         if a.get('refresh'):
             orbit_updates.check_now()
