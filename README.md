@@ -1,16 +1,16 @@
 # Orbit Core MCP
 
-**Local-first, approval-driven orchestration for your own coding IDE.** Python 3.10+ · SQLite · **35 MCP tools in the current v0.25.0 source; 33 in the published v0.24.1 desktop bundle** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
+**Local-first, approval-driven orchestration for your own coding IDE.** Python 3.10+ · SQLite · **36 MCP tools in the v0.25.1 update-manager candidate (35 in v0.25.0 main before merging this PR; 33 in published v0.24.1 desktop bundle)** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
 
 Orbit helps an existing coding host turn plain-language requests into approved product decisions, researched architecture, reusable components, staged implementation tasks, checkpointed progress, and verifiable checks. **Orbit is not a standalone LLM, IDE, code editor or background worker**: the host performs reasoning, agent invocation, file edits and terminal commands. Model recommendations never switch providers or consume credits by themselves.
 
-> **Release status:** v0.24.1 is **published as a prerelease candidate**. The newer lifecycle and adversarial-audit source fixes are merged to `main`, but **not included in the published v0.24.1 installer**. `VERSION=0.25.0` identifies the **merged, unpublished candidate source**; `NEXT_VERSION=0.25.1` is a tentative subsequent patch target. GitHub CI is not a substitute for live Windows/IDE acceptance. Published releases are available at [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). This repository is separate from other Orbit-branded CLIs/plugins.
+> **Release status:** v0.24.1 is **published as a prerelease candidate**. The newer lifecycle and adversarial-audit source fixes are merged to `main`, but **not included in the published v0.24.1 installer**. `VERSION=0.25.1` identifies this **unpublished update-manager release candidate**, building on the merged but never published v0.25.0 source; `NEXT_VERSION=0.25.2` is a tentative later patch target. GitHub CI is not a substitute for live Windows/IDE acceptance. Published releases are available at [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). This repository is separate from other Orbit-branded CLIs/plugins.
 
-## v0.25.0 source merged — public release still gated
+## v0.25.1 release candidate — public release still gated
 
-The merged source builds a **test artifact**, not a published GitHub Release. The last approved test artifact was produced from the tested release PR; regular `main` CI does not publish a release. GitHub Actions CI prepares `ORBIT-Claude-Desktop-v0.25.0.mcpb`, verifies byte-for-byte parity of all runtime modules, creates `ORBIT-Universal-Setup-v0.25.0.zip` and its checksum, and uploads them under a short-lived **orbit-v0.25.0-host-acceptance** artifact from Ubuntu Python 3.12. No tag, install, publisher attestation, automatic host changes or production certification occurs. The testing and approval checklist is in [v0.25.0 release acceptance](docs/RELEASE-ACCEPTANCE-v0.25.0.md). Downloads from CI should be evaluated in a disposable project and verified against the job's checksum before use.
+The current feature branch prepares a **test artifact**, not a published GitHub Release. The last approved test artifact was produced from the tested release PR; regular `main` CI does not publish a release. GitHub Actions CI prepares `ORBIT-Claude-Desktop-v0.25.1.mcpb`, verifies byte-for-byte parity of all runtime modules, creates `ORBIT-Universal-Setup-v0.25.1.zip` and its checksum, and uploads them under a short-lived **orbit-v0.25.1-host-acceptance** artifact from Ubuntu Python 3.12. No tag, install, publisher attestation, automatic host changes or production certification occurs. The testing and approval checklist is in [v0.25.0 release acceptance](docs/RELEASE-ACCEPTANCE-v0.25.0.md). Downloads from CI should be evaluated in a disposable project and verified against the job's checksum before use.
 
-Published v0.24.1 instructions below remain the only supported public installation instructions until v0.25.0 is separately approved and released. In particular, don't mistake an Actions artifact for a signed public release.
+Published v0.24.1 instructions below remain the only supported public installation instructions until v0.25.1 is separately approved and released. In particular, don't mistake an Actions artifact for a signed public release.
 
 ## Get started (install once)
 
@@ -19,7 +19,7 @@ Published v0.24.1 instructions below remain the only supported public installati
 1. Download `ORBIT-Universal-Setup-v0.24.1.zip` **and its `.sha256` checksum** from [the release page](https://github.com/samjuniors/Orbit-Core-MCP/releases). Verify the checksum and extract the ZIP.
 2. Ensure Python 3.10+ with Tkinter is installed. From the extracted `orbit-universal-0.24.1` folder double-click `install_orbit_gui.pyw`, or run `py -3 install_orbit_gui.pyw`.
 3. Select **This computer** (recommended if you want Orbit in every project) or **One project**, and choose your IDEs. The wizard detects likely hosts; detection is not a live connection test. **Preview changes → Install Orbit**. The installer preserves owner docs, other MCP entries, SQLite and existing projects. Unrecognized customized files require manual review, never a forced overwrite.
-4. Restart/refresh the selected IDE's MCP servers; confirm the **published v0.24.1** `orbit-core-native` exposes 33 tools (this candidate source exposes 35) and call `orbit_project_scan` in an approved project.
+4. Restart/refresh the selected IDE's MCP servers; confirm the **published v0.24.1** `orbit-core-native` exposes 33 tools (this candidate source exposes 36) and call `orbit_project_scan` in an approved project.
 
 **macOS/Linux**: extract the verified release archive, then in its root run:
 
@@ -31,6 +31,20 @@ python3 installer.py --scope machine --hosts codex --install
 Replace `codex` with your selected host; `--scope project --project /absolute/path` installs to only one trusted workspace. No sudo, external model CLI or `pip install` is needed for the MCP server itself. **Python Playwright is optional** and only required for Orbit's built-in browser QA.
 
 For normal Claude Desktop chat, install the matching `ORBIT-Claude-Desktop-v0.24.1.mcpb` extension from the verified release. It provides MCP tools, not Claude Code terminal or native subagent execution.
+
+## Install once, then update through Orbit
+
+**v0.25.1 candidate — not in the published v0.24.1 release yet.** Orbit adds a **built-in Update Manager** and read-only update notices. After this code is released, the local Orbit MCP checks **published** candidate or stable release metadata on startup in the background, no more than once daily. If a newer version exists, `orbit_project_resume` includes `update_notice`. A supported IDE can surface an **Update / Later** prompt; other hosts display a normal text notice. Orbit never downloads or executes an installer just because an agent resumed a project.
+
+Open the existing stable Orbit launcher using `orbit manager` (or **Manage updates** in the bundled setup GUI). After installation on Windows, you can also double-click `%USERPROFILE%\\.orbit-universal\\bin\\Orbit Update Manager.cmd`; on macOS/Linux, launch `~/.orbit-universal/bin/orbit-manager`. Neither option requires PATH changes or downloading the MCP again. The manager shows installed/latest versions, chooses machine scope versus one project, and lets you select Antigravity, Codex, Claude Code and VS Code host configurations. Click **Install update** and approve its confirmation to run the existing backup-first, SHA256-checked updater. Restart the IDE's Orbit MCP server afterward. No fresh manual ZIP download or installer wizard is needed for a normal local host update.
+
+**Important limitations:** the first upgrade from v0.24.1 to a version containing this manager remains a one-time manual/CLI transition; the previous published installer cannot magically acquire a future UI. No standalone background service or unsolicited OS popups exist. Separate Claude Desktop `.mcpb` extensions and hosted ChatGPT connectors follow their own platform update/publishing path and are **not** silently replaced by this local manager. Updates apply only to the current OS account and selected host/project scope, not all user accounts or every registered project. `ORBIT_UPDATE_CHECK=0` disables automatic metadata checks. A GitHub ZIP checksum is not cryptographic publisher authenticity. See [Update experience and per-host limitations](docs/UPDATE-EXPERIENCE.md) and [release-security gate](https://github.com/samjuniors/Orbit-Core-MCP/issues/9).
+
+## What's new, older versions and rollback
+
+Orbit displays **the published release's actual description** (new features, changes, fixes, and known limits) inside Update Manager **before** confirmation, and shows a bounded What's New summary as read-only MCP update metadata. If a published release has no notes, it says so and links to its official page instead of inventing benefits. Source descriptions are display data, never instructions to the agent.
+
+Choose **Older versions** in Update Manager, or run `orbit versions`, to open [GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases) where old ZIP/MCPB packages remain downloadable. **Latest is the recommended default; older versions are optional, never automatically installed as a downgrade.** Rollback may require restoration of backups and compatible SQLite/project state, so save a backup and review downgrade warnings before switching versions. Published v0.23.0 and v0.24.1 assets remain preserved.
 
 ## Update without reinstalling manually
 

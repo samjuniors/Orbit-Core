@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
-VERSION = '0.25.0'
+VERSION = '0.25.1'
 SERVER = "orbit-core-native"
 HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
@@ -180,7 +180,7 @@ You are the lead project orchestrator, using this host's current model and nativ
 
 For new platform, stack and UI decisions offer recommended answer **or Custom / type own words**, then record exact user wording with orbit_intake_answer and ask only necessary conditional followups. Use orbit_decision_route to compare existing platform components, audited prebuilt libraries or custom design for the actual product type and accepted stack. Use orbit_model_route with real host-reported model names before significant delegated roles when supported; this MCP does not change models, install skills, spend quota or verify entitlements. New type-specific workflows skip irrelevant browser-only checks for native apps, SDKs and OS platforms. Load references/DECISION-ROUTING.md only on a relevant decision.
 
-On each resume call orbit_project_resume once and read recovery.status/next/pending_tasks. If multiple active builds exist ask which one; never guess or restart old stages. Use the existing orbit_project_checkpoint for doing/next/blockers. For substantial research or QA load references/PRODUCT-KIT-ADOPTION.md as needed; apply smallest complete change and two-unchanged-failures stop. Do not read all project docs every turn, run detached Product Kit agents, or auto-push Git.
+On each resume call orbit_project_resume once and read recovery.status/next/pending_tasks. If its `update_notice.status` is `UPDATE_AVAILABLE`, show the published version and offer Update / Later using real host-supported controls, or plain text when controls are unavailable. `orbit_update_status(refresh=true)` only checks public release metadata, never installs. To actually update, the user launches the stable local `orbit manager` GUI, selects host/project scope and approves Install update. Never use an MCP model argument as proof of host consent; no auto-download or auto-apply on resume. The local updater needs a host restart to load a new version. If multiple active builds exist ask which one; never guess or restart old stages. Use the existing orbit_project_checkpoint for doing/next/blockers. For substantial research or QA load references/PRODUCT-KIT-ADOPTION.md as needed; apply smallest complete change and two-unchanged-failures stop. Do not read all project docs every turn, run detached Product Kit agents, or auto-push Git.
 
 **Orbit is the product, not the demo app.** In a fresh product, offer Scope first or user-delegated sensible defaults; ask the highest-impact question and adapt the next question to the user's last answer. Begin RESEARCH only after accepted intake, then show an editable, task-based PLAN for approval before IMPLEMENT. New build PLAN passes only with evidence containing title, summary, tasks, approval_method and an actual user approval/delegation reference (caller-reported). Existing build stage records stay valid. Show real task-ledger progress and next step; do not claim a new visual builder UI in an MCP host.
 
@@ -337,7 +337,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
     runtime=runtime_folder()
     if any(p.is_symlink() for p in [runtime,runtime.parent]):raise SetupError('Runtime directory is a symlink')
     changes=[]
-    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py','orbit_intake.py','orbit_decisions.py']:
+    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py','orbit_intake.py','orbit_decisions.py','orbit_updates.py']:
         p=src/'runtime'/name
         same_or_create(changes,runtime/name,p.read_bytes(),None,'Shared Orbit stdio MCP runtime')
     def add_references(dest: Path, boundary: Path) -> None:
@@ -346,6 +346,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
                            'Orbit guided workflow reference '+ref.name)
     # Stable installer-independent update launcher. Does not alter PATH automatically.
     same_or_create(changes,home/'.orbit-universal/orbit_cli.py',(PACKAGE/'orbit_cli.py').read_bytes(),None,'Orbit command-line updater and host detection')
+    same_or_create(changes,home/'.orbit-universal/orbit_update_gui.py',(PACKAGE/'orbit_update_gui.py').read_bytes(),None,'Optional local update manager (no auto-install)')
     if os.name=='nt':
         launcher=home/'.orbit-universal/bin/orbit.cmd'
         body=b'@echo off\r\npy -3 "%~dp0..\\orbit_cli.py" %*\r\n'
@@ -353,6 +354,16 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
         launcher=home/'.orbit-universal/bin/orbit'
         body=b'#!/bin/sh\nexec python3 "$(dirname "$0")/../orbit_cli.py" "$@"\n'
     same_or_create(changes,launcher,body,None,'Orbit stable update launcher; PATH modification is manual opt-in')
+    # A persistent clickable manager launcher means future updates don't require
+    # hunting for the original extracted setup ZIP.
+    if os.name=='nt':
+        manager_launcher=home/'.orbit-universal/bin/Orbit Update Manager.cmd'
+        manager_body=b'@echo off\r\npy -3 "%~dp0..\\orbit_cli.py" manager\r\n'
+    else:
+        manager_launcher=home/'.orbit-universal/bin/orbit-manager'
+        manager_body=b'#!/bin/sh\nexec python3 "$(dirname "$0")/../orbit_cli.py" manager\n'
+    same_or_create(changes,manager_launcher,manager_body,None,
+                   'Stable local Orbit Update Manager launcher; no PATH mutation')
     cmd=python_binary()
     script=runtime/'orbit_mcp.py'
     common={'command':cmd,'args':[str(script)]}
@@ -451,7 +462,7 @@ def install(changes: list[Change]) -> list[str]:
             with tmp.open('xb') as f:f.write(c.data)
             tmp.replace(c.target)
             applied.append(str(backup))
-        if os.name!='nt' and c.target.name=='orbit' and c.target.parent.name=='bin' and c.target.parent.parent.name=='.orbit-universal':
+        if os.name!='nt' and c.target.name in {'orbit','orbit-manager'} and c.target.parent.name=='bin' and c.target.parent.parent.name=='.orbit-universal':
             c.target.chmod(0o700)
         applied.append(str(c.target))
     return applied

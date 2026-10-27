@@ -3,7 +3,7 @@ import hashlib, zipfile, argparse
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 VERSION=(ROOT/'VERSION').read_text().strip()
-FILES=['orbit_cli.py','installer.py','install_orbit_gui.pyw','README.md','VERSION','NEXT_VERSION','CHANGELOG.md','SECURITY.md','TODO-LAB-TEST.md','CAPABILITY-TEST.md',f'ORBIT-Claude-Desktop-v{VERSION}.mcpb']
+FILES=['orbit_cli.py','orbit_update_gui.py','installer.py','install_orbit_gui.pyw','README.md','VERSION','NEXT_VERSION','CHANGELOG.md','SECURITY.md','TODO-LAB-TEST.md','CAPABILITY-TEST.md',f'ORBIT-Claude-Desktop-v{VERSION}.mcpb']
 FILES += sorted(p.relative_to(ROOT).as_posix() for d in ['source','tests','docs','scripts'] for p in (ROOT/d).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ['.pyc','.pyo'])
 parser=argparse.ArgumentParser();parser.add_argument('--verify',action='store_true');args=parser.parse_args()
 missing=[p for p in FILES if not (ROOT/p).is_file()]

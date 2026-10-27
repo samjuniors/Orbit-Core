@@ -14,6 +14,7 @@ import zipfile
 from pathlib import Path
 
 REPO='samjuniors/Orbit-Core-MCP'
+RELEASE_ARCHIVE_URL='https://github.com/'+REPO+'/releases'
 VERS=re.compile(r'^[0-9]+\.[0-9]+\.[0-9]+$')
 HOSTS=('antigravity','codex','claude-code','vscode')
 def home():return Path(os.environ.get('ORBIT_SETUP_HOME') or Path.home()).expanduser().resolve()
@@ -75,9 +76,20 @@ def latest(channel='candidate'):
         name='ORBIT-Universal-Setup-v'+v+'.zip'
         if name in assets and name+'.sha256' in assets:
             matched.append((tuple(map(int,v.split('.'))),{'version':v,'zip':assets[name],
-                'sha':assets[name+'.sha256'],'url':release.get('html_url'),'channel':channel}))
+                'sha':assets[name+'.sha256'],'url':release.get('html_url'),'channel':channel,
+                'release_name':str(release.get('name') or ('Orbit v'+v))[:160],
+                'release_notes':str(release.get('body') or '')[:6000]}))
     if matched:return max(matched,key=lambda x:x[0])[1]
     raise ValueError('No published '+channel+' release with verified ZIP and SHA256 asset')
+
+def display_release_notes(info, limit=3000):
+    """Display only: cleanse terminal control characters and bound published notes."""
+    raw = info.get('release_notes') if isinstance(info,dict) else None
+    if not isinstance(raw,str) or not raw.strip():
+        return 'No release notes supplied. Review the official release page before updating.'
+    clean = ''.join(ch if ch in '\n\t' or ch.isprintable() else ' ' for ch in raw)
+    return clean[:limit].strip()
+
 
 def validate_zip(data,v):
     z=zipfile.ZipFile(io.BytesIO(data))
@@ -108,6 +120,10 @@ def update(a):
             v=z.read(next(n for n in z.namelist() if re.fullmatch(r'orbit-universal-[0-9.]+/VERSION',n))).decode().strip()
     else:
         info=latest(a.channel);v=info['version'];print('Installed:',version(),'Available:',v,info['url'])
+        print("WHAT'S NEW (publisher's release description; informational only):")
+        print(display_release_notes(info, limit=2000))
+        if getattr(a,'expect_version',None) and v!=a.expect_version:
+            raise ValueError('Published release changed since approval; check again before updating')
         if version()!='unknown' and tuple(map(int,v.split('.'))) <= tuple(map(int,version().split('.'))) and not a.force:
             print('No newer '+a.channel+' release.');return 0
         if a.check:return 0
@@ -181,6 +197,8 @@ def main(argv=None):
     p=argparse.ArgumentParser(prog='orbit')
     sub=p.add_subparsers(dest='command',required=True)
     sub.add_parser('status',help='Show installed Orbit version')
+    sub.add_parser('manager',help='Open the optional approval-based Orbit Update Manager GUI')
+    sub.add_parser('versions',help='Show the official archive of previous Orbit versions (no downgrade performed)')
     check=sub.add_parser('doctor',help='Read-only installation and host diagnostic')
     check.add_argument('--project')
     d=sub.add_parser('detect',help='Read-only probable CLI/desktop host detection')
@@ -195,9 +213,18 @@ def main(argv=None):
     u.add_argument('--from-zip')
     u.add_argument('--sha256')
     u.add_argument('--force',action='store_true')
+    u.add_argument('--expect-version',help='Pin published version presented by Update Manager')
     a=p.parse_args(argv)
     try:
         if a.command=='status':print('Orbit version:',version());return 0
+        if a.command=='versions':
+            print('Published Orbit versions (latest first):',RELEASE_ARCHIVE_URL)
+            print('Older versions can be downloaded manually; downgrades are not automatically applied.')
+            return 0
+        if a.command=='manager':
+            import orbit_update_gui
+            orbit_update_gui.launch()
+            return 0
         if a.command=='detect':print(json.dumps(detect(a.project),indent=2));return 0
         if a.command=='doctor':return doctor(a.project)
         return update(a)
