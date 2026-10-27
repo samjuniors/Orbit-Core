@@ -19,7 +19,9 @@ import installer
 def release(version, prerelease=True, complete=True, draft=False):
     name = "ORBIT-Universal-Setup-v" + version + ".zip"
     assets = [{"name": name}, {"name": name + ".sha256"}] if complete else [{"name": name}]
-    return {"tag_name": "v" + version, "prerelease": prerelease, "draft": draft, "assets": assets}
+    return {"tag_name": "v" + version, "prerelease": prerelease, "draft": draft,
+            "assets": assets, "name": "What's new in Orbit " + version,
+            "body": "New: one-click Update Manager. Fixed: safe user data preservation."}
 
 
 class UpdateNotificationsTests(unittest.TestCase):
@@ -37,6 +39,34 @@ class UpdateNotificationsTests(unittest.TestCase):
         found = orbit_updates._newest(options, "candidate")
         self.assertEqual(found["version"], "0.25.1")
         self.assertEqual(orbit_updates._newest(options, "stable")["version"], "1.0.0")
+
+    def test_update_notice_includes_real_published_release_notes_as_data(self):
+        with patch.dict(os.environ, {"ORBIT_UPDATE_CHECK": "1",
+                                     "ORBIT_UPDATE_CHANNEL": "candidate"}):
+            state = orbit_updates.check_now(
+                self.cache, fetch=lambda: [release("0.25.2")], now=100)
+            self.assertEqual(state["latest"]["title"], "What's new in Orbit 0.25.2")
+            notice = orbit_updates.notice("0.25.1", self.cache, now=101)
+            self.assertEqual(notice["status"], "UPDATE_AVAILABLE")
+            self.assertIn("one-click Update Manager", notice["whats_new"])
+            self.assertTrue(notice["notes_are_untrusted_display_text"])
+
+    def test_cli_latest_reads_notes_from_published_release_only(self):
+        published = release("0.25.2")
+        draft = release("0.25.3", draft=True)
+        payload = json.dumps([published, draft]).encode()
+        with patch.object(orbit_cli, "download", return_value=payload):
+            found = orbit_cli.latest("candidate")
+        self.assertEqual(found["version"], "0.25.2")
+        self.assertIn("safe user data preservation", found["release_notes"])
+        self.assertEqual(found["release_name"], "What's new in Orbit 0.25.2")
+
+    def test_older_versions_command_never_downloads_or_downgrades(self):
+        self.assertEqual(
+            orbit_cli.RELEASE_ARCHIVE_URL,
+            "https://github.com/samjuniors/Orbit-Core-MCP/releases")
+        with patch.object(orbit_cli, "download", side_effect=AssertionError("download forbidden")):
+            self.assertEqual(orbit_cli.main(["versions"]), 0)
 
     def test_read_only_notice_from_cache_and_new_version(self):
         with patch.dict(os.environ, {"ORBIT_UPDATE_CHECK": "1",
