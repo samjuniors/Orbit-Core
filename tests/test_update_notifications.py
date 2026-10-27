@@ -18,7 +18,11 @@ import installer
 
 def release(version, prerelease=True, complete=True, draft=False):
     name = "ORBIT-Universal-Setup-v" + version + ".zip"
-    assets = [{"name": name}, {"name": name + ".sha256"}] if complete else [{"name": name}]
+    base = "https://github.com/samjuniors/Orbit-Core-MCP/releases/download/v" + version + "/"
+    assets = [{"name": name, "browser_download_url": base + name},
+              {"name": name + ".sha256",
+               "browser_download_url": base + name + ".sha256"}] if complete else [
+              {"name": name, "browser_download_url": base + name}]
     return {"tag_name": "v" + version, "prerelease": prerelease, "draft": draft,
             "assets": assets, "name": "What's new in Orbit " + version,
             "body": "New: one-click Update Manager. Fixed: safe user data preservation."}
