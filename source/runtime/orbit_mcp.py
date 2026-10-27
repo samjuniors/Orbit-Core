@@ -18,6 +18,7 @@ import orbit_browser
 import orbit_build
 import orbit_intake
 import orbit_decisions
+import orbit_updates
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -317,7 +318,8 @@ def string(n=4000):
 
 TOOLS = [
     {'name':'orbit_project_scan','description':'Read-only bounded project checkpoint and document metadata.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
-    {'name':'orbit_project_resume','description':'Load current project state and project-scoped SQLite memories. Caller checks Git/tests separately.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
+    {'name':'orbit_project_resume','description':'Load current project state, project-scoped SQLite memories and a cached published-release update notice. Caller checks Git/tests separately.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
+    {'name':'orbit_update_status','description':'Read-only update notice; optional refresh fetches only published GitHub release metadata. It NEVER downloads code, executes an installer or changes a project. User opens Orbit Update Manager to approve installation.', 'inputSchema':schema({'refresh':{'type':'boolean'}},[])}, 
     {'name':'orbit_memory_save','description':'Preview/save one approved project-scoped memory; explicit confirm_write for persistence.', 'inputSchema':schema({'project':string(80),'key':string(160),'kind':{'type':'string','enum':sorted(KINDS)},'summary':string(4000),'source':string(1000),'evidence':{'type':'string','maxLength':4000},'importance':{'type':'integer','minimum':1,'maximum':5},'confirm_write':{'type':'boolean'}},['project','key','kind','summary','source'])},
     {'name':'orbit_memory_recall','description':'Read project-scoped SQLite memories, no cross-project recall.', 'inputSchema':schema({'project':string(80),'query':{'type':'string','maxLength':300},'limit':{'type':'integer','minimum':1,'maximum':20},'include_archived':{'type':'boolean'}},['project'])},
     {'name':'orbit_memory_archive','description':'Non-destructively archive a record on explicit approval.', 'inputSchema':schema({'project':string(80),'key':string(160),'reason':string(500),'confirm_write':{'type':'boolean'}},['project','key','reason'])},
@@ -360,7 +362,7 @@ TOOLS += [
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
     'orbit_task_list','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
-    'orbit_decision_route','orbit_model_route'}
+    'orbit_decision_route','orbit_model_route','orbit_update_status'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
 for _tool in TOOLS:
     _name=_tool['name']
@@ -413,6 +415,10 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name=='orbit_update_status':
+        if a.get('refresh'):
+            orbit_updates.check_now()
+        return orbit_updates.notice(VERSION)
     if name in {'orbit_decision_route','orbit_model_route'}:
         project=project_key(a)
         root=project_root(a)
@@ -509,6 +515,9 @@ def execute(conn, name, a):
         if alternates:
             status['project_key_notice'] = {'message': 'This folder already has Orbit records under a different project key; reuse that key instead of starting over unless the user wants a separate project.', 'existing_keys': alternates}
         status['context_strategy']='Load current checkpoint and agreed brief, then only stage-specific docs and changed source files; do not reread all reference documents.'
+        notice=orbit_updates.notice(VERSION)
+        if notice['status']=='UPDATE_AVAILABLE':
+            status['update_notice']=notice
         return status
     if name=='orbit_memory_save': return memory_save(conn,a)
     if name=='orbit_memory_recall': return memory_recall(conn,a)
@@ -579,6 +588,7 @@ def write_frame(response):
 
 def main():
     conn=db_connect()
+    orbit_updates.start_background_check()  # metadata-only; never blocks MCP startup
     try:
         while True:
             raw = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
