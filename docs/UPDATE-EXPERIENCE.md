@@ -1,6 +1,6 @@
 # Orbit install-once update experience
 
-**Status:** source implementation on a feature branch; public installers do not gain this feature until the owner approves a newer published release and existing installations update to that version once. This document is not evidence of real IDE UI integration.
+**Status:** source implementation merged into `main` in PR #14, but public installers do not gain this feature until the owner approves and publishes a newer release and installations upgrade to that version once. This document is not evidence of real IDE UI integration.
 
 ## What an installed user sees
 
