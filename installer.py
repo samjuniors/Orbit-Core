@@ -15,12 +15,23 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
-VERSION = '0.24.1'
+VERSION = '0.25.0'
 SERVER = "orbit-core-native"
 HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Exact source-verified stock files produced by the immutable v0.24.1
+    # tag installer. Calculated in an isolated prior-tag installation on CI.
+    # Only byte-for-byte matches qualify for backup-first upgrade; any edit
+    # by the owner still triggers manual review rather than being overwritten.
+    'fe05b82d899ef63d9cf79b9c8fae20cd70d7cb1b850f7fe68503a0f4fc899db7',  # orbit_cli.py
+    '25a4370768eda1397c3562431d51dbf402ee1d1e8f5461ebc667260bc0c70427',  # installed orbit/SKILL.md
+    '83465a5f4a9fbcf99bff5739f9864cb38ce336e9455d4f2b1465e65c7e8820ef',  # COMPONENT-REUSE.md
+    '2f81e2dcb796a3eb432464a51eb245a068f9e5bc245d7ce2e8379de093c3d802',  # DECISION-ROUTING.md
+    'a9563ac5429776eef9bd5707156c677e60a4be1ae6a58bc923f32253f9753eb6',  # DOCS-AND-CONTEXT.md
+    '240c938ea40da8126a56e4adceb59ff5081b4560fdd10a2b9e63ac1aed564d43',  # PRODUCT-KIT-ADOPTION.md
+    '2c1436556ab6450f23a85067daf05b1c10850d7ec2e9a4045de81594e8569dd0',  # PROJECT-INTAKE.md
     # Previous official Edge/Chrome QA candidate (c027e73) stock files.
     # Exact SHA256 only; unknown/customized content remains protected.
     '8fb102a9b367332ef92d9f1204e69996f6ef1bee033354dd1971735ccd46ba1a',  # source/runtime/orbit_mcp.py

@@ -2,7 +2,10 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — planned v0.25.0
+## [Unreleased] — post-v0.25.0 fixes
+- The next patch target is tracked in `NEXT_VERSION`; no subsequent release has been published.
+
+## [0.25.0] — Release candidate in preparation (NOT PUBLISHED)
 - Main source supports lifecycle operations for fresh, partially built, existing and completed products, with host-neutral routing, safe pause/resume and scoped existing-product adoption (Issues #7 and #9).
 - Merge the externally audited MCP protocol, checkpoint/SQLite, recovery, preview, agent-task and memory hardening; add adversarial regression coverage (PR #10).
 - Update previews no longer execute downloaded installer code. Introduce optional host-controlled trusted workspace roots, restricted child environment defaults and clearer warnings about model-asserted approvals.

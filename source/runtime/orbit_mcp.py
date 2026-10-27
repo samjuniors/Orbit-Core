@@ -21,7 +21,7 @@ import orbit_decisions
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = '0.24.1'
+VERSION = '0.25.0'
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_STATE_BYTES = 24000
 SUPPORTED_PROTOCOLS = ('2025-11-25', '2025-06-18', '2025-03-26')

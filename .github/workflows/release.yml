@@ -66,6 +66,8 @@ jobs:
           fi
           echo "ORBIT_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
           echo "ORBIT_RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+      - name: Prepare versioned candidate bundle from canonical runtime
+        run: python scripts/prepare_release_candidate.py
       - name: Compile code
         run: python -m compileall -q source installer.py scripts tests
       - name: Run unit and MCP protocol tests
