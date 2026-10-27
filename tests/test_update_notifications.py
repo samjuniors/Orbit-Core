@@ -139,6 +139,8 @@ class UpdateNotificationsTests(unittest.TestCase):
             self.assertTrue(any(x.target.name == "orbit_update_gui.py" for x in actions))
             installer.install(actions)
             self.assertTrue((Path(self.temp.name) / ".orbit-universal/orbit_update_gui.py").is_file())
+            binary = "Orbit Update Manager.cmd" if os.name == "nt" else "orbit-manager"
+            self.assertTrue((Path(self.temp.name) / ".orbit-universal/bin" / binary).is_file())
             self.assertTrue((Path(self.temp.name) / ".orbit-universal" / installer.VERSION / "orbit_updates.py").is_file())
 
 
