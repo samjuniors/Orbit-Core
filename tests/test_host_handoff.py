@@ -129,7 +129,7 @@ class HostHandoffTests(unittest.TestCase):
     def test_research_context_is_optional_and_scoped_source_pointer(self):
         self.register()
         self.reserve()
-        record = orbit_evidence.save(self.db, self.root, "todo", {
+        record = orbit_evidence.save(self.db, self.root.resolve(), "todo", {
             "source_key": "research-guide", "title": "Research memory architecture",
             "url": "https://example.com/agent/research", "tags": ["research","agent"],
             "note": "Read current source independently", "confirm_write": True})
