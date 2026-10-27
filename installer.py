@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
-VERSION = '0.24.1'
+VERSION = '0.25.0'
 SERVER = "orbit-core-native"
 HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
