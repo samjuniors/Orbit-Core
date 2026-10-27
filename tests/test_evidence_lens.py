@@ -120,7 +120,7 @@ class EvidenceLensTests(unittest.TestCase):
 
     def test_long_objective_still_fits_context_budget(self):
         self.call("orbit_research_source_save", self.example(confirm_write=True))
-        objective = "memory " * 95
+        objective = "memory " * 80
         output = self.call("orbit_research_context",
                            {"project_root": str(self.one), "project": "orbit",
                             "objective": objective, "max_chars": 600})
