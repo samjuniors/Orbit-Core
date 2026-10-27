@@ -3,8 +3,10 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from installer import plan, install, SetupError
 from orbit_cli import detect
+from orbit_update_gui import launch as open_update_manager
+from installer import VERSION
 
-r=tk.Tk();r.title('Orbit Universal Setup v0.24.0');r.geometry('860x630')
+r=tk.Tk();r.title('Orbit Universal Setup v'+VERSION);r.geometry('860x630')
 tk.Label(r,text='ORBIT — one-click universal setup',font=('Arial',17,'bold')).pack(anchor='w',padx=18,pady=(12,5))
 tk.Label(r,text='Choose availability everywhere on this computer, or only in one selected project. Uses existing coding host models; no other AI CLI.',wraplength=790,justify='left').pack(anchor='w',padx=18)
 scope=tk.StringVar(value='machine');section=tk.Frame(r);section.pack(anchor='w',padx=18,pady=8)
@@ -58,4 +60,5 @@ def go():
 buttons=tk.Frame(r);buttons.pack(pady=11)
 tk.Button(buttons,text='Preview changes',width=23,command=preview).pack(side='left',padx=8)
 tk.Button(buttons,text='Install Orbit (one click)',width=28,command=go).pack(side='left',padx=8)
+tk.Button(buttons,text='Manage updates',width=19,command=open_update_manager).pack(side='left',padx=8)
 r.mainloop()
