@@ -101,13 +101,16 @@ def task_progress(conn,project,root):
 
 def recovery_brief(conn, root, project):
     """Small, read-only recover/continue view derived from actual local records."""
-    rows=conn.execute(
-        '''SELECT build_id,stage,revision,objective,updated_at,evidence_json
-           FROM build_runs WHERE project=? AND root=?
-           ORDER BY updated_at DESC,build_id LIMIT 12''',
-        (project,str(root))).fetchall()
-    all_builds=[dict(x) for x in rows]
-    active=[x for x in all_builds if x['stage']!='DONE']
+    # Unfinished builds are queried on their own so a long history of DONE builds can
+    # never push a stalled build out of a recency window (and report ALL_DONE).
+    columns='build_id,stage,revision,objective,updated_at,evidence_json'
+    active=[dict(x) for x in conn.execute(
+        'SELECT '+columns+''' FROM build_runs WHERE project=? AND root=? AND stage<>'DONE'
+           ORDER BY updated_at DESC,build_id LIMIT 12''',(project,str(root))).fetchall()]
+    latest=[dict(x) for x in conn.execute(
+        'SELECT '+columns+''' FROM build_runs WHERE project=? AND root=?
+           ORDER BY updated_at DESC,build_id LIMIT 12''',(project,str(root))).fetchall()]
+    all_builds=latest or active
     progress=task_progress(conn,project,root)
     tasks=[]
     if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='orbit_agent_tasks'").fetchone():
@@ -689,6 +692,14 @@ def advance(conn,root,a):
         checkpoint=root/'.orbit'/'STATE.md'
         if checkpoint.is_symlink() or not checkpoint.is_file() or '<!-- ORBIT_NATIVE_CHECKPOINT_START -->' not in checkpoint.read_text(encoding='utf-8'):
             return {'status':'HOLD','reason':'Write an Orbit-managed .orbit/STATE.md checkpoint with actual evidence first'}
+        text=checkpoint.read_text(encoding='utf-8')
+        project_line=re.search(r'^Project: (.+)$',text,re.M)
+        updated_line=re.search(r'^Updated UTC: (\S+)$',text,re.M)
+        # Fields written by orbit_project_checkpoint are validated when present; a hand-written
+        # bare marker (legacy) is still accepted as caller-reported evidence.
+        if ((project_line and project_line.group(1).strip()!=a['project'])
+                or (updated_line and updated_line.group(1)<row['updated_at'])):
+            return {'status':'HOLD','reason':'.orbit/STATE.md must be an Orbit checkpoint for this project written after this build entered CHECKPOINT; save a fresh checkpoint first'}
     # Independent browser checks require a pass result stored by Orbit, not caller claims.
     if row['stage']=='BROWSER_QA' and outcome=='PASS':
         rec=conn.execute('SELECT status,summary FROM browser_results WHERE project=? AND root=? AND build_id=? ORDER BY id DESC LIMIT 1',
