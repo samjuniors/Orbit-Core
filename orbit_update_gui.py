@@ -139,8 +139,7 @@ def launch():
             pass
         # Show the exact published notes to the user before requesting approval.
         # Release body is treated as display-only untrusted text, not instructions.
-        notes = (info.get("release_notes") or "").strip()
-        preview_notes = notes[:1100] if notes else "No release notes supplied; review the official release page."
+        preview_notes = orbit_cli.display_release_notes(info, limit=1100)
         message = ("Update Orbit v" + installed + " → v" + info["version"] + "?\n\n" +
                    "What's new (published release notes):\n" + preview_notes + "\n\n" +
                    "Hosts: " + ", ".join(chosen) +
@@ -204,9 +203,7 @@ def launch():
                         summary.set("Orbit v" + info["version"] + " is available — select hosts and choose Install update.")
                         add_log("Release: " + info["url"])
                         add_log("WHAT'S NEW — " + info.get("release_name", "Orbit "+info["version"]))
-                        details = (info.get("release_notes") or "").strip()
-                        add_log(details[:6000] if details else
-                                "No published release notes supplied. Review the release link before deciding.")
+                        add_log(orbit_cli.display_release_notes(info, limit=6000))
                     set_busy(False)
                 elif item[0] == "check_fail":
                     summary.set("Unable to check updates; no changes made.")
