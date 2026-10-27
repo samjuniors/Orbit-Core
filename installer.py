@@ -1,4 +1,4 @@
-"""Orbit Universal local project setup 0.24.0.
+"""Orbit Universal local project setup (see VERSION).
 
 No agent CLI is spawned. No project code or Git is modified. Local MCP uses
 Python stdio; file/config edits are previewed and require explicit confirmation.

@@ -2,8 +2,12 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-- Follow-up improvements remain on dedicated branches.
+## [Unreleased] — planned v0.25.0
+- Main source supports lifecycle operations for fresh, partially built, existing and completed products, with host-neutral routing, safe pause/resume and scoped existing-product adoption (Issues #7 and #9).
+- Merge the externally audited MCP protocol, checkpoint/SQLite, recovery, preview, agent-task and memory hardening; add adversarial regression coverage (PR #10).
+- Update previews no longer execute downloaded installer code. Introduce optional host-controlled trusted workspace roots, restricted child environment defaults and clearer warnings about model-asserted approvals.
+- Support safe future version preparation from the immutable prior desktop bundle and explicit NEXT_VERSION planning.
+- **Not yet released:** host-specific approval evidence, comprehensive threat-model fixes, real IDE/browser acceptance, cryptographic provenance and updated versioned desktop installer remain gates. `v0.24.1` artifacts and tags stay unchanged.
 
 ## [0.24.1] — Integration candidate
 - Combine adaptive product intake and model recommendations, vetted component selection, role-specific workflows, durable checkpoints and native host delegation guidance.

@@ -1,0 +1,36 @@
+{
+  "repository": "samjuniors/Orbit-Core-MCP",
+  "purpose": "Delete only unchanged heads of verified merged PR branches; preserve closed-unmerged and independent work",
+  "branches": [
+    {
+      "name": "chore/automated-github-releases",
+      "head_sha": "73ed0f3a7b5c53d26628b3764579003fd805fa8c",
+      "pr": 1
+    },
+    {
+      "name": "release/orbit-core-integration-hardening",
+      "head_sha": "16ae20929a981bbada0f67fbb89fd52422bce21c",
+      "pr": 4
+    },
+    {
+      "name": "feat/product-experience-v1",
+      "head_sha": "d0eef93c25ed0d46a42037c7ca1879b6d235db91",
+      "pr": 5
+    },
+    {
+      "name": "docs/product-experience-main-landing",
+      "head_sha": "32ad2de65518e41a5bef2095a6f3f800718cc447",
+      "pr": 6
+    },
+    {
+      "name": "feature/issue-7-lifecycle-host-neutral",
+      "head_sha": "eeca3de8c3d0850ec7a9ca9ff0d769d332aa60b7",
+      "pr": 8
+    },
+    {
+      "name": "fix/issue-9-claude-audit-hardening",
+      "head_sha": "18d3d1ce0c5b6800180119b62d384e76be97fcda",
+      "pr": 10
+    }
+  ]
+}
