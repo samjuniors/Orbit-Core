@@ -160,7 +160,7 @@ def context(conn, root: Path, project: str, args):
             "network_access": False, "external_documents_written": False,
             "next": "Verify selected links against live primary sources in the host before decisions",
             "matched_in_window": 0, "returned": 0,
-            "retrieval_scope": "this resolved folder and this project key only"
+            "retrieval_scope": "this resolved folder and this project key only"}
     if not terms:
         return base
     rows = conn.execute("""SELECT * FROM orbit_research_sources
