@@ -120,21 +120,40 @@ def update(a):
     print('Verified release:',v,'SHA256:',actual)
     package=validate_zip(raw,v)
     if a.check:return 0
+    # Never import or execute code from a downloaded package in preview mode.
+    # A matching SHA256 proves integrity against the supplied checksum, NOT
+    # publisher authenticity; host-side approval remains mandatory for --apply.
+    hosts=a.hosts or [h['host'] for h in detect(a.project) if h['detected'] and h['host'] in HOSTS]
+    if not hosts:raise ValueError('No detected hosts: specify --hosts explicitly')
+    scope='project' if a.project else 'machine'
+    if not a.apply:
+        print('PREVIEW ONLY: Verified ZIP contents and checksum; selected hosts:', ', '.join(hosts))
+        print('Scope:',scope,'Project:',a.project or '(machine)')
+        print('No downloaded installer code loaded or run. Exact change plan is computed only after --apply.')
+        print('SHA256 is not a signature or provenance attestation; verify the publisher and archive independently.')
+        return 0
     with tempfile.TemporaryDirectory(prefix='orbit-upgrade-') as tmp:
         package.extractall(tmp)
         pkg=Path(tmp)/('orbit-universal-'+v)
-        sys.path.insert(0,str(pkg))
-        import installer
-        if installer.VERSION!=v:raise ValueError('Installer version mismatch')
-        hosts=a.hosts or [h['host'] for h in detect(a.project) if h['detected'] and h['host'] in installer.HOSTS]
-        if not hosts:raise ValueError('No detected hosts: specify --hosts explicitly')
-        scope='project' if a.project else 'machine'
-        changes=installer.plan(a.project,hosts,scope)
+        # Execute the archive installer only after explicit --apply. Load this
+        # exact verified file, not a previously imported installer in sys.modules.
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('_orbit_release_installer_'+v.replace('.','_'),str(pkg/'installer.py'))
+        if spec is None or spec.loader is None:
+            raise ValueError('Archive installer could not be loaded')
+        release_installer=importlib.util.module_from_spec(spec)
+        sys.modules[spec.name]=release_installer
+        try:
+            spec.loader.exec_module(release_installer)
+        finally:
+            sys.modules.pop(spec.name,None)
+        if release_installer.VERSION!=v:raise ValueError('Installer version mismatch')
+        if any(h not in release_installer.HOSTS for h in hosts):
+            raise ValueError('Archive does not support selected hosts')
+        changes=release_installer.plan(a.project,hosts,scope)
         for c in changes:
             if c.action not in {'SKIP','PRESERVE'}:print(c.action,c.target)
-        if not a.apply:
-            print('PREVIEW ONLY: rerun with --apply to authorize versioned changes.');return 0
-        written=installer.install(changes)
+        written=release_installer.install(changes)
         print('Updated',len(written),'files/backups. Refresh selected MCP hosts.')
         return 0
 

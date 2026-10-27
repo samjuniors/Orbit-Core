@@ -101,13 +101,16 @@ def task_progress(conn,project,root):
 
 def recovery_brief(conn, root, project):
     """Small, read-only recover/continue view derived from actual local records."""
-    rows=conn.execute(
-        '''SELECT build_id,stage,revision,objective,updated_at,evidence_json
-           FROM build_runs WHERE project=? AND root=?
-           ORDER BY updated_at DESC,build_id LIMIT 12''',
-        (project,str(root))).fetchall()
-    all_builds=[dict(x) for x in rows]
-    active=[x for x in all_builds if x['stage']!='DONE']
+    # Unfinished builds are queried on their own so a long history of DONE builds can
+    # never push a stalled build out of a recency window (and report ALL_DONE).
+    columns='build_id,stage,revision,objective,updated_at,evidence_json'
+    active=[dict(x) for x in conn.execute(
+        'SELECT '+columns+''' FROM build_runs WHERE project=? AND root=? AND stage<>'DONE'
+           ORDER BY updated_at DESC,build_id LIMIT 12''',(project,str(root))).fetchall()]
+    latest=[dict(x) for x in conn.execute(
+        'SELECT '+columns+''' FROM build_runs WHERE project=? AND root=?
+           ORDER BY updated_at DESC,build_id LIMIT 12''',(project,str(root))).fetchall()]
+    all_builds=latest or active
     progress=task_progress(conn,project,root)
     tasks=[]
     if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='orbit_agent_tasks'").fetchone():
@@ -227,6 +230,7 @@ def feedback(conn,root,a):
 import re
 
 SCOPED_FLOWS = {
+    'adopt': ('PLAN','IMPLEMENT','VERIFY','REVIEW','CHECKPOINT','DONE'),
     'fix': ('IMPLEMENT','VERIFY','REVIEW','CHECKPOINT','DONE'),
     'feature': ('PLAN','IMPLEMENT','VERIFY','REVIEW','CHECKPOINT','DONE'),
     'redesign': ('PLAN','IMPLEMENT','VERIFY','REVIEW','CHECKPOINT','DONE'),
@@ -234,7 +238,8 @@ SCOPED_FLOWS = {
 }
 ALL_FLOWS = tuple(FLOWS.values()) + tuple(SCOPED_FLOWS.values())
 LIFECYCLE_STEPS = {
-    'start': ['Inspect project and selected checkpoint', 'Resume an unfinished build or use approved intake for a new project'],
+    'start': ['Inspect project and selected checkpoint', 'Resume an unfinished build, adopt existing source or use approved intake for a new project'],
+    'adopt': ['Verify existing source and canonical documents', 'Create a baseline-backed continuation plan', 'Preserve source, user data and completed work'],
     'resume': ['Select build if ambiguous', 'Reconcile checkpoint against current Git, files and tests', 'Continue only the verified next step'],
     'pause': ['Finish or safely interrupt the host task', 'Save an approved scoped checkpoint', 'Pause this Orbit build ledger only'],
     'preview_stop': ['Identify an Orbit-owned same-session preview_id', 'Preview orbit_preview_stop and obtain explicit host consent', 'Call orbit_preview_stop(confirm_stop=true); never kill other processes'],
@@ -260,8 +265,9 @@ def normalize_action(value):
            'status':'status','inspect':'status','review':'review','test':'review',
            'debug':'fix','fix':'fix','repair':'fix','redesign':'redesign',
            'refactor':'refactor','new':'new','new project':'new',
-           'add feature':'feature','feature':'feature','custom':'custom'}
+           'add feature':'feature','feature':'feature','adopt':'adopt','adopt project':'adopt','custom':'custom'}
     if term in exact:return exact[term]
+    if re.match(r'^(?:adopt|take over|onboard)\b',term):return 'adopt'
     # Explicit new-product requests still require baseline inspection by the host.
     if re.match(r'^(?:create|build|make) (?:me |us )?(?:a |an |new )?(?:mobile app|web app|android app|ios app|desktop app|website|application|app|project|product|api|cli|library)\b',term):
         return 'new'
@@ -335,7 +341,7 @@ def lifecycle_view(conn, root, a):
                if selected and selected['stage']!='DONE' else
                'Locate and inspect the reported project code before changing or creating files.'
                if missing_baseline else
-               'Inspect the existing repo; use a scoped build with baseline_reference for changes.'
+               'Inspect existing code, then use change_kind=adopt with baseline_reference to continue.'
                if code_signals else 'Use approved adaptive intake for the new goal.'),
       'resume':('Confirm revision to resume the paused ledger.' if halted else
                 'Reconcile recorded stage with Git status, modified paths and tests.'
@@ -346,6 +352,7 @@ def lifecycle_view(conn, root, a):
       'pause':'Save a revision-guarded pause; separately checkpoint via orbit_project_checkpoint.',
       'preview_stop':'Use orbit_preview_stop only with a known same-session preview_id and explicit approval.',
       'feature':'Anchor a new change build to a DONE build or an existing verified baseline.',
+       'adopt':'Verify source, then use a change_kind=adopt build anchored to baseline_reference.',
       'fix':'Reproduce, patch and test without mandatory new-project intake.',
       'redesign':'Inspect current UX and preserve existing API/data contracts.',
       'refactor':'Verify behavioral baseline and preserve public contracts.',
@@ -578,7 +585,8 @@ def begin(conn,root,a):
         markers=project_signals(root)
         code={'package.json','pyproject.toml','setup.py','Cargo.toml','go.mod',
               'pom.xml','build.gradle','pubspec.yaml','CMakeLists.txt',
-              'src/','app/','apps/','source/','lib/','android/','ios/'}
+              'src/','app/','apps/','source/','lib/','android/','ios/',
+               'index.html','main.py','server/','client/','api/','packages/'}
         if not set(markers).intersection(code):
             return {'status':'HOLD','reason':'No bounded code/manifest signals; inspect the repo and use approved intake if new'}
     flow=SCOPED_FLOWS[kind] if kind else flow_for_project(conn,root,a)
@@ -689,6 +697,14 @@ def advance(conn,root,a):
         checkpoint=root/'.orbit'/'STATE.md'
         if checkpoint.is_symlink() or not checkpoint.is_file() or '<!-- ORBIT_NATIVE_CHECKPOINT_START -->' not in checkpoint.read_text(encoding='utf-8'):
             return {'status':'HOLD','reason':'Write an Orbit-managed .orbit/STATE.md checkpoint with actual evidence first'}
+        text=checkpoint.read_text(encoding='utf-8')
+        project_line=re.search(r'^Project: (.+)$',text,re.M)
+        updated_line=re.search(r'^Updated UTC: (\S+)$',text,re.M)
+        # Fields written by orbit_project_checkpoint are validated when present; a hand-written
+        # bare marker (legacy) is still accepted as caller-reported evidence.
+        if ((project_line and project_line.group(1).strip()!=a['project'])
+                or (updated_line and updated_line.group(1)<row['updated_at'])):
+            return {'status':'HOLD','reason':'.orbit/STATE.md must be an Orbit checkpoint for this project written after this build entered CHECKPOINT; save a fresh checkpoint first'}
     # Independent browser checks require a pass result stored by Orbit, not caller claims.
     if row['stage']=='BROWSER_QA' and outcome=='PASS':
         rec=conn.execute('SELECT status,summary FROM browser_results WHERE project=? AND root=? AND build_id=? ORDER BY id DESC LIMIT 1',

@@ -1,4 +1,4 @@
-import io,json,os,sys,tempfile,unittest,zipfile
+import io,json,os,sys,tempfile,unittest,zipfile,hashlib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -48,6 +48,40 @@ class TestUpdater(unittest.TestCase):
   with patch.object(orbit_cli,'download',return_value=json.dumps(choices).encode()):
    self.assertEqual(orbit_cli.latest('candidate')['version'],'0.24.0')
    self.assertEqual(orbit_cli.latest('stable')['version'],'1.0.0')
+
+ def test_untrusted_zip_preview_does_not_import_or_execute_installer(self):
+  marker=Path(self.temp.name)/'unexpected-side-effect.txt'
+  v='0.24.1'
+  prefix='orbit-universal-'+v+'/'
+  payload=io.BytesIO()
+  with zipfile.ZipFile(payload,'w') as z:
+   z.writestr(prefix+'VERSION',v)
+   z.writestr(prefix+'installer.py',
+     "from pathlib import Path\nPath("+repr(str(marker))+").write_text('EXECUTED')\n")
+  data=payload.getvalue()
+  archive=Path(self.temp.name)/'untrusted.zip';archive.write_bytes(data)
+  args=['update','--from-zip',str(archive),'--sha256',hashlib.sha256(data).hexdigest(),'--hosts','codex']
+  self.assertEqual(orbit_cli.main(args),0)
+  self.assertFalse(marker.exists(),'A read-only update preview must not run archive code')
+
+ def test_update_apply_is_explicit_execution_boundary(self):
+  marker=Path(self.temp.name)/'authorized-apply.txt'
+  v='0.24.1';prefix='orbit-universal-'+v+'/'
+  payload=io.BytesIO()
+  installer_code=("from pathlib import Path\nVERSION='0.24.1'\nHOSTS=('codex',)\n"
+   "def plan(project,hosts,scope):\n"
+   "    Path("+repr(str(marker))+").write_text('APPLY')\n"
+   "    return []\n"
+   "def install(changes):\n    return []\n")
+  with zipfile.ZipFile(payload,'w') as z:
+   z.writestr(prefix+'VERSION',v);z.writestr(prefix+'installer.py',installer_code)
+  data=payload.getvalue()
+  archive=Path(self.temp.name)/'approved.zip';archive.write_bytes(data)
+  args=['update','--from-zip',str(archive),'--sha256',hashlib.sha256(data).hexdigest(),'--hosts','codex']
+  self.assertEqual(orbit_cli.main(args),0)
+  self.assertFalse(marker.exists())
+  self.assertEqual(orbit_cli.main(args+['--apply']),0)
+  self.assertEqual(marker.read_text(),'APPLY')
 
  def test_update_default_channel_is_candidate_and_no_side_effect(self):
   from unittest.mock import patch

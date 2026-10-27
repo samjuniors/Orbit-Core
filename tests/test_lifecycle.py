@@ -125,6 +125,27 @@ class LifecycleTests(unittest.TestCase):
             baseline_reference='git:deadbeef',confirm_write=True)
         self.assertEqual(denied['status'],'HOLD')
 
+    def test_adopt_existing_undocumented_code_without_fake_feature_or_intake(self):
+        (self.root/'index.html').write_text('<main>Existing site</main>')
+        self.assertEqual(self.inspect('adopt existing repo')['action'],'adopt')
+        self.assertIn('change_kind=adopt',self.inspect('start')['next_action'])
+        preview=self.call('orbit_build_begin',build_id='adopt-1',
+            objective='Continue existing site',change_kind='adopt',
+            baseline_reference='git:existing-commit',confirm_write=False)
+        self.assertEqual(preview['status'],'PREVIEW_ONLY')
+        self.assertEqual(preview['stage'],'PLAN')
+        adopted=self.call('orbit_build_begin',build_id='adopt-1',
+            objective='Continue existing site',change_kind='adopt',
+            baseline_reference='git:existing-commit',confirm_write=True)
+        self.assertEqual(adopted['status'],'CREATED')
+        self.assertEqual(adopted['run']['stage'],'PLAN')
+        self.assertEqual((self.root/'index.html').read_text(),'<main>Existing site</main>')
+
+    def test_adopt_rejects_empty_project_without_a_baseline(self):
+        self.assertEqual(self.call('orbit_build_begin',build_id='adopt-empty',
+            objective='Attempt to adopt no code',change_kind='adopt',
+            baseline_reference='git:nonexistent',confirm_write=True)['status'],'HOLD')
+
     def test_scoped_fix_skips_new_project_plan_but_requires_tests(self):
         (self.root/'src').mkdir()
         (self.root/'src'/'existing.py').write_text('print("existing")\n')
