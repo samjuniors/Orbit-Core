@@ -2,7 +2,21 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — post-v0.25.0 fixes
+## [Unreleased] — post-v0.25.1 work
+- No additional published changes. `NEXT_VERSION=0.25.2` is planning metadata only.
+
+## [0.25.1] — Install-once update experience (candidate; NOT PUBLISHED)
+
+**What's new and why it matters**
+- **Update Manager:** Once installed, open `orbit manager` or the per-user Update Manager launcher; select local hosts and approve an in-place upgrade without re-downloading and re-running setup each time.
+- **Update notices:** MCP checks **published releases** in the background at most daily, then shows an optional update notification on resume when newer. No network dependency for normal project work and no unattended install.
+- **Read what changed:** View the actual published release description in the Update Manager and its confirmation dialog before approving an update; the MCP notice can show the bounded published summary as display-only data.
+- **Older versions:** Open the GitHub Releases archive through the manager or `orbit versions` to download a previous version deliberately. Older versions remain available; downgrade is manual and may be incompatible with newer saved data.
+- **Safety:** Keep release version pinned to what the user approved, check ZIP SHA256 and package paths, retain recognized-stock backups and preserve customized documents/SQLite; unknown files block, rather than silently overwrite.
+- **Included since v0.24.1:** Previous v0.25.0 source improvements to existing-project adoption, scoped changes to completed products, restart/checkpoints and audit hardening. v0.25.0 source was never a separately published installer.
+- **Important limitations:** No claim of publisher signature from a colocated SHA256, real native toast in every IDE, automated Claude Desktop extension updating, all-workspace batch updates, OS-level notifications, or independent host-approved MCP writes. Restart the relevant IDE/MCP server after installation. Real-host acceptance and Issue #9 security gates remain open.
+
+
 - Add read-only, asynchronous, cached published-release notification on Orbit MCP startup and `orbit_project_resume` (one day cadence, `ORBIT_UPDATE_CHECK=0` opt-out). Add an explicit `orbit_update_status` tool (36 total).
 - Add persistent local Orbit Update Manager with a real Install button, version-pinned approved updates and a launcher available without re-downloading setup; one selected machine-user or project install scope at a time. No silent code execution, automatic upgrade or native IDE popup guarantees.
 - Keep SHA256, signed-publisher limitation, customized owner file/SQLite protection and versioned-runtime backup rules; preserve distinct Claude Desktop and hosted ChatGPT plugin update channels.
