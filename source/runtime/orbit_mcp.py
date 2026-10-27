@@ -60,6 +60,22 @@ def project_root(obj):
     p = p.resolve(strict=True)
     if not p.is_dir() or p == Path(p.anchor) or p == Path.home().resolve():
         raise ValueError('Select a specific existing project directory')
+    # A workspace path is selected by the host, not independently authorized by
+    # the MCP. Refuse well-known credential/host settings folders by default.
+    home = Path.home().resolve()
+    sensitive = {'.ssh','.aws','.gnupg','.kube','.config','.local','.claude',
+                 '.codex','.gemini','.cursor','.vscode','.npm','appdata'}
+    if p.is_relative_to(home):
+        relative = p.relative_to(home)
+        if relative.parts and relative.parts[0].casefold() in sensitive:
+            raise ValueError('Sensitive home configuration directory is not a project workspace')
+    # An owner can configure a strict, host-side allowlist. Never allow an MCP
+    # request to modify this value; a model-supplied confirmation is NOT trust.
+    allowed = os.environ.get('ORBIT_TRUSTED_ROOTS')
+    if allowed is not None:
+        roots = [Path(x).expanduser().resolve() for x in allowed.split(os.pathsep) if x.strip()]
+        if not roots or not any(p == r or p.is_relative_to(r) for r in roots):
+            raise ValueError('project_root is outside ORBIT_TRUSTED_ROOTS configured by the host')
     return p
 
 
