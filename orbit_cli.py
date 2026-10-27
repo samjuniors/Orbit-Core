@@ -14,6 +14,7 @@ import zipfile
 from pathlib import Path
 
 REPO='samjuniors/Orbit-Core-MCP'
+RELEASE_ARCHIVE_URL='https://github.com/'+REPO+'/releases'
 VERS=re.compile(r'^[0-9]+\.[0-9]+\.[0-9]+$')
 HOSTS=('antigravity','codex','claude-code','vscode')
 def home():return Path(os.environ.get('ORBIT_SETUP_HOME') or Path.home()).expanduser().resolve()
@@ -75,7 +76,9 @@ def latest(channel='candidate'):
         name='ORBIT-Universal-Setup-v'+v+'.zip'
         if name in assets and name+'.sha256' in assets:
             matched.append((tuple(map(int,v.split('.'))),{'version':v,'zip':assets[name],
-                'sha':assets[name+'.sha256'],'url':release.get('html_url'),'channel':channel}))
+                'sha':assets[name+'.sha256'],'url':release.get('html_url'),'channel':channel,
+                'release_name':str(release.get('name') or ('Orbit v'+v))[:160],
+                'release_notes':str(release.get('body') or '')[:6000]}))
     if matched:return max(matched,key=lambda x:x[0])[1]
     raise ValueError('No published '+channel+' release with verified ZIP and SHA256 asset')
 
@@ -184,6 +187,7 @@ def main(argv=None):
     sub=p.add_subparsers(dest='command',required=True)
     sub.add_parser('status',help='Show installed Orbit version')
     sub.add_parser('manager',help='Open the optional approval-based Orbit Update Manager GUI')
+    sub.add_parser('versions',help='Show the official archive of previous Orbit versions (no downgrade performed)')
     check=sub.add_parser('doctor',help='Read-only installation and host diagnostic')
     check.add_argument('--project')
     d=sub.add_parser('detect',help='Read-only probable CLI/desktop host detection')
@@ -202,6 +206,10 @@ def main(argv=None):
     a=p.parse_args(argv)
     try:
         if a.command=='status':print('Orbit version:',version());return 0
+        if a.command=='versions':
+            print('Published Orbit versions (latest first):',RELEASE_ARCHIVE_URL)
+            print('Older versions can be downloaded manually; downgrades are not automatically applied.')
+            return 0
         if a.command=='manager':
             import orbit_update_gui
             orbit_update_gui.launch()
