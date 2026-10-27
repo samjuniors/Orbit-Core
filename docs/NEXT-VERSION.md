@@ -2,6 +2,34 @@
 
 The focus is **a trustworthy local orchestrator inside existing coding IDEs**, not duplicating an entire cloud app-building platform. This is a prioritized engineering backlog, not an automated promise of completed features.
 
+## Orbit-native research and intelligence roadmap — approved direction (2026-10-27)
+
+**Product principle:** build an original, lightweight Orbit experience, not an ECC fork or clone. Research links, annotations and retrieval records belong in **authorized local project-scoped SQLite outside the Git repository**. Owner documentation remains authoritative. External references are untrusted inputs, never auto-executed skills or agent instructions. This roadmap preserves Issue #13 product-experience commitments and Issue #9 release/security gates.
+
+### M1 — P0: Orbit Evidence Lens (in progress on feature branch)
+- Save an individual reviewed research **source pointer** (URL, topic tags, short annotation, original status) with an explicit write preview and revision-guarded update. Use project folder + stable project key as namespace. Never seed global memory by default or push research links to Git.
+- Recover only sources relevant to an objective within a predictable character budget; return provenance, limits, unverified-source warning and explicit live verification guidance. No network request or third-party code execution from source content.
+- Support project- and folder-level isolation, duplicate identity updates, malicious URLs and stale-revision tests; retain existing local SQLite and legacy memories. A trusted local IDE user manually imports the previously prepared 9-link research packet after connecting, not a Git checkout or ChatGPT cloud session.
+- **Gate:** Linux/Windows tests + disposable installer/stdio smoke; no claim of real IDE acceptance.
+
+### M2 — P0: Reliable real-host delegation and handoff
+- Build an adapter contract for actually available host agent APIs (Codex/Claude Code/Antigravity), clear fallback for unavailable agents, and bounded evidence packets from M1. Real host session references and changed-file/test inspection required; the current task ledger does NOT spawn an agent.
+- **Gate:** complete a tiny new-project build and an existing-project scoped feature/debug flow in two real hosts, with explicit consent and clear fallback.
+
+### M3 — P1: Independent QA, permissions and scoped recovery
+- Bind test reports to code revision and acceptance case. Gate commands/files on real host permissions; review/rework integration and safe cancellation/rollback. Preserve Issue #9 security limitations.
+- **Gate:** no stale PASS after source changes; real host verification and permission-denial tests.
+
+### M4 — P1: Adaptive capability surfaces and reusable context
+- Reuse native host features, owned code, on-demand skills or a small MCP surface according to task—not a universal dependency pile. Extend the M1 compact pack to accepted decisions and checkpoint context only after verifying project-root binding and provenance.
+- **Gate:** compare tool-turns, context bytes, recovery accuracy and install friction on Orbit's real product benchmarks.
+
+### M5 — P2: Evidence-backed learning (opt-in)
+- Suggest reusable project-scoped practices only after repeated verified outcomes and human review; never silently create/modify global skills, run continuous watchers, store full chats, or promote untrusted research prose to trusted instructions.
+- **Gate:** auditable evidence per suggestion, scoped opt-in, opt-out and safe archive/supersession.
+
+**Research inspiration:** prior user-shared sources ECC, Emergent, Lovable, Scram, Neura, etc. stay **outside Git as source pointers**. Compare behaviors and adapt ideas independently with license/security review; no copying source code or installing external components. The M1 implementation is specific to Orbit's existing SQLite and host-neutral execution model.
+
 ## P0: release and host acceptance
 
 - Validate Windows Antigravity/Codex/Claude Code setup from **downloaded, signed-in, authorized machines**, including preview/backup of customized files, restart, actual tool discovery and user decision flow.
