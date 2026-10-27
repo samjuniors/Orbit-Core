@@ -11,7 +11,10 @@ import re
 import zipfile
 from pathlib import Path
 
-from build_desktop_extension import build
+if __package__:
+    from .build_desktop_extension import build
+else:
+    from build_desktop_extension import build
 
 ROOT = Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
