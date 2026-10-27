@@ -1,6 +1,6 @@
 # Orbit Core MCP
 
-**Local-first, approval-driven orchestration for your own coding IDE.** Python 3.10+ · SQLite · **36 MCP tools in current v0.25.1 source; 33 in the published v0.24.1 desktop bundle** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
+**Local-first, approval-driven orchestration for your own coding IDE.** Python 3.10+ · SQLite · **38 MCP tools on the Evidence Lens development branch (36 on current v0.25.1 main source; 33 in the published v0.24.1 desktop bundle)** · Antigravity, Codex, Claude Code, optional VS Code and Claude Desktop.
 
 Orbit helps an existing coding host turn plain-language requests into approved product decisions, researched architecture, reusable components, staged implementation tasks, checkpointed progress, and verifiable checks. **Orbit is not a standalone LLM, IDE, code editor or background worker**: the host performs reasoning, agent invocation, file edits and terminal commands. Model recommendations never switch providers or consume credits by themselves.
 
@@ -58,6 +58,12 @@ After the first installation, use the stable local Orbit launcher. GitHub **0.x 
 ```
 
 Use `update --channel stable` only when a stable release exists. `orbit update` works without the full path only if you **choose** to add the launcher folder to your user PATH. Orbit never modifies PATH or installs tools automatically. Local development ZIPs may be previewed with `update --from-zip <file> --sha256 <separately-trusted-digest>`; do not blindly install an unreviewed branch. If the updater reports a manual-review conflict, keep the file and investigate—do not delete it.
+
+## Orbit Evidence Lens (in development — not yet in a published installer)
+
+A focused first milestone toward original Orbit project intelligence: save approved external reference *pointers* to existing local project-scoped SQLite, then build tiny relevance-ranked source packs for real coding/research tasks. `orbit_research_source_save` previews by default, uses an explicit permission flag and revision checks for updates. `orbit_research_context` retrieves up to six relevant source links with a bounded context size; it never browses, copies code, writes docs, runs skills, shares memories across projects or invents verification.
+
+References are namespaced by the canonical selected folder **and** project key, so two workspaces with the same name cannot see each other's Evidence Lens links. Untrusted external summaries remain data. Existing `orbit_memory_*` remains available for legacy project memory; the new source library is intentionally separate from non-root-bound legacy memory. A local user/IDE may manually import approved entries from the earlier external research packet, using `orbit_research_source_save` and readback; this Git repository contains **no user research packet or copied external repository code**. See [roadmap](docs/NEXT-VERSION.md). CI tests are not real host approval verification.
 
 ## How to use Orbit
 
