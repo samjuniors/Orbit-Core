@@ -71,7 +71,7 @@ jobs:
       - name: Run unit and MCP protocol tests
         run: python -m unittest discover -s tests -v
       - name: Verify consistent package versions
-        run: python scripts/check_version.py
+        run: python scripts/check_version.py --strict-bundle
       - name: Build and verify reproducible release artifacts
         shell: bash
         run: |
