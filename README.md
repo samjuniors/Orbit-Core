@@ -90,6 +90,19 @@ Orbit's workflow is **situational**. New products can start with adaptive intake
 
 ## Install, update and uninstall
 
+**Fresh installation after conflicts:** close all coding hosts, reopen `Orbit Setup.cmd`, and select **Clear Orbit / Fresh install…**. The dialog lists exact DELETE/EDIT paths and requires typing `REMOVE ORBIT`. It clears Orbit registrations in **all global hosts**, customized Orbit agents/skills, and the shared runtime/updater. Selecting a project also clears that project's integrations. Reinstall afterward; other projects using the shared runtime will need the runtime installed again.
+
+The separate, unchecked **delete saved memory** option includes research/tasks for **all projects**, SQLite sidecars, and the selected project's `.orbit` checkpoints/notes. Unrelated MCPs, shared host configuration files, product source and owner `AGENTS.md`/`CLAUDE.md` remain. Original files are copied to `.orbit-uninstall-backups` before deletion; those recovery copies are deliberately retained. Other project folders and custom `ORBIT_LOCAL_DB` files are not automatically searched/deleted. Invalid shared configuration blocks reset rather than risking unrelated settings.
+
+Terminal equivalent (preview first):
+
+```powershell
+py -3.12 orbit_setup.py clean --scope machine
+py -3.12 orbit_setup.py clean --scope machine --apply --confirm-clean "REMOVE ORBIT"
+```
+
+Add `--erase-memory` only to intentionally erase saved project memory. Use `--scope project --project "C:\path\to\project"` to include one project's local integration and optional notes.
+
 The unified setup manager operates on **the selected host integrations**. Its actions are preview-first; terminal changes require `--apply`.
 
 | Action | Terminal command | Behavior |

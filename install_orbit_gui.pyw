@@ -5,11 +5,11 @@ from installer import plan, install, SetupError
 from orbit_cli import detect
 from orbit_update_gui import launch as open_update_manager
 from installer import VERSION
-from orbit_setup import plan_uninstall, apply_uninstall
+from orbit_setup import plan_uninstall, apply_uninstall, plan_clean_reset, apply_clean_reset
 
 r=tk.Tk()
 r.title('Orbit Setup · '+VERSION)
-r.geometry('940x760');r.minsize(800,680)
+r.geometry('940x790');r.minsize(800,720)
 r.configure(background='#f3f5f9')
 r.option_add('*Font', ('Segoe UI', 10))
 style=ttk.Style(r)
@@ -175,6 +175,74 @@ def remove():
     except (SetupError,OSError,ValueError) as e:
         messagebox.showerror('Orbit uninstall blocked',str(e))
 
+
+def clean_reset():
+    if state['busy']:
+        return
+    selected_project=project.get().strip() if scope.get()=='project' else None
+    if scope.get()=='project' and not selected_project:
+        messagebox.showerror('Select a project', 'Choose the project folder before clearing its local Orbit files.')
+        return
+    state['busy']=True
+    for button in operation_buttons:
+        button.config(state='disabled')
+    dialog=tk.Toplevel(r);dialog.title('Clear Orbit / Fresh install')
+    dialog.geometry('820x690');dialog.minsize(720,620)
+    dialog.transient(r);dialog.grab_set()
+    ttk.Label(dialog,text='Clear Orbit installation',style='Title.TLabel').pack(anchor='w',padx=20,pady=(18,8))
+    ttk.Label(dialog,text='Close all coding hosts and Orbit MCP processes first. This removes Orbit from ALL global hosts, not just the checked tools. Customized Orbit files are included.',wraplength=750,justify='left').pack(fill='x',padx=20)
+    ttk.Label(dialog,text=('Also clears project: '+selected_project) if selected_project else 'No project selected. Other project-local integrations are not scanned.',wraplength=750,style='Muted.TLabel').pack(fill='x',padx=20,pady=8)
+    erase=tk.BooleanVar(value=False)
+    ttk.Checkbutton(dialog,text='Also delete saved memory / research / tasks for ALL projects\nand the selected project’s .orbit checkpoints and notes (backed up)',variable=erase).pack(anchor='w',padx=20,pady=6)
+    pane=ttk.Frame(dialog);pane.pack(fill='both',expand=True,padx=20,pady=8)
+    output=tk.Text(pane,wrap='word',height=12,font=('Consolas',9))
+    scrollbar=ttk.Scrollbar(pane,command=output.yview);scrollbar.pack(side='right',fill='y')
+    output.configure(yscrollcommand=scrollbar.set);output.pack(fill='both',expand=True)
+    ttk.Label(dialog,text='Recovery copies remain outside the installation. Review the paths above.\nType REMOVE ORBIT to authorize deletion:',wraplength=750).pack(anchor='w',padx=20,pady=4)
+    phrase=tk.StringVar();ttk.Entry(dialog,textvariable=phrase).pack(fill='x',padx=20,pady=4)
+    footer=ttk.Frame(dialog);footer.pack(fill='x',padx=20,pady=(8,18))
+    preview_state={'changes':None}
+    def close():
+        dialog.grab_release();dialog.destroy()
+        state['busy']=False
+        for button in operation_buttons:
+            button.config(state='normal')
+        refresh_action()
+    def update_button(*_):
+        clear.config(state='normal' if preview_state['changes'] and phrase.get()=='REMOVE ORBIT' else 'disabled')
+    def preview_clean(*_):
+        preview_state['changes']=None
+        phrase.set('')
+        output.config(state='normal');output.delete('1.0','end')
+        try:
+            changes,notes=plan_clean_reset(selected_project,erase_memory=erase.get())
+            preview_state['changes']=changes
+            output.insert('end','\n'.join(notes)+'\n\n')
+            for item in changes:
+                output.insert('end',('DELETE  ' if item.replacement is None else 'EDIT    ')+str(item.path)+'\n')
+            output.insert('end',f'\n{len(changes)} file changes. No files changed yet.\n')
+        except (SetupError,OSError,ValueError) as exc:
+            output.insert('end','BLOCKED: '+str(exc)+'\nNo files changed. Fix this conflict before retrying.')
+        output.config(state='disabled');update_button()
+    def apply_clean():
+        if phrase.get()!='REMOVE ORBIT' or not preview_state['changes']:
+            return
+        clear.config(state='disabled');cancel.config(state='disabled')
+        try:
+            backup=apply_clean_reset(preview_state['changes'],selected_project,erase_memory=erase.get(),confirmation=phrase.get())
+        except (SetupError,OSError,ValueError) as exc:
+            messagebox.showerror('Clean reset incomplete',str(exc)+'\n\nReview the preview and recovery backups before retrying.',parent=dialog)
+            phrase.set('');cancel.config(state='normal');preview_clean()
+            return
+        close()
+        log.delete('1.0','end');log.insert('end','Orbit installation cleared.\nRecovery backup: '+str(backup)+'\nChoose your coding tools and install fresh.\n')
+        messagebox.showinfo('Orbit cleared successfully','The previewed Orbit components were removed.\n\nRecovery backup: '+str(backup)+'\n\nChoose your coding tools and click Install Orbit to start fresh. Other project folders were not scanned.')
+    cancel=ttk.Button(footer,text='Cancel',command=close);cancel.pack(side='right')
+    clear=ttk.Button(footer,text='Delete previewed Orbit files',command=apply_clean,state='disabled');clear.pack(side='right',padx=8)
+    erase.trace_add('write',preview_clean);phrase.trace_add('write',update_button)
+    dialog.protocol('WM_DELETE_WINDOW',close)
+    preview_clean()
+
 buttons=ttk.Frame(r);buttons.pack(fill='x',padx=24,pady=(8,6))
 operation_buttons=[]
 def action_button(parent,text,command,width=24):
@@ -189,6 +257,7 @@ action_button(buttons,'Check published updates',open_update_manager,20)
 remove_buttons=ttk.Frame(r);remove_buttons.pack(fill='x',padx=24,pady=(0,18))
 action_button(remove_buttons,'Preview uninstall',preview_remove,26)
 action_button(remove_buttons,'Uninstall…',remove,39)
+action_button(remove_buttons,'Clear Orbit / Fresh install…',clean_reset)
 scope.trace_add('write',refresh_action)
 project.trace_add('write',refresh_action)
 for selected in selection.values():
