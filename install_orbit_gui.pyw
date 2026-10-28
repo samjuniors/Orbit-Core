@@ -1,40 +1,69 @@
 """Orbit GUI - single approved install for all current projects or one workspace."""
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 from installer import plan, install, SetupError
 from orbit_cli import detect
 from orbit_update_gui import launch as open_update_manager
 from installer import VERSION
 from orbit_setup import plan_uninstall, apply_uninstall
 
-r=tk.Tk();r.title('Orbit Universal Setup v'+VERSION);r.geometry('950x710')
-tk.Label(r,text='ORBIT — Install / Update / Uninstall',font=('Arial',17,'bold')).pack(anchor='w',padx=18,pady=(12,5))
-tk.Label(r,text='Choose availability everywhere on this computer, or only in one selected project. Uses existing coding host models; no other AI CLI.',wraplength=790,justify='left').pack(anchor='w',padx=18)
-scope=tk.StringVar(value='machine');section=tk.Frame(r);section.pack(anchor='w',padx=18,pady=8)
-for mode,title in [('machine','This computer (all projects)'),('project','One specific project')]:
-    tk.Radiobutton(section,text=title,variable=scope,value=mode).pack(side='left',padx=8)
-row=tk.Frame(r);row.pack(fill='x',padx=18,pady=7)
-project=tk.StringVar();entry=tk.Entry(row,textvariable=project,width=85);entry.pack(side='left',fill='x',expand=True)
-btn=tk.Button(row,text='Browse project',command=lambda: project.set(filedialog.askdirectory(title='Select project folder') or project.get()))
-btn.pack(side='left',padx=4)
+r=tk.Tk()
+r.title('Orbit Setup · '+VERSION)
+r.geometry('940x760');r.minsize(800,680)
+r.configure(background='#f3f5f9')
+r.option_add('*Font', ('Segoe UI', 10))
+style=ttk.Style(r)
+style.theme_use('clam')
+style.configure('.',background='#f3f5f9',foreground='#1e293b')
+style.configure('TFrame',background='#f3f5f9')
+style.configure('TLabel',background='#f3f5f9')
+style.configure('Title.TLabel',font=('Segoe UI',24,'bold'))
+style.configure('Muted.TLabel',foreground='#526077')
+style.configure('TLabelframe',padding=14,borderwidth=1,relief='solid')
+style.configure('TLabelframe.Label',font=('Segoe UI',11,'bold'))
+style.configure('TButton',padding=(12,8))
+style.configure('Primary.TButton',background='#315ce8',foreground='white',font=('Segoe UI',10,'bold'))
+style.map('Primary.TButton',background=[('disabled','#dce2ed'),('active','#2446b5')],foreground=[('disabled','#69758b')])
+style.configure('TRadiobutton',padding=5)
+style.configure('TCheckbutton',padding=5)
+header=ttk.Frame(r,padding=(24,20,24,12));header.pack(fill='x')
+ttk.Label(header,text='Orbit Setup',style='Title.TLabel').pack(anchor='w')
+ttk.Label(header,text='Version '+VERSION+'  ·  Connect Orbit to your coding tools',style='Muted.TLabel').pack(anchor='w',pady=(4,0))
+section=ttk.LabelFrame(r,text='1  Choose where Orbit is available');section.pack(fill='x',padx=24,pady=6)
+scope=tk.StringVar(value='machine')
+scopes=ttk.Frame(section);scopes.pack(fill='x')
+for mode,title in [('machine','This computer · all projects'),('project','One project only')]:
+    ttk.Radiobutton(scopes,text=title,variable=scope,value=mode).pack(side='left',padx=(0,22))
+row=ttk.Frame(section);row.pack(fill='x',pady=(8,0))
+project=tk.StringVar();entry=ttk.Entry(row,textvariable=project);entry.pack(side='left',fill='x',expand=True)
+btn=ttk.Button(row,text='Choose folder…',command=lambda: project.set(filedialog.askdirectory(title='Select project folder') or project.get()))
+btn.pack(side='left',padx=(8,0))
 def update_scope(*_):
-    x=scope.get()=='project';entry.config(state='normal' if x else 'disabled');btn.config(state='normal' if x else 'disabled')
+    enabled=scope.get()=='project'
+    entry.config(state='normal' if enabled else 'disabled');btn.config(state='normal' if enabled else 'disabled')
 scope.trace_add('write',update_scope);update_scope()
-tk.Label(r,text='Select supported hosts (Claude Desktop regular chat uses a separate optional extension):').pack(anchor='w',padx=18)
+choices=ttk.LabelFrame(r,text='2  Select coding tools');choices.pack(fill='x',padx=24,pady=6)
 detected={item['host'] for item in detect() if item['detected']}
 selection={h:tk.BooleanVar(value=h in detected) for h in ('antigravity','codex','claude-code','vscode')}
-choices=tk.Frame(r);choices.pack(anchor='w',padx=18,pady=4)
+hostrow=ttk.Frame(choices);hostrow.pack(fill='x')
 for key,title in [('antigravity','Antigravity'),('codex','Codex'),('claude-code','Claude Code'),('vscode','VS Code')]:
-    tk.Checkbutton(choices,text=title,variable=selection[key]).pack(side='left',padx=8)
+    ttk.Checkbutton(hostrow,text=title,variable=selection[key]).pack(side='left',padx=(0,14))
 def refresh_detected():
     root=project.get() if scope.get()=='project' and project.get().strip() else None
     found={item['host'] for item in detect(root) if item['detected']}
     for host,selected in selection.items():selected.set(host in found)
-    status.set('Host detection updated; CLI/config presence only, not a live MCP connection.')
-tk.Button(choices,text='Detect hosts',command=refresh_detected).pack(side='left',padx=8)
-tk.Label(r,text='Hosts selected by local CLI/config evidence; review or override manually.',fg='gray').pack(anchor='w',padx=18)
-log=tk.Text(r,height=23,wrap='none');log.pack(padx=18,pady=8,fill='both',expand=True)
-status=tk.StringVar(value='Ready. A safety confirmation is required before writing files.');tk.Label(r,textvariable=status,anchor='w').pack(fill='x',padx=18)
+    status.set('Host detection updated. Restart your coding tools after setup to verify MCP connectivity.')
+ttk.Button(hostrow,text='Detect again',command=refresh_detected).pack(side='right')
+ttk.Label(choices,text='Detected from local files. You can change the selection. Claude Desktop uses a separate extension.',style='Muted.TLabel',wraplength=820).pack(anchor='w',pady=(6,0))
+details=ttk.LabelFrame(r,text='3  Review changes');details.pack(fill='both',expand=True,padx=24,pady=6)
+ttk.Label(details,text='Preview lists the exact files. Applying changes always asks for confirmation.',style='Muted.TLabel').pack(anchor='w',pady=(0,8))
+logrow=ttk.Frame(details);logrow.pack(fill='both',expand=True)
+log=tk.Text(logrow,height=9,wrap='word',font=('Consolas',10),background='white',foreground='#334155',relief='flat',padx=12,pady=10)
+scroll=ttk.Scrollbar(logrow,command=log.yview);scroll.pack(side='right',fill='y')
+log.configure(yscrollcommand=scroll.set);log.pack(fill='both',expand=True)
+log.insert('end','Choose your scope and coding tools, then preview the installation.\n')
+status=tk.StringVar(value='Checking installation…')
+ttk.Label(r,textvariable=status,wraplength=870,justify='left',style='Muted.TLabel').pack(fill='x',padx=24,pady=(8,4))
 state={'preview':None,'choices':None,'busy':False}
 
 def installation_action(changes):
@@ -42,7 +71,7 @@ def installation_action(changes):
     writable=[c for c in changes if c.action not in {'SKIP','PRESERVE'}]
     if not writable:
         return 'current'
-    if any(c.action in {'UPGRADE','MERGE'} for c in writable):
+    if any(c.action in {'UPGRADE','MERGE','APPEND'} for c in writable):
         return 'update'
     if any(c.target.exists() for c in changes):
         return 'repair'
@@ -58,18 +87,21 @@ def refresh_action(*_):
         status.set('Orbit is up to date for the selected scope and hosts.' if action=='current' else 'Ready: '+labels[action]+'. Preview and approval required before changes.')
     except (SetupError,OSError,ValueError) as e:
         primary.config(text='Review required',state='disabled')
-        status.set(str(e))
+        status.set('Review needed. Use Preview changes for the file path and details.')
 def args():return (project.get() if scope.get()=='project' else None,[h for h,b in selection.items() if b.get()],scope.get())
 def make_preview():
     log.delete('1.0','end')
     c=plan(*args())
     state['preview']=c;state['choices']=args()
     for item in c:log.insert('end',f'{item.action:7} {item.description}\n  {item.target}\n')
-    status.set(f'Preview: {sum(item.action!="SKIP" for item in c)} proposed file changes, no installs executed.')
+    status.set(f'Preview: {sum(item.action not in {"SKIP","PRESERVE"} for item in c)} proposed file changes, no installs executed.')
     return c
 def preview():
     try:make_preview()
-    except (SetupError,OSError) as e:state['preview']=None;messagebox.showerror('Preview blocked',str(e))
+    except (SetupError,OSError,ValueError) as e:
+        state['preview']=None
+        log.insert('end',str(e)+'\n\nKeep the file intact. Compare it with the bundled version before replacing it.\n')
+        messagebox.showerror('Review needed',str(e))
 def go():
     if state['busy']:
         return
@@ -143,20 +175,20 @@ def remove():
     except (SetupError,OSError,ValueError) as e:
         messagebox.showerror('Orbit uninstall blocked',str(e))
 
-buttons=tk.Frame(r);buttons.pack(pady=5)
+buttons=ttk.Frame(r);buttons.pack(fill='x',padx=24,pady=(8,6))
 operation_buttons=[]
 def action_button(parent,text,command,width=24):
-    button=tk.Button(parent,text=text,width=width,command=command)
+    button=ttk.Button(parent,text=text,command=command,style='Primary.TButton' if command==go else 'TButton')
     button.pack(side='left',padx=5)
     operation_buttons.append(button)
     return button
 
-action_button(buttons,'Preview install/update',preview)
+action_button(buttons,'Preview changes',preview)
 primary=action_button(buttons,'Checking installation...',go)
-action_button(buttons,'Published updates',open_update_manager,20)
-remove_buttons=tk.Frame(r);remove_buttons.pack(pady=5)
+action_button(buttons,'Check published updates',open_update_manager,20)
+remove_buttons=ttk.Frame(r);remove_buttons.pack(fill='x',padx=24,pady=(0,18))
 action_button(remove_buttons,'Preview uninstall',preview_remove,26)
-action_button(remove_buttons,'Uninstall selected hosts (backup first)',remove,39)
+action_button(remove_buttons,'Uninstall…',remove,39)
 scope.trace_add('write',refresh_action)
 project.trace_add('write',refresh_action)
 for selected in selection.values():

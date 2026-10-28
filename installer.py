@@ -21,6 +21,50 @@ HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Source-verified intermediate official agent templates, commit 7e1372f.
+    # Includes Windows line endings and Claude conversion; owner edits still block.
+    'e5bed463ed9e7b9198edeca1d1c15b1ecc36fcdcb69cf465d25bed3334d45869',  # orbit-architect.md, native, LF
+    '07c77ce4769eff768b5a7be898efc0544af074ebd070df1d192fad597a1df91c',  # orbit-architect.md, native, CRLF
+    'a0e4f671eef0c7db9dcd9bf94bd496cae9cda9840484690762831efaf76f415f',  # orbit-architect.md, Claude Code, LF
+    'db10fef153d7dbce79476c596f5828d8dc99d852751cef7eea9e0ac8f11e067d',  # orbit-architect.md, Claude Code, CRLF
+    'd9966db5e4f7dc852dc55d443c6c3b620a232f18342ad603884bfa3336ca00ce',  # orbit-backend.md, native, CRLF
+    '8a29356c671eeedd3ec1e49c1136fae5c74b80c09a7f36dfe4011e10c64556ba',  # orbit-backend.md, Claude Code, LF
+    '72b8d26456da95426847e6927352aab43f5c02679b5d9b3b5504a93b320ceaa9',  # orbit-backend.md, Claude Code, CRLF
+    '1f9191748666736860be0ba048f1b3bff0be0c17874dc023f7eefcbcaf2f5feb',  # orbit-data.md, native, CRLF
+    'e6b563e700e9e30f30c5b9455a4ce21d457405a993b682c581f69932927928d6',  # orbit-data.md, Claude Code, LF
+    'd5b48c7bb144a812502604877f450b665082fa436ddc9e559cdf50364734583f',  # orbit-data.md, Claude Code, CRLF
+    '927eae2317e938acb9b59c50db4db949d01dcd93d9171e22a5922091addc37a0',  # orbit-devops.md, native, CRLF
+    '87db755c0021ef3f8e174cd6dcb52cdca962064ae83a3c28cf367f6269dc4c9d',  # orbit-devops.md, Claude Code, LF
+    '0070d6cf0fb00cd6dd8dea4168597accbe5d17e85d4a26f55e769b2c618f2871',  # orbit-devops.md, Claude Code, CRLF
+    '8f073c7d1535b3e607841ff7eff27f52606073ceab93cd269acc5c1cd26fd2ee',  # orbit-frontend.md, native, CRLF
+    '2bb51d5063ee45dfc3897f2377fe82ea6adebaa5b1e8fc50f98a0ae1609cca9c',  # orbit-frontend.md, Claude Code, LF
+    '95c9ec95e140cef921e7837441a3f2f3c4645f5741981087437047bf8020190e',  # orbit-frontend.md, Claude Code, CRLF
+    '2b143e276dade0c48f19c4696e6c301bb65f2da04c689bb12e798132408cde32',  # orbit-integrator.md, native, CRLF
+    'c9176f7118ce5f60c40cfad902839ae3e981d1f26ea3fe5e08e6cdf51f556cf1',  # orbit-integrator.md, Claude Code, LF
+    'e2ffa8c26cbb2ad0f6da2db74ad00602ea091bd44dc12e5df5bd324ce5271b8c',  # orbit-integrator.md, Claude Code, CRLF
+    '2fe2de371093caa3fa53237afeb4fad0ff9a338438f88d3517874d5bde69bce9',  # orbit-qa.md, native, CRLF
+    'e875388d8c87772d0f2a5227417fe02ebc5a7cf53db9662c382a276434912eda',  # orbit-qa.md, Claude Code, LF
+    'ff6e2f5c777fd3aaf1c41324032bdd07bc6fa75d789b82f560f16407130aabab',  # orbit-qa.md, Claude Code, CRLF
+    'cab6faa188086fd592de4c2c4d90232ce67ebb643e5f2016592605c14f62c3c9',  # orbit-research.md, native, CRLF
+    '23c9cd5e7382fe78ebd547448afa4b5415c02c212e597ce4f00b85dbb8c86814',  # orbit-research.md, Claude Code, LF
+    '685a7a1c0d3787711bad86a83d3d7efef184dc72976f1969a406c91c50762ba6',  # orbit-research.md, Claude Code, CRLF
+    'e7c21456a057fb1400c1afa1e1d364931043db28ac9d50a6f5a74d0b7b209ec2',  # orbit-reviewer.md, native, CRLF
+    '20ac2c8969c897aec4880183280e68e12bf49045b8d647d4af91df23b2f6f963',  # orbit-reviewer.md, Claude Code, LF
+    '9d922eeffb0d296990162ca958953f952d590578c46e3b5948aed92ecea81195',  # orbit-reviewer.md, Claude Code, CRLF
+    '01bdf9a23493be364d4e1b6d9c6268cad4dd8bf41347de7737aefe05ae34c3e0',  # orbit-security.md, native, CRLF
+    'ccf467cfb29238a4b11845b9c2c7bb6db14ea8c9bb7d51c0f11d36b5e44b278e',  # orbit-security.md, Claude Code, LF
+    '06d93020ade5e7ca381cf4859e08f6a20c8ce305bb486647bcd8d6d18cee2bbf',  # orbit-security.md, Claude Code, CRLF
+    'da068886b64b59be374d6378487ff1814613b4b7a7e437103fac2d9725cc700c',  # orbit-ux.md, native, CRLF
+    'a959c702daa1be2db7063adc5da2a4eb471998b4245623d18825f6dfbd31ce83',  # orbit-ux.md, Claude Code, LF
+    'a4eda89055c9972dca0ff3429bf7f775a8baf0220759ab9d1acfb6cb43ec576f',  # orbit-ux.md, Claude Code, CRLF
+    'e44743a5fcbfa795e3c3ec6a0fb8c355ab045de8c0a0619bb2292fdf2dfbc966',  # orbit-writer.md, native, LF
+    '709bec90b7fcafe7ad0a2e42a2ac966e50a1d2276626ea6ac01cf98160e46226',  # orbit-writer.md, native, CRLF
+    '14155bf1bbd96e3d51575efe3143ced9ab0a0b5f96c558b30cac03a6491e4e27',  # orbit-writer.md, Claude Code, LF
+    '409c92b3d6f452d0e38e7df312042832bf0c63fb4d8f3cfc1510600345a359d1',  # orbit-writer.md, Claude Code, CRLF
+    '65e2798b9f38770a6f9fe5cef336ceefe04b052e02d5536fdd22379385f00fac',  # orbit.md, native, LF
+    '446ffe8ed57d06dd8f2ca8186567c8aae65f375a52a56f0762a4c814b88e8486',  # orbit.md, native, CRLF
+    'd8ce7b0d85364a7dab39e642b64ceb2571d4c42865b3f9a2d46b55cd0e89574d',  # orbit.md, Claude Code, LF
+    'fa7b276fbc47da9fcabdf4d079a3e2dba4c1e6fd55816d463a2d97978f757998',  # orbit.md, Claude Code, CRLF
     # Exact source-verified stock files produced by the immutable v0.24.1
     # tag installer. Calculated in an isolated prior-tag installation on CI.
     # Only byte-for-byte matches qualify for backup-first upgrade; any edit
@@ -247,7 +291,7 @@ def same_or_create(changes: list[Change], dest: Path, data: bytes, root: Path|No
                 # Existing owner guidance is authoritative; Orbit's skill remains available.
                 changes.append(Change(dest,current,'PRESERVE','Existing owner guidance retained'))
             else:
-                raise SetupError('Existing customized file needs manual review; no overwrite: '+str(dest))
+                raise SetupError('Existing file differs from recognized Orbit versions; no overwrite.\n\nReview this file (it may be customized or from an unrecognized build):\n'+str(dest))
         else:
             changes.append(Change(dest,data,'SKIP',desc))
     else:

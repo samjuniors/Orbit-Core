@@ -48,7 +48,7 @@ git clone https://github.com/samjuniors/Orbit-Core-MCP.git
 cd Orbit-Core-MCP
 ```
 
-**Windows — graphical setup:** Double-click **`Orbit Setup.cmd`**. The launcher selects an available CI-tested Python with Tkinter and opens a single window for **Install**, **Update from source**, **Published updates**, and **Uninstall**.
+**Windows — graphical setup:** Double-click **`Orbit Setup.cmd`**. The launcher selects an available CI-tested Python with Tkinter and opens a guided window for scope, coding tools, and file preview. One primary action selects **Install**, **Update**, or **Repair** from the actual file state; current installations show **Orbit is up to date**. Published updates and backup-first uninstall remain separate actions. Verified older agent templates upgrade with backups; edited or unrecognized files require review.
 
 **Windows — PowerShell menu:**
 

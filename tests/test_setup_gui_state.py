@@ -27,6 +27,7 @@ class SetupGuiStateTests(unittest.TestCase):
         self.assertEqual(action([self.change('PRESERVE',True)]),'current')
         self.assertEqual(action([self.change('UPGRADE',True)]),'update')
         self.assertEqual(action([self.change('MERGE',True)]),'update')
+        self.assertEqual(action([self.change('APPEND',True)]),'update')
         self.assertEqual(action([self.change('SKIP',True),self.change('CREATE')]),'repair')
 
     def setup_callback(self,changes):
