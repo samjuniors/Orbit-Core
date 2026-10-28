@@ -2,18 +2,10 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — post-v0.25.1 work
-- **Explicit clean reset:** add **Clear Orbit / Fresh install…** with exact path preview, typed `REMOVE ORBIT` confirmation, all-global-host/customized Orbit cleanup, shared runtime removal, optional selected-project cleanup and separately opted-in memory deletion. Back up all originals before changes; preserve unrelated MCPs/configuration and product source. Refuse symlinks, invalid shared config and stale previews. Equivalent `orbit_setup.py clean` command; Windows visual acceptance remains pending.
-- **Setup repair and polish:** recognize exact official intermediate agent templates from `7e1372f` (native/Claude, LF/CRLF) for backup-first upgrades, fixing the reported `orbit-architect.md` block. Unknown edits remain protected. Use a themed three-step layout, scrollable file preview, clearer review messages and one state-aware action. Windows visual acceptance remains pending.
-- **Unified setup (source candidate):** `Orbit Setup.cmd` opens the expanded native Windows setup UI; `orbit_setup.py` offers an interactive terminal menu or explicit preview-first `install`, `update`, and reversible `uninstall` for selected IDE hosts. Uninstall preserves shared runtime, SQLite, owner docs, unrelated MCP entries and custom files, with backups; it does not auto-update Git or bypass stock-file conflicts. Included in candidate ZIP smoke and Windows/Linux CI.
-- **M2 host-native delegation handoff (merged source, not published):** a read-only `orbit_task_handoff` produces source-scoped, approval-aware packets only for reserved tasks with a matching *reported* native IDE agent tool. Native invocation, session evidence and execution still belong entirely to the connected host; safe HOLD/serial fallback when unavailable. No extra model CLI or automatic agent spawning.
+## [Unreleased]
+- No further changes recorded after the v0.25.1 candidate.
 
-- **Orbit Evidence Lens (merged source, not published):** original folder+project-scoped SQLite research source pointers with preview-first, revision-guarded review; bounded objective-relevant context pack and untrusted-source warnings. No automatic crawler, source execution, Git research notes, global cross-project sharing or new model service. Existing local memory retained; requires real IDE/local install acceptance.
-- **Research/context milestones:** approved M1–M5 roadmap for scoped research memory, native-agent handoffs, evidence authentic QA, adaptive skills/context and optional verified learning, without adopting ECC's runtime or a universal auto-learning hook system.
-
-- No additional published changes. `NEXT_VERSION=0.25.2` is planning metadata only.
-
-## [0.25.1] — Install-once update experience (candidate; NOT PUBLISHED)
+## [0.25.1] — Install-once update experience (prerelease candidate; live-host acceptance pending)
 
 **What's new and why it matters**
 - **Update Manager:** Once installed, open `orbit manager` or the per-user Update Manager launcher; select local hosts and approve an in-place upgrade without re-downloading and re-running setup each time.
@@ -29,6 +21,17 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 - Add persistent local Orbit Update Manager with a real Install button, version-pinned approved updates and a launcher available without re-downloading setup; one selected machine-user or project install scope at a time. No silent code execution, automatic upgrade or native IDE popup guarantees.
 - Keep SHA256, signed-publisher limitation, customized owner file/SQLite protection and versioned-runtime backup rules; preserve distinct Claude Desktop and hosted ChatGPT plugin update channels.
 - The next patch target is tracked in `NEXT_VERSION`; no subsequent release has been published.
+
+**Additional changes included in the v0.25.1 candidate**
+
+- **Explicit clean reset:** add **Clear Orbit / Fresh install…** with exact path preview, typed `REMOVE ORBIT` confirmation, all-global-host/customized Orbit cleanup, shared runtime removal, optional selected-project cleanup and separately opted-in memory deletion. Back up all originals before changes; preserve unrelated MCPs/configuration and product source. Refuse symlinks, invalid shared config and stale previews. Equivalent `orbit_setup.py clean` command; Windows visual acceptance remains pending.
+- **Setup repair and polish:** recognize exact official intermediate agent templates from `7e1372f` (native/Claude, LF/CRLF) for backup-first upgrades, fixing the reported `orbit-architect.md` block. Unknown edits remain protected. Use a themed three-step layout, scrollable file preview, clearer review messages and one state-aware action. Windows visual acceptance remains pending.
+- **Unified setup (source candidate):** `Orbit Setup.cmd` opens the expanded native Windows setup UI; `orbit_setup.py` offers an interactive terminal menu or explicit preview-first `install`, `update`, and reversible `uninstall` for selected IDE hosts. Uninstall preserves shared runtime, SQLite, owner docs, unrelated MCP entries and custom files, with backups; it does not auto-update Git or bypass stock-file conflicts. Included in candidate ZIP smoke and Windows/Linux CI.
+- **M2 host-native delegation handoff (merged source, not published):** a read-only `orbit_task_handoff` produces source-scoped, approval-aware packets only for reserved tasks with a matching *reported* native IDE agent tool. Native invocation, session evidence and execution still belong entirely to the connected host; safe HOLD/serial fallback when unavailable. No extra model CLI or automatic agent spawning.
+
+- **Orbit Evidence Lens (merged source, not published):** original folder+project-scoped SQLite research source pointers with preview-first, revision-guarded review; bounded objective-relevant context pack and untrusted-source warnings. No automatic crawler, source execution, Git research notes, global cross-project sharing or new model service. Existing local memory retained; requires real IDE/local install acceptance.
+- **Research/context milestones:** approved M1–M5 roadmap for scoped research memory, native-agent handoffs, evidence authentic QA, adaptive skills/context and optional verified learning, without adopting ECC's runtime or a universal auto-learning hook system.
+
 
 ## [0.25.0] — Candidate source merged; NOT PUBLISHED
 - Main source supports lifecycle operations for fresh, partially built, existing and completed products, with host-neutral routing, safe pause/resume and scoped existing-product adoption (Issues #7 and #9).
