@@ -14,7 +14,7 @@ class StockAgentUpgradeTests(unittest.TestCase):
         for windows in (False, True):
             for host in ('antigravity', 'claude-code'):
                 with self.subTest(windows=windows, host=host), tempfile.TemporaryDirectory() as folder:
-                    home = Path(folder)
+                    home = Path(folder).resolve()
                     if host == 'antigravity':
                         target = home / '.gemini/config/agents/orbit-architect.md'
                         data = stock
@@ -39,7 +39,7 @@ class StockAgentUpgradeTests(unittest.TestCase):
     def test_owner_edit_remains_blocked_without_writes(self):
         stock = (Path(__file__).parent / 'fixtures/orbit-architect-7e1372f.md').read_bytes()
         with tempfile.TemporaryDirectory() as folder:
-            home = Path(folder)
+            home = Path(folder).resolve()
             target = home / '.gemini/config/agents/orbit-architect.md'
             target.parent.mkdir(parents=True)
             data = stock + b'\nOwner customization\n'
