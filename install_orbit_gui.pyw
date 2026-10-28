@@ -5,9 +5,10 @@ from installer import plan, install, SetupError
 from orbit_cli import detect
 from orbit_update_gui import launch as open_update_manager
 from installer import VERSION
+from orbit_setup import plan_uninstall, apply_uninstall
 
-r=tk.Tk();r.title('Orbit Universal Setup v'+VERSION);r.geometry('860x630')
-tk.Label(r,text='ORBIT — one-click universal setup',font=('Arial',17,'bold')).pack(anchor='w',padx=18,pady=(12,5))
+r=tk.Tk();r.title('Orbit Universal Setup v'+VERSION);r.geometry('950x710')
+tk.Label(r,text='ORBIT — Install / Update / Uninstall',font=('Arial',17,'bold')).pack(anchor='w',padx=18,pady=(12,5))
 tk.Label(r,text='Choose availability everywhere on this computer, or only in one selected project. Uses existing coding host models; no other AI CLI.',wraplength=790,justify='left').pack(anchor='w',padx=18)
 scope=tk.StringVar(value='machine');section=tk.Frame(r);section.pack(anchor='w',padx=18,pady=8)
 for mode,title in [('machine','This computer (all projects)'),('project','One specific project')]:
@@ -46,10 +47,10 @@ def make_preview():
 def preview():
     try:make_preview()
     except (SetupError,OSError) as e:state['preview']=None;messagebox.showerror('Preview blocked',str(e))
-def go():
+def go(action='install'):
     try:
         c=make_preview()
-        if not messagebox.askyesno('Authorize Orbit installation',f'Install Orbit in {scope.get()} scope for {", ".join(args()[1])}?\n\nOnly verified bundled files and MCP configurations are written. External skills/MCPs are NOT installed automatically.'):
+        if not messagebox.askyesno('Authorize Orbit '+action,f'{action.title()} Orbit from THIS checked-out source in {scope.get()} scope for {", ".join(args()[1])}?\n\nOnly verified bundled files and MCP configurations are written. External skills/MCPs are NOT installed automatically.'):
             return
         again=plan(*args())
         if [(x.target,x.action,x.data) for x in c] != [(x.target,x.action,x.data) for x in again]: raise SetupError('Changes detected since preview; review again')
@@ -57,8 +58,50 @@ def go():
         status.set(f'Orbit installed: {len(paths)} changes. Restart/refresh the selected hosts.')
         messagebox.showinfo('Orbit installed','Orbit setup completed. Restart or refresh your selected coding hosts; verify orbit-core-native in their MCP lists. No external marketplace software was installed.')
     except (SetupError,OSError) as e:messagebox.showerror('Installation blocked',str(e))
-buttons=tk.Frame(r);buttons.pack(pady=11)
-tk.Button(buttons,text='Preview changes',width=23,command=preview).pack(side='left',padx=8)
-tk.Button(buttons,text='Install Orbit (one click)',width=28,command=go).pack(side='left',padx=8)
-tk.Button(buttons,text='Manage updates',width=19,command=open_update_manager).pack(side='left',padx=8)
+def preview_remove():
+    log.delete('1.0','end')
+    try:
+        path, hosts, selected_scope = args()
+        changes, warnings = plan_uninstall(path, hosts, selected_scope)
+        for item in changes:
+            action = 'REMOVE' if item.replacement is None else 'EDIT'
+            log.insert('end', f'{action:7} {item.description}\n  {item.path}\n')
+        for warning in warnings:
+            log.insert('end', warning+'\n')
+        status.set(f'Uninstall preview: {len(changes)} verified Orbit targets. No files changed.')
+    except (SetupError,OSError,ValueError) as e:
+        messagebox.showerror('Uninstall preview blocked',str(e))
+
+def remove():
+    try:
+        path, hosts, selected_scope = args()
+        changes, warnings = plan_uninstall(path,hosts,selected_scope)
+        preview_remove()
+        if not changes:
+            messagebox.showinfo('Nothing to uninstall','No verified Orbit-managed files found for selected scope/hosts. Existing customized files may require manual review.')
+            return
+        warning = '\n'.join(w for w in warnings if 'PRESERVE customized' in w)
+        if not messagebox.askyesno('Confirm safe Orbit uninstall',
+                f'Uninstall {len(changes)} verified Orbit targets for {", ".join(hosts)} in {selected_scope} scope?\n\n'
+                'All affected files are backed up before deletion or editing. Memory, owner docs and shared runtime stay.\n'
+                'Restart selected IDEs afterward.\n'+warning[:480]):
+            return
+        again, _ = plan_uninstall(path,hosts,selected_scope)
+        if again != changes:
+            raise SetupError('Uninstall plan changed; preview again')
+        backup = apply_uninstall(again)
+        status.set(f'Uninstalled {len(again)} Orbit targets. Backup: {backup}')
+        messagebox.showinfo('Orbit uninstalled',
+                            f'Backup: {backup}\n\nShared runtime and memories retained. Restart the affected coding hosts.')
+    except (SetupError,OSError,ValueError) as e:
+        messagebox.showerror('Orbit uninstall blocked',str(e))
+
+buttons=tk.Frame(r);buttons.pack(pady=5)
+tk.Button(buttons,text='Preview install/update',width=24,command=preview).pack(side='left',padx=5)
+tk.Button(buttons,text='Install from source',width=22,command=lambda:go('install')).pack(side='left',padx=5)
+tk.Button(buttons,text='Update from source',width=22,command=lambda:go('update')).pack(side='left',padx=5)
+tk.Button(buttons,text='Published updates',width=20,command=open_update_manager).pack(side='left',padx=5)
+remove_buttons=tk.Frame(r);remove_buttons.pack(pady=5)
+tk.Button(remove_buttons,text='Preview uninstall',width=26,command=preview_remove).pack(side='left',padx=6)
+tk.Button(remove_buttons,text='Uninstall selected hosts (backup first)',width=39,command=remove).pack(side='left',padx=6)
 r.mainloop()

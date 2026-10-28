@@ -3,6 +3,7 @@
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] — post-v0.25.1 work
+- **Unified setup (source candidate):** `Orbit Setup.cmd` opens the expanded native Windows setup UI; `orbit_setup.py` offers an interactive terminal menu or explicit preview-first `install`, `update`, and reversible `uninstall` for selected IDE hosts. Uninstall preserves shared runtime, SQLite, owner docs, unrelated MCP entries and custom files, with backups; it does not auto-update Git or bypass stock-file conflicts. Included in candidate ZIP smoke and Windows/Linux CI.
 - **M2 host-native delegation handoff (merged source, not published):** a read-only `orbit_task_handoff` produces source-scoped, approval-aware packets only for reserved tasks with a matching *reported* native IDE agent tool. Native invocation, session evidence and execution still belong entirely to the connected host; safe HOLD/serial fallback when unavailable. No extra model CLI or automatic agent spawning.
 
 - **Orbit Evidence Lens (merged source, not published):** original folder+project-scoped SQLite research source pointers with preview-first, revision-guarded review; bounded objective-relevant context pack and untrusted-source warnings. No automatic crawler, source execution, Git research notes, global cross-project sharing or new model service. Existing local memory retained; requires real IDE/local install acceptance.

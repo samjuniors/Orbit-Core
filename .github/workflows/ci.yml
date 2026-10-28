@@ -33,7 +33,9 @@ jobs:
       - name: Prepare reproducible desktop bundle for current source version
         run: python scripts/prepare_release_candidate.py
       - name: Compile Python sources
-        run: python -m compileall -q source installer.py scripts tests
+        run: python -m compileall -q source installer.py orbit_setup.py scripts tests
+      - name: Compile Windows GUI script
+        run: python -m py_compile install_orbit_gui.pyw
       - name: Unit and MCP protocol tests
         run: python -m unittest discover -s tests -v
       - name: Version consistency
