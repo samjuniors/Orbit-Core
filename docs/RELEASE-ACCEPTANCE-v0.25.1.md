@@ -1,9 +1,9 @@
 # Orbit v0.25.1 — Release acceptance checklist
 
-**Status: UNPUBLISHED CANDIDATE.** `VERSION=0.25.1` in the update-manager branch is not evidence of a release or installed version. Last published Orbit installer is v0.24.1. Do not tag, publish, or auto-roll out without external owner release approval and Issue #9's remaining security/host acceptance gates.
+**Status: UNPUBLISHED CANDIDATE.** `VERSION=0.25.1` on `main` is development source, not evidence of a published release or installed version. Last published Orbit installer is v0.24.1. Do not tag, publish, or auto-roll out without external owner release approval and Issue #9's remaining security/host acceptance gates.
 
 ## Published release and older version controls
-- [ ] Confirm the v0.25.1 `CHANGELOG.md` section accurately states new features, fixes, security warnings, and limits. `.github/workflows/release.yml` uses this section as the published GitHub Release description.
+- [x] Confirm the v0.25.1 `CHANGELOG.md` section covers accumulated candidate features, fixes, security warnings, and limits (release candidate branch; subject to final owner review). `.github/workflows/release.yml` uses this section as the published GitHub Release description.
 - [ ] After publishing **only with approval**, verify the release has all four versioned ZIP/MCPB/checksum assets and release notes, not only a tag. Before publication this remains NOT RUN.
 - [ ] Verify the **Older versions** link from the GUI and `orbit versions` open the official `https://github.com/samjuniors/Orbit-Core-MCP/releases` archive and **do not** invoke a downgrade or execute installer code.
 - [ ] Preserve v0.23.0 and v0.24.1 tags/release assets. Do not repoint, replace, or hide these to make the new release appear current.
@@ -31,9 +31,10 @@
 | ChatGPT connector/plugin | Managed by ChatGPT platform; local CLI cannot update | NOT RUN | HOLD |
 
 ## Automated evidence
+- **2026-10-28 baseline:** `main` commit `ba51b1363718cca3539a3820f0e4f06d83a22363` passed all five Linux/Windows CI jobs ([run #40675572257](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40675572257)); the candidate branch must pass its own CI before further promotion. These results do not establish IDE/GUI acceptance.
 - [ ] 5/5 GitHub CI matrix passes (Ubuntu Python 3.10–3.13; Windows Python 3.12), with source/bundle strict parity and source release ZIP digest check.
 - [ ] Release ZIP/Claude Desktop MCPB have v0.25.1 in all package manifests and canonical runtime inventory.
-- [ ] Disposable install + JSON-RPC 36 tools and v0.24.1-tag to v0.25.1 stock upgrade rehearsal passes on Linux/Windows.
+- [ ] Disposable install + JSON-RPC 39 tools and v0.24.1-tag to v0.25.1 stock upgrade rehearsal passes on Linux/Windows.
 - [ ] Update/older version/release notes unit tests pass (publisher notes bounded, no draft or incomplete asset eligible, no implicit downgrade, no code download on status).
 - [ ] Outstanding Issue #9 AUD-01 verifiable publisher origin, AUD-24 host-attested approvals, AUD-25/27 root-scoped security and AUD-28/30 browser/Windows command safety, macOS and actual IDE GUI host tests addressed or explicitly accepted by release owner.
 
