@@ -12,6 +12,30 @@ The current source is merged to `main`; its PR and CI prepare **test artifacts**
 
 Published v0.24.1 instructions below remain the only supported public installation instructions until v0.25.1 is separately approved and released. In particular, don't mistake an Actions artifact for a signed public release.
 
+## One Orbit Setup for Install / Update / Uninstall (merged source candidate)
+
+**Windows:** double-click **`Orbit Setup.cmd`** in your trusted Orbit checkout or extracted **v0.25.1 source-candidate** ZIP. It checks for Python 3.10–3.13 + Tkinter (prefers 3.12), opens one native window with **Install from source**, **Update from source**, **Published updates**, and **Uninstall selected hosts**. Python 3.14/3.15 are not selected for source acceptance because the current CI matrix does not verify them. No administrator privileges, extra AI models or network downloads are initiated by the launcher.
+
+**Terminal, Windows PowerShell:**
+
+```powershell
+cd "E:\\SOFTWARE\\Plugin\\Orbit-Core-MCP"
+py -3.12 orbit_setup.py                                    # interactive menu
+py -3.12 orbit_setup.py install --scope project --project "$HOME\\Orbit-M2-Lab" --hosts antigravity codex
+py -3.12 orbit_setup.py install --scope project --project "$HOME\\Orbit-M2-Lab" --hosts antigravity codex --apply
+py -3.12 orbit_setup.py update --scope project --project "$HOME\\Orbit-M2-Lab" --hosts antigravity codex --apply
+py -3.12 orbit_setup.py uninstall --scope project --project "$HOME\\Orbit-M2-Lab" --hosts antigravity codex
+py -3.12 orbit_setup.py uninstall --scope project --project "$HOME\\Orbit-M2-Lab" --hosts antigravity codex --apply
+```
+
+On Linux/macOS run `python3 orbit_setup.py` for the menu or replace `py -3.12` with a supported `python3`. **Without `--apply`, commands preview and don't mutate files.** `--scope machine` affects only current-account host registrations, not every OS login. Selecting one project requires an **existing absolute project directory**; no project or Git checkout is removed.
+
+**Two update paths:** `Update from source` reinstalls from **the currently checked-out local Git source** (use a reviewed `git pull --ff-only` to change the source first). `Published updates` opens the existing release manager, which validates official published release assets. The source installer is not an auto-updater, never silently executes downloaded Git changes, and stops on unrecognized customized files requiring manual review. Existing Git clones and other plugins are never cleaned.
+
+**Safe uninstall:** removes verified bundled agent/skill files and only the selected host's owned MCP registration; all originals are backed up to `~/.orbit-uninstall-backups/<timestamp>/` with an index. **Always preserves:** shared `~/.orbit-universal` runtime/updater (another project may still reference it), `ORBIT_LOCAL_DB`/SQLite memories, unrelated MCP servers, custom files and owner documents `AGENTS.md`/`CLAUDE.md`. A total removal of shared runtime from all existing projects is **not** claimed. If an old/custom launcher (such as `~/.orbit-universal/orbit_cli.py`) blocks reinstall, the installer deliberately stops; back it up and reconcile it explicitly, rather than forcing an unattended overwrite. Real host restart/connection must still be checked.
+
+**Published v0.24.1** does not contain this launcher. This functionality is in merged source and its candidate ZIP until a separate public release is approved.
+
 ## Get started (install once)
 
 **Windows / Antigravity / Codex / Claude Code / VS Code**
