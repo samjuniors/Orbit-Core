@@ -136,6 +136,35 @@ class SetupManagerTests(unittest.TestCase):
             orbit_setup.plan_uninstall(str(self.project), ["antigravity"])
         self.assertEqual(external.read_text(),"outside")
 
+    def test_symlink_parent_refused(self):
+        self.install(["antigravity"])
+        folder = self.project / ".agents/agents"
+        external = self.base / "outside-agents"
+        folder.rename(external)
+        try:
+            folder.symlink_to(external, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            external.rename(folder)
+            self.skipTest("Directory symlink unavailable")
+        with self.assertRaises(installer.SetupError):
+            orbit_setup.plan_uninstall(str(self.project), ["antigravity"])
+        self.assertTrue((external / "orbit-frontend.md").exists())
+
+    def test_uninstall_refuses_symlink_backup_store(self):
+        self.install(["antigravity"])
+        external = self.base / "external-backup"
+        external.mkdir()
+        shortcut = self.home / ".orbit-uninstall-backups"
+        try:
+            shortcut.symlink_to(external, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("Directory symlink unavailable")
+        changes, _ = orbit_setup.plan_uninstall(str(self.project), ["antigravity"])
+        with self.assertRaises(installer.SetupError):
+            orbit_setup.apply_uninstall(changes)
+        self.assertTrue((self.project / ".agents/agents/orbit-frontend.md").exists())
+        self.assertEqual(list(external.iterdir()), [])
+
     def test_machine_uninstall_leaves_project_scopes(self):
         self.install(["codex"],scope="machine")
         project = self.project / ".codex/config.toml"
