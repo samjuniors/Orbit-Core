@@ -31,11 +31,14 @@
 | ChatGPT connector/plugin | Managed by ChatGPT platform; local CLI cannot update | NOT RUN | HOLD |
 
 ## Automated evidence
+- **2026-10-28 candidate validation:** commit `56524c4916cfbcb25d95c81c87bc61b545e00f22` passed **5/5** GitHub Actions matrix jobs ([run #40677013610](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40677013610)): Ubuntu Python 3.10–3.13 and Windows Python 3.12. CI ran Python unittest/MCP protocol tests, installer ZIP smoke, v0.24.1 stock upgrade rehearsals (Python 3.12 Linux/Windows), source/version checks and strict desktop bundle parity (Ubuntu 3.12). The run produced unpublished host-acceptance artifact `orbit-v0.25.1-host-acceptance` (ID `12811132197`). These are automated checks, **not** direct IDE/GUI, rollback interruption, signing or permission acceptance.
 - **2026-10-28 baseline:** `main` commit `ba51b1363718cca3539a3820f0e4f06d83a22363` passed all five Linux/Windows CI jobs ([run #40675572257](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40675572257)); the candidate branch must pass its own CI before further promotion. These results do not establish IDE/GUI acceptance.
-- [ ] 5/5 GitHub CI matrix passes (Ubuntu Python 3.10–3.13; Windows Python 3.12), with source/bundle strict parity and source release ZIP digest check.
-- [ ] Release ZIP/Claude Desktop MCPB have v0.25.1 in all package manifests and canonical runtime inventory.
-- [ ] Disposable install + JSON-RPC 39 tools and v0.24.1-tag to v0.25.1 stock upgrade rehearsal passes on Linux/Windows.
+- [x] 5/5 GitHub CI matrix passes (Ubuntu Python 3.10–3.13; Windows Python 3.12), with source/bundle strict parity and source release ZIP digest check — run #40677013610.
+- [x] CI source/packaging version checks and desktop MCPB strict parity passed for v0.25.1 candidate — run #40677013610; physical host inspection remains open.
+- [x] CI disposable ZIP/MCP smoke and v0.24.1-tag to v0.25.1 stock upgrade rehearsal passed on Linux/Windows — run #40677013610; manual customized-profile/rollback testing remains open.
 - [ ] Update/older version/release notes unit tests pass (publisher notes bounded, no draft or incomplete asset eligible, no implicit downgrade, no code download on status).
 - [ ] Outstanding Issue #9 AUD-01 verifiable publisher origin, AUD-24 host-attested approvals, AUD-25/27 root-scoped security and AUD-28/30 browser/Windows command safety, macOS and actual IDE GUI host tests addressed or explicitly accepted by release owner.
+
+**Owner intent: approve v0.25.1 publication requested 2026-10-28, pending completion/acceptance of documented security and live-host gates. No tag, release, or merge is authorized to bypass unresolved safety checks.**
 
 **Current release gate: HOLD.** No release signing, native host prompt rendering, actual GUI acceptance or compatibility-verified rollback should be claimed based solely on this source branch.
