@@ -99,7 +99,7 @@ class SetupManagerTests(unittest.TestCase):
         agent.write_text("owner custom edits, do not delete")
         changes, warnings = orbit_setup.plan_uninstall(str(self.project), ["antigravity"])
         self.assertNotIn(agent, [c.path for c in changes])
-        self.assertTrue(any(str(agent) in w for w in warnings))
+        self.assertTrue(any('PRESERVE customized/unrecognized file' in w and agent.name in w for w in warnings))
         orbit_setup.apply_uninstall(changes)
         self.assertEqual(agent.read_text(), "owner custom edits, do not delete")
 
