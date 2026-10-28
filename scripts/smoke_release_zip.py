@@ -48,6 +48,9 @@ def smoke(root=ROOT):
                 if z.read("server/" + path.name) != path.read_bytes():
                     raise RuntimeError("Packaged server/source mismatch: " + path.name)
 
+        for file in ("orbit_setup.py", "Orbit Setup.cmd"):
+            if not (pkg / file).is_file():
+                raise RuntimeError("Unified setup launcher missing from candidate ZIP: " + file)
         workspace = temporary / "disposable-project"
         workspace.mkdir()
         home = temporary / "isolated-home"
@@ -93,6 +96,16 @@ def smoke(root=ROOT):
             raise RuntimeError("Packaged MCP tool inventory mismatch")
         if replies[2]["result"].get("isError"):
             raise RuntimeError("Packaged resume returned tool error")
+        uninstall = subprocess.run([sys.executable, str(pkg / 'orbit_setup.py'), 'uninstall',
+                                   '--scope', 'project', '--project', str(workspace),
+                                   '--hosts', 'codex', '--apply'],capture_output=True,text=True,
+                                   timeout=25,env=env)
+        if uninstall.returncode != 0 or 'Uninstalled' not in uninstall.stdout:
+            raise RuntimeError('Unified setup uninstall smoke failed: '+uninstall.stderr)
+        if 'orbit-core-native' in (workspace / '.codex/config.toml').read_text():
+            raise RuntimeError('Unified setup left Codex Orbit MCP registration')
+        if not server.is_file():
+            raise RuntimeError('Uninstall removed shared Orbit MCP runtime')
         return {"version": version, "sha256": actual, "tools": len(tools),
                 "result": "DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS",
                 "note": "No real IDE, desktop UI or browser has been tested"}
