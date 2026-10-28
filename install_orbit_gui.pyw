@@ -35,7 +35,30 @@ tk.Button(choices,text='Detect hosts',command=refresh_detected).pack(side='left'
 tk.Label(r,text='Hosts selected by local CLI/config evidence; review or override manually.',fg='gray').pack(anchor='w',padx=18)
 log=tk.Text(r,height=23,wrap='none');log.pack(padx=18,pady=8,fill='both',expand=True)
 status=tk.StringVar(value='Ready. A safety confirmation is required before writing files.');tk.Label(r,textvariable=status,anchor='w').pack(fill='x',padx=18)
-state={'preview':None,'choices':None}
+state={'preview':None,'choices':None,'busy':False}
+
+def installation_action(changes):
+    """Derive the action from the selected scope's actual file plan."""
+    writable=[c for c in changes if c.action not in {'SKIP','PRESERVE'}]
+    if not writable:
+        return 'current'
+    if any(c.action in {'UPGRADE','MERGE'} for c in writable):
+        return 'update'
+    if any(c.target.exists() for c in changes):
+        return 'repair'
+    return 'install'
+
+def refresh_action(*_):
+    if state['busy']:
+        return
+    try:
+        action=installation_action(plan(*args()))
+        labels={'install':'Install Orbit','update':'Update Orbit','repair':'Repair installation','current':'Orbit is up to date'}
+        primary.config(text=labels[action],state='disabled' if action=='current' else 'normal')
+        status.set('Orbit is up to date for the selected scope and hosts.' if action=='current' else 'Ready: '+labels[action]+'. Preview and approval required before changes.')
+    except (SetupError,OSError,ValueError) as e:
+        primary.config(text='Review required',state='disabled')
+        status.set(str(e))
 def args():return (project.get() if scope.get()=='project' else None,[h for h,b in selection.items() if b.get()],scope.get())
 def make_preview():
     log.delete('1.0','end')
@@ -47,17 +70,40 @@ def make_preview():
 def preview():
     try:make_preview()
     except (SetupError,OSError) as e:state['preview']=None;messagebox.showerror('Preview blocked',str(e))
-def go(action='install'):
+def go():
+    if state['busy']:
+        return
+    state['busy']=True
+    for button in operation_buttons:
+        button.config(state='disabled')
     try:
+        selected=args()
         c=make_preview()
-        if not messagebox.askyesno('Authorize Orbit '+action,f'{action.title()} Orbit from THIS checked-out source in {scope.get()} scope for {", ".join(args()[1])}?\n\nOnly verified bundled files and MCP configurations are written. External skills/MCPs are NOT installed automatically.'):
+        action=installation_action(c)
+        if action=='current':
+            messagebox.showinfo('Orbit is up to date','No installation changes are needed.')
             return
-        again=plan(*args())
-        if [(x.target,x.action,x.data) for x in c] != [(x.target,x.action,x.data) for x in again]: raise SetupError('Changes detected since preview; review again')
+        if not messagebox.askyesno('Authorize Orbit '+action,f'{action.title()} Orbit from THIS checked-out source in {selected[2]} scope for {", ".join(selected[1])}?\n\nOnly verified bundled files and MCP configurations are written. External skills/MCPs are NOT installed automatically.'):
+            return
+        if args()!=selected:
+            raise SetupError('Selection changed; preview again')
+        again=plan(*selected)
+        if [(x.target,x.action,x.data) for x in c] != [(x.target,x.action,x.data) for x in again]:
+            raise SetupError('Changes detected since preview; review again')
+        status.set('Applying Orbit '+action+'...')
+        r.update_idletasks()
         paths=install(again)
-        status.set(f'Orbit installed: {len(paths)} changes. Restart/refresh the selected hosts.')
-        messagebox.showinfo('Orbit installed','Orbit setup completed. Restart or refresh your selected coding hosts; verify orbit-core-native in their MCP lists. No external marketplace software was installed.')
-    except (SetupError,OSError) as e:messagebox.showerror('Installation blocked',str(e))
+        if installation_action(plan(*selected))!='current':
+            raise SetupError('Files were written but verification found remaining changes; review the preview before retrying')
+        result={'install':'installed','update':'updated','repair':'repaired'}[action]
+        messagebox.showinfo('Orbit '+result+' successfully',f'Orbit {result} successfully.\n\nRestart or refresh your selected coding hosts and verify orbit-core-native in their MCP lists.')
+    except (SetupError,OSError,ValueError) as e:
+        messagebox.showerror('Orbit setup blocked',str(e))
+    finally:
+        state['busy']=False
+        for button in operation_buttons:
+            button.config(state='normal')
+        refresh_action()
 def preview_remove():
     log.delete('1.0','end')
     try:
@@ -91,17 +137,29 @@ def remove():
             raise SetupError('Uninstall plan changed; preview again')
         backup = apply_uninstall(again)
         status.set(f'Uninstalled {len(again)} Orbit targets. Backup: {backup}')
+        refresh_action()
         messagebox.showinfo('Orbit uninstalled',
                             f'Backup: {backup}\n\nShared runtime and memories retained. Restart the affected coding hosts.')
     except (SetupError,OSError,ValueError) as e:
         messagebox.showerror('Orbit uninstall blocked',str(e))
 
 buttons=tk.Frame(r);buttons.pack(pady=5)
-tk.Button(buttons,text='Preview install/update',width=24,command=preview).pack(side='left',padx=5)
-tk.Button(buttons,text='Install from source',width=22,command=lambda:go('install')).pack(side='left',padx=5)
-tk.Button(buttons,text='Update from source',width=22,command=lambda:go('update')).pack(side='left',padx=5)
-tk.Button(buttons,text='Published updates',width=20,command=open_update_manager).pack(side='left',padx=5)
+operation_buttons=[]
+def action_button(parent,text,command,width=24):
+    button=tk.Button(parent,text=text,width=width,command=command)
+    button.pack(side='left',padx=5)
+    operation_buttons.append(button)
+    return button
+
+action_button(buttons,'Preview install/update',preview)
+primary=action_button(buttons,'Checking installation...',go)
+action_button(buttons,'Published updates',open_update_manager,20)
 remove_buttons=tk.Frame(r);remove_buttons.pack(pady=5)
-tk.Button(remove_buttons,text='Preview uninstall',width=26,command=preview_remove).pack(side='left',padx=6)
-tk.Button(remove_buttons,text='Uninstall selected hosts (backup first)',width=39,command=remove).pack(side='left',padx=6)
+action_button(remove_buttons,'Preview uninstall',preview_remove,26)
+action_button(remove_buttons,'Uninstall selected hosts (backup first)',remove,39)
+scope.trace_add('write',refresh_action)
+project.trace_add('write',refresh_action)
+for selected in selection.values():
+    selected.trace_add('write',refresh_action)
+refresh_action()
 r.mainloop()
