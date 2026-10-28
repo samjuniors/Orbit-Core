@@ -119,7 +119,11 @@ class UniversalSetupTests(unittest.TestCase):
 
     def test_reject_root_and_symlink(self):
         with self.assertRaises(installer.SetupError):installer.plan(self.project.anchor,scope='project')
-        p=Path(self.t.name)/'linked';p.symlink_to(self.project,target_is_directory=True)
+        p=Path(self.t.name)/'linked'
+        try:
+            p.symlink_to(self.project,target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("Symlinks require elevated privileges on this system")
         with self.assertRaises(installer.SetupError):installer.plan(p,scope='project')
 
     def test_project_manifest_configs_valid(self):
@@ -157,7 +161,11 @@ class UniversalSetupTests(unittest.TestCase):
 
     def test_mcpb_structure(self):
         import zipfile
-        with zipfile.ZipFile(ROOT/f'ORBIT-Claude-Desktop-v{installer.VERSION}.mcpb') as z:
+        bundle_path = ROOT / f'ORBIT-Claude-Desktop-v{installer.VERSION}.mcpb'
+        if not bundle_path.exists():
+            import scripts.prepare_release_candidate as prep
+            prep.prepare(ROOT)
+        with zipfile.ZipFile(bundle_path) as z:
             m=json.loads(z.read('manifest.json'))
             self.assertEqual(m['server']['type'],'python')
             self.assertEqual(len(m['tools']),34)

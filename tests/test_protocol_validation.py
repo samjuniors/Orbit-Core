@@ -19,7 +19,11 @@ class ProtocolValidationTests(unittest.TestCase):
         # Release packaging requires scripts/check_version.py --strict-bundle.
         import zipfile
         version = (ROOT / 'VERSION').read_text().strip()
-        with zipfile.ZipFile(ROOT / f'ORBIT-Claude-Desktop-v{version}.mcpb') as bundle:
+        bundle_path = ROOT / f'ORBIT-Claude-Desktop-v{version}.mcpb'
+        if not bundle_path.exists():
+            import scripts.prepare_release_candidate as prep
+            prep.prepare(ROOT)
+        with zipfile.ZipFile(bundle_path) as bundle:
             manifest = json.loads(bundle.read('manifest.json'))
             self.assertEqual(manifest['version'], version)
             for source in sorted((ROOT / 'source/runtime').glob('*.py')):

@@ -31,7 +31,8 @@ class ResearchProjectIsolationTests(unittest.TestCase):
                 "confirm_write": True,
             }
 
-            with sqlite3.connect(db) as conn:
+            conn = sqlite3.connect(db)
+            try:
                 conn.row_factory = sqlite3.Row
                 orbit_evidence.setup(conn)
                 result = orbit_evidence.save(conn, root_a.resolve(), "project-a", args)
@@ -42,9 +43,12 @@ class ResearchProjectIsolationTests(unittest.TestCase):
                 self.assertEqual(saved["status"], "REFERENCE_ONLY")
                 self.assertFalse(saved["network_verified"])
                 self.assertIn("never agent instructions", saved["source_trust"])
+            finally:
+                conn.close()
 
             # Reopen SQLite to model an Orbit/IDE restart.
-            with sqlite3.connect(db) as conn:
+            conn = sqlite3.connect(db)
+            try:
                 conn.row_factory = sqlite3.Row
                 orbit_evidence.setup(conn)
                 query = {"objective": "agent memory research", "limit": 6}
@@ -68,12 +72,15 @@ class ResearchProjectIsolationTests(unittest.TestCase):
                 # Verify there is no hidden direct-record cross-project access.
                 self.assertIsNone(orbit_evidence.current(conn, root_a.resolve(), "project-b", args["source_key"]))
                 self.assertIsNone(orbit_evidence.current(conn, root_b.resolve(), "project-a", args["source_key"]))
+            finally:
+                conn.close()
 
     def test_research_is_not_returned_without_objective_match(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "todo"
             root.mkdir()
-            with sqlite3.connect(Path(temp) / "db.sqlite3") as conn:
+            conn = sqlite3.connect(Path(temp) / "db.sqlite3")
+            try:
                 conn.row_factory = sqlite3.Row
                 orbit_evidence.setup(conn)
                 orbit_evidence.save(conn, root.resolve(), "todo", {
@@ -89,6 +96,8 @@ class ResearchProjectIsolationTests(unittest.TestCase):
                 })
                 self.assertEqual(result["status"], "NO_RELEVANT_REFERENCES")
                 self.assertEqual(result["sources"], [])
+            finally:
+                conn.close()
 
 
 if __name__ == "__main__":
