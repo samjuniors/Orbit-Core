@@ -144,9 +144,9 @@ The MCP runtime focuses on **project state and coordination**, while the host re
 From a source checkout with a supported Python interpreter:
 
 ```sh
+python3 scripts/prepare_release_candidate.py
 python3 -m compileall -q source installer.py orbit_setup.py scripts tests
 python3 -m unittest discover -s tests -v
-python3 scripts/prepare_release_candidate.py
 python3 scripts/check_version.py
 python3 scripts/build_release.py --verify
 ```
