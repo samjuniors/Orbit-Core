@@ -2,6 +2,7 @@
 
 Run: python -m unittest discover -s tests -p 'test_research_project_isolation.py' -v
 """
+from contextlib import closing
 import sqlite3
 import sys
 import tempfile
@@ -31,7 +32,7 @@ class ResearchProjectIsolationTests(unittest.TestCase):
                 "confirm_write": True,
             }
 
-            with sqlite3.connect(db) as conn:
+            with closing(sqlite3.connect(db)) as conn:
                 conn.row_factory = sqlite3.Row
                 orbit_evidence.setup(conn)
                 result = orbit_evidence.save(conn, root_a.resolve(), "project-a", args)
@@ -44,7 +45,7 @@ class ResearchProjectIsolationTests(unittest.TestCase):
                 self.assertIn("never agent instructions", saved["source_trust"])
 
             # Reopen SQLite to model an Orbit/IDE restart.
-            with sqlite3.connect(db) as conn:
+            with closing(sqlite3.connect(db)) as conn:
                 conn.row_factory = sqlite3.Row
                 orbit_evidence.setup(conn)
                 query = {"objective": "agent memory research", "limit": 6}
@@ -73,7 +74,7 @@ class ResearchProjectIsolationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "todo"
             root.mkdir()
-            with sqlite3.connect(Path(temp) / "db.sqlite3") as conn:
+            with closing(sqlite3.connect(Path(temp) / "db.sqlite3")) as conn:
                 conn.row_factory = sqlite3.Row
                 orbit_evidence.setup(conn)
                 orbit_evidence.save(conn, root.resolve(), "todo", {
