@@ -59,7 +59,7 @@ def _owned_entry(value, home, typed=None):
 def _read_file(path):
     if not path.exists() and not path.is_symlink():
         return None
-    if path.is_symlink() or not path.is_file():
+    if path.is_symlink() or any(parent.is_symlink() for parent in path.parents) or not path.is_file():
         raise installer.SetupError("Refusing symlink or non-file Orbit target: " + str(path))
     return path.read_bytes()
 
@@ -197,16 +197,26 @@ def apply_uninstall(changes):
         if _read_file(c.path) != c.original:
             raise installer.SetupError("Uninstall plan stale: " + str(c.path))
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
-    backup = installer.user_home() / ".orbit-uninstall-backups" / stamp
-    backup.mkdir(parents=True, exist_ok=False)
+    backup_root = installer.user_home() / ".orbit-uninstall-backups"
+    if backup_root.is_symlink():
+        raise installer.SetupError("Refusing symlink uninstall backup root")
+    backup = backup_root / stamp
+    backup.mkdir(parents=True, exist_ok=False, mode=0o700)
+    if os.name != "nt":
+        backup.chmod(0o700)
     manifest = []
     for i, c in enumerate(changes):
         dest = backup / f"{i:03d}.bak"
         with dest.open("xb") as file:
             file.write(c.original)
+        if os.name != "nt":
+            dest.chmod(0o600)
         manifest.append({"original_path": str(c.path), "backup_name": dest.name,
                          "action": "REMOVE" if c.replacement is None else "EDIT"})
-    (backup / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    index = backup / "manifest.json"
+    index.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    if os.name != "nt":
+        index.chmod(0o600)
     for c in changes:
         if _read_file(c.path) != c.original:
             raise installer.SetupError("Partial uninstall: file changed; see backup " + str(backup))
