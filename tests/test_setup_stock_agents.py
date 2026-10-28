@@ -14,7 +14,7 @@ class StockAgentUpgradeTests(unittest.TestCase):
         for windows in (False, True):
             for host in ('antigravity', 'claude-code'):
                 with self.subTest(windows=windows, host=host), tempfile.TemporaryDirectory() as folder:
-                    home = Path(folder)
+                    home = Path(folder).resolve()
                     if host == 'antigravity':
                         target = home / '.gemini/config/agents/orbit-architect.md'
                         data = stock
@@ -25,10 +25,10 @@ class StockAgentUpgradeTests(unittest.TestCase):
                         data = data.replace(b'\n', b'\r\n')
                     target.parent.mkdir(parents=True)
                     target.write_bytes(data)
-                    env = {'ORBIT_SETUP_HOME': folder, 'ORBIT_UNIVERSAL_HOME': str(home / '.orbit-universal')}
+                    env = {'ORBIT_SETUP_HOME': str(home), 'ORBIT_UNIVERSAL_HOME': str(home / '.orbit-universal')}
                     with patch.dict(os.environ, env):
                         changes = installer.plan(None, [host], 'machine')
-                        change = next(c for c in changes if c.target == target)
+                        change = next(c for c in changes if c.target.resolve() == target.resolve())
                         self.assertEqual(change.action, 'UPGRADE')
                         self.assertEqual(target.read_bytes(), data, 'Preview must not write')
                         installer.install(changes)
@@ -39,12 +39,12 @@ class StockAgentUpgradeTests(unittest.TestCase):
     def test_owner_edit_remains_blocked_without_writes(self):
         stock = (Path(__file__).parent / 'fixtures/orbit-architect-7e1372f.md').read_bytes()
         with tempfile.TemporaryDirectory() as folder:
-            home = Path(folder)
+            home = Path(folder).resolve()
             target = home / '.gemini/config/agents/orbit-architect.md'
             target.parent.mkdir(parents=True)
             data = stock + b'\nOwner customization\n'
             target.write_bytes(data)
-            with patch.dict(os.environ, {'ORBIT_SETUP_HOME': folder, 'ORBIT_UNIVERSAL_HOME': str(home / '.orbit-universal')}):
+            with patch.dict(os.environ, {'ORBIT_SETUP_HOME': str(home), 'ORBIT_UNIVERSAL_HOME': str(home / '.orbit-universal')}):
                 with self.assertRaisesRegex(installer.SetupError, 'no overwrite'):
                     installer.plan(None, ['antigravity'], 'machine')
                 self.assertEqual(target.read_bytes(), data)

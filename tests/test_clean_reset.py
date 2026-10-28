@@ -14,7 +14,7 @@ class CleanResetTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.home = self.base / 'home'
         self.project = self.base / 'project'
         self.project.mkdir()
@@ -74,7 +74,7 @@ class CleanResetTests(unittest.TestCase):
         self.assertNotIn(installer.SERVER, self.codex.read_text())
         self.assertEqual((self.home / '.gemini/config/agents/other-agent.md').read_bytes(), b'unrelated agent')
         manifest = json.loads((backup / 'manifest.json').read_text())
-        entry = next(x for x in manifest if x['original_path'] == str(self.agent))
+        entry = next(x for x in manifest if Path(x['original_path']).resolve() == self.agent.resolve())
         self.assertEqual((backup / entry['backup_name']).read_bytes(), b'customized conflicting Orbit agent')
         for project, scope in [(None, 'machine'), (self.project, 'project')]:
             installer.install(installer.plan(project, installer.HOSTS, scope))
@@ -164,7 +164,7 @@ class CleanResetTests(unittest.TestCase):
         changes = self.plan()
         original_unlink = Path.unlink
         def fail_target(path, *args, **kwargs):
-            if path == self.agent:
+            if Path(path).resolve() == self.agent.resolve():
                 raise PermissionError('target in use')
             return original_unlink(path, *args, **kwargs)
         with patch.object(Path, 'unlink', fail_target):
@@ -189,7 +189,7 @@ class CleanResetTests(unittest.TestCase):
         original = installer.PACKAGE
         def move_package(*args, **kwargs):
             result = real_plan(*args, **kwargs)
-            installer.PACKAGE = self.home / '.orbit-universal/active-setup'
+            installer.PACKAGE = (self.home / '.orbit-universal/active-setup').resolve()
             return result
         try:
             with patch.object(orbit_setup, 'plan_uninstall', side_effect=move_package):

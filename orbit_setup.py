@@ -299,7 +299,9 @@ def plan_clean_reset(project=None, *, erase_memory=False):
         if raw is not None:
             planned[path] = Removal(path, raw, None, desc)
     def tree(folder, desc):
-        if folder == installer.PACKAGE or folder in installer.PACKAGE.parents:
+        pkg = installer.PACKAGE.resolve()
+        f_res = folder.resolve()
+        if f_res == pkg or f_res in pkg.parents:
             raise installer.SetupError("Run Setup from a separate checkout, outside the installation being cleared")
         for path in _tree_files(folder):
             remove_file(path, desc)
