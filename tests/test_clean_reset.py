@@ -14,7 +14,7 @@ class CleanResetTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.home = self.base / 'home'
         self.project = self.base / 'project'
         self.project.mkdir()
