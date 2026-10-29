@@ -253,6 +253,68 @@ def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UN
     }
 
 
+def adaptive_workflow(objective, categories, role, host_tools, candidates, permission_state):
+    """Bounded M4 recommendation, not a host tool dispatch or model decision.
+
+    Names and permission status are *reported*, not attested. The connected IDE
+    must check actual availability, schemas, cost and authorization itself.
+    """
+    words=set(re.findall(r'[a-z0-9]+',objective.lower()))
+    sensitive=bool(words & {'release','publish','deploy','production','security',
+                            'secrets','credentials','permission','migration',
+                            'rollback','delete','destructive'})
+    broad=bool(words & {'architecture','roadmap','redesign','entire','platform',
+                        'system','multistage','migration'}) or len(categories)>1
+    mode='HIGH_RISK_REVIEW' if sensitive else 'MULTI_STAGE' if broad else 'FOCUSED'
+    context='FULL_REVIEW' if sensitive or broad else 'COMPACT_RESUME'
+    approved=permission_state!='DENIED'
+    # Deliberately use only recognized exact caller-reported host tool labels.
+    # "Agent" / "Task" are ambiguous; even a match needs schema inspection.
+    native=next((x for x in host_tools
+                 if x in ('invoke_subagent','spawn_agent','Agent','Task')),None)
+    if not approved:
+        execution='HOLD_PERMISSION_DENIED'
+        native=None
+    elif mode=='HIGH_RISK_REVIEW':
+        execution='HOST_APPROVAL_AND_REVIEW_REQUIRED'
+    elif native:
+        execution='VERIFY_NATIVE_HOST_TOOL'
+    else:
+        execution='HOST_SERIAL_FALLBACK'
+    return {
+        'workflow_mode':mode,
+        'execution':{
+            'decision':execution,
+            'native_tool_hint':native,
+            'host_tool_verified':False,
+            'agent_invoked':False,
+            'model_choice':'HOST_CONTROLLED',
+            'permission_verified':False,
+        },
+        'context':{
+            'mode':context,
+            'tool':'orbit_project_resume',
+            'compact':context=='COMPACT_RESUME',
+            'max_chars':1500 if context=='COMPACT_RESUME' else None,
+            'requires_canonical_git_tests':True,
+            'root_bound_retrieval':True,
+        },
+        'skill_review':{
+            'candidate':candidates[0]['name'] if candidates else None,
+            'status':'REVIEW_LOCAL_SKILL_BEFORE_USE' if candidates else 'NO_MATCH',
+            'auto_install':False,
+        },
+        'next':('Stop: permission denial requires fresh real host/user consent.'
+                if not approved else
+                'Inspect risk, canonical docs, Git state and exact host permission before acting.'
+                if sensitive else
+                'Inspect actual host tool schema and get real permission; use serial host work if unavailable.'
+                if native else
+                'Use the connected host serially, with targeted context; no subagent is implied.'),
+        'evidence':'Advisory inference from objective + caller-reported tool names. No tool execution, verified approval, model switch or changed files.',
+    }
+
+
 def select(project_root, objective, host_tools=None, *, home=None, permission_state='UNKNOWN'):
     if not isinstance(objective,str) or not objective.strip() or len(objective)>1500: raise ValueError('objective must contain 1..1500 characters')
     if not isinstance(host_tools,list) or len(host_tools)>80 or any(not isinstance(x,str) or len(x)>100 for x in host_tools):raise ValueError('host_tools must be a short list of names')
@@ -294,10 +356,12 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
                  'security':'orbit-security','devops':'orbit-devops'}
         role=next((aliases[c] for c in categories if c in aliases),'orbit')
     recommended=skill_policy(role,available)
+    adaptive_plan=adaptive_workflow(objective,categories,role,host_tools,candidates,permission_state)
     browser_plan = browser_workflow(host_tools,available['mcp_servers'],permission_state=permission_state) if ('qa' in categories or role=='orbit-qa') else None
     return {'objective':objective,'role_skill_preferences':recommended,'categories':categories,'installed_matches':candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
             'optional_browser_provider':browser_provider,
             'browser_workflow':browser_plan,
+            'adaptive_workflow':adaptive_plan,
             'permission_state_reported':permission_state,
             'permission_verified':False,
         'recommended_action':'HOLD_PERMISSION_DENIED' if permission_state=='DENIED' else ('REUSE_AND_VERIFY_INSTALLED' if candidates else ('BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL' if research else 'USE_EXISTING_HOST_CAPABILITIES')),

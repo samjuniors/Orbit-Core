@@ -8,6 +8,11 @@ No additional user-facing changes are scheduled in this entry. `NEXT_VERSION=0.2
 
 ## [0.26.0] — Development release candidate (NOT PUBLISHED; NOT production-certified)
 
+**Additional v0.26.0 development work (still not a published release)**
+- **M3 consent hardening:** the existing capability selector now accepts optional caller-reported `permission_state`; denied browser/computer use yields a HOLD instead of recommending another provider.
+- **M4 adaptive guidance:** a small `adaptive_workflow` recommendation chooses focused compact resume or full review according to task risk/complexity, and suggests only available host-native or serial execution paths. All tool/permission/model execution remains host-controlled; no new MCP tool or automatic installation.
+- Automated regression tests, including simulated context-byte comparisons, are required before integrating into the v0.26.0 source candidate. Real host/context savings remain unverified.
+
 **What’s new**
 - **Compact context on resume (M4.1):** the existing `orbit_project_resume` accepts opt-in `compact=true`, an objective and a bounded JSON-character budget. It summarizes approved local intake (approval is caller-reported), a project-matched checkpoint, a local build recovery hint and relevant research source pointers. Full resume remains the default. It does not fetch full Notion pages, reuse unscoped memories or invoke another AI model.
 - **Adaptive browser selection:** prioritize genuinely available, authorized host-native browser/computer-use tools before a local installed browser and optional reviewed agent-browser integration; do not silently operate personal browser profiles.

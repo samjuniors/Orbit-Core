@@ -28,6 +28,7 @@ The focus is **a trustworthy local orchestrator inside existing coding IDEs**, n
 ### M4 — P1: Adaptive capability surfaces and reusable context
 - Reuse native host features, owned code, on-demand skills or a small MCP surface according to task—not a universal dependency pile. Extend the M1 compact pack to accepted decisions and checkpoint context only after verifying project-root binding and provenance.
 - **Gate:** compare tool-turns, context bytes, recovery accuracy and install friction on Orbit's real product benchmarks.
+- **M4.2 v0.26.0 source follow-up:** Existing `orbit_capability_select` now recommends focused compact resume, multi-stage full review, or high-risk permission/review gates based on the objective and caller-reported host tool names. No subagent executes from a selector, no model is switched, and actual host permissions remain external. Synthetic JSON-byte savings tests are useful but do not establish real model-token/credit savings; benchmark signed-in IDE use later.
 
 ### M5 — P2: Evidence-backed learning (opt-in)
 - Suggest reusable project-scoped practices only after repeated verified outcomes and human review; never silently create/modify global skills, run continuous watchers, store full chats, or promote untrusted research prose to trusted instructions.
