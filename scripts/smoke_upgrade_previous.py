@@ -93,7 +93,7 @@ def test_upgrade(previous_root, candidate_root=ROOT):
         if not protected.is_file():
             raise RuntimeError("Previous stock task lifecycle reference missing")
         original = protected.read_bytes()
-        owner_edit = original + b"\\n# Owner-specific workflow customization\\n"
+        owner_edit = original + b"\n# Owner-specific workflow customization\n"
         protected.write_bytes(owner_edit)
         blocked = subprocess.run(new_command, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, text=True, env=env, timeout=45)
