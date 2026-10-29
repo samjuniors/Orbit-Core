@@ -372,7 +372,7 @@ def reported(conn,a,root):
         # accepted task/checkpoint history. The observation remains untrusted.
         previous=old['note'] or ''
         marker='HOST_TERMINAL_REPORTED:'+state
-        note=(previous[:max(0,500-len(marker)-2)]+'; ' if previous else '')+marker
+        note=previous+('; ' if previous else '')+marker
         out=_update(conn,old,outcome,evidence=evidence,
                     changed_paths=_serialize(paths),note=note)
     check=scope_report(json.loads(old['write_paths']),paths)
