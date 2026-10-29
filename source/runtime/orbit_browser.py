@@ -240,7 +240,10 @@ def run(root, a, preview):
     source_after=orbit_build.code_fingerprint(root)
     if source_after!=source_before:
         failures.append({'step':0,'op':'source_revision','message':'Project source changed during browser QA'})
-    passed=not errors and not failures
+    if blocked:
+        failures.append({'step':0,'op':'network_origin',
+                         'message':'App attempted requests outside its authorized preview origin; review blocked hostnames.'})
+    passed=not errors and not failures and not blocked
     # Bounded reporting; never treat console or screenshot as proof of security compliance.
     result={'status':'PASS' if passed else 'FAIL','url':url,'viewport':viewport_name,
             'title':title,'browser':browser_label,'actions':results,'errors':errors[:10],'failures':failures[:10],
