@@ -337,8 +337,11 @@ class HostHandoffTests(unittest.TestCase):
         recovered=sqlite3.connect(str(dbfile))
         recovered.row_factory=sqlite3.Row
         try:
+            # Match the canonical project_root used by Orbit's MCP on Windows
+            # (temp path casing/normalization may differ from an unresolved Path).
+            canonical=orbit_mcp.project_root({'project_root':str(self.root)})
             listing=orbit_tasks.read_tasks(recovered,
-                {'project':'todo'},self.root)
+                {'project':'todo'},canonical)
             self.assertEqual(listing['tasks'][0]['status'],'RUNNING')
             self.assertTrue(listing['host_reconciliation']['needs_host_reconciliation'])
             self.assertFalse(listing['host_reconciliation']['agent_liveness_verified'])
@@ -347,7 +350,7 @@ class HostHandoffTests(unittest.TestCase):
             rec=orbit_tasks.reported(recovered,{'project':'todo','task_key':'frontend',
                 'expected_revision':3,'outcome':'BLOCKED','evidence':'MCP restarted and cannot find host state',
                 'observed_host_session':'actual-session-123456','host_state':'UNKNOWN',
-                'confirm_write':True},self.root)
+                'confirm_write':True},canonical)
             self.assertEqual(rec['status'],'HOLD_HOST_RECONCILIATION')
             self.assertEqual(listing['tasks'][0]['host_session'],'actual-session-123456')
             self.assertEqual(recovered.execute('SELECT status FROM orbit_agent_tasks').fetchone()[0],'RUNNING')
