@@ -108,6 +108,20 @@ class PortableTests(unittest.TestCase):
                 self.assertEqual(r['status'],'IMPORTED')
             finally: fresh.close()
 
+    def test_partial_database_counts_do_not_swallow_unrelated_sqlite_errors(self):
+        import orbit_portable
+        partial=sqlite3.connect(':memory:')
+        self.addCleanup(partial.close)
+        self.assertEqual(orbit_portable.counts(partial,self.b,'lab'),
+                         {'tasks':0,'research':0})
+        self.assertEqual(partial.execute(
+            "SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0],0)
+        # Only a truly missing table is treated as absent. A corrupt or older
+        # incompatible schema must be diagnosed, not reported as zero records.
+        partial.execute('CREATE TABLE orbit_agent_tasks(project_root TEXT)')
+        with self.assertRaises(sqlite3.OperationalError):
+            orbit_portable.counts(partial,self.b,'lab')
+
     def test_uninitialized_database_counts_and_transfer(self):
         import orbit_portable
         empty_db=sqlite3.connect(':memory:')
