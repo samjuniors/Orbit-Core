@@ -18,7 +18,6 @@ The focus is **a trustworthy local orchestrator inside existing coding IDEs**, n
 
 ### M3 — P1: Independent QA, permissions and scoped recovery
 - Bind test reports to code revision and acceptance case. Gate commands/files on real host permissions; review/rework integration and safe cancellation/rollback. Preserve Issue #9 security limitations.
-- **M3.2 development branch (2026-10-29):** distinguish real host permission denial, native tool unavailability and failed pre-invocation dispatch from user cancellation. `orbit_task_release` can record a safe `BLOCKED` reservation without spawning/stopping an agent; require a new caller-reported approval reference before retry after denial. This is not cryptographic host consent attestation. Follow [M3.2 PR](https://github.com/samjuniors/Orbit-Core-MCP/pulls) for exact implementation/review; do not mark complete until merged and verified.
 - **Gate:** no stale PASS after source changes; real host verification and permission-denial tests.
 
 ### M4 — P1: Adaptive capability surfaces and reusable context
