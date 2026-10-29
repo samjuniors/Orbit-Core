@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import importlib.util
 from pathlib import Path
 
 TRIGGERS = {
@@ -151,6 +153,84 @@ def discover(project_root, *, home=None):
     except ImportError: pass
     return {'skills':skills[:MAX_ITEMS], 'mcp_servers':servers[:MAX_ITEMS], 'limits':['Installed skills are untrusted until vetted. A configured MCP is NOT proof it is connected.', 'No network, process launching, installations, host tool enumeration or permission changes occurred.']}
 
+def browser_workflow(host_tools, configured_mcp_servers):
+    """Read-only, host-neutral browser selection. Names are caller-reported hints.
+
+    Orbit cannot inspect the host's private tool registry, authorize computer
+    control, invoke native browser APIs or attest a tool ran. The lead host must
+    check the real tool/schema and consent before any browser interaction.
+    """
+    native, computer, browser_use, vercel = [], [], [], []
+    for original in host_tools:
+        name = original.lower().replace('-', '_').replace('.', '_')
+        if re.search(r'(?:^|__)agent_browser(?:_|__|$)', name):
+            vercel.append(original)
+        elif re.search(r'(?:^|__)browser_use(?:_|__|$)', name):
+            browser_use.append(original)
+        elif re.search(r'(?:^|__)computer(?:_use)?(?:_|__|$)', name):
+            computer.append(original)
+        elif re.search(r'(?:^|__)browser_(?:navigate|open|click|act|interact|snapshot|screenshot|capture|view|tabs?)(?:_|__|$)', name):
+            native.append(original)
+
+    def action_names(names, terms):
+        return any(any(term in name.lower().replace('-', '_') for term in terms) for name in names)
+
+    # Read-only metadata checks; Playwright/browser execution is not attempted.
+    playwright = importlib.util.find_spec('playwright') is not None
+    detected = []
+    for key, exes in (('chrome', ('chrome','google-chrome','chrome.exe')),
+                       ('msedge', ('msedge','msedge.exe')),
+                       ('chromium', ('chromium','chromium-browser'))):
+        if any(shutil.which(binary) for binary in exes):
+            detected.append(key)
+    if os.name == 'nt':
+        for key, suffix in (('chrome','Google/Chrome/Application/chrome.exe'),
+                            ('msedge','Microsoft/Edge/Application/msedge.exe')):
+            if key not in detected and any(
+                    (Path(os.environ[base])/suffix).is_file()
+                    for base in ('PROGRAMFILES','PROGRAMFILES(X86)','LOCALAPPDATA')
+                    if os.environ.get(base)):
+                detected.append(key)
+
+    cli_installed = bool(shutil.which('agent-browser') or shutil.which('agent-browser.exe')
+                         or shutil.which('agent-browser.cmd'))
+    configured = any(row['name']=='agent-browser' for row in configured_mcp_servers)
+    native_ready = action_names(native, ('browser_navigate','browser_open','browser_click','browser_act','browser_interact'))
+    computer_ready = action_names(computer, ('computer_use','computer_click','computer_act','computer_interact'))
+    browser_use_ready = action_names(browser_use, ('browser_use','browser_use_open','browser_use_navigate','browser_use_click'))
+    providers = [
+        {'id':'host_browser','tools':native[:8], 'status':'HOST_REPORTED_ACTION_TOOL' if native_ready else
+         'INSUFFICIENT_TOOLS' if native else 'NOT_REPORTED'},
+        {'id':'host_computer_use','tools':computer[:8], 'status':'HOST_REPORTED_ACTION_TOOL' if computer_ready else
+         'INSUFFICIENT_TOOLS' if computer else 'NOT_REPORTED'},
+        {'id':'host_browser_use','tools':browser_use[:8], 'status':'HOST_REPORTED_ACTION_TOOL' if browser_use_ready else
+         'INSUFFICIENT_TOOLS' if browser_use else 'NOT_REPORTED'},
+        {'id':'local_playwright','browsers_detected':detected, 'playwright_installed':playwright,
+         'status':'INSTALLED_EXECUTION_UNVERIFIED' if playwright else 'PLAYWRIGHT_NOT_INSTALLED'},
+        {'id':'vercel_agent_browser','tools':vercel[:8], 'cli_found':cli_installed,
+         'configured_mcp':configured,'official_source':'https://github.com/vercel-labs/agent-browser',
+         'status':'HOST_REPORTED_ACTION_TOOL' if action_names(vercel, ('agent_browser_open','agent_browser_click','agent_browser_navigate')) else
+         'CONFIGURED_OR_INSTALLED_REVIEW_REQUIRED' if cli_installed or configured or vercel else 'NOT_INSTALLED'}
+    ]
+    primary = next((p for p in providers if p['status']=='HOST_REPORTED_ACTION_TOOL'),None)
+    if not primary and playwright:
+        primary = providers[3]
+    return {
+        'priority':['host_browser','host_computer_use','host_browser_use','local_playwright','vercel_agent_browser'],
+        'preferred':{'id':primary['id'],'status':primary['status']} if primary else None,
+        'providers':providers,
+        'next_action':('Verify the actual host tool, target app and user permission before invoking browser/computer actions.'
+                       if primary and primary['id'].startswith('host_') else
+                       'Use approved Orbit-managed preview and run local Playwright/Edge/Chrome QA; verify real browser launch.'
+                       if primary and primary['id']=='local_playwright' else
+                       'No browser tool verified: review installed host capabilities or seek approval for optional Vercel agent-browser.'),
+        'execution_verified':False, 'install_performed':False,
+        'privacy':'Avoid personal browser tabs, saved login profiles, credentials and remote/cloud sessions without separate explicit permission; prefer a disposable loopback test session.',
+        'qa_gate':'Host/computer-use and agent-browser evidence is supplemental in current source. BROWSER_QA PASS still requires a fresh Orbit-recorded Playwright run bound to source revision and managed preview. Never forge or bypass that gate.',
+        'fallback':'If a preferred host browser tool is missing, denied, or fails, use the next authorized provider. Report BLOCKED when no authorized working provider exists.'
+    }
+
+
 def select(project_root, objective, host_tools=None, *, home=None):
     if not isinstance(objective,str) or not objective.strip() or len(objective)>1500: raise ValueError('objective must contain 1..1500 characters')
     if not isinstance(host_tools,list) or len(host_tools)>80 or any(not isinstance(x,str) or len(x)>100 for x in host_tools):raise ValueError('host_tools must be a short list of names')
@@ -190,7 +270,9 @@ def select(project_root, objective, host_tools=None, *, home=None):
                  'security':'orbit-security','devops':'orbit-devops'}
         role=next((aliases[c] for c in categories if c in aliases),'orbit')
     recommended=skill_policy(role,available)
+    browser_plan = browser_workflow(host_tools,available['mcp_servers']) if ('qa' in categories or role=='orbit-qa') else None
     return {'objective':objective,'role_skill_preferences':recommended,'categories':categories,'installed_matches':candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
             'optional_browser_provider':browser_provider,
+            'browser_workflow':browser_plan,
         'recommended_action':'REUSE_AND_VERIFY_INSTALLED' if candidates else ('BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL' if research else 'USE_EXISTING_HOST_CAPABILITIES'),
         'policy':['Prefer current built-in host abilities and already installed vetted skills.', 'If a needed capability is missing, the agent may web-search reputable official sources using host tools. Never claim MCP performed the search.', 'Never execute npx/curl/script, install packages, add MCP connections, grant OAuth/scopes, or modify agent rules without reviewing source and obtaining applicable host/user approval.', 'Use the minimal permission and project scope; re-check actual tool availability after approved install; no best-in-class guarantee.']}
