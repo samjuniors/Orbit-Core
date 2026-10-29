@@ -266,7 +266,7 @@ class UniversalSetupTests(unittest.TestCase):
         with patch('source.runtime.orbit_capabilities.importlib.util.find_spec', return_value=None), \
              patch('source.runtime.orbit_capabilities.shutil.which', return_value=None):
             result=cap.select(self.project,'orbit-qa: browser testing',[
-                'browser_snapshot','computer_screenshot','browser_use_screenshot',
+                'browser_snapshot','computer_use_screenshot','browser_use_screenshot',
                 'agent_browser_snapshot'],home=self.home)
             wf=result['browser_workflow']
             self.assertIsNone(wf['preferred'])
