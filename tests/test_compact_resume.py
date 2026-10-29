@@ -50,9 +50,10 @@ class CompactResumeTests(unittest.TestCase):
 
     def test_compact_bounds_and_no_bulk_memories(self):
         self.approve_intake()
-        self.call('orbit_memory_save',key='unrelated-secret',kind='decision',
-                  summary='Do not retrieve this unrelated global memory token: PRIVATE-LEGACY-SECRET',
-                  source='local',confirm_write=True)
+        orbit_mcp.execute(self.conn,'orbit_memory_save',{
+                  'project':'workspace','key':'unrelated-secret','kind':'decision',
+                  'summary':'Do not retrieve this unrelated global memory token: PRIVATE-LEGACY-SECRET',
+                  'source':'local','confirm_write':True})
         self.call('orbit_research_source_save',source_key='ui-accessibility',
                   title='Accessibility testing reference',
                   url='https://example.com/accessibility',
