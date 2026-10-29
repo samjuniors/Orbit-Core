@@ -234,6 +234,65 @@ class UniversalSetupTests(unittest.TestCase):
         self.assertEqual(visible['optional_browser_provider']['status'],'HOST_REPORTED_TOOL_VISIBLE')
         self.assertIn('Playwright PASS',visible['optional_browser_provider']['orbit_browser_qa_gate'])
 
+    def test_browser_workflow_prefers_host_browser_then_computer_use(self):
+        from unittest.mock import patch
+        from source.runtime import orbit_capabilities as cap
+        with patch('source.runtime.orbit_capabilities.importlib.util.find_spec', return_value=None), \
+             patch('source.runtime.orbit_capabilities.shutil.which', return_value=None):
+            tools=['browser_navigate','browser_snapshot','computer_use_click','agent_browser_open']
+            result=cap.select(self.project,'orbit-qa: test web app in browser',tools,home=self.home)
+            wf=result['browser_workflow']
+            self.assertEqual(wf['preferred']['id'],'host_browser')
+            self.assertEqual(wf['preferred']['status'],'HOST_REPORTED_ACTION_TOOL')
+            self.assertFalse(wf['execution_verified'])
+            self.assertFalse(wf['install_performed'])
+            self.assertIn('Playwright',wf['qa_gate'])
+            computer=cap.select(self.project,'orbit-qa: check web browser',[
+                'computer_use_click','computer_screenshot'],home=self.home)
+            self.assertEqual(computer['browser_workflow']['preferred']['id'],'host_computer_use')
+            browser_use=cap.select(self.project,'orbit-qa: use browser',[
+                'browser_use_open','browser_use_snapshot'],home=self.home)
+            self.assertEqual(browser_use['browser_workflow']['preferred']['id'],'host_browser_use')
+            vercel=cap.select(self.project,'orbit-qa: browser UI tests',[
+                'agent_browser_open','agent_browser_snapshot'],home=self.home)
+            self.assertEqual(vercel['browser_workflow']['preferred']['id'],'vercel_agent_browser')
+            self.assertIn('explicit permission',vercel['browser_workflow']['privacy'])
+
+    def test_browser_workflow_does_not_promote_screenshot_only_or_configured_mcp(self):
+        from unittest.mock import patch
+        from source.runtime import orbit_capabilities as cap
+        cfg=self.project/'.mcp.json'
+        cfg.write_text(json.dumps({'mcpServers':{'agent-browser':{'command':'agent-browser','args':['mcp']}}}))
+        with patch('source.runtime.orbit_capabilities.importlib.util.find_spec', return_value=None), \
+             patch('source.runtime.orbit_capabilities.shutil.which', return_value=None):
+            result=cap.select(self.project,'orbit-qa: browser testing',[
+                'browser_snapshot','computer_screenshot','browser_use_screenshot',
+                'agent_browser_snapshot'],home=self.home)
+            wf=result['browser_workflow']
+            self.assertIsNone(wf['preferred'])
+            self.assertEqual(wf['providers'][0]['status'],'INSUFFICIENT_TOOLS')
+            self.assertEqual(wf['providers'][1]['status'],'INSUFFICIENT_TOOLS')
+            self.assertEqual(wf['providers'][2]['status'],'INSUFFICIENT_TOOLS')
+            self.assertEqual(wf['providers'][4]['status'],'CONFIGURED_OR_INSTALLED_REVIEW_REQUIRED')
+            self.assertEqual(result['optional_browser_provider']['status'],'HOST_REPORTED_TOOL_VISIBLE')
+            self.assertEqual(cap.select(self.project,'Write short docs',[],home=self.home)['browser_workflow'],None)
+
+    def test_browser_workflow_local_fallback_and_mcp_namespaced_tools(self):
+        from unittest.mock import patch
+        from source.runtime import orbit_capabilities as cap
+        def find_exe(name):
+            return '/usr/bin/google-chrome' if name=='google-chrome' else None
+        with patch('source.runtime.orbit_capabilities.importlib.util.find_spec', return_value=object()), \
+             patch('source.runtime.orbit_capabilities.shutil.which', side_effect=find_exe):
+            result=cap.select(self.project,'orbit-qa: browser testing',[],home=self.home)
+            wf=result['browser_workflow']
+            self.assertEqual(wf['preferred']['id'],'local_playwright')
+            self.assertIn('chrome',wf['providers'][3]['browsers_detected'])
+            namespaced=cap.select(self.project,'orbit-qa: browser testing',[
+                'mcp__playwright__browser_navigate','mcp__agent_browser__open'],home=self.home)
+            self.assertEqual(namespaced['browser_workflow']['preferred']['id'],'host_browser')
+            self.assertEqual(namespaced['browser_workflow']['providers'][4]['status'],'HOST_REPORTED_ACTION_TOOL')
+
     def test_optional_provider_upgrade_hashes_recognized(self):
         self.assertIn('0f929f83c43c11b46a666387dd3d7581e081876a4cf401e2f2928b1a3f97f85c',installer.OLD_STOCK_SHA256)
         self.assertIn('81bcd52a57163a9b071212a02ca9421a4df832ef6cfbaee9ff62dc46dc19aaa1',installer.OLD_STOCK_SHA256)
