@@ -117,6 +117,12 @@ def run(root, a, preview):
                 'actions':actions,'browser':browser_label,'notice':'Browser automation may read visible app data and change local app state. Host approval required.'}
     if actions and a.get('confirm_interactions') is not True:
         return {'status':'INTERACTIONS_NEED_APPROVAL','url':url,'actions_count':len(actions)}
+    # Snapshot exact local source before browser work, not an LLM-supplied hash.
+    import orbit_build
+    source_before=orbit_build.code_fingerprint(root)
+    if source_before is None:
+        return {'status':'SOURCE_SNAPSHOT_UNAVAILABLE',
+                'notice':'Code/source snapshot is unsafe, empty or exceeds bounded limits; review scope before trusting browser QA.'}
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -179,11 +185,17 @@ def run(root, a, preview):
                 browser.close()
     except Exception as exc:
         failures.append({'step':0,'op':'browser','message':str(exc).splitlines()[0][:240]})
+    # A source edit while Playwright was running invalidates the observed result.
+    source_after=orbit_build.code_fingerprint(root)
+    if source_after!=source_before:
+        failures.append({'step':0,'op':'source_revision','message':'Project source changed during browser QA'})
     passed=not errors and not failures
     # Bounded reporting; never treat console or screenshot as proof of security compliance.
     result={'status':'PASS' if passed else 'FAIL','url':url,'viewport':viewport_name,
             'title':title,'browser':browser_label,'actions':results,'errors':errors[:10],'failures':failures[:10],
             'blocked_remote_hosts':sorted(set(blocked))[:10],
             'screenshot':screenshot,'elapsed_ms':round((time.monotonic()-started)*1000),
+            'source_fingerprint':source_before,'preview_id':a['preview_id'],
+            'preview_started_at':session['started_at'],
             'verified_by':'local Playwright (' + browser_label + ')','notice':'Browser functionality tested only as specified; no deployment or security audit.'}
     return result
