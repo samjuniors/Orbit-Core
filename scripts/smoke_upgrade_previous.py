@@ -1,4 +1,4 @@
-"""Upgrade rehearsal from the immutable v0.24.1 Git tag to a candidate ZIP.
+"""Upgrade rehearsal from an immutable supported prior Git tag to a candidate ZIP.
 
 Runs only inside a disposable temporary folder. Does NOT touch real host apps,
 user configuration, credentials, running services, or any published release.
@@ -32,8 +32,12 @@ def test_upgrade(previous_root, candidate_root=ROOT):
     candidate_root = Path(candidate_root).resolve(strict=True)
     old_version = (previous_root / "VERSION").read_text(encoding="utf-8").strip()
     new_version = (candidate_root / "VERSION").read_text(encoding="utf-8").strip()
-    if old_version != "0.24.1" or new_version not in {"0.25.0", "0.25.1"}:
-        raise RuntimeError("Only reviewed v0.24.1 → v0.25.0/v0.25.1 upgrades may be exercised")
+    supported_source_versions = {"0.24.1", "0.25.1"}
+    reviewed_candidate_versions = {"0.25.0", "0.25.1", "0.26.0"}
+    if (old_version not in supported_source_versions
+            or new_version not in reviewed_candidate_versions
+            or tuple(map(int, new_version.split("."))) <= tuple(map(int, old_version.split(".")))):
+        raise RuntimeError("Upgrade rehearsal must use a supported immutable prior tag and newer reviewed candidate")
     archive = candidate_root / "dist" / ("ORBIT-Universal-Setup-v" + new_version + ".zip")
 
     with tempfile.TemporaryDirectory(prefix="orbit-old-stock-upgrade-") as folder:
@@ -53,7 +57,7 @@ def test_upgrade(previous_root, candidate_root=ROOT):
             raise RuntimeError("Old installer did not install versioned runtime")
         old_runtime_digest = hashlib.sha256(old_runtime.read_bytes()).hexdigest()
 
-        # These paths are vendor-created by the checked-out immutable v0.24.1
+        # These paths are vendor-created by the checked-out immutable prior
         # installer. Print only public stock hashes (never private user data)
         # to support an exact, narrow upgrade allowlist review.
         stock_roots = [
@@ -83,6 +87,21 @@ def test_upgrade(previous_root, candidate_root=ROOT):
         pkg = base / "new-archive" / ("orbit-universal-" + new_version)
         new_command = [sys.executable, str(pkg / "installer.py"),
                        "--scope", "project", "--hosts", "codex", "--project", str(project)]
+        # A tiny owner edit to an *official* installed Orbit file must still
+        # stop the upgrade; exact stock digests never authorize edited content.
+        protected = project / ".agents" / "skills" / "orbit" / "references" / "TASK-LIFECYCLE.md"
+        if not protected.is_file():
+            raise RuntimeError("Previous stock task lifecycle reference missing")
+        original = protected.read_bytes()
+        owner_edit = original + b"\n# Owner-specific workflow customization\n"
+        protected.write_bytes(owner_edit)
+        blocked = subprocess.run(new_command, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True, env=env, timeout=45)
+        if blocked.returncode == 0 or "INSTALL BLOCKED" not in (blocked.stderr + blocked.stdout):
+            raise RuntimeError("Customized installed Orbit file must trigger explicit manual-review block")
+        if protected.read_bytes() != owner_edit:
+            raise RuntimeError("Blocked upgrade modified an owner-customized stock file")
+        protected.write_bytes(original)  # Restore only this isolated fixture for stock upgrade.
         preview = checked_run(new_command, env)
         if "PREVIEW ONLY" not in preview:
             raise RuntimeError("Upgrader must preview before writing")
@@ -103,13 +122,13 @@ def test_upgrade(previous_root, candidate_root=ROOT):
         return {"from": old_version, "to": new_version,
                 "result": "DISPOSABLE_STOCK_UPGRADE_PASS",
                 "preserved": ["custom AGENTS.md", ".orbit/STATE.md",
-                              "existing DB bytes", "v0.24.1 runtime"],
+                              "existing DB bytes", "v" + old_version + " runtime"],
                 "note": "This is NOT an acceptance test in a real IDE or user profile"}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--previous-root", required=True,
-                        help="Existing checked-out immutable v0.24.1 Git tag")
+                        help="Existing checked-out immutable prior release Git tag")
     args = parser.parse_args()
     print(json.dumps(test_upgrade(args.previous_root), indent=2))

@@ -97,3 +97,8 @@ The older 39-tool acceptance prompt predates the portable-transfer feature.
 The owner reported Antigravity and Codex same-PC native delegation/restart PASS;
 **live cross-PC transfer and native delegation on the destination are NOT VERIFIED**.
 Neither published prerelease nor these host reports constitute production certification.
+
+
+## v0.26.0 source candidate (2026-10-29)
+
+The M3 engineering improvements and M4.1 optional compact project resume are merged into development source. `release/v0.26.0-candidate` is preparing a compatible **minor** candidate because the accumulated work adds user-facing capabilities, not just fixes. Its `VERSION=0.26.0` and `NEXT_VERSION=0.26.1` are **source metadata** until a separately authorized release. CI builds unpublished test ZIP/MCPB artifacts and checks bundle parity, SQLite upgrade behavior and Linux/Windows regressions. Do not mark the live native-host, installer, browser or Issue #9 security gates PASS based on this work; publication is separately approval-gated.

@@ -143,7 +143,7 @@ class UpdateNotificationsTests(unittest.TestCase):
                           return_value={"status": "UP_TO_DATE"}) as notice:
             self.assertEqual(orbit_mcp.execute(None, "orbit_update_status", {}),
                              {"status": "UP_TO_DATE"})
-            notice.assert_called_once_with("0.25.1")
+            notice.assert_called_once_with(orbit_mcp.VERSION)
         with self.assertRaises(ValueError):
             orbit_mcp.validate("orbit_update_status", {"confirm_write": True})
 

@@ -53,17 +53,30 @@ jobs:
       - name: Rehearse existing v0.24.1 installation upgrade without user data loss
         if: matrix.python-version == '3.12'
         run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.24.1
+      - name: Check out immutable v0.25.1 for disposable published-prerelease upgrade
+        if: matrix.python-version == '3.12'
+        uses: actions/checkout@v4
+        with:
+          ref: v0.25.1
+          path: previous-0.25.1
+      - name: Rehearse published v0.25.1 upgrade without owner data loss
+        if: matrix.python-version == '3.12'
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.25.1
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle
+      - name: Select current candidate version for test artifacts
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12' && (github.event_name == 'pull_request' || startsWith(github.ref_name, 'release/'))
+        shell: bash
+        run: echo "ORBIT_CANDIDATE_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
       - name: Upload non-published candidate installers for host acceptance
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12' && (github.event_name == 'pull_request' || startsWith(github.ref_name, 'release/'))
         uses: actions/upload-artifact@v4
         with:
-          name: orbit-v0.25.1-host-acceptance
+          name: orbit-v${{ env.ORBIT_CANDIDATE_VERSION }}-host-acceptance
           path: |
-            ORBIT-Claude-Desktop-v0.25.1.mcpb
-            dist/ORBIT-Universal-Setup-v0.25.1.zip
-            dist/ORBIT-Universal-Setup-v0.25.1.zip.sha256
+            ORBIT-Claude-Desktop-v${{ env.ORBIT_CANDIDATE_VERSION }}.mcpb
+            dist/ORBIT-Universal-Setup-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip
+            dist/ORBIT-Universal-Setup-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip.sha256
           if-no-files-found: error
           retention-days: 14

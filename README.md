@@ -11,7 +11,7 @@ Orbit connects to the coding environment you already use. It helps turn requirem
 **[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)**
 
 > [!IMPORTANT]
-> **Release status (2026-10-29):** **v0.25.1 is published as a prerelease**, with the universal setup ZIP, Claude Desktop MCPB and SHA256 sidecars. The published package and current `main` expose **40 MCP tools**, including Evidence Lens, native-agent handoff and portable project transfer. Owner-reported Antigravity/Codex functional acceptance passed, but independent host consent, real installer/rollback, cross-PC transfer and Issue #9 security verification remain open. This is **not production certification**.
+> **Release status (2026-10-29):** The latest **published** package is **v0.25.1 (prerelease)**. Current development source is preparing **v0.26.0 (unpublished candidate)**, with M3 agent recovery and browser QA safeguards plus opt-in M4 compact resume. Both retain the 40-tool MCP surface. Owner-reported M1/M2 acceptance does **not** independently certify native permissions, desktop/browser acceptance, upgrade/rollback, two-PC transfer or Issue #9 security gates. No v0.26.0 tag or release exists until separately authorized.
 
 ## What is Orbit?
 

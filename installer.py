@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
-VERSION = '0.25.1'
+VERSION = '0.26.0'
 SERVER = "orbit-core-native"
 HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
@@ -78,6 +78,15 @@ OLD_STOCK_SHA256 = {
     'a9563ac5429776eef9bd5707156c677e60a4be1ae6a58bc923f32253f9753eb6',  # DOCS-AND-CONTEXT.md
     '240c938ea40da8126a56e4adceb59ff5081b4560fdd10a2b9e63ac1aed564d43',  # PRODUCT-KIT-ADOPTION.md
     '2c1436556ab6450f23a85067daf05b1c10850d7ec2e9a4045de81594e8569dd0',  # PROJECT-INTAKE.md
+    # Exact unmodified project-host stock files emitted by the immutable
+    # published v0.25.1 tag installer in the disposable CI upgrade fixture.
+    # These are SHA256s of installed files, NOT a permission to overwrite edits.
+    # Retain existing backup-first review and refuse unknown/customized bytes.
+    '8964fcc25fdf2bd4febee41d2d6d9b5b6536245264daef9b0678956d252a1f54',  # v0.25.1 orbit_cli.py
+    '56b0aac2f4e092d5425c3eb6594c2ebc184442ffce63050fd327e9bd0350abd9',  # v0.25.1 installed SKILL.md
+    '2ba28070239300b080994879a8df81996172df90c5910ad346c76114252fd2ff',  # v0.25.1 HANDOFF.md
+    'b45ad9da0a259838c16a84ed8f4f3440973761e9bc1174e82527d10206d8c418',  # v0.25.1 PROJECT-INTAKE.md
+    'ab5dd7d29724a966f80dbc0c540be6c3e7042671959d5d85e266d8b480d98829',  # v0.25.1 TASK-LIFECYCLE.md
     # Previous official Edge/Chrome QA candidate (c027e73) stock files.
     # Exact SHA256 only; unknown/customized content remains protected.
     '8fb102a9b367332ef92d9f1204e69996f6ef1bee033354dd1971735ccd46ba1a',  # source/runtime/orbit_mcp.py
