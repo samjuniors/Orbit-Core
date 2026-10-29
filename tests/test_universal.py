@@ -295,6 +295,8 @@ class UniversalSetupTests(unittest.TestCase):
 
     def test_m3_denied_browser_permission_must_not_reroute_to_another_provider(self):
         from unittest.mock import patch
+        sys.path.insert(0,str(ROOT/'source/runtime'))
+        import orbit_mcp
         from source.runtime import orbit_capabilities as cap
         with (patch('source.runtime.orbit_capabilities.importlib.util.find_spec',return_value=object()),
               patch('source.runtime.orbit_capabilities.shutil.which',return_value='/usr/bin/chrome')):
