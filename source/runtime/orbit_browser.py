@@ -93,6 +93,44 @@ def validate_actions(actions):
     return actions
 
 
+def approved_preview_origin(target_url, port, *, websocket=False):
+    """Allow network traffic only to the exact Orbit-owned preview origin.
+
+    'localhost', IPv6 loopback, alternate ports, HTTPS and DNS rebinding
+    hosts are intentionally NOT interchangeable with 127.0.0.1:<port>.
+    Use a different reviewed adapter for multi-server application flows.
+    """
+    try:
+        target=urlparse(target_url)
+        return (target.scheme == ('ws' if websocket else 'http')
+                and target.hostname == '127.0.0.1'
+                and target.port == port
+                and target.username is None and target.password is None)
+    except (ValueError, TypeError):
+        return False
+
+
+def route_preview_request(route, port, blocked):
+    """Intercept HTTP(S) requests; never follow redirects to another origin."""
+    uri=route.request.url
+    kind=urlparse(uri).scheme
+    if approved_preview_origin(uri, port) or kind in {'data','blob','about'}:
+        route.continue_()
+    else:
+        blocked.append(urlparse(uri).hostname or kind)
+        route.abort()
+
+
+def route_preview_socket(ws_route, port, blocked):
+    """Playwright 1.48+ intercepts websockets before their first connection."""
+    uri=ws_route.url
+    if approved_preview_origin(uri, port, websocket=True):
+        ws_route.connect_to_server()
+    else:
+        blocked.append(urlparse(uri).hostname or urlparse(uri).scheme)
+        ws_route.close(code=1008, reason='Orbit QA: non-preview WebSocket denied')
+
+
 def verify_request(root, a, preview):
     if a.get('viewport', 'desktop') not in SIZES:
         raise ValueError('viewport must be desktop or mobile')
@@ -141,14 +179,15 @@ def run(root, a, preview):
             browser = p.chromium.launch(**launch_options)
             try:
                 context=browser.new_context(viewport={'width':width,'height':height}, service_workers='block')
-                def intercept(route):
-                    target=urlparse(route.request.url)
-                    if (target.scheme in {'http','https'} and target.hostname in {'127.0.0.1','localhost','::1'}) or target.scheme in {'data','blob','about'}:
-                        route.continue_()
-                    else:
-                        blocked.append(target.hostname or target.scheme)
-                        route.abort()
-                context.route('**/*',intercept)
+                # Routing HTTP requests is not sufficient: Playwright before 1.48
+                # cannot route WebSockets, which can otherwise reach other local
+                # services. Fail closed rather than certify isolated browser QA.
+                if not callable(getattr(context,'route_web_socket',None)):
+                    context.close()
+                    return {'status':'DEPENDENCY_TOO_OLD',
+                            'notice':'Browser QA requires Playwright >=1.48 for WebSocket origin control. Review an approved dependency update; no remote browser or install attempted.'}
+                context.route('**/*',lambda route: route_preview_request(route,session['port'],blocked))
+                context.route_web_socket('**/*',lambda ws: route_preview_socket(ws,session['port'],blocked))
                 page=context.new_page()
                 page.on('pageerror', lambda error: errors.append(str(error)[:240]))
                 page.on('console', lambda msg: errors.append(msg.text[:240]) if msg.type=='error' else None)
@@ -197,5 +236,5 @@ def run(root, a, preview):
             'screenshot':screenshot,'elapsed_ms':round((time.monotonic()-started)*1000),
             'source_fingerprint':source_before,'preview_id':a['preview_id'],
             'preview_started_at':session['started_at'],
-            'verified_by':'local Playwright (' + browser_label + ')','notice':'Browser functionality tested only as specified; no deployment or security audit.'}
+            'verified_by':'local Playwright (' + browser_label + ')','notice':'Browser functionality tested only as specified with HTTP and WebSocket requests restricted to the approved preview origin; not a network sandbox, deployment or security audit.'}
     return result
