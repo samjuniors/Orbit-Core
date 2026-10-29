@@ -108,6 +108,9 @@ def public(row):
     for field in ('write_paths','depends_on','changed_paths'):
         d[field]=json.loads(d[field])
     d['host_evidence_unverified']=True
+    if d.get('note','').startswith('IMPORTED_HISTORY_UNVERIFIED;'):
+        d['imported_history_unverified']=True
+        d['host_session_is_historical']=True
     return d
 
 

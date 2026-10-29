@@ -21,6 +21,8 @@ HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    '183dd19ed5f35ea4bc7c4e01e1c57274ed062203fbed8a7815608bb6de9dbfaa',  # pre-portability source/runtime/orbit_mcp.py
+    '67ee9124509c2ac854a22649dbb5c690ee69f78f79754f7e06377336f34029e6',  # pre-portability source/runtime/orbit_tasks.py
     # Source-verified intermediate official agent templates, commit 7e1372f.
     # Includes Windows line endings and Claude conversion; owner edits still block.
     'e5bed463ed9e7b9198edeca1d1c15b1ecc36fcdcb69cf465d25bed3334d45869',  # orbit-architect.md, native, LF
@@ -381,7 +383,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
     runtime=runtime_folder()
     if any(p.is_symlink() for p in [runtime,runtime.parent]):raise SetupError('Runtime directory is a symlink')
     changes=[]
-    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py','orbit_intake.py','orbit_decisions.py','orbit_updates.py','orbit_evidence.py','orbit_delegation.py']:
+    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py','orbit_intake.py','orbit_decisions.py','orbit_updates.py','orbit_evidence.py','orbit_delegation.py','orbit_portable.py']:
         p=src/'runtime'/name
         same_or_create(changes,runtime/name,p.read_bytes(),None,'Shared Orbit stdio MCP runtime')
     def add_references(dest: Path, boundary: Path) -> None:
