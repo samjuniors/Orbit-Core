@@ -10,8 +10,10 @@ import orbit_mcp as m
 class PortableTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
-        self.a=Path(self.temp.name)/'old'; self.b=Path(self.temp.name)/'new'
+        base=Path(self.temp.name).resolve()
+        self.a=base/'old'; self.b=base/'new'
         self.a.mkdir(); self.b.mkdir()
+        self.a=self.a.resolve(); self.b=self.b.resolve()
         self.db=sqlite3.connect(':memory:'); self.db.row_factory=sqlite3.Row
         self.addCleanup(self.db.close)
         import orbit_tasks, orbit_evidence
@@ -33,14 +35,14 @@ class PortableTests(unittest.TestCase):
         self.assertEqual(self.imp(raw)['status'],'CONFLICT')
         result=m.execute(self.db,'orbit_research_context',{'project_root':str(self.b),'project':'lab','objective':'memory'})
         self.assertEqual(result['status'],'RELEVANT_REFERENCES')
-        row=self.db.execute('SELECT * FROM orbit_agent_tasks WHERE project_root=?',(str(self.b),)).fetchone()
+        row=self.db.execute('SELECT * FROM orbit_agent_tasks WHERE project_root=?',(str(self.b.resolve()),)).fetchone()
         self.assertEqual(row['approval_reference'],'')
         self.assertIn('IMPORTED_HISTORY',row['note'])
     def test_active_session_is_historical_and_blocked(self):
         self.db.execute("UPDATE orbit_agent_tasks SET status='RUNNING',host_session='old-session',approval_reference='old-approval'")
         raw=self.export()['bundle']; p=self.imp(raw)
         self.imp(raw,confirm_write=True,expected_revision=p['bundle_revision'])
-        row=self.db.execute('SELECT * FROM orbit_agent_tasks WHERE project_root=?',(str(self.b),)).fetchone()
+        row=self.db.execute('SELECT * FROM orbit_agent_tasks WHERE project_root=?',(str(self.b.resolve()),)).fetchone()
         self.assertEqual(row['status'],'BLOCKED'); self.assertEqual(row['host_session'],'old-session')
         self.assertEqual(row['approval_reference'],'')
     def test_reject_project_and_malicious_scopes_without_writes(self):
@@ -49,7 +51,7 @@ class PortableTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.imp(json.dumps(packet))
         packet['project']='lab';packet['tasks'][0]['write_paths']='["../secret"]'
         with self.assertRaises(ValueError): self.imp(json.dumps(packet),confirm_write=True)
-        self.assertEqual(self.db.execute('SELECT count(*) FROM orbit_agent_tasks WHERE project_root=?',(str(self.b),)).fetchone()[0],0)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM orbit_agent_tasks WHERE project_root=?',(str(self.b.resolve()),)).fetchone()[0],0)
     def test_no_cross_project_export(self):
         packet=json.loads(self.export()['bundle'])
         self.assertEqual(len(packet['tasks']),1);self.assertEqual(len(packet['research']),1)
