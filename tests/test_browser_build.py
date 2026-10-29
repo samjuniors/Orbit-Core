@@ -1,6 +1,7 @@
 """Durable build state and real (if present) headless browser QA tests."""
 from __future__ import annotations
 import os
+import json
 import importlib.util
 import shutil
 import socket
@@ -232,7 +233,7 @@ class BuildBrowserTests(unittest.TestCase):
             'source_fingerprint':orbit_build.code_fingerprint(self.root),
             'preview_id':'browser-test','preview_started_at':session['started_at'],
             'blocked_remote_hosts':['127.0.0.1']}
-        with self.assertRaisesRegex(ValueError,'QA source/preview changed'):
+        with self.assertRaisesRegex(ValueError,'forbidden network origin'):
             orbit_build.save_browser(self.db,self.root,
                 {**self.meta,'preview_id':'browser-test'},report)
         self.assertEqual(self.advance()['status'],'HOLD')
@@ -243,7 +244,7 @@ class BuildBrowserTests(unittest.TestCase):
             self.db.execute(
                 'INSERT INTO browser_results(project,root,build_id,status,summary,created_at) VALUES (?,?,?,?,?,?)',
                 (self.meta['project'],str(self.root),self.meta['build_id'],'PASS',
-                 __import__('json').dumps({**report,'qa_build_revision':rev}),'now'))
+                 json.dumps({**report,'qa_build_revision':rev}),'now'))
         denied=self.advance()
         self.assertEqual(denied['status'],'HOLD')
         self.assertIn('forbidden network origin',denied['reason'])
