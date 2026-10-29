@@ -61,3 +61,33 @@ Merges to `main` may contain reviewed release candidates, but must not imply pro
 ## Product experience first (current development priority)
 
 Deliver a reliable one-glance resume/decision view and correctly frozen stage progression before investing in deployment infrastructure, service supervision, distributed locks or managed hosting. Evaluate a host-native editable plan/task panel only after the lightweight MCP UX contract has been tested in Antigravity and another coding host. No premature live-production claim based solely on CI.
+
+## Cross-PC continuity correction (2026-10-29)
+
+A moved checkpoint does not imply the other PC's SQLite database moved. Resume
+now reports the server-selected database path and exact task/research counts.
+A checkpoint with no local records returns `CHECKPOINT_ONLY_LOCAL_CONTEXT_MISSING`:
+continue inspecting existing code without onboarding or inventing missing history.
+This is a portability limitation, not evidence of same-PC persistence failure.
+
+Use `orbit_project_transfer` with `action: export` on the original PC. It returns a
+bounded JSON bundle (100 tasks + 100 research pointers, 90 KB maximum), without
+writing files. Review notes/URLs for sensitive content and manually transfer it
+outside Git. No other projects, host settings, credentials or legacy global
+memories are collected; notes may still contain owner-entered sensitive text.
+
+On the destination, use the same project key, the new absolute project root,
+`action: import`, and the bundle string. Review the preview, then explicitly
+confirm with its `expected_revision` digest and `confirm_write: true`. Imports
+are transactional, refuse existing keys, remap scope, preserve historical task
+revisions, and clear approvals/reservations. Active/reported-but-unreviewed work
+becomes BLOCKED. Sessions and accepted results remain unverified historical
+claims, never proof of execution on this host. Existing checkpoint files are not
+overwritten; transfer the project folder including `.orbit/STATE.md` separately.
+Build/intake state and legacy memories are not transferred in this bounded version.
+Without the original PC/export, only the available checkpoint can be recovered.
+
+The development tool inventory is now **40**; the older v0.25.1 acceptance prompt's
+39-tool requirement applies to that candidate, not this change. No release or
+new live-host acceptance is implied. Antigravity results supplied by the owner
+are reported PASS; cross-PC Codex delegation remains NOT RUN.

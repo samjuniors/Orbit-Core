@@ -92,7 +92,7 @@ def smoke(root=ROOT):
         tools = {tool["name"] for tool in replies[1]["result"]["tools"]}
         expected = {"orbit_project_resume", "orbit_project_action", "orbit_memory_recall",
                     "orbit_project_checkpoint", "orbit_build_begin"}
-        if not expected.issubset(tools) or len(tools) != 39:
+        if not expected.issubset(tools) or len(tools) != 40:
             raise RuntimeError("Packaged MCP tool inventory mismatch")
         if replies[2]["result"].get("isError"):
             raise RuntimeError("Packaged resume returned tool error")

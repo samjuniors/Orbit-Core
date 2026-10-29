@@ -21,6 +21,7 @@ import orbit_decisions
 import orbit_updates
 import orbit_evidence
 import orbit_delegation
+import orbit_portable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -365,6 +366,7 @@ TOOLS += [
     {'name':'orbit_decision_route','description':'Read-only, platform-specific workflow and reviewed component/library research candidates; permits custom designs.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']}},['project_root','project'])},
     {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
 ]
+TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
     'orbit_task_list','orbit_task_handoff','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
@@ -421,6 +423,9 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name == "orbit_project_transfer":
+        root=project_root(a)
+        return orbit_portable.transfer(conn,root,project_key(a),a,snapshot(root))
     if name in {'orbit_research_source_save','orbit_research_context'}:
         root = project_root(a)
         project = project_key(a)
@@ -526,7 +531,16 @@ def execute(conn, name, a):
         alternates = other_slugs(conn, project_root(a), status['project'])
         if alternates:
             status['project_key_notice'] = {'message': 'This folder already has Orbit records under a different project key; reuse that key instead of starting over unless the user wants a separate project.', 'existing_keys': alternates}
-        status['context_strategy']='Load current checkpoint and agreed brief, then only stage-specific docs and changed source files; do not reread all reference documents.'
+        root=project_root(a)
+        local=orbit_portable.counts(conn,root,status['project'])
+        status['continuity']={'status':'CHECKPOINT_ONLY_LOCAL_CONTEXT_MISSING' if status['checkpoint']['exists'] and not any(local.values()) else 'LOCAL_CONTEXT',
+            'local_records':local,'database_path':str(db_path()),
+            'guidance':'A different PC or folder can have an empty local database. Continue from the checkpoint without onboarding; do not invent missing records. Export orbit_project_transfer on the original PC and preview/import on this PC for task/research continuity. Historical sessions are not current-host execution evidence.'}
+        if status['continuity']['status']=='CHECKPOINT_ONLY_LOCAL_CONTEXT_MISSING':
+            status['experience'].update(phase='RECOVERED_CHECKPOINT',headline='Continue from portable checkpoint',
+                summary='Local task/research history is unavailable on this PC; inspect existing code and recover an optional transfer bundle.',
+                next_action={'label':'Review checkpoint and current source; do not repeat onboarding','tool':'orbit_project_scan'})
+        status['context_strategy']= 'Load current checkpoint and agreed brief, then only stage-specific docs and changed source files; do not reread all reference documents.'
         notice=orbit_updates.notice(VERSION)
         if notice['status']=='UPDATE_AVAILABLE':
             status['update_notice']=notice
