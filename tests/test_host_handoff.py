@@ -357,6 +357,20 @@ class HostHandoffTests(unittest.TestCase):
         finally:
             recovered.close()
 
+    def test_m33_preserves_existing_owner_note_when_terminal_observation_added(self):
+        self.running_for_recovery()
+        note='Existing historical owner note: '+'important-context-'*45
+        with self.db:
+            self.db.execute('UPDATE orbit_agent_tasks SET note=? WHERE project=? AND task_key=?',
+                (note,'todo','frontend'))
+        report=self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+            outcome='BLOCKED',evidence='Host panel reported stopped unexpectedly; needs rework',
+            observed_host_session='actual-session-123456',host_state='STOPPED',
+            confirm_write=True)
+        self.assertEqual(report['status'],'BLOCKED')
+        self.assertTrue(report['task']['note'].startswith(note))
+        self.assertTrue(report['task']['note'].endswith('HOST_TERMINAL_REPORTED:STOPPED'))
+
     def test_m33_report_schema_accepts_explicit_host_observation_only(self):
         schema=orbit_mcp.TOOL_MAP['orbit_task_report']
         self.assertIn('observed_host_session',schema['properties'])
