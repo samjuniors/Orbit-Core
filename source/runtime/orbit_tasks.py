@@ -50,7 +50,7 @@ def setup(conn):
         project TEXT NOT NULL, project_root TEXT NOT NULL, task_key TEXT NOT NULL,
         attempt_number INTEGER NOT NULL, step TEXT NOT NULL,
         reserved_at TEXT NOT NULL, disposition TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
+        host_session TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL,
         PRIMARY KEY(project,project_root,task_key,attempt_number))''')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_orbit_attempt_step ON orbit_task_attempts(project,project_root,step,disposition)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_orbit_attempt_day ON orbit_task_attempts(project_root,reserved_at,disposition)')
@@ -262,25 +262,26 @@ def _record_reservation(conn, old, when):
         # observation instead of pretending a long-lived task was never run.
         timestamp=old['reserved_at'] or when
         conn.execute('''INSERT INTO orbit_task_attempts
-            (project,project_root,task_key,attempt_number,step,reserved_at,disposition,updated_at)
-            VALUES(?,?,?,?,?,?,?,?)''',
-            (*params,1,old['step'],timestamp,'LEGACY_UNVERIFIED',when))
+            (project,project_root,task_key,attempt_number,step,reserved_at,disposition,host_session,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?)''',
+            (*params,1,old['step'],timestamp,'LEGACY_UNVERIFIED',old['host_session'],when))
         number=1
     next_number=number+1
     conn.execute('''INSERT INTO orbit_task_attempts
-        (project,project_root,task_key,attempt_number,step,reserved_at,disposition,updated_at)
-        VALUES(?,?,?,?,?,?,?,?)''',
-        (*params,next_number,old['step'],when,'RESERVED',when))
+        (project,project_root,task_key,attempt_number,step,reserved_at,disposition,host_session,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?)''',
+        (*params,next_number,old['step'],when,'RESERVED','',when))
     return next_number
 
 
-def _mark_latest_attempt(conn, old, disposition):
+def _mark_latest_attempt(conn, old, disposition, *, host_session=None):
     """Move only the most recent recorded attempt to a terminal observation."""
-    conn.execute('''UPDATE orbit_task_attempts SET disposition=?, updated_at=?
+    conn.execute('''UPDATE orbit_task_attempts SET disposition=?, updated_at=?,
+            host_session=COALESCE(?,host_session)
         WHERE project=? AND project_root=? AND task_key=?
           AND attempt_number=(SELECT MAX(attempt_number) FROM orbit_task_attempts
             WHERE project=? AND project_root=? AND task_key=?)''',
-        (disposition,utc_now(),old['project'],old['project_root'],old['task_key'],
+        (disposition,utc_now(),host_session,old['project'],old['project_root'],old['task_key'],
          old['project'],old['project_root'],old['task_key']))
 
 
@@ -309,7 +310,10 @@ def reserve(conn,a,root):
         if stepcount>=MAX_PER_STEP: raise ValueError('Per-step agent budget exhausted (3 attempts)')
         if daycount>=MAX_PER_DAY: raise ValueError('Daily agent budget exhausted (12 attempts)')
         attempt=_record_reservation(conn,old,today)
-        out=_update(conn,old,'RESERVED',approval_reference=approval,reserved_at=today)
+        # A retry is not the previous worker: keep its historical session in
+        # the attempt ledger and clear current-slot session until native start.
+        out=_update(conn,old,'RESERVED',approval_reference=approval,
+                    reserved_at=today,host_session='')
         conn.commit()
         return {'status':'RESERVED','task':public(out),'agent_spawned':False,
                 'attempt_number':attempt,
@@ -331,7 +335,7 @@ def started(conn,a,root):
         if conflict:return conflict
         if old['status']!='RESERVED': raise ValueError('Task must be RESERVED before host confirms execution')
         out=_update(conn,old,'RUNNING',host_session=ref)
-        _mark_latest_attempt(conn,old,'HOST_REPORTED_STARTED')
+        _mark_latest_attempt(conn,old,'HOST_REPORTED_STARTED',host_session=ref)
     return {'status':'RUNNING_REPORTED','task':public(out),'host_session_verified':False}
 
 
