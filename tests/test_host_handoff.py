@@ -656,6 +656,60 @@ class HostHandoffTests(unittest.TestCase):
             "SELECT host_session FROM orbit_task_attempts WHERE task_key='frontend' AND attempt_number=1"
         ).fetchone()['host_session'],'running-retry-agent-123456')
 
+    def test_m3_integration_reservation_update_failure_rolls_back_attempt_insert(self):
+        self.register()
+        self.db.execute("""CREATE TRIGGER reject_task_reservation
+             BEFORE UPDATE ON orbit_agent_tasks WHEN NEW.status='RESERVED'
+             BEGIN SELECT RAISE(ABORT,'synthetic task update failure'); END""")
+        with self.assertRaisesRegex(sqlite3.IntegrityError,'synthetic task update failure'):
+            self.reserve()
+        self.assertEqual(self.db.execute(
+            "SELECT COUNT(*) FROM orbit_task_attempts").fetchone()[0],0)
+        task=self.call('orbit_task_list')['tasks'][0]
+        self.assertEqual((task['status'],task['revision']),('PLANNED',1))
+        self.db.execute('DROP TRIGGER reject_task_reservation')
+        reservation=self.reserve()
+        self.assertEqual(reservation['status'],'RESERVED')
+        self.assertEqual(reservation['attempt_number'],1)
+
+    def test_m3_integration_started_and_reported_failure_preserve_attempt_state(self):
+        self.register()
+        self.reserve()
+        self.db.execute("""CREATE TRIGGER reject_task_start
+             BEFORE UPDATE ON orbit_agent_tasks WHEN NEW.status='RUNNING'
+             BEGIN SELECT RAISE(ABORT,'synthetic start failure'); END""")
+        with self.assertRaisesRegex(sqlite3.IntegrityError,'synthetic start failure'):
+            self.call('orbit_task_started',task_key='frontend',expected_revision=2,
+                host_session='host-session-rollback-123',confirm_write=True)
+        self.assertEqual(self.call('orbit_task_list')['tasks'][0]['status'],'RESERVED')
+        self.assertEqual(self.db.execute(
+            "SELECT disposition FROM orbit_task_attempts").fetchone()['disposition'],'RESERVED')
+        self.db.execute('DROP TRIGGER reject_task_start')
+        started=self.call('orbit_task_started',task_key='frontend',expected_revision=2,
+            host_session='host-session-rollback-123',confirm_write=True)
+        self.assertEqual(started['status'],'RUNNING_REPORTED')
+        self.db.execute("""CREATE TRIGGER reject_task_report
+             BEFORE UPDATE ON orbit_agent_tasks WHEN NEW.status='FAILED'
+             BEGIN SELECT RAISE(ABORT,'synthetic report failure'); END""")
+        with self.assertRaisesRegex(sqlite3.IntegrityError,'synthetic report failure'):
+            self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+                outcome='FAILED',evidence='Host reported failed validation in a real session',
+                observed_host_session='host-session-rollback-123',host_state='FAILED',
+                confirm_write=True)
+        self.assertEqual(self.call('orbit_task_list')['tasks'][0]['status'],'RUNNING')
+        self.assertEqual(self.db.execute(
+            "SELECT disposition,host_session FROM orbit_task_attempts").fetchone()['disposition'],
+            'HOST_REPORTED_STARTED')
+        self.db.execute('DROP TRIGGER reject_task_report')
+        reported=self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+            outcome='FAILED',evidence='Host reported failed validation in a real session',
+            observed_host_session='host-session-rollback-123',host_state='FAILED',
+            confirm_write=True)
+        self.assertEqual(reported['status'],'FAILED')
+        self.assertEqual(self.db.execute(
+            "SELECT disposition FROM orbit_task_attempts").fetchone()['disposition'],
+            'HOST_REPORTED_FAILED')
+
     def test_tool_contract_read_only_and_arguments_tight(self):
         tool = next(t for t in orbit_mcp.TOOLS if t["name"] == "orbit_task_handoff")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
