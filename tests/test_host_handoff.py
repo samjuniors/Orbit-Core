@@ -575,6 +575,87 @@ class HostHandoffTests(unittest.TestCase):
         self.assertEqual(good['attempt_number'],1)
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orbit_task_attempts').fetchone()[0],1)
 
+    def test_m3_integrated_denial_refunds_slot_but_requires_fresh_approval(self):
+        self.register()
+        reserved=self.reserve()
+        self.assertEqual(reserved['attempt_number'],1)
+        refused=self.call('orbit_task_release',task_key='frontend',expected_revision=2,
+            reason_code='HOST_PERMISSION_DENIED',
+            reason='Native host explicitly refused this delegated task',
+            confirm_write=True)
+        self.assertEqual(refused['status'],'BLOCKED')
+        history=self.db.execute(
+            "SELECT disposition FROM orbit_task_attempts WHERE task_key='frontend'").fetchone()
+        self.assertEqual(history['disposition'],'RELEASED_UNUSED')
+        self.assertEqual(orbit_tasks._attempt_usage(
+            self.db,'todo',orbit_mcp.project_root({'project_root':str(self.root)}),
+            'IMPLEMENT',orbit_tasks.utc_now()[:10]),(0,0))
+        with self.assertRaisesRegex(ValueError,'fresh host/user approval'):
+            self.call('orbit_task_reserve',task_key='frontend',expected_revision=3,
+                approval_reference='host-approved-plan-123',confirm_write=True)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orbit_task_attempts').fetchone()[0],1)
+        retried=self.call('orbit_task_reserve',task_key='frontend',expected_revision=3,
+            approval_reference='fresh-actual-host-approval-123',confirm_write=True)
+        self.assertEqual(retried['status'],'RESERVED')
+        self.assertEqual(retried['attempt_number'],2)
+        self.assertEqual(retried['attempt_budget']['step_used'],1)
+        self.assertEqual(retried['task']['host_session'],'')
+        started=self.call('orbit_task_started',task_key='frontend',expected_revision=4,
+            host_session='host-new-session-123456',confirm_write=True)
+        hold=self.call('orbit_task_report',task_key='frontend',expected_revision=5,
+            outcome='FAILED',evidence='MCP restarted while host state is unknown',
+            observed_host_session='host-new-session-123456',host_state='UNKNOWN',
+            confirm_write=True)
+        self.assertEqual(hold['status'],'HOLD_HOST_RECONCILIATION')
+        self.assertEqual(self.call('orbit_task_list')['tasks'][0]['status'],'RUNNING')
+        self.assertEqual(self.db.execute(
+            "SELECT disposition FROM orbit_task_attempts WHERE task_key='frontend' AND attempt_number=2"
+        ).fetchone()['disposition'],'HOST_REPORTED_STARTED')
+        terminal=self.call('orbit_task_report',task_key='frontend',expected_revision=5,
+            outcome='FAILED',evidence='Actual host session exited with failing test',
+            observed_host_session='host-new-session-123456',host_state='FAILED',
+            confirm_write=True)
+        self.assertEqual(terminal['status'],'FAILED')
+        history=self.db.execute(
+            "SELECT disposition,host_session FROM orbit_task_attempts WHERE task_key='frontend' ORDER BY attempt_number"
+        ).fetchall()
+        self.assertEqual([(x['disposition'],x['host_session']) for x in history],[
+            ('RELEASED_UNUSED',''),('HOST_REPORTED_FAILED','host-new-session-123456')])
+
+    def test_m3_integrated_running_agent_uses_budget_and_keeps_scope_locked(self):
+        self.register()
+        first=self.reserve()
+        self.call('orbit_task_started',task_key='frontend',expected_revision=2,
+            host_session='running-retry-agent-123456',confirm_write=True)
+        self.register(key='overlap',scope=['src/ui/'])
+        self.assertEqual(self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+            outcome='CANCELLED',evidence='Cancellation was requested but not confirmed',
+            observed_host_session='running-retry-agent-123456',host_state='RUNNING',
+            confirm_write=True)['status'],'HOLD_HOST_RECONCILIATION')
+        with self.assertRaisesRegex(ValueError,'Overlapping writable scopes'):
+            self.reserve(key='overlap')
+        self.assertEqual(self.db.execute(
+            "SELECT disposition FROM orbit_task_attempts WHERE task_key='frontend'").fetchone()['disposition'],
+            'HOST_REPORTED_STARTED')
+        confirmed=self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+            outcome='BLOCKED',evidence='Host confirmed worker stopped after interrupted process',
+            observed_host_session='running-retry-agent-123456',host_state='STOPPED',
+            confirm_write=True)
+        self.assertEqual(confirmed['status'],'BLOCKED')
+        self.assertEqual(confirmed['task']['host_session'],'running-retry-agent-123456')
+        self.assertEqual(self.db.execute(
+            "SELECT disposition FROM orbit_task_attempts WHERE task_key='frontend'").fetchone()['disposition'],
+            'HOST_REPORTED_BLOCKED')
+        retry=self.call('orbit_task_reserve',task_key='frontend',expected_revision=4,
+            approval_reference='approved-new-retry-12345',confirm_write=True)
+        self.assertEqual(retry['status'],'RESERVED')
+        self.assertEqual(retry['attempt_number'],2)
+        self.assertEqual(retry['attempt_budget']['step_used'],2)
+        self.assertEqual(retry['task']['host_session'],'')
+        self.assertEqual(self.db.execute(
+            "SELECT host_session FROM orbit_task_attempts WHERE task_key='frontend' AND attempt_number=1"
+        ).fetchone()['host_session'],'running-retry-agent-123456')
+
     def test_tool_contract_read_only_and_arguments_tight(self):
         tool = next(t for t in orbit_mcp.TOOLS if t["name"] == "orbit_task_handoff")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
