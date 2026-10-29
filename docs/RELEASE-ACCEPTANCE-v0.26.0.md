@@ -13,8 +13,8 @@ This is a **version-specific acceptance record**, not a second roadmap or author
 | Playwright preview-origin restrictions | **MERGED; automated PASS only** | [PR #33](https://github.com/samjuniors/Orbit-Core-MCP/pull/33) |
 | M4 compact resume | **MERGED; automated PASS only** | [PR #34](https://github.com/samjuniors/Orbit-Core-MCP/pull/34) |
 | M3 permission-denial fallback hardening | **MERGED; automated PASS only** | [PR #37](https://github.com/samjuniors/Orbit-Core-MCP/pull/37): denied consent cannot silently switch browser/computer-use providers |
-| M4.2 adaptive workflow/context routing | **IN DEVELOPMENT; CI REVIEW REQUIRED** | [PR #38](https://github.com/samjuniors/Orbit-Core-MCP/pull/38): no actual subagent invocation/model switch; benchmark genuine context usage later |
-| Exact main commit CI | **5/5 PASS** | [GitHub Actions #40870213947](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40870213947): Ubuntu Python 3.10–3.13, Windows 3.12 |
+| M4.2 adaptive workflow/context routing | **MERGED; automated PASS only** | [PR #38](https://github.com/samjuniors/Orbit-Core-MCP/pull/38): focused compact vs full context, high-risk review and unverified host-native/serial recommendations; real context/token benchmarks pending |
+| Exact reviewed M3/M4 heads | **5/5 PASS each** | [M3 #40893382550](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40893382550), [M4 #40894592371](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40894592371): Ubuntu Python 3.10–3.13, Windows 3.12; final main CI checked separately |
 | Candidate package and installer test | **PASS in CI** | [Actions #40869882650](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40869882650): source/MCPB parity, ZIP integrity, disposable fresh setup |
 | Upgrade compatibility | **PASS in disposable CI** | v0.24.1 and v0.25.1 → v0.26.0, Windows/Linux; customized stock guidance safely blocks overwrite |
 | Downloadable candidate | **CI ARTIFACT ONLY** | `orbit-v0.26.0-host-acceptance` in [Actions #40869882650](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40869882650); not a signed publication |
