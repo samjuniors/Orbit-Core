@@ -327,6 +327,56 @@ class UniversalSetupTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             orbit_mcp.validate('orbit_capability_select',{**valid,'permission_state':'SILENT_OVERRIDE'})
 
+    def test_m4_adaptive_context_and_host_tool_is_always_unverified(self):
+        from source.runtime import orbit_capabilities as cap
+        skill=self.project/'.agents/skills/local-ui-review/SKILL.md'
+        skill.parent.mkdir(parents=True)
+        skill.write_text('---\\nname: local-ui-review\\ndescription: UI design and layout review\\n---\\nlocal') 
+        simple=cap.select(self.project,'Fix frontend component layout',
+                          ['spawn_agent'],home=self.home)
+        plan=simple['adaptive_workflow']
+        self.assertEqual(plan['workflow_mode'],'FOCUSED')
+        self.assertEqual(plan['context']['mode'],'COMPACT_RESUME')
+        self.assertTrue(plan['context']['compact'])
+        self.assertEqual(plan['context']['max_chars'],1500)
+        self.assertEqual(plan['execution']['decision'],'VERIFY_NATIVE_HOST_TOOL')
+        self.assertEqual(plan['execution']['native_tool_hint'],'spawn_agent')
+        self.assertFalse(plan['execution']['host_tool_verified'])
+        self.assertFalse(plan['execution']['permission_verified'])
+        self.assertFalse(plan['execution']['agent_invoked'])
+        self.assertEqual(plan['execution']['model_choice'],'HOST_CONTROLLED')
+        self.assertEqual(plan['skill_review']['candidate'],'local-ui-review')
+        self.assertFalse(plan['skill_review']['auto_install'])
+        self.assertLess(len(json.dumps(plan,ensure_ascii=True)),1600)
+        self.assertFalse((self.project/'.agents/skills/agent-browser').exists())
+
+    def test_m4_risk_and_multistage_do_not_silently_use_compact_context(self):
+        from source.runtime import orbit_capabilities as cap
+        high=cap.select(self.project,'Deploy production backend security migration',
+                        ['invoke_subagent'],home=self.home)
+        p=high['adaptive_workflow']
+        self.assertEqual(p['workflow_mode'],'HIGH_RISK_REVIEW')
+        self.assertEqual(p['context']['mode'],'FULL_REVIEW')
+        self.assertIsNone(p['context']['max_chars'])
+        self.assertEqual(p['execution']['decision'],'HOST_APPROVAL_AND_REVIEW_REQUIRED')
+        self.assertFalse(p['execution']['agent_invoked'])
+        broad=cap.select(self.project,'Redesign the entire mobile platform architecture',
+                         ['spawn_agent'],home=self.home)['adaptive_workflow']
+        self.assertEqual(broad['workflow_mode'],'MULTI_STAGE')
+        self.assertEqual(broad['context']['mode'],'FULL_REVIEW')
+        serial=cap.select(self.project,'Fix a small backend bug',[],
+                          home=self.home)['adaptive_workflow']
+        self.assertEqual(serial['workflow_mode'],'FOCUSED')
+        self.assertEqual(serial['execution']['decision'],'HOST_SERIAL_FALLBACK')
+        self.assertIsNone(serial['execution']['native_tool_hint'])
+        denied=cap.select(self.project,'Fix small UI component', ['spawn_agent'],
+                          home=self.home,permission_state='DENIED')
+        blocked=denied['adaptive_workflow']
+        self.assertEqual(blocked['execution']['decision'],'HOLD_PERMISSION_DENIED')
+        self.assertIsNone(blocked['execution']['native_tool_hint'])
+        self.assertFalse(blocked['execution']['permission_verified'])
+        self.assertEqual(denied['recommended_action'],'HOLD_PERMISSION_DENIED')
+
     def test_optional_provider_upgrade_hashes_recognized(self):
         self.assertIn('0f929f83c43c11b46a666387dd3d7581e081876a4cf401e2f2928b1a3f97f85c',installer.OLD_STOCK_SHA256)
         self.assertIn('81bcd52a57163a9b071212a02ca9421a4df832ef6cfbaee9ff62dc46dc19aaa1',installer.OLD_STOCK_SHA256)
