@@ -252,6 +252,109 @@ class HostHandoffTests(unittest.TestCase):
                 'task_key':'frontend','expected_revision':3,
                 'reason':'Permission reported denied','reason_code':'FORCE_SUCCESS'})
 
+    def running_for_recovery(self, *, key="frontend"):
+        self.register(key=key)
+        self.assertEqual(self.reserve(key=key)['status'],'RESERVED')
+        result=self.call('orbit_task_started',task_key=key,expected_revision=2,
+            host_session='actual-session-123456',confirm_write=True)
+        self.assertEqual(result['status'],'RUNNING_REPORTED')
+        return result
+
+    def test_m33_uncertain_host_state_keeps_running_task_and_lock(self):
+        self.running_for_recovery()
+        before=self.call('orbit_task_list')
+        self.assertTrue(before['host_reconciliation']['needs_host_reconciliation'])
+        self.assertEqual(before['host_reconciliation']['active'][0]['host_session'],'actual-session-123456')
+        for fields in (
+            {},
+            {'observed_host_session':'wrong-session','host_state':'STOPPED'},
+            {'observed_host_session':'actual-session-123456','host_state':'UNKNOWN'},
+            {'observed_host_session':'actual-session-123456','host_state':'RUNNING'},
+            {'observed_host_session':'actual-session-123456','host_state':'COMPLETED'},
+        ):
+            with self.subTest(fields=fields):
+                response=self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+                    outcome='CANCELLED',evidence='Requested cancellation; host state unconfirmed',
+                    confirm_write=True,**fields)
+                self.assertEqual(response['status'],'HOLD_HOST_RECONCILIATION',response)
+                self.assertFalse(response['host_status_verified'])
+        state=self.call('orbit_task_list')
+        self.assertEqual(state['tasks'][0]['status'],'RUNNING')
+        self.assertEqual(state['tasks'][0]['revision'],3)
+        self.register(key='overlap',scope=['src/ui/'])
+        with self.assertRaisesRegex(ValueError,'Overlapping writable scopes'):
+            self.reserve(key='overlap')
+
+    def test_m33_confirmed_cancel_requires_exact_session_and_preserves_checkpoint(self):
+        self.running_for_recovery()
+        cp=self.root/'.orbit'/'STATE.md'
+        cp.parent.mkdir()
+        cp.write_text('owner checkpoint: preserve this')
+        preview=self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+            outcome='CANCELLED',evidence='Native agent panel reports stopped after user cancellation',
+            observed_host_session='actual-session-123456',host_state='STOPPED')
+        self.assertEqual(preview['status'],'PREVIEW_ONLY')
+        self.assertEqual(self.call('orbit_task_list')['tasks'][0]['status'],'RUNNING')
+        finished=self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+            outcome='CANCELLED',evidence='Native agent panel reports stopped after user cancellation',
+            observed_host_session='actual-session-123456',host_state='STOPPED',confirm_write=True)
+        self.assertEqual(finished['status'],'CANCELLED')
+        self.assertFalse(finished['host_status_verified'])
+        self.assertFalse(finished['agent_stopped_by_mcp'])
+        self.assertEqual(finished['task']['revision'],4)
+        self.assertEqual(finished['task']['host_session'],'actual-session-123456')
+        self.assertIn('HOST_TERMINAL_REPORTED:STOPPED',finished['task']['note'])
+        self.assertEqual(cp.read_text(),'owner checkpoint: preserve this')
+        self.assertFalse(self.call('orbit_task_list')['host_reconciliation']['needs_host_reconciliation'])
+        with self.assertRaises(ValueError):
+            self.call('orbit_task_review',task_key='frontend',expected_revision=4,
+                verdict='ACCEPT',review_evidence='Cannot accept a cancelled task',confirm_write=True)
+
+    def test_m33_failed_task_requires_host_terminal_observation_before_retry(self):
+        self.running_for_recovery()
+        hold=self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+            outcome='FAILED',evidence='Host session disappeared unexpectedly')
+        self.assertEqual(hold['status'],'HOLD_HOST_RECONCILIATION')
+        with self.assertRaisesRegex(ValueError,'Overlapping writable scopes'):
+            self.register(key='blocked-scope',scope=['src/ui/'])
+            self.reserve(key='blocked-scope')
+        result=self.call('orbit_task_report',task_key='frontend',expected_revision=3,
+            outcome='FAILED',evidence='Inspected host session, exit code nonzero and error log',
+            observed_host_session='actual-session-123456',host_state='FAILED',confirm_write=True)
+        self.assertEqual(result['status'],'FAILED')
+        self.assertEqual(result['task']['revision'],4)
+        self.assertEqual(self.call('orbit_task_reserve',task_key='frontend',expected_revision=4,
+            approval_reference='fresh-host-approval-456',confirm_write=True)['status'],'RESERVED')
+
+    def test_m33_resume_after_sqlite_restart_reports_unverified_host_liveness(self):
+        self.running_for_recovery()
+        import os
+        dbfile=Path(self.tmp.name)/'recovery.sqlite'
+        saved=sqlite3.connect(str(dbfile))
+        try:
+            self.db.backup(saved)
+        finally:
+            saved.close()
+        recovered=sqlite3.connect(str(dbfile))
+        recovered.row_factory=sqlite3.Row
+        try:
+            listing=orbit_tasks.read_tasks(recovered,
+                {'project':'todo'},self.root)
+            self.assertEqual(listing['tasks'][0]['status'],'RUNNING')
+            self.assertTrue(listing['host_reconciliation']['needs_host_reconciliation'])
+            self.assertFalse(listing['host_reconciliation']['agent_liveness_verified'])
+            self.assertEqual(listing['host_reconciliation']['active'][0]['revision'],3)
+            # A process restart does not grant permission to erase the reservation.
+            rec=orbit_tasks.reported(recovered,{'project':'todo','task_key':'frontend',
+                'expected_revision':3,'outcome':'BLOCKED','evidence':'MCP restarted and cannot find host state',
+                'observed_host_session':'actual-session-123456','host_state':'UNKNOWN',
+                'confirm_write':True},self.root)
+            self.assertEqual(rec['status'],'HOLD_HOST_RECONCILIATION')
+            self.assertEqual(listing['tasks'][0]['host_session'],'actual-session-123456')
+            self.assertEqual(recovered.execute('SELECT status FROM orbit_agent_tasks').fetchone()[0],'RUNNING')
+        finally:
+            recovered.close()
+
     def test_tool_contract_read_only_and_arguments_tight(self):
         tool = next(t for t in orbit_mcp.TOOLS if t["name"] == "orbit_task_handoff")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
