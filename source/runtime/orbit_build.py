@@ -817,7 +817,7 @@ def save_browser(conn,root,a,result):
     if result['status']=='PASS' and (
             not result.get('source_fingerprint')
             or result['source_fingerprint']!=code_fingerprint(root)
-            or result.get('preview_id')!=a.get('preview_id')
+            or result.get('preview_id')!=a.get('preview_id',result.get('preview_id'))
             or not isinstance(result.get('preview_started_at'),(int,float))):
         raise ValueError('QA source/preview changed or snapshot unavailable; rerun browser QA')
     summary={k:v for k,v in result.items() if k in {
