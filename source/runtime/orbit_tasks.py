@@ -288,7 +288,9 @@ def _record_reservation(conn, old, when):
             old['status'] in ('CANCELLED','BLOCKED') and not old['host_session']):
         # We cannot reconstruct past tries: preserve one unverified legacy
         # observation instead of pretending a long-lived task was never run.
-        timestamp=old['reserved_at'] or when
+        # Portable imports intentionally clear reserved_at: unknown history
+        # must not be charged to today's quota merely because we first saw it now.
+        timestamp=old['reserved_at'] or ''
         conn.execute('''INSERT INTO orbit_task_attempts
             (project,project_root,task_key,attempt_number,step,reserved_at,disposition,host_session,updated_at)
             VALUES(?,?,?,?,?,?,?,?,?)''',
