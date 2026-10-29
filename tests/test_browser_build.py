@@ -225,6 +225,32 @@ class BuildBrowserTests(unittest.TestCase):
         self.assertIn('browser', schema['properties'])
         self.assertEqual(schema['properties']['browser']['enum'], ['auto','msedge','chrome','chromium'])
 
+    def test_m34_blocked_network_attempts_never_certify_browser_qa(self):
+        session=self.make_browser_gate()
+        report={'status':'PASS',
+            'actions':[{'status':'PASS','op':'expect_visible'}],
+            'source_fingerprint':orbit_build.code_fingerprint(self.root),
+            'preview_id':'browser-test','preview_started_at':session['started_at'],
+            'blocked_remote_hosts':['127.0.0.1']}
+        with self.assertRaisesRegex(ValueError,'QA source/preview changed'):
+            orbit_build.save_browser(self.db,self.root,
+                {**self.meta,'preview_id':'browser-test'},report)
+        self.assertEqual(self.advance()['status'],'HOLD')
+        # Even an externally inserted historical PASS record cannot bypass
+        # the origin policy while claiming valid source and preview metadata.
+        rev=orbit_build.current(self.db,self.root,self.meta)['run']['revision']
+        with self.db:
+            self.db.execute(
+                'INSERT INTO browser_results(project,root,build_id,status,summary,created_at) VALUES (?,?,?,?,?,?)',
+                (self.meta['project'],str(self.root),self.meta['build_id'],'PASS',
+                 __import__('json').dumps({**report,'qa_build_revision':rev}),'now'))
+        denied=self.advance()
+        self.assertEqual(denied['status'],'HOLD')
+        self.assertIn('forbidden network origin',denied['reason'])
+        self.assertEqual(orbit_build.current(self.db,self.root,self.meta)['run']['stage'],'BROWSER_QA')
+        self.save_test_pass(session)
+        self.assertEqual(self.advance()['run']['stage'],'REVIEW')
+
     def test_m34_preview_network_origin_is_exact(self):
         allowed=orbit_browser.approved_preview_origin
         for url in ('http://127.0.0.1:49152/','http://127.0.0.1:49152/api?x=1',
