@@ -134,6 +134,26 @@ class CompactResumeTests(unittest.TestCase):
         self.assertNotIn('SECRET-IN-OTHER-PROJECT',json.dumps(result))
         self.assertNotIn('managed_fields',result['checkpoint'])
 
+    def test_m4_synthetic_benchmark_compact_vs_full_json_bytes(self):
+        # This is a repeatable *serialization size* benchmark, not a claim
+        # about the current host's actual token billing or model accuracy.
+        for i in range(8):
+            orbit_mcp.execute(self.conn,'orbit_memory_save',{
+                'project':'workspace','key':f'historical-{i}',
+                'kind':'decision','summary':'Archived planning context ' + ('x'*460),
+                'source':'unit-fixture','confirm_write':True})
+        before=self.conn.total_changes
+        compact=self.call('orbit_project_resume',compact=True,
+                          objective='Fix one local component bug',max_chars=1500)
+        full=self.call('orbit_project_resume')
+        compact_bytes=len(json.dumps(compact,ensure_ascii=True,separators=(',',':')))
+        full_bytes=len(json.dumps(full,ensure_ascii=True,separators=(',',':')))
+        self.assertLessEqual(compact_bytes,1500)
+        self.assertGreater(full_bytes,compact_bytes*2)
+        self.assertNotIn('historical-0',json.dumps(compact))
+        self.assertIn('memories',full)
+        self.assertEqual(self.conn.total_changes,before)
+
     def test_no_database_or_file_writes_for_compact_read(self):
         before=self.conn.total_changes
         files=list(self.root.rglob('*'))
