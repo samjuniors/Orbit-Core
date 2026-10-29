@@ -1,6 +1,7 @@
 """Read-only Orbit capability discovery and selection; no imports/installs/network."""
 from __future__ import annotations
 import json
+import os
 import re
 from pathlib import Path
 
@@ -108,7 +109,7 @@ def _configs(project_root, home):
     return items
 
 def discover(project_root, *, home=None):
-    h=Path(home) if home else Path.home()
+    h = Path(home) if home else Path(os.getenv('ORBIT_UNIVERSAL_HOME') or Path.home())
     skills=[]; seen=set(); servers=[]; limits=[]
     for folder in _skill_paths(project_root,h):
         if folder.is_symlink() or not folder.is_dir():continue

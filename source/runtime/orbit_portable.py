@@ -11,12 +11,19 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 def counts(conn, root, project):
-    return {label: conn.execute(f'SELECT count(*) FROM {table} WHERE {column}=? AND project=?',
-            (str(root), project)).fetchone()[0]
-            for label, table, column in [('tasks','orbit_agent_tasks','project_root'),
-                                        ('research','orbit_research_sources','root')]}
+    res = {}
+    for label, table, column in [('tasks','orbit_agent_tasks','project_root'),
+                                 ('research','orbit_research_sources','root')]:
+        try:
+            res[label] = conn.execute(f'SELECT count(*) FROM {table} WHERE {column}=? AND project=?',
+                                      (str(root), project)).fetchone()[0]
+        except sqlite3.OperationalError:
+            res[label] = 0
+    return res
 
 def transfer(conn, root, project, args, checkpoint):
+    orbit_tasks.setup(conn)
+    orbit_evidence.setup(conn)
     if args['action'] == 'export':
         tasks = [dict(r) for r in conn.execute('SELECT * FROM orbit_agent_tasks WHERE project_root=? AND project=? ORDER BY task_key LIMIT 101', (str(root), project))]
         research = [dict(r) for r in conn.execute('SELECT * FROM orbit_research_sources WHERE root=? AND project=? ORDER BY source_key LIMIT 101', (str(root), project))]

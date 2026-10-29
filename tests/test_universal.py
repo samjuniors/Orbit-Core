@@ -242,7 +242,7 @@ class UniversalSetupTests(unittest.TestCase):
         installer.install(installer.plan(self.project,['codex'],scope='project'))
         exe=installer.python_binary();server=installer.runtime_folder()/'orbit_mcp.py'
         msgs=[{'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'orbit_capability_select','arguments':{'project_root':str(self.project),'objective':'polish frontend design'}}}]
-        p=subprocess.run([exe,str(server)],input=json.dumps(msgs[0])+'\n',text=True,capture_output=True,timeout=12,env={**os.environ,'ORBIT_LOCAL_DB':str(Path(self.t.name)/'test2.sqlite')})
+        p=subprocess.run([exe,str(server)],input=json.dumps(msgs[0])+'\n',text=True,capture_output=True,timeout=12,env={**os.environ,'ORBIT_LOCAL_DB':str(Path(self.t.name)/'test2.sqlite'),'HOME':str(self.home),'USERPROFILE':str(self.home)})
         self.assertEqual(p.returncode,0,p.stderr)
         result=json.loads(json.loads(p.stdout)['result']['content'][0]['text'])
         self.assertEqual(result['recommended_action'],'BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL')

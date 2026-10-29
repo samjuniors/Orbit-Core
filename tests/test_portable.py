@@ -70,3 +70,11 @@ class PortableTests(unittest.TestCase):
                 r=m.execute(fresh,'orbit_project_transfer',{'project_root':str(self.b),'project':'lab','action':'import','bundle':raw,'confirm_write':True,'expected_revision':p['bundle_revision']})
                 self.assertEqual(r['status'],'IMPORTED')
             finally: fresh.close()
+
+    def test_uninitialized_database_counts_and_transfer(self):
+        import orbit_portable
+        empty_db=sqlite3.connect(':memory:')
+        self.addCleanup(empty_db.close)
+        self.assertEqual(orbit_portable.counts(empty_db,self.a,'lab'),{'tasks':0,'research':0})
+        packet=m.execute(empty_db,'orbit_project_transfer',{**self.base,'action':'export'})
+        self.assertEqual(packet['status'],'EXPORT_READY')
