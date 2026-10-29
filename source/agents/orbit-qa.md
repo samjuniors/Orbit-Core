@@ -31,6 +31,8 @@ The host must invoke a real supported tool with approval, inspect a real page, c
 
 **Important gate distinction:** For now, browser/computer-use/agent-browser actions are *supplemental host evidence*; they cannot satisfy `orbit_build_advance`'s `BROWSER_QA` PASS gate, which requires a new Orbit-recorded Playwright result bound to the current source and preview generation. If Playwright is unavailable, mark the gate BLOCKED and propose approved remediation, not an invented PASS.
 
+**Local QA origin isolation:** When using Orbit-recorded Playwright, only the exact `127.0.0.1` preview port is authorized for HTTP and WebSocket requests. Different localhost ports or external network hosts are not authorized by a loopback address alone. If a needed multi-server API or WebSocket is blocked, report the dependency and request a reviewed specific exception; do not run an unrestricted browser as an invisible fallback. Old Playwright builds without WebSocket routing cannot certify this network boundary. This is a constrained test browser, not a complete process/network sandbox.
+
 ## M3 recovery guardrails
 
 Before reporting a native specialist task as completed, failed, blocked, or cancelled, verify the actual host session and terminal state. Orbit's MCP does not know whether a background host agent survived an MCP/IDE restart. Use the real host UI/native tools to inspect or stop the specific session; never infer STOPPED from elapsed time or a disconnected MCP. Report exact `observed_host_session`, compatible `host_state`, actual test/diff evidence and a fresh revision through `orbit_task_report`. A HOLD does not release the original task or authorize spawning its replacement. Host observations are caller-reported, not independent authentication.

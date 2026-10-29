@@ -1,6 +1,7 @@
 """Durable build state and real (if present) headless browser QA tests."""
 from __future__ import annotations
 import os
+import json
 import importlib.util
 import shutil
 import socket
@@ -224,6 +225,97 @@ class BuildBrowserTests(unittest.TestCase):
         schema=orbit_mcp.TOOL_MAP['orbit_browser_qa']
         self.assertIn('browser', schema['properties'])
         self.assertEqual(schema['properties']['browser']['enum'], ['auto','msedge','chrome','chromium'])
+
+    def test_m34_blocked_network_attempts_never_certify_browser_qa(self):
+        session=self.make_browser_gate()
+        report={'status':'PASS',
+            'actions':[{'status':'PASS','op':'expect_visible'}],
+            'source_fingerprint':orbit_build.code_fingerprint(self.root),
+            'preview_id':'browser-test','preview_started_at':session['started_at'],
+            'blocked_remote_hosts':['127.0.0.1']}
+        with self.assertRaisesRegex(ValueError,'forbidden network origin'):
+            orbit_build.save_browser(self.db,self.root,
+                {**self.meta,'preview_id':'browser-test'},report)
+        self.assertEqual(self.advance()['status'],'HOLD')
+        # Even an externally inserted historical PASS record cannot bypass
+        # the origin policy while claiming valid source and preview metadata.
+        rev=orbit_build.current(self.db,self.root,self.meta)['run']['revision']
+        with self.db:
+            self.db.execute(
+                'INSERT INTO browser_results(project,root,build_id,status,summary,created_at) VALUES (?,?,?,?,?,?)',
+                (self.meta['project'],str(self.root),self.meta['build_id'],'PASS',
+                 json.dumps({**report,'qa_build_revision':rev}),'now'))
+        denied=self.advance()
+        self.assertEqual(denied['status'],'HOLD')
+        self.assertIn('forbidden network origin',denied['reason'])
+        self.assertEqual(orbit_build.current(self.db,self.root,self.meta)['run']['stage'],'BROWSER_QA')
+        self.save_test_pass(session)
+        self.assertEqual(self.advance()['run']['stage'],'REVIEW')
+
+    def test_m34_preview_network_origin_is_exact(self):
+        allowed=orbit_browser.approved_preview_origin
+        for url in ('http://127.0.0.1:49152/','http://127.0.0.1:49152/api?x=1',
+                    'http://127.0.0.1:49152/#dashboard'):
+            self.assertTrue(allowed(url,49152),url)
+        for url in ('http://127.0.0.1:49153/',
+                    'http://127.0.0.1:80/',
+                    'http://localhost:49152/',
+                    'http://[::1]:49152/',
+                    'https://127.0.0.1:49152/',
+                    'http://127.0.0.2:49152/',
+                    'http://127.0.0.1.evil.example:49152/',
+                    'http://user:password@127.0.0.1:49152/',
+                    'file:///etc/passwd',
+                    'http://[::1'):
+            with self.subTest(url=url):
+                self.assertFalse(allowed(url,49152))
+        self.assertTrue(allowed('ws://127.0.0.1:49152/notifications',49152,websocket=True))
+        for url in ('wss://127.0.0.1:49152/ws','ws://127.0.0.1:49153/ws',
+                    'ws://localhost:49152/ws','ws://remote.example/ws'):
+            with self.subTest(url=url):
+                self.assertFalse(allowed(url,49152,websocket=True))
+
+    def test_m34_http_routes_allow_only_preview_and_inline_resources(self):
+        class FakeRoute:
+            def __init__(self,url):
+                self.request=type('Request',(),{'url':url})()
+                self.action=None
+            def continue_(self): self.action='continue'
+            def abort(self): self.action='abort'
+        blocked=[]
+        for url in ('http://127.0.0.1:49152/styles.css','data:text/plain,hello',
+                    'blob:http://127.0.0.1:49152/object','about:blank'):
+            route=FakeRoute(url)
+            orbit_browser.route_preview_request(route,49152,blocked)
+            self.assertEqual(route.action,'continue',url)
+        for url in ('http://127.0.0.1:49153/secret','http://localhost:49152/',
+                    'https://127.0.0.1:49152/','https://public.example/script.js',
+                    'file:///etc/passwd'):
+            route=FakeRoute(url)
+            orbit_browser.route_preview_request(route,49152,blocked)
+            self.assertEqual(route.action,'abort',url)
+        self.assertEqual(len(blocked),5)
+        self.assertIn('127.0.0.1',blocked)
+        self.assertIn('public.example',blocked)
+
+    def test_m34_websocket_route_never_connects_to_other_services(self):
+        class FakeSocket:
+            def __init__(self,url):
+                self.url=url;self.connected=False;self.closed=None
+            def connect_to_server(self): self.connected=True
+            def close(self,**kwargs): self.closed=kwargs
+        blocked=[]
+        good=FakeSocket('ws://127.0.0.1:49152/updates')
+        orbit_browser.route_preview_socket(good,49152,blocked)
+        self.assertTrue(good.connected)
+        self.assertIsNone(good.closed)
+        for url in ('ws://127.0.0.1:49153/admin','ws://localhost:49152/',
+                    'wss://remote.example/socket'):
+            route=FakeSocket(url)
+            orbit_browser.route_preview_socket(route,49152,blocked)
+            self.assertFalse(route.connected)
+            self.assertEqual(route.closed['code'],1008)
+        self.assertEqual(len(blocked),3)
 
     def test_browser_input_validation(self):
         with self.assertRaises(ValueError):orbit_browser.validate_actions([{'op':'evaluate','selector':'body','value':'fetch()'}])
