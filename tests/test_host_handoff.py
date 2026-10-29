@@ -300,6 +300,43 @@ class HostHandoffTests(unittest.TestCase):
             'IMPLEMENT',orbit_tasks.utc_now()[:10])
         self.assertEqual((step,day),(1,1))
 
+    def test_m3_attempt_budget_survives_sqlite_restart(self):
+        self.register()
+        reserved=self.reserve()
+        self.call('orbit_task_started',task_key='frontend',
+            expected_revision=reserved['task']['revision'],
+            host_session='session-before-restart-1234',confirm_write=True)
+        terminal=self.call('orbit_task_report',task_key='frontend',
+            expected_revision=3,outcome='FAILED',
+            evidence='Host reported regression failure before restarting MCP',
+            confirm_write=True)
+        self.assertEqual(terminal['status'],'FAILED')
+        path=Path(self.tmp.name)/'attempt-restart.sqlite'
+        saved=sqlite3.connect(str(path))
+        try:
+            self.db.backup(saved)
+        finally:
+            saved.close()
+        reopened=sqlite3.connect(str(path))
+        reopened.row_factory=sqlite3.Row
+        try:
+            orbit_tasks.setup(reopened)
+            canonical=orbit_mcp.project_root({'project_root':str(self.root)})
+            retried=orbit_tasks.reserve(reopened,{
+                'project':'todo','task_key':'frontend','expected_revision':4,
+                'approval_reference':'approved-after-restart-1234',
+                'confirm_write':True},canonical)
+            self.assertEqual(retried['status'],'RESERVED')
+            self.assertEqual(retried['attempt_number'],2)
+            self.assertEqual(retried['attempt_budget']['step_used'],2)
+            self.assertEqual(retried['task']['host_session'],'')
+            prior=reopened.execute(
+                "SELECT host_session FROM orbit_task_attempts WHERE task_key='frontend' AND attempt_number=1"
+            ).fetchone()
+            self.assertEqual(prior['host_session'],'session-before-restart-1234')
+        finally:
+            reopened.close()
+
     def test_m3_stale_reservation_has_no_attempt_history_side_effect(self):
         self.register()
         stale=self.call('orbit_task_reserve',task_key='frontend',
