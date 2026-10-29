@@ -6,6 +6,9 @@ across MCP restarts. A reported code/test result is not independently verified.
 from __future__ import annotations
 import json
 import sqlite3
+import os
+import hashlib
+from pathlib import Path
 import orbit_decisions
 from datetime import datetime,timezone
 
@@ -36,6 +39,68 @@ def flow_for_project(conn,root,a):
               'library' if kind in {'cli','sdk-library','plugin-mcp','api-service','data-automation'} else
               'platform' if kind=='os-platform' else 'web')
     return FLOWS[category]
+
+
+# M3.1: bounded source snapshot. Local bytes, not a Git HEAD or an agent assertion.
+# Dependency caches, generated outputs and Orbit state must not affect the QA identity.
+QA_SOURCE_SUFFIXES = {'.html','.htm','.css','.scss','.js','.jsx','.mjs','.cjs',
+    '.ts','.tsx','.vue','.svelte','.json','.yaml','.yml','.toml','.xml',
+    '.py','.go','.rs','.java','.kt','.kts','.swift','.dart','.php','.rb',
+    '.sql','.c','.cc','.cpp','.h','.hpp','.svg','.png','.jpg','.jpeg',
+    '.gif','.webp','.ico'}
+QA_SOURCE_NAMES = {'Dockerfile','Makefile','Containerfile','Gemfile','Podfile',
+    'gradlew','gradlew.bat','Cargo.lock','pubspec.lock'}
+QA_SKIP_DIRS = {'.git','.orbit','.hg','.svn','node_modules','vendor','dist',
+    'build','coverage','.next','.nuxt','.svelte-kit','.venv','venv','__pycache__',
+    '.pytest_cache','.tox','.gradle','.idea','.vscode','.expo','.dart_tool',
+    'target','.turbo','.cache'}
+QA_MAX_FILES = 1600
+QA_MAX_FILE_BYTES = 16 * 1024 * 1024
+QA_MAX_TOTAL_BYTES = 96 * 1024 * 1024
+
+
+def code_fingerprint(root):
+    """Hash bounded, project-local source/assets; fail closed on unsafe/incomplete scans.
+
+    This is a *code and test source* identity, not a full runtime/security proof.
+    Very large or symlinked source trees require a reviewed narrower QA strategy.
+    """
+    root = Path(root)
+    digest = hashlib.sha256()
+    count = 0
+    total = 0
+    try:
+        def fail_scan(exc):
+            raise exc
+        for folder, dirs, files in os.walk(root, topdown=True, followlinks=False, onerror=fail_scan):
+            base = Path(folder)
+            dirs[:] = sorted(d for d in dirs if d not in QA_SKIP_DIRS)
+            if any((base / d).is_symlink() for d in dirs):
+                return None
+            for name in sorted(files):
+                path = base / name
+                if path.suffix.lower() not in QA_SOURCE_SUFFIXES and name not in QA_SOURCE_NAMES:
+                    continue
+                if path.is_symlink() or not path.is_file():
+                    return None
+                size = path.stat().st_size
+                count += 1
+                total += size
+                if count > QA_MAX_FILES or size > QA_MAX_FILE_BYTES or total > QA_MAX_TOTAL_BYTES:
+                    return None
+                rel = path.relative_to(root).as_posix().encode('utf-8')
+                digest.update(len(rel).to_bytes(4,'big'))
+                digest.update(rel)
+                digest.update(size.to_bytes(8,'big'))
+                with path.open('rb') as inp:
+                    while True:
+                        chunk = inp.read(131072)
+                        if not chunk:
+                            break
+                        digest.update(chunk)
+        return digest.hexdigest() if count else None
+    except (OSError, ValueError, OverflowError):
+        return None
 
 
 def now(): return datetime.now(timezone.utc).isoformat(timespec='seconds')
@@ -709,9 +774,30 @@ def advance(conn,root,a):
     if row['stage']=='BROWSER_QA' and outcome=='PASS':
         rec=conn.execute('SELECT status,summary FROM browser_results WHERE project=? AND root=? AND build_id=? ORDER BY id DESC LIMIT 1',
                          (a['project'],str(root),row['build_id'])).fetchone()
-        recorded=json.loads(rec['summary']) if rec else {}
-        if not rec or rec['status']!='PASS' or not recorded.get('actions'):
+        try:
+            recorded=json.loads(rec['summary']) if rec else {}
+        except (ValueError,TypeError):
+            recorded={}
+        actions=recorded.get('actions')
+        if (not rec or rec['status']!='PASS' or not isinstance(actions,list)
+                or not actions or not all(isinstance(x,dict) and x.get('status')=='PASS' for x in actions)):
             return {'status':'HOLD','reason':'No recorded passing interactive Playwright browser QA result for this build'}
+        # Legacy/unbound records cannot certify currently edited code or a new preview.
+        if recorded.get('qa_build_revision')!=row['revision']:
+            return {'status':'HOLD','reason':'Browser QA record belongs to a different build revision; rerun QA'}
+        live_hash=code_fingerprint(root)
+        if not live_hash or recorded.get('source_fingerprint')!=live_hash:
+            return {'status':'HOLD','reason':'Browser QA is stale or has no source snapshot; rerun QA after source changes'}
+        import orbit_preview
+        preview_id=a.get('preview_id')
+        if not preview_id or recorded.get('preview_id')!=preview_id:
+            return {'status':'HOLD','reason':'Browser QA preview identity missing or mismatched; rerun QA'}
+        session=orbit_preview.SESSIONS.get(orbit_preview.preview_key(root,preview_id))
+        if (not session or session['proc'].poll() is not None
+                or recorded.get('preview_started_at')!=session.get('started_at')):
+            return {'status':'HOLD','reason':'Browser QA was run in a different preview generation or MCP session; rerun QA'}
+        if orbit_preview.status(root,{'preview_id':preview_id}).get('status')!='READY':
+            return {'status':'HOLD','reason':'Browser QA preview is not currently READY; rerun or restart QA'}
     if a.get('confirm_write') is not True:
         return {'status':'PREVIEW_ONLY','stage':row['stage'], 'next_stage':flow[flow.index(row['stage'])+1] if outcome=='PASS' else row['stage']}
     evidence_map[row['stage']]={'outcome':outcome,'evidence':evidence,'updated_at':now(),
@@ -725,9 +811,22 @@ def advance(conn,root,a):
     return {'status':'ADVANCED' if outcome=='PASS' else 'RECORDED_'+outcome,'run':public(get(conn,root,a))}
 
 def save_browser(conn,root,a,result):
+    row=get(conn,root,a)
+    if not row or row['stage']!='BROWSER_QA':
+        raise ValueError('Browser result requires an active BROWSER_QA build')
+    if result['status']=='PASS' and (
+            not result.get('source_fingerprint')
+            or result['source_fingerprint']!=code_fingerprint(root)
+            or result.get('preview_id')!=a.get('preview_id')
+            or not isinstance(result.get('preview_started_at'),(int,float))):
+        raise ValueError('QA source/preview changed or snapshot unavailable; rerun browser QA')
+    summary={k:v for k,v in result.items() if k in {
+        'url','viewport','title','actions','errors','failures','screenshot',
+        'source_fingerprint','preview_id','preview_started_at'}}
+    summary['qa_build_revision']=row['revision']
     with conn:
         conn.execute('INSERT INTO browser_results (project,root,build_id,status,summary,created_at) VALUES (?,?,?,?,?,?)',
-                     (a['project'],str(root),a['build_id'],result['status'],json.dumps({k:v for k,v in result.items() if k in {'url','viewport','title','actions','errors','failures','screenshot'}}),now()))
+                     (a['project'],str(root),a['build_id'],result['status'],json.dumps(summary),now()))
     return result
 
 def setup_browser(conn):
