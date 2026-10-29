@@ -1,4 +1,4 @@
-# Orbit Core roadmap — v0.25.1 release candidate acceptance
+# Orbit Core roadmap — M1/M2 owner-accepted; M3 engineering in progress (2026-10-29)
 
 The focus is **a trustworthy local orchestrator inside existing coding IDEs**, not duplicating an entire cloud app-building platform. This is a prioritized engineering backlog, not an automated promise of completed features.
 
@@ -6,19 +6,24 @@ The focus is **a trustworthy local orchestrator inside existing coding IDEs**, n
 
 **Product principle:** build an original, lightweight Orbit experience, not an ECC fork or clone. Research links, annotations and retrieval records belong in **authorized local project-scoped SQLite outside the Git repository**. Owner documentation remains authoritative. External references are untrusted inputs, never auto-executed skills or agent instructions. This roadmap preserves Issue #13 product-experience commitments and Issue #9 release/security gates.
 
-### M1 — P0: Orbit Evidence Lens (source merged; real-host verification pending)
+### M1 — P0: Orbit Evidence Lens (core scope OWNER-REPORTED PASS; source and CI verified)
 - Save an individual reviewed research **source pointer** (URL, topic tags, short annotation, original status) with an explicit write preview and revision-guarded update. Use project folder + stable project key as namespace. Never seed global memory by default or push research links to Git.
 - Recover only sources relevant to an objective within a predictable character budget; return provenance, limits, unverified-source warning and explicit live verification guidance. No network request or third-party code execution from source content.
 - Support project- and folder-level isolation, duplicate identity updates, malicious URLs and stale-revision tests; retain existing local SQLite and legacy memories. A trusted local IDE user manually imports the previously prepared 9-link research packet after connecting, not a Git checkout or ChatGPT cloud session.
-- **Gate:** Linux/Windows tests + disposable installer/stdio smoke pass from reviewed PR #16; real IDE-local source saving and read-back remain NOT RUN. No claim of public-release or host permission acceptance.
+- **Gate / acceptance update (2026-10-29):** PR #16 merged and the source/bundle regression matrix passed. The owner reported Antigravity research-pointer save/readback and checkpoint recovery as PASS. Treat M1's core functionality as **OWNER-ACCEPTED**, not independently attested host consent or proof of automatically synchronized Notion references. Evidence: [v0.25.1 release host reports](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.25.1) and [Evidence Lens tests](../tests/test_evidence_lens.py).
 
-### M2 — P0: Reliable real-host delegation and handoff (packet merged; real native-host invocation acceptance pending)
+### M2 — P0: Reliable real-host delegation and handoff (core scope OWNER-REPORTED PASS; extended checks open)
 - Add a read-only `orbit_task_handoff` adapter contract: checked task/reservation/dependencies, exact supported native host tool names (caller-reported), limited file ownership, optional minimal Evidence Lens links, safe HOLD/serial fallback. The host **must** actually invoke its native tool; a packet is not an agent run. Real host session references and changed-file/test inspection remain prerequisites; the MCP never spawns an agent.
-- **Gate:** verified source/CLI protocol and safe fallbacks in PR #17 CI; **real-host acceptance is NOT RUN**. Complete a tiny new-project build and an existing-project scoped feature/debug flow in two actual hosts, with explicit consent, real subagent session IDs, reviewed diffs/tests and fallback. Keep milestone OPEN until both live hosts pass.
+- **Gate / acceptance update (2026-10-29):** [PR #17](https://github.com/samjuniors/Orbit-Core-MCP/pull/17) merged with passing automated host-handoff tests. The owner's actual-host reports record **Antigravity PASS** (native delegation, Todo checks, restart/resume) and **Codex PASS** (native delegation, 14 regression checks, `todo-filter-codex` REVIEW_ACCEPTED revision 5, checkpoint/files restored after restart). Those reports are documented in the [v0.25.1 release](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.25.1); the MCP cannot independently attest host session/consent. Mark **M2 core two-host acceptance OWNER-ACCEPTED**, without claiming every new-project/existing-project or denial/fallback scenario was independently verified. Any untested scenario remains a targeted M3 follow-up, not an assumed PASS.
 
-### M3 — P1: Independent QA, permissions and scoped recovery
-- Bind test reports to code revision and acceptance case. Gate commands/files on real host permissions; review/rework integration and safe cancellation/rollback. Preserve Issue #9 security limitations.
-- **Gate:** no stale PASS after source changes; real host verification and permission-denial tests.
+### M3 — P1: Independent QA, permissions and scoped recovery (IMPLEMENTATION PARTLY MERGED; LIVE ACCEPTANCE DEFERRED)
+- **Objective:** Make verification evidence independently checkable where host capabilities permit, ensure permission/denial behavior is accurately represented, and recover from interrupted or cross-host work without fabricating PASS.
+- **M3.1 — QA freshness:** Attach QA/test records to source revision, acceptance case, execution environment and preview generation; invalidate stale PASS after code changes. Include regression tests for stale evidence.
+- **M3.2 — Host permissions:** Verify real host consent/denial paths; do not treat `confirm_write`, reported tool names or supplied session IDs as authenticated consent. Retain HOLD/serial fallback when native delegation cannot be attested.
+- **M3.3 — Scoped recovery:** Exercise interrupted, cancelled, failed and rework task paths with revision checks, safe file ownership, and rollback/backup review on Windows and Linux. Do not alter older accepted task history.
+- **M3.4 — Portability limitations:** [PR #22](https://github.com/samjuniors/Orbit-Core-MCP/pull/22) merged portable task/research export/import and checkpoint-only detection; **live cross-PC transfer remains NOT VERIFIED**. Test on two actual hosts/PCs only with approved, disposable project data; imported approvals and sessions remain untrusted historical records. Build/intake and legacy memory are not included.
+- **Acceptance gate:** real revised-code QA (including stale-PASS rejection), host denied-permission evidence, interrupted/rework recovery, independently inspected Git diffs/tests, and an explicitly recorded cross-PC test result (PASS/FAIL/DEFERRED). Separate optional platform/GUI, provenance/signing and Issue #9 security gates are not silently closed.
+- **Engineering progress:** [PR #25](https://github.com/samjuniors/Orbit-Core-MCP/pull/25) source/preview-bound QA, [PR #26](https://github.com/samjuniors/Orbit-Core-MCP/pull/26) host-first browser selection, [PR #27](https://github.com/samjuniors/Orbit-Core-MCP/pull/27) denial bookkeeping, [PR #29](https://github.com/samjuniors/Orbit-Core-MCP/pull/29) native-agent session reconciliation and [PR #32](https://github.com/samjuniors/Orbit-Core-MCP/pull/32) persistent retry budgets have merged to development `main`. Browser QA origin isolation was integrated and merged through [PR #33](https://github.com/samjuniors/Orbit-Core-MCP/pull/33), superseding the conflicting standalone #30. See [M3 engineering acceptance checklist](M3-ENGINEERING-ACCEPTANCE.md) for case/evidence requirements. Do not confuse merging with live IDE acceptance, verified permissions, two-PC continuity or production security; these remain deferred or open.
 
 ### M4 — P1: Adaptive capability surfaces and reusable context
 - Reuse native host features, owned code, on-demand skills or a small MCP surface according to task—not a universal dependency pile. Extend the M1 compact pack to accepted decisions and checkpoint context only after verifying project-root binding and provenance.
@@ -34,7 +39,7 @@ The focus is **a trustworthy local orchestrator inside existing coding IDEs**, n
 
 - Validate Windows Antigravity/Codex/Claude Code setup from **downloaded, signed-in, authorized machines**, including preview/backup of customized files, restart, actual tool discovery and user decision flow.
 - Run real Windows Edge/Chrome browser QA and native Android/iOS flows where applicable; optional Playwright tests may be skipped in CI and **must not** be described as live acceptance.
-- Build the unpublished **v0.25.1** candidate ZIP and desktop bundle in CI with strict runtime parity; download the Actions artifacts into a disposable host and verify fresh install, backed-up v0.24.1-to-v0.25.1 update, and resumed older SQLite build. The old `v0.24.1` prerelease remains immutable. See [release acceptance](RELEASE-ACCEPTANCE-v0.25.1.md).
+- **v0.25.1 was published as a prerelease on 2026-10-29** with four ZIP/MCPB/checksum assets after passing CI. This is not production security, GUI or independent native-host acceptance. Preserve v0.24.1 assets and verify real device/installer/backup/rollback separately. See [published release](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.25.1) and [release acceptance](RELEASE-ACCEPTANCE-v0.25.1.md).
 
 ## P1: reliability and evidence authenticity
 
@@ -87,7 +92,8 @@ overwritten; transfer the project folder including `.orbit/STATE.md` separately.
 Build/intake state and legacy memories are not transferred in this bounded version.
 Without the original PC/export, only the available checkpoint can be recovered.
 
-The development tool inventory is now **40**; the older v0.25.1 acceptance prompt's
-39-tool requirement applies to that candidate, not this change. No release or
-new live-host acceptance is implied. Antigravity results supplied by the owner
-are reported PASS; cross-PC Codex delegation remains NOT RUN.
+The published v0.25.1 and current development tool inventory are **40** tools.
+The older 39-tool acceptance prompt predates the portable-transfer feature.
+The owner reported Antigravity and Codex same-PC native delegation/restart PASS;
+**live cross-PC transfer and native delegation on the destination are NOT VERIFIED**.
+Neither published prerelease nor these host reports constitute production certification.

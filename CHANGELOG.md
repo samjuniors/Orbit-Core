@@ -3,17 +3,28 @@
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] — post-v0.25.1 work
+
+Source changes merged after the published **v0.25.1 prerelease** (NOT a new published release):
+- **M3 host-denial bookkeeping:** real host permission denial or unavailable native delegation remains BLOCKED instead of being mistaken for a user's cancellation (#27).
+- **M3 interrupted-agent recovery:** terminal outcomes require a matching caller-reported native host session/state; uncertain work remains on HOLD and keeps its scope lock (#29).
+- **M3 durable attempt history:** additive local SQLite attempt ledger, bounded retries, pre-invocation refunds, legacy/cross-PC date safeguards and SQLite rollback regressions (#32).
+- **M3 browser QA origin isolation:** exact managed preview-origin HTTP/WebSocket restrictions and fail-closed network-attempt QA gate merged to development `main` through #33; this remains unreleased and is not a complete OS/browser sandbox.
+
+All M3 source changes remain **development-only** until a separately authorized release. Real-host M3 acceptance, Issue #9 security and rollback tests are not complete. `NEXT_VERSION=0.25.2` remains planning metadata, not a release.
+
+## [0.25.1] — Published prerelease (2026-10-29; NOT production-certified)
+
+**Included from the previously staged post-candidate source at the published 40-tool commit:**
 - **Explicit clean reset:** add **Clear Orbit / Fresh install…** with exact path preview, typed `REMOVE ORBIT` confirmation, all-global-host/customized Orbit cleanup, shared runtime removal, optional selected-project cleanup and separately opted-in memory deletion. Back up all originals before changes; preserve unrelated MCPs/configuration and product source. Refuse symlinks, invalid shared config and stale previews. Equivalent `orbit_setup.py clean` command; Windows visual acceptance remains pending.
 - **Setup repair and polish:** recognize exact official intermediate agent templates from `7e1372f` (native/Claude, LF/CRLF) for backup-first upgrades, fixing the reported `orbit-architect.md` block. Unknown edits remain protected. Use a themed three-step layout, scrollable file preview, clearer review messages and one state-aware action. Windows visual acceptance remains pending.
-- **Unified setup (source candidate):** `Orbit Setup.cmd` opens the expanded native Windows setup UI; `orbit_setup.py` offers an interactive terminal menu or explicit preview-first `install`, `update`, and reversible `uninstall` for selected IDE hosts. Uninstall preserves shared runtime, SQLite, owner docs, unrelated MCP entries and custom files, with backups; it does not auto-update Git or bypass stock-file conflicts. Included in candidate ZIP smoke and Windows/Linux CI.
-- **M2 host-native delegation handoff (merged source, not published):** a read-only `orbit_task_handoff` produces source-scoped, approval-aware packets only for reserved tasks with a matching *reported* native IDE agent tool. Native invocation, session evidence and execution still belong entirely to the connected host; safe HOLD/serial fallback when unavailable. No extra model CLI or automatic agent spawning.
+- **Unified setup (published prerelease):** `Orbit Setup.cmd` opens the expanded native Windows setup UI; `orbit_setup.py` offers an interactive terminal menu or explicit preview-first `install`, `update`, and reversible `uninstall` for selected IDE hosts. Uninstall preserves shared runtime, SQLite, owner docs, unrelated MCP entries and custom files, with backups; it does not auto-update Git or bypass stock-file conflicts. Included in candidate ZIP smoke and Windows/Linux CI.
+- **M2 host-native delegation handoff (published prerelease; not production-certified):** a read-only `orbit_task_handoff` produces source-scoped, approval-aware packets only for reserved tasks with a matching *reported* native IDE agent tool. Native invocation, session evidence and execution still belong entirely to the connected host; safe HOLD/serial fallback when unavailable. No extra model CLI or automatic agent spawning.
 
-- **Orbit Evidence Lens (merged source, not published):** original folder+project-scoped SQLite research source pointers with preview-first, revision-guarded review; bounded objective-relevant context pack and untrusted-source warnings. No automatic crawler, source execution, Git research notes, global cross-project sharing or new model service. Existing local memory retained; requires real IDE/local install acceptance.
+- **Orbit Evidence Lens (published prerelease; not production-certified):** original folder+project-scoped SQLite research source pointers with preview-first, revision-guarded review; bounded objective-relevant context pack and untrusted-source warnings. No automatic crawler, source execution, Git research notes, global cross-project sharing or new model service. Existing local memory retained; requires real IDE/local install acceptance.
 - **Research/context milestones:** approved M1–M5 roadmap for scoped research memory, native-agent handoffs, evidence authentic QA, adaptive skills/context and optional verified learning, without adopting ECC's runtime or a universal auto-learning hook system.
 
 - No additional published changes. `NEXT_VERSION=0.25.2` is planning metadata only.
 
-## [0.25.1] — Install-once update experience (candidate; NOT PUBLISHED)
 
 **What's new and why it matters**
 - **Update Manager:** Once installed, open `orbit manager` or the per-user Update Manager launcher; select local hosts and approve an in-place upgrade without re-downloading and re-running setup each time.
@@ -35,7 +46,7 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 - Merge the externally audited MCP protocol, checkpoint/SQLite, recovery, preview, agent-task and memory hardening; add adversarial regression coverage (PR #10).
 - Update previews no longer execute downloaded installer code. Introduce optional host-controlled trusted workspace roots, restricted child environment defaults and clearer warnings about model-asserted approvals.
 - Support safe future version preparation from the immutable prior desktop bundle and explicit NEXT_VERSION planning.
-- **Not yet released:** host-specific approval evidence, comprehensive threat-model fixes, real IDE/browser acceptance, cryptographic provenance and updated versioned desktop installer remain gates. `v0.24.1` artifacts and tags stay unchanged.
+- **v0.25.0 was not published separately:** the later v0.25.1 prerelease includes updated installers while real IDE/browser acceptance, host-attested approvals, signing/provenance and threat-model fixes remain open. Older v0.24.1 assets and tags stay unchanged.
 
 ## [0.24.1] — Integration candidate
 - Combine adaptive product intake and model recommendations, vetted component selection, role-specific workflows, durable checkpoints and native host delegation guidance.

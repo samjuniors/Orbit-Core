@@ -11,7 +11,7 @@ Orbit connects to the coding environment you already use. It helps turn requirem
 **[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)**
 
 > [!IMPORTANT]
-> **Release status:** The latest published package is **v0.24.1 (prerelease)**. The `main` branch currently contains **v0.25.1 development source**, including the unified setup manager, Evidence Lens and native-agent handoff; it is **not a published or production-certified release**. The published v0.24.1 package has **33 MCP tools**; current source has **39**. CI passing does not establish live IDE acceptance.
+> **Release status (2026-10-29):** **v0.25.1 is published as a prerelease**, with the universal setup ZIP, Claude Desktop MCPB and SHA256 sidecars. The published package and current `main` expose **40 MCP tools**, including Evidence Lens, native-agent handoff and portable project transfer. Owner-reported Antigravity/Codex functional acceptance passed, but independent host consent, real installer/rollback, cross-PC transfer and Issue #9 security verification remain open. This is **not production certification**.
 
 ## What is Orbit?
 
@@ -35,9 +35,9 @@ Orbit does **not** provide its own LLM, silently install AI providers, launch ba
 
 ### Option A — Published package
 
-For the last publicly published package (**v0.24.1**), get the Universal Setup ZIP and its SHA256 file from **[GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)**. Verify the downloaded checksum, extract the archive and run `install_orbit_gui.pyw` on Windows, or `installer.py` on other systems.
+For the latest published package (**v0.25.1 prerelease**), get the Universal Setup ZIP and its SHA256 sidecar from **[GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.25.1)**. Verify the downloaded checksum, extract the archive and preview installation using `Orbit Setup.cmd` on Windows or `python3 orbit_setup.py` on other systems; approve only the intended host/profile changes.
 
-The published version does **not** contain the new `Orbit Setup.cmd` launcher or the 39-tool development runtime.
+This prerelease includes the unified setup launcher and a 40-tool runtime. The existence of a published package or green CI does not establish live GUI, update/rollback or security acceptance.
 
 ### Option B — Current development source
 
