@@ -70,3 +70,11 @@ class PortableTests(unittest.TestCase):
                 r=m.execute(fresh,'orbit_project_transfer',{'project_root':str(self.b),'project':'lab','action':'import','bundle':raw,'confirm_write':True,'expected_revision':p['bundle_revision']})
                 self.assertEqual(r['status'],'IMPORTED')
             finally: fresh.close()
+
+    def test_partial_database_counts_are_read_only(self):
+        import orbit_portable
+        partial=sqlite3.connect(':memory:')
+        try:
+            self.assertEqual(orbit_portable.counts(partial,self.b,'lab'),{'tasks':0,'research':0})
+            self.assertEqual(partial.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0],0)
+        finally: partial.close()

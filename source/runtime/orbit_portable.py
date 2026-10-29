@@ -11,10 +11,14 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 def counts(conn, root, project):
-    return {label: conn.execute(f'SELECT count(*) FROM {table} WHERE {column}=? AND project=?',
-            (str(root), project)).fetchone()[0]
-            for label, table, column in [('tasks','orbit_agent_tasks','project_root'),
-                                        ('research','orbit_research_sources','root')]}
+    result = {}
+    for label, table, column in [('tasks','orbit_agent_tasks','project_root'),
+                                 ('research','orbit_research_sources','root')]:
+        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+        result[label] = conn.execute(f'SELECT count(*) FROM {table} WHERE {column}=? AND project=?',
+                                    (str(root),project)).fetchone()[0] if exists else 0
+    return result
+
 
 def transfer(conn, root, project, args, checkpoint):
     if args['action'] == 'export':
