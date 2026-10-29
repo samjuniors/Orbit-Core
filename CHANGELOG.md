@@ -4,7 +4,13 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] — post-v0.25.1 work
 
-No unreleased code changes are recorded here since the v0.25.1 prerelease; future v0.25.2 scope remains planned, not shipped.
+Source changes merged after the published **v0.25.1 prerelease** (NOT a new published release):
+- **M3 host-denial bookkeeping:** real host permission denial or unavailable native delegation remains BLOCKED instead of being mistaken for a user's cancellation (#27).
+- **M3 interrupted-agent recovery:** terminal outcomes require a matching caller-reported native host session/state; uncertain work remains on HOLD and keeps its scope lock (#29).
+- **M3 durable attempt history:** additive local SQLite attempt ledger, bounded retries, pre-invocation refunds, legacy/cross-PC date safeguards and SQLite rollback regressions (#32).
+- Browser QA preview-origin isolation is reviewed separately in #33; do not claim it shipped until merged.
+
+All M3 source changes remain **development-only** until a separately authorized release. Real-host M3 acceptance, Issue #9 security and rollback tests are not complete. `NEXT_VERSION=0.25.2` remains planning metadata, not a release.
 
 ## [0.25.1] — Published prerelease (2026-10-29; NOT production-certified)
 
