@@ -163,6 +163,95 @@ class HostHandoffTests(unittest.TestCase):
         self.assertEqual(packet["status"], "HOLD_RESERVE_TASK_FIRST")
         self.assertFalse(packet["native_invoked"])
 
+    def test_m3_host_permission_denial_releases_unused_slot_without_invocation(self):
+        self.register()
+        self.assertEqual(self.reserve()['status'],'RESERVED')
+        preview=self.call('orbit_task_release',task_key='frontend',
+            expected_revision=2, reason_code='HOST_PERMISSION_DENIED',
+            reason='The host refused the native agent permission request')
+        self.assertEqual(preview['status'],'PREVIEW_ONLY')
+        self.assertEqual(preview['proposed_status'],'BLOCKED')
+        self.assertEqual(self.call('orbit_task_list')['tasks'][0]['status'],'RESERVED')
+        denied=self.call('orbit_task_release',task_key='frontend',
+            expected_revision=2,reason_code='HOST_PERMISSION_DENIED',
+            reason='The host refused the native agent permission request',
+            confirm_write=True)
+        self.assertEqual(denied['status'],'BLOCKED')
+        self.assertFalse(denied['agent_stopped_by_mcp'])
+        self.assertFalse(denied['host_permission_verified'])
+        self.assertEqual(denied['task']['revision'],3)
+        self.assertEqual(denied['task']['host_session'],'')
+        self.assertIn('HOST_PERMISSION_DENIED',denied['task']['note'])
+        # A declined reservation does not claim a host invocation or accepted QA.
+        self.assertEqual(self.handoff()['status'],'HOLD_RESERVE_TASK_FIRST')
+        self.register(key='other',scope=['src/ui/'])
+        self.assertEqual(self.reserve(key='other')['status'],'RESERVED')
+
+    def test_m3_denied_task_needs_a_new_approval_reference_before_retry(self):
+        self.register()
+        self.reserve()
+        self.call('orbit_task_release',task_key='frontend',expected_revision=2,
+                  reason_code='HOST_PERMISSION_DENIED',
+                  reason='Host denied access to the requested agent',
+                  confirm_write=True)
+        with self.assertRaisesRegex(ValueError,'fresh host/user approval'):
+            self.call('orbit_task_reserve',task_key='frontend',
+                      expected_revision=3,approval_reference='host-approved-plan-123',
+                      confirm_write=True)
+        task=self.call('orbit_task_list')['tasks'][0]
+        self.assertEqual(task['status'],'BLOCKED')
+        self.assertEqual(task['revision'],3)
+        resumed=self.call('orbit_task_reserve',task_key='frontend',
+                         expected_revision=3,approval_reference='new-real-host-approval-456',
+                         confirm_write=True)
+        self.assertEqual(resumed['status'],'RESERVED')
+        self.assertFalse(resumed['agent_spawned'])
+        self.assertEqual(resumed['task']['revision'],4)
+
+    def test_m3_unavailable_and_failed_invocation_remain_blocked(self):
+        for key,code in (('native-tool','HOST_TOOL_UNAVAILABLE'),
+                         ('invocation','HOST_INVOCATION_FAILED')):
+            with self.subTest(code=code):
+                self.register(key=key,scope=['src/'+key+'/'])
+                self.reserve(key=key)
+                event=self.call('orbit_task_release',task_key=key,
+                    expected_revision=2,reason_code=code,
+                    reason='Host reported no working tool before invocation',
+                    confirm_write=True)
+                self.assertEqual(event['status'],'BLOCKED')
+                self.assertFalse(event['agent_stopped_by_mcp'])
+        self.register(key='cancelled',scope=['src/cancelled/'])
+        default=self.call('orbit_task_release',task_key='cancelled',
+            expected_revision=1, reason='User cancelled this pending task',
+            confirm_write=True)
+        self.assertEqual(default['status'],'CANCELLED')
+        self.assertEqual(default['reason_code'],'USER_CANCELLED')
+
+    def test_m3_denial_cannot_cancel_live_agent_or_use_stale_revision(self):
+        self.register()
+        self.reserve()
+        stale=self.call('orbit_task_release',task_key='frontend',
+            expected_revision=1,reason_code='HOST_PERMISSION_DENIED',
+            reason='Native permission denied during handoff',confirm_write=True)
+        self.assertEqual(stale['status'],'STALE_REVISION')
+        self.assertEqual(self.call('orbit_task_list')['tasks'][0]['status'],'RESERVED')
+        self.call('orbit_task_started',task_key='frontend',
+                  expected_revision=2,host_session='actual-host-session-123',
+                  confirm_write=True)
+        with self.assertRaisesRegex(ValueError,'running tasks must be stopped in the host'):
+            self.call('orbit_task_release',task_key='frontend',
+                      expected_revision=3,reason_code='HOST_PERMISSION_DENIED',
+                      reason='Attempted to release running host agent',
+                      confirm_write=True)
+        task=self.call('orbit_task_list')['tasks'][0]
+        self.assertEqual(task['status'],'RUNNING')
+        self.assertEqual(task['revision'],3)
+        with self.assertRaises(ValueError):
+            orbit_mcp.validate('orbit_task_release',{
+                'project_root':str(self.root),'project':'todo',
+                'task_key':'frontend','expected_revision':3,
+                'reason':'Permission reported denied','reason_code':'FORCE_SUCCESS'})
+
     def test_tool_contract_read_only_and_arguments_tight(self):
         tool = next(t for t in orbit_mcp.TOOLS if t["name"] == "orbit_task_handoff")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
