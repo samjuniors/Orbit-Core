@@ -199,7 +199,12 @@ def browser_workflow(host_tools, configured_mcp_servers):
                          or shutil.which('agent-browser.cmd'))
     configured = any(row['name']=='agent-browser' for row in configured_mcp_servers)
     native_ready = action_names(native, ('browser_navigate','browser_open','browser_click','browser_act','browser_interact'))
-    computer_ready = action_names(computer, ('computer_use','computer_click','computer_act','computer_interact'))
+    computer_ready = action_names(computer, ('computer_click','computer_act','computer_interact',
+                                                'computer_use_click','computer_use_act',
+                                                'computer_use_interact','computer_use_type',
+                                                'computer_use_move')) or any(
+        re.sub(r'_+', '_', name.lower().replace('-', '_'))=='computer_use'
+        for name in computer)
     browser_use_ready = action_names(browser_use, ('browser_use_open','browser_use_navigate',
                                                      'browser_use_click','browser_use_act',
                                                      'browser_use_interact')) or any(
