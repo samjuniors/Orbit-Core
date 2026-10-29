@@ -47,6 +47,17 @@ def setup(conn):
         created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
         PRIMARY KEY(project,project_root,task_key))''')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_orbit_agent_tasks_scope ON orbit_agent_tasks(project_root,status)')
+    # Append-only attempt identity, separate from the current mutable task state.
+    # Never replace or backfill historical task rows. Old untracked rows are
+    # counted conservatively as a single attempt (see _attempt_usage).
+    conn.execute('''CREATE TABLE IF NOT EXISTS orbit_task_attempts (
+        project TEXT NOT NULL, project_root TEXT NOT NULL, task_key TEXT NOT NULL,
+        attempt_number INTEGER NOT NULL, step TEXT NOT NULL,
+        reserved_at TEXT NOT NULL, disposition TEXT NOT NULL,
+        host_session TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL,
+        PRIMARY KEY(project,project_root,task_key,attempt_number))''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_orbit_attempt_step ON orbit_task_attempts(project,project_root,step,disposition)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_orbit_attempt_day ON orbit_task_attempts(project_root,reserved_at,disposition)')
     conn.commit()
 
 
@@ -236,6 +247,74 @@ def _update(conn, old, status, **fields):
                              (old['project'],old['project_root'],old['task_key'])).fetchone())
 
 
+def _attempt_usage(conn, project, root, step, day):
+    """Count reservations per attempt, not merely per task key.
+
+    Unstarted slots released without host execution are refunded. Existing
+    tasks from before this table have no reconstructible attempt history: count
+    each still-relevant task once until it has a first tracked reservation.
+    This is a local advisory budget, not cross-PC or host quota enforcement.
+    """
+    path=str(root)
+    consuming="disposition<>'RELEASED_UNUSED'"
+    n_step=conn.execute(
+        "SELECT COUNT(*) FROM orbit_task_attempts WHERE project=? AND project_root=? AND step=? AND "+consuming,
+        (project,path,step)).fetchone()[0]
+    n_day=conn.execute(
+        "SELECT COUNT(*) FROM orbit_task_attempts WHERE project_root=? AND substr(reserved_at,1,10)=? AND "+consuming,
+        (path,day)).fetchone()[0]
+    legacy="""t.status<>'PLANNED'
+              AND NOT (t.status IN ('CANCELLED','BLOCKED') AND t.host_session='')
+              AND NOT EXISTS (
+                SELECT 1 FROM orbit_task_attempts a
+                WHERE a.project=t.project AND a.project_root=t.project_root
+                  AND a.task_key=t.task_key)"""
+    n_step+=conn.execute(
+        "SELECT COUNT(*) FROM orbit_agent_tasks t WHERE t.project=? AND t.project_root=? AND t.step=? AND "+legacy,
+        (project,path,step)).fetchone()[0]
+    n_day+=conn.execute(
+        "SELECT COUNT(*) FROM orbit_agent_tasks t WHERE t.project_root=? AND substr(t.reserved_at,1,10)=? AND "+legacy,
+        (path,day)).fetchone()[0]
+    return n_step,n_day
+
+
+def _record_reservation(conn, old, when):
+    """Record each approved reservation atomically under reserve's IMMEDIATE lock."""
+    params=(old['project'],old['project_root'],old['task_key'])
+    number=conn.execute(
+        '''SELECT COALESCE(MAX(attempt_number),0) FROM orbit_task_attempts
+           WHERE project=? AND project_root=? AND task_key=?''',params).fetchone()[0]
+    if number==0 and old['status']!='PLANNED' and not (
+            old['status'] in ('CANCELLED','BLOCKED') and not old['host_session']):
+        # We cannot reconstruct past tries: preserve one unverified legacy
+        # observation instead of pretending a long-lived task was never run.
+        # Portable imports intentionally clear reserved_at: unknown history
+        # must not be charged to today's quota merely because we first saw it now.
+        timestamp=old['reserved_at'] or ''
+        conn.execute('''INSERT INTO orbit_task_attempts
+            (project,project_root,task_key,attempt_number,step,reserved_at,disposition,host_session,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?)''',
+            (*params,1,old['step'],timestamp,'LEGACY_UNVERIFIED',old['host_session'],when))
+        number=1
+    next_number=number+1
+    conn.execute('''INSERT INTO orbit_task_attempts
+        (project,project_root,task_key,attempt_number,step,reserved_at,disposition,host_session,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?)''',
+        (*params,next_number,old['step'],when,'RESERVED','',when))
+    return next_number
+
+
+def _mark_latest_attempt(conn, old, disposition, *, host_session=None):
+    """Move only the most recent recorded attempt to a terminal observation."""
+    conn.execute('''UPDATE orbit_task_attempts SET disposition=?, updated_at=?,
+            host_session=COALESCE(?,host_session)
+        WHERE project=? AND project_root=? AND task_key=?
+          AND attempt_number=(SELECT MAX(attempt_number) FROM orbit_task_attempts
+            WHERE project=? AND project_root=? AND task_key=?)''',
+        (disposition,utc_now(),host_session,old['project'],old['project_root'],old['task_key'],
+         old['project'],old['project_root'],old['task_key']))
+
+
 def reserve(conn,a,root):
     if a.get('confirm_write') is not True:
         return {'status':'PREVIEW_ONLY','message':'Reservation requires explicit approved write, no native agent is launched'}
@@ -259,16 +338,21 @@ def reserve(conn,a,root):
         for other in active:
             conflicts=_collisions(json.loads(old['write_paths']),json.loads(other['write_paths']))
             if conflicts: raise ValueError(f'Overlapping writable scopes with {other["task_key"]}: {conflicts}')
-        stepcount=conn.execute('SELECT COUNT(*) FROM orbit_agent_tasks WHERE project=? AND project_root=? AND step=? AND status<>\'PLANNED\' AND NOT (status=\'CANCELLED\' AND host_session=\'\')',
-                               (old['project'],str(root),old['step'])).fetchone()[0]
-        if stepcount>=MAX_PER_STEP: raise ValueError('Per-step agent budget exhausted (3)')
-        today=utc_now()[:10]
-        daycount=conn.execute('SELECT COUNT(*) FROM orbit_agent_tasks WHERE project_root=? AND substr(reserved_at,1,10)=? AND status<>\'PLANNED\' AND NOT (status=\'CANCELLED\' AND host_session=\'\')',
-                              (str(root),today)).fetchone()[0]
-        if daycount>=MAX_PER_DAY: raise ValueError('Daily agent budget exhausted (12)')
-        out=_update(conn,old,'RESERVED',approval_reference=approval,reserved_at=utc_now())
+        today=utc_now()
+        stepcount,daycount=_attempt_usage(conn,old['project'],root,old['step'],today[:10])
+        if stepcount>=MAX_PER_STEP: raise ValueError('Per-step agent budget exhausted (3 attempts)')
+        if daycount>=MAX_PER_DAY: raise ValueError('Daily agent budget exhausted (12 attempts)')
+        attempt=_record_reservation(conn,old,today)
+        # A retry is not the previous worker: keep its historical session in
+        # the attempt ledger and clear current-slot session until native start.
+        out=_update(conn,old,'RESERVED',approval_reference=approval,
+                    reserved_at=today,host_session='')
         conn.commit()
         return {'status':'RESERVED','task':public(out),'agent_spawned':False,
+                'attempt_number':attempt,
+                'attempt_budget':{'step_used':stepcount+1,'step_limit':MAX_PER_STEP,
+                                  'day_used':daycount+1,'day_limit':MAX_PER_DAY,
+                                  'legacy_history_may_be_incomplete':True},
                 'next':'Invoke the native subagent through the host native subagent tools, then mark_started using the real host session reference. Release this reservation if invocation fails.',
                 'permission_note':'approval_reference is caller-supplied, not cryptographically authenticated by MCP.'}
     except Exception:
@@ -284,6 +368,7 @@ def started(conn,a,root):
         if conflict:return conflict
         if old['status']!='RESERVED': raise ValueError('Task must be RESERVED before host confirms execution')
         out=_update(conn,old,'RUNNING',host_session=ref)
+        _mark_latest_attempt(conn,old,'HOST_REPORTED_STARTED',host_session=ref)
     return {'status':'RUNNING_REPORTED','task':public(out),'host_session_verified':False}
 
 
@@ -311,6 +396,8 @@ def release(conn,a,root):
         if old['host_session']:
             raise ValueError('A task with a host session cannot be released as unstarted; reconcile with the host first')
         out=_update(conn,old,target,note=code+': '+why)
+        if old['status']=='RESERVED':
+            _mark_latest_attempt(conn,old,'RELEASED_UNUSED')
     return {'status':target,'task':public(out),'reason_code':code,
             'agent_stopped_by_mcp':False,'host_permission_verified':False,
             'next':('Request new host/user approval before any retry; otherwise stop safely or work serially within existing permissions.'
@@ -375,6 +462,7 @@ def reported(conn,a,root):
         note=previous+('; ' if previous else '')+marker
         out=_update(conn,old,outcome,evidence=evidence,
                     changed_paths=_serialize(paths),note=note)
+        _mark_latest_attempt(conn,old,'HOST_REPORTED_'+outcome)
     check=scope_report(json.loads(old['write_paths']),paths)
     return {'status':outcome,'task':public(out),'scope_report':check,
             'host_state_reported':state,'host_status_verified':False,

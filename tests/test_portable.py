@@ -45,6 +45,41 @@ class PortableTests(unittest.TestCase):
         row=self.db.execute('SELECT * FROM orbit_agent_tasks WHERE project_root=?',(str(self.b.resolve()),)).fetchone()
         self.assertEqual(row['status'],'BLOCKED'); self.assertEqual(row['host_session'],'old-session')
         self.assertEqual(row['approval_reference'],'')
+    def test_imported_unknown_attempt_date_never_counts_as_todays_host_execution(self):
+        import orbit_tasks
+        reserve=m.execute(self.db,'orbit_task_reserve',{
+            **self.base,'task_key':'todo','expected_revision':1,
+            'approval_reference':'approved-source-host-12345','confirm_write':True})
+        self.assertEqual(reserve['status'],'RESERVED')
+        m.execute(self.db,'orbit_task_started',{
+            **self.base,'task_key':'todo','expected_revision':2,
+            'host_session':'historical-source-session-12345','confirm_write':True})
+        exported=self.export()
+        packet=self.imp(exported['bundle'])
+        self.assertEqual(self.imp(exported['bundle'],
+            expected_revision=packet['bundle_revision'],confirm_write=True)['status'],'IMPORTED')
+        current=self.db.execute("SELECT status,host_session,reserved_at,revision FROM orbit_agent_tasks WHERE project_root=?",
+            (str(self.b),)).fetchone()
+        self.assertEqual(current['status'],'BLOCKED')
+        self.assertEqual(current['reserved_at'],'')
+        self.assertEqual(current['host_session'],'historical-source-session-12345')
+        retry=m.execute(self.db,'orbit_task_reserve',{
+            'project_root':str(self.b),'project':'lab','task_key':'todo',
+            'expected_revision':current['revision'],
+            'approval_reference':'approved-destination-host-12345','confirm_write':True})
+        self.assertEqual(retry['status'],'RESERVED')
+        self.assertEqual(retry['attempt_number'],2)
+        self.assertEqual(retry['attempt_budget']['step_used'],2)
+        self.assertEqual(retry['attempt_budget']['day_used'],1)
+        past=self.db.execute("""SELECT reserved_at,disposition,host_session FROM orbit_task_attempts
+             WHERE project_root=? AND task_key='todo' AND attempt_number=1""",(str(self.b),)).fetchone()
+        self.assertEqual(past['reserved_at'],'')
+        self.assertEqual(past['disposition'],'LEGACY_UNVERIFIED')
+        self.assertEqual(past['host_session'],'historical-source-session-12345')
+        self.assertEqual(orbit_tasks._attempt_usage(self.db,'lab',self.b,'Build',
+            orbit_tasks.utc_now()[:10]),(2,1))
+        self.assertEqual(retry['task']['host_session'],'')
+
     def test_reject_project_and_malicious_scopes_without_writes(self):
         packet=json.loads(self.export()['bundle'])
         packet['project']='other'
