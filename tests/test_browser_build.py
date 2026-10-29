@@ -116,9 +116,16 @@ class BuildBrowserTests(unittest.TestCase):
         try:
             self.assertEqual(orbit_build.current(con2,self.root,self.meta)['run']['stage'],'BROWSER_QA')
         finally: con2.close()
+        # Legacy rows without code/preview revision are not sufficient to pass M3 QA.
         with self.db:
             self.db.execute('INSERT INTO browser_results(project,root,build_id,status,summary,created_at) VALUES (?,?,?,?,?,?)',
                             ('todo-test',str(self.root),'test-app','PASS','{"actions":[{"status":"PASS"}]}','now'))
+        self.assertEqual(self.advance()['status'],'HOLD')
+        session=orbit_preview.SESSIONS[orbit_preview.preview_key(self.root,'browser-test')]
+        orbit_build.save_browser(self.db,self.root,{**self.meta,'preview_id':'browser-test'},{
+            'status':'PASS','actions':[{'status':'PASS','op':'expect_visible'}],
+            'source_fingerprint':orbit_build.code_fingerprint(self.root),
+            'preview_id':'browser-test','preview_started_at':session['started_at']})
         self.assertEqual(self.advance()['run']['stage'],'REVIEW')
         self.assertEqual(self.advance()['run']['stage'],'CHECKPOINT')
         self.assertEqual(self.advance()['status'],'HOLD')
@@ -126,6 +133,74 @@ class BuildBrowserTests(unittest.TestCase):
         cp.write_text('<!-- ORBIT_NATIVE_CHECKPOINT_START -->\nVerified via tests\n<!-- ORBIT_NATIVE_CHECKPOINT_END -->\n')
         self.assertEqual(self.advance()['run']['stage'],'DONE')
         self.assertEqual(self.advance()['status'],'ALREADY_DONE')
+
+    def make_browser_gate(self):
+        orbit_build.begin(self.db,self.root,{**self.meta,'objective':'Todo QA','confirm_write':True})
+        for _ in range(4):
+            self.advance()
+        self.assertEqual(orbit_preview.start(self.root,{**self.pa,'confirm_run':True})['status'],'READY')
+        self.assertEqual(self.advance()['run']['stage'],'BROWSER_QA')
+        return orbit_preview.SESSIONS[orbit_preview.preview_key(self.root,'browser-test')]
+
+    def save_test_pass(self, session, actions=None):
+        # Unit-only synthetic result; production results come from local Playwright.
+        result={'status':'PASS','actions':actions or [{'status':'PASS','op':'expect_visible'}],
+                'source_fingerprint':orbit_build.code_fingerprint(self.root),
+                'preview_id':'browser-test','preview_started_at':session['started_at']}
+        return orbit_build.save_browser(self.db,self.root,{**self.meta,'preview_id':'browser-test'},result)
+
+    def test_m3_browser_qa_blocks_stale_source_even_if_build_revision_unchanged(self):
+        session=self.make_browser_gate()
+        original=(self.root/'index.html').read_text()
+        self.save_test_pass(session)
+        (self.root/'index.html').write_text(original+'\n<!-- changed after QA -->')
+        stale=self.advance()
+        self.assertEqual(stale['status'],'HOLD')
+        self.assertIn('stale',stale['reason'].lower())
+        self.assertEqual(orbit_build.current(self.db,self.root,self.meta)['run']['stage'],'BROWSER_QA')
+        # Rerunning QA at the new source snapshot releases the gate.
+        self.save_test_pass(session)
+        self.assertEqual(self.advance()['run']['stage'],'REVIEW')
+
+    def test_m3_qa_rejects_changed_preview_generation(self):
+        session=self.make_browser_gate()
+        self.save_test_pass(session)
+        original=session['started_at']
+        session['started_at']=original+1
+        try:
+            self.assertEqual(self.advance()['status'],'HOLD')
+            self.assertIn('generation',self.advance()['reason'].lower())
+            self.save_test_pass(session)
+            self.assertEqual(self.advance()['run']['stage'],'REVIEW')
+        finally:
+            session['started_at']=original
+
+    def test_m3_failed_steps_and_missing_snapshot_cannot_claim_pass(self):
+        session=self.make_browser_gate()
+        self.assertEqual(self.advance()['status'],'HOLD')
+        with self.assertRaises(ValueError):
+            orbit_build.save_browser(self.db,self.root,{**self.meta,'preview_id':'browser-test'},{
+                'status':'PASS','actions':[{'status':'PASS'}],'preview_id':'browser-test',
+                'preview_started_at':session['started_at']})
+        self.save_test_pass(session,[{'status':'FAIL','op':'expect_visible'}])
+        self.assertEqual(self.advance()['status'],'HOLD')
+        self.save_test_pass(session)
+        self.assertEqual(self.advance()['run']['stage'],'REVIEW')
+
+    def test_m3_source_fingerprint_rejects_symlinked_code(self):
+        first=orbit_build.code_fingerprint(self.root)
+        self.assertEqual(len(first),64)
+        (self.root/'.orbit').mkdir()
+        (self.root/'.orbit'/'STATE.md').write_text('checkpoint updated')
+        self.assertEqual(first,orbit_build.code_fingerprint(self.root))
+        (self.root/'new.js').write_text('console.log(1)')
+        self.assertNotEqual(first,orbit_build.code_fingerprint(self.root))
+        link=self.root/'linked.css'
+        try:
+            link.symlink_to(self.root/'new.js')
+        except (OSError,NotImplementedError):
+            self.skipTest('Symlinks unavailable on this host')
+        self.assertIsNone(orbit_build.code_fingerprint(self.root))
 
     def test_branded_browser_choices_and_no_download(self):
         from unittest.mock import patch
