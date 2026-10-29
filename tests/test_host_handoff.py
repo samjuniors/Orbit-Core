@@ -177,8 +177,7 @@ class HostHandoffTests(unittest.TestCase):
             failed=self.call('orbit_task_report',task_key='frontend',
                 expected_revision=started['task']['revision'],outcome='FAILED',
                 evidence='Host reported a real failing regression test result',
-                observed_host_session=f'native-session-{attempt}-abc',
-                host_state='FAILED',confirm_write=True)
+                confirm_write=True)
             self.assertEqual(failed['status'],'FAILED')
         with self.assertRaisesRegex(ValueError,'Per-step agent budget exhausted'):
             self.reserve()
@@ -208,7 +207,6 @@ class HostHandoffTests(unittest.TestCase):
             self.call('orbit_task_report',task_key=key,
                 expected_revision=started['task']['revision'],outcome='FAILED',
                 evidence='Host reported failed validation for this module',
-                observed_host_session=f'native-{n}-session',host_state='FAILED',
                 confirm_write=True)
         planned=self.call('orbit_task_plan',task_key='over-limit',
             step='new-step',role='backend',
@@ -259,7 +257,6 @@ class HostHandoffTests(unittest.TestCase):
             host_session='current-real-native-session',confirm_write=True)
         self.call('orbit_task_report',task_key='frontend',expected_revision=6,
             outcome='FAILED',evidence='Host confirmed this second attempt failed',
-            observed_host_session='current-real-native-session',host_state='FAILED',
             confirm_write=True)
         third=self.call('orbit_task_reserve',task_key='frontend',
             expected_revision=7,approval_reference='fresh-third-user-consent',
