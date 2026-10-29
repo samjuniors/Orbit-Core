@@ -153,7 +153,7 @@ def discover(project_root, *, home=None):
     except ImportError: pass
     return {'skills':skills[:MAX_ITEMS], 'mcp_servers':servers[:MAX_ITEMS], 'limits':['Installed skills are untrusted until vetted. A configured MCP is NOT proof it is connected.', 'No network, process launching, installations, host tool enumeration or permission changes occurred.']}
 
-def browser_workflow(host_tools, configured_mcp_servers):
+def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UNKNOWN'):
     """Read-only, host-neutral browser selection. Names are caller-reported hints.
 
     Orbit cannot inspect the host's private tool registry, authorize computer
@@ -227,11 +227,20 @@ def browser_workflow(host_tools, configured_mcp_servers):
     primary = next((p for p in providers if p['status']=='HOST_REPORTED_ACTION_TOOL'),None)
     if not primary and playwright:
         primary = providers[3]
+    # Denied consent must not be bypassed with a different browser/provider.
+    denied = permission_state == 'DENIED'
+    if denied:
+        primary = None
     return {
         'priority':['host_browser','host_computer_use','host_browser_use','local_playwright','vercel_agent_browser'],
         'preferred':{'id':primary['id'],'status':primary['status']} if primary else None,
+        'permission_state':permission_state,
+        'permission_verified':False,
+        'decision':'HOLD_PERMISSION_DENIED' if denied else 'REVIEW_HOST_PERMISSION',
         'providers':providers,
-        'next_action':('Verify the actual host tool, target app and user permission before invoking browser/computer actions.'
+        'next_action':('Do not invoke any fallback browser or computer-use provider after permission denial. Obtain new scope-specific approval first.'
+                       if denied else
+                       'Verify the actual host tool, target app and user permission before invoking browser/computer actions.'
                        if primary and primary['id'].startswith('host_') else
                        'Use approved Orbit-managed preview and run local Playwright/Edge/Chrome QA; verify real browser launch.'
                        if primary and primary['id']=='local_playwright' else
@@ -240,13 +249,15 @@ def browser_workflow(host_tools, configured_mcp_servers):
         'privacy':'Avoid personal browser tabs, saved login profiles, credentials and remote/cloud sessions without separate explicit permission; prefer a disposable loopback test session.',
         'notes':'A reported host tool name is a hint only. No host browser/computer command or external CLI is invoked by this selector.',
         'qa_gate':'Host/computer-use and agent-browser evidence is supplemental in current source. BROWSER_QA PASS still requires a fresh Orbit-recorded Playwright run bound to source revision and managed preview. Never forge or bypass that gate.',
-        'fallback':'If a preferred host browser tool is missing, denied, or fails, use the next authorized provider. Report BLOCKED when no authorized working provider exists.'
+        'fallback':'Only missing or failed tools permit an independently authorized fallback; DENIED consent stops this operation. Never bypass denied permission by switching providers.'
     }
 
 
-def select(project_root, objective, host_tools=None, *, home=None):
+def select(project_root, objective, host_tools=None, *, home=None, permission_state='UNKNOWN'):
     if not isinstance(objective,str) or not objective.strip() or len(objective)>1500: raise ValueError('objective must contain 1..1500 characters')
     if not isinstance(host_tools,list) or len(host_tools)>80 or any(not isinstance(x,str) or len(x)>100 for x in host_tools):raise ValueError('host_tools must be a short list of names')
+    if permission_state not in ('UNKNOWN','APPROVED','DENIED'):
+        raise ValueError('permission_state must be UNKNOWN, APPROVED or DENIED')
     available=discover(project_root,home=home)
     words=set(re.findall(r'[a-z0-9]+',objective.lower()))
     categories=[k for k,terms in TRIGGERS.items() if words&terms]
@@ -283,9 +294,11 @@ def select(project_root, objective, host_tools=None, *, home=None):
                  'security':'orbit-security','devops':'orbit-devops'}
         role=next((aliases[c] for c in categories if c in aliases),'orbit')
     recommended=skill_policy(role,available)
-    browser_plan = browser_workflow(host_tools,available['mcp_servers']) if ('qa' in categories or role=='orbit-qa') else None
+    browser_plan = browser_workflow(host_tools,available['mcp_servers'],permission_state=permission_state) if ('qa' in categories or role=='orbit-qa') else None
     return {'objective':objective,'role_skill_preferences':recommended,'categories':categories,'installed_matches':candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
             'optional_browser_provider':browser_provider,
             'browser_workflow':browser_plan,
-        'recommended_action':'REUSE_AND_VERIFY_INSTALLED' if candidates else ('BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL' if research else 'USE_EXISTING_HOST_CAPABILITIES'),
+            'permission_state_reported':permission_state,
+            'permission_verified':False,
+        'recommended_action':'HOLD_PERMISSION_DENIED' if permission_state=='DENIED' else ('REUSE_AND_VERIFY_INSTALLED' if candidates else ('BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL' if research else 'USE_EXISTING_HOST_CAPABILITIES')),
         'policy':['Prefer current built-in host abilities and already installed vetted skills.', 'If a needed capability is missing, the agent may web-search reputable official sources using host tools. Never claim MCP performed the search.', 'Never execute npx/curl/script, install packages, add MCP connections, grant OAuth/scopes, or modify agent rules without reviewing source and obtaining applicable host/user approval.', 'Use the minimal permission and project scope; re-check actual tool availability after approved install; no best-in-class guarantee.']}
