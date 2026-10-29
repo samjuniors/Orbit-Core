@@ -328,7 +328,6 @@ class HostHandoffTests(unittest.TestCase):
 
     def test_m33_resume_after_sqlite_restart_reports_unverified_host_liveness(self):
         self.running_for_recovery()
-        import os
         dbfile=Path(self.tmp.name)/'recovery.sqlite'
         saved=sqlite3.connect(str(dbfile))
         try:
@@ -354,6 +353,20 @@ class HostHandoffTests(unittest.TestCase):
             self.assertEqual(recovered.execute('SELECT status FROM orbit_agent_tasks').fetchone()[0],'RUNNING')
         finally:
             recovered.close()
+
+    def test_m33_report_schema_accepts_explicit_host_observation_only(self):
+        schema=orbit_mcp.TOOL_MAP['orbit_task_report']
+        self.assertIn('observed_host_session',schema['properties'])
+        self.assertIn('host_state',schema['properties'])
+        self.assertIn('UNKNOWN',schema['properties']['host_state']['enum'])
+        self.assertNotIn('TERMINATE_PROCESS',schema['properties']['host_state']['enum'])
+        valid={'project_root':str(self.root),'project':'todo',
+               'task_key':'frontend','expected_revision':3,'outcome':'FAILED',
+               'evidence':'Host reported failure with task details',
+               'observed_host_session':'actual-session-123456','host_state':'FAILED'}
+        orbit_mcp.validate('orbit_task_report',valid)
+        with self.assertRaises(ValueError):
+            orbit_mcp.validate('orbit_task_report',{**valid,'host_state':'KILL_AGENT'})
 
     def test_tool_contract_read_only_and_arguments_tight(self):
         tool = next(t for t in orbit_mcp.TOOLS if t["name"] == "orbit_task_handoff")
