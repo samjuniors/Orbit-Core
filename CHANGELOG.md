@@ -2,15 +2,38 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — post-v0.25.1 work
+## [Unreleased] — beyond v0.26.0 candidate
 
-Source changes merged after the published **v0.25.1 prerelease** (NOT a new published release):
-- **M3 host-denial bookkeeping:** real host permission denial or unavailable native delegation remains BLOCKED instead of being mistaken for a user's cancellation (#27).
-- **M3 interrupted-agent recovery:** terminal outcomes require a matching caller-reported native host session/state; uncertain work remains on HOLD and keeps its scope lock (#29).
-- **M3 durable attempt history:** additive local SQLite attempt ledger, bounded retries, pre-invocation refunds, legacy/cross-PC date safeguards and SQLite rollback regressions (#32).
-- **M3 browser QA origin isolation:** exact managed preview-origin HTTP/WebSocket restrictions and fail-closed network-attempt QA gate merged to development `main` through #33; this remains unreleased and is not a complete OS/browser sandbox.
+No additional user-facing changes are scheduled in this entry. `NEXT_VERSION=0.26.1` is a planning marker, not a published release or update.
 
-All M3 source changes remain **development-only** until a separately authorized release. Real-host M3 acceptance, Issue #9 security and rollback tests are not complete. `NEXT_VERSION=0.25.2` remains planning metadata, not a release.
+## [0.26.0] — Development release candidate (NOT PUBLISHED; NOT production-certified)
+
+**What’s new**
+- **Compact context on resume (M4.1):** the existing `orbit_project_resume` accepts opt-in `compact=true`, an objective and a bounded JSON-character budget. It summarizes approved local intake (approval is caller-reported), a project-matched checkpoint, a local build recovery hint and relevant research source pointers. Full resume remains the default. It does not fetch full Notion pages, reuse unscoped memories or invoke another AI model.
+- **Adaptive browser selection:** prioritize genuinely available, authorized host-native browser/computer-use tools before a local installed browser and optional reviewed agent-browser integration; do not silently operate personal browser profiles.
+
+**Reliability, permissions and recovery**
+- **Host-denial clarity:** failed or refused pre-invocation delegation is recorded as BLOCKED instead of being confused with user cancellation. Fresh host approval remains required to retry.
+- **Interrupted-agent reconciliation:** running tasks retain their scoped reservations until an exact, caller-reported native host session and compatible terminal state are observed. Unknown session state fails closed and never proves the worker stopped.
+- **Durable attempt budgets:** local SQLite records individual native-agent reservations and their outcomes, including repeated retries; enforce existing per-step, per-day and concurrency limits. Safely refund only unused pre-invocation slots. Keep prior host sessions in attempt history, preserve old task rows and checkpoint data.
+- **Portable historical accounting:** imported task history with unknown reservation dates is not incorrectly charged as new same-day destination-host work. Local attempt records are **not** synchronized across computers.
+- **Partial database safety:** explicitly check for missing task/research tables on resume, without suppressing unrelated SQLite operational errors.
+- **Transactional regression tests:** task state and attempt history must remain consistent after failed reserve, start or report writes, including restart recovery.
+
+**Browser QA protection**
+- Restrict Orbit-managed Playwright HTTP and WebSocket QA requests to the exact approved local preview origin. Blocked network attempts cannot produce a passing build-gate result. Playwright **1.48+** WebSocket routing is required for that bounded policy; an older installation returns a dependency HOLD rather than an unearned PASS.
+- Browser routing does not form a complete operating-system network sandbox or authenticate any external provider’s permissions. Multi-origin applications require a separately reviewed policy.
+
+**Compatibility / behavior changes**
+- Clients reporting terminal native-agent outcomes for RUNNING tasks should now supply the correct `observed_host_session` and compatible `host_state` to `orbit_task_report`. Missing or uncertain observations return HOLD instead of clearing a possibly live worker. Verify host-side cancellation independently.
+- The additive `orbit_task_attempts` SQLite table preserves old task records, but **backing up SQLite (including WAL files) before upgrading is recommended**; older runtimes may not understand every newer state/behavior. Never silently downgrade user databases.
+- Source runtime and installer version move to **0.26.0**; `NEXT_VERSION=0.26.1` remains tentative. MCP tool inventory is unchanged at 40; no new model runtime, implicit subagent spawning, cloud synchronization or extra installation is introduced.
+
+**Requirements, packaging and verification**
+- Python 3.10–3.13 CI targets; Windows Python 3.12 recommended. Host-native delegation is limited to tools actually supplied and authorized by Antigravity, Codex, Claude Code or other supported hosts.
+- Candidate artifacts are built from the exact current runtime and packaged through GitHub Actions as **unpublished host-acceptance artifacts**; versioned ZIP/MCPB and SHA256 integrity checks are part of CI. Successful checksum verification is not publisher signing.
+- Independent signed-in host permission/cancellation, physical browser/device QA, upgrade/rollback, two-computer transfer and Issue #9 security gates remain **NOT VERIFIED / OWNER-DEFERRED**. CI success and merging this source branch do **not** certify a production release.
+- **Publication:** No `v0.26.0` tag or GitHub Release is authorized by this candidate alone; publication requires a separate explicit owner go-ahead and completed release gates.
 
 ## [0.25.1] — Published prerelease (2026-10-29; NOT production-certified)
 
