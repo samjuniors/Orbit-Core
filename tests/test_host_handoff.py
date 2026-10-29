@@ -251,7 +251,10 @@ class HostHandoffTests(unittest.TestCase):
         self.assertEqual([(r['disposition'],r['attempt_number']) for r in legacy],
                          [('LEGACY_UNVERIFIED',1),('RESERVED',2)])
         self.assertEqual(first['task']['revision'],5)
-        self.assertEqual(first['task']['host_session'],'previous-native-host-session')
+        self.assertEqual(first['task']['host_session'],'')
+        self.assertEqual(self.db.execute(
+            "SELECT host_session FROM orbit_task_attempts WHERE task_key='frontend' AND attempt_number=1"
+        ).fetchone()[0],'previous-native-host-session')
         # Simulate a second terminal result after actual host invocation.
         self.call('orbit_task_started',task_key='frontend',expected_revision=5,
             host_session='current-real-native-session',confirm_write=True)
@@ -263,6 +266,39 @@ class HostHandoffTests(unittest.TestCase):
             confirm_write=True)
         self.assertEqual(third['attempt_number'],3)
         self.assertEqual(third['attempt_budget']['step_used'],3)
+
+    def test_m3_retry_never_inherits_prior_host_session_or_burns_unused_slot(self):
+        self.register()
+        first=self.reserve()
+        self.call('orbit_task_started',task_key='frontend',
+            expected_revision=2,host_session='first-real-native-session-123',
+            confirm_write=True)
+        failed=self.call('orbit_task_report',task_key='frontend',
+            expected_revision=3,outcome='FAILED',
+            evidence='Host reported failed validation and stopped',
+            confirm_write=True)
+        retry=self.call('orbit_task_reserve',task_key='frontend',
+            expected_revision=failed['task']['revision'],
+            approval_reference='fresh-real-approval-reference',
+            confirm_write=True)
+        self.assertEqual(retry['attempt_number'],2)
+        self.assertEqual(retry['task']['host_session'],'')
+        release=self.call('orbit_task_release',task_key='frontend',
+            expected_revision=retry['task']['revision'],
+            reason='Second attempt never launched a host agent, release it',
+            confirm_write=True)
+        self.assertEqual(release['status'],'CANCELLED')
+        rows=self.db.execute(
+            "SELECT disposition,host_session FROM orbit_task_attempts WHERE task_key='frontend' ORDER BY attempt_number"
+        ).fetchall()
+        self.assertEqual([(x['disposition'],x['host_session']) for x in rows],
+                         [('HOST_REPORTED_FAILED','first-real-native-session-123'),
+                          ('RELEASED_UNUSED','')])
+        # The first started agent is still budgeted even if the retry was unused.
+        step,day=orbit_tasks._attempt_usage(self.db,'todo',
+            orbit_mcp.project_root({'project_root':str(self.root)}),
+            'IMPLEMENT',orbit_tasks.utc_now()[:10])
+        self.assertEqual((step,day),(1,1))
 
     def test_m3_stale_reservation_has_no_attempt_history_side_effect(self):
         self.register()
