@@ -173,7 +173,10 @@ def browser_workflow(host_tools, configured_mcp_servers):
             native.append(original)
 
     def action_names(names, terms):
-        return any(any(term in name.lower().replace('-', '_') for term in terms) for name in names)
+        # Accommodate MCP namespaces with double underscores without trusting
+        # a screenshot-only tool as full interactive browser access.
+        return any(any(term in re.sub(r'_+', '_', name.lower().replace('-', '_').replace('.', '_'))
+                       for term in terms) for name in names)
 
     # Read-only metadata checks; Playwright/browser execution is not attempted.
     playwright = importlib.util.find_spec('playwright') is not None
@@ -197,7 +200,11 @@ def browser_workflow(host_tools, configured_mcp_servers):
     configured = any(row['name']=='agent-browser' for row in configured_mcp_servers)
     native_ready = action_names(native, ('browser_navigate','browser_open','browser_click','browser_act','browser_interact'))
     computer_ready = action_names(computer, ('computer_use','computer_click','computer_act','computer_interact'))
-    browser_use_ready = action_names(browser_use, ('browser_use','browser_use_open','browser_use_navigate','browser_use_click'))
+    browser_use_ready = action_names(browser_use, ('browser_use_open','browser_use_navigate',
+                                                     'browser_use_click','browser_use_act',
+                                                     'browser_use_interact')) or any(
+        re.sub(r'_+', '_', name.lower().replace('-', '_'))=='browser_use'
+        for name in browser_use)
     providers = [
         {'id':'host_browser','tools':native[:8], 'status':'HOST_REPORTED_ACTION_TOOL' if native_ready else
          'INSUFFICIENT_TOOLS' if native else 'NOT_REPORTED'},
@@ -226,6 +233,7 @@ def browser_workflow(host_tools, configured_mcp_servers):
                        'No browser tool verified: review installed host capabilities or seek approval for optional Vercel agent-browser.'),
         'execution_verified':False, 'install_performed':False,
         'privacy':'Avoid personal browser tabs, saved login profiles, credentials and remote/cloud sessions without separate explicit permission; prefer a disposable loopback test session.',
+        'notes':'A reported host tool name is a hint only. No host browser/computer command or external CLI is invoked by this selector.',
         'qa_gate':'Host/computer-use and agent-browser evidence is supplemental in current source. BROWSER_QA PASS still requires a fresh Orbit-recorded Playwright run bound to source revision and managed preview. Never forge or bypass that gate.',
         'fallback':'If a preferred host browser tool is missing, denied, or fails, use the next authorized provider. Report BLOCKED when no authorized working provider exists.'
     }
