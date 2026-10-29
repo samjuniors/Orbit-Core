@@ -31,6 +31,8 @@ The host must invoke a real supported tool with approval, inspect a real page, c
 
 **Important gate distinction:** For now, browser/computer-use/agent-browser actions are *supplemental host evidence*; they cannot satisfy `orbit_build_advance`'s `BROWSER_QA` PASS gate, which requires a new Orbit-recorded Playwright result bound to the current source and preview generation. If Playwright is unavailable, mark the gate BLOCKED and propose approved remediation, not an invented PASS.
 
+**Local QA origin isolation:** When using Orbit-recorded Playwright, only the exact `127.0.0.1` preview port is authorized for HTTP and WebSocket requests. Different localhost ports or external network hosts are not authorized by a loopback address alone. If a needed multi-server API or WebSocket is blocked, report the dependency and request a reviewed specific exception; do not run an unrestricted browser as an invisible fallback. Old Playwright builds without WebSocket routing cannot certify this network boundary. This is a constrained test browser, not a complete process/network sandbox.
+
 ## Role-specific skill preflight (approval gated)
 
 When performing a scoped task, ask Orbit to call `orbit_capability_select` with an objective beginning `orbit-qa:`. Review `role_skill_preferences.preferred_skills` in order, **verify the skill is installed, read and trusted**, and check task applicability. A React skill must not be applied to vanilla JS, and a configured MCP is not proof it is running. Missing/unapproved skill → use current host-native tools and tested existing project components first; request explicit user approval before any installation. Report the actual selected or fallback tool and verification evidence; never pretend a recommendation was executed.
