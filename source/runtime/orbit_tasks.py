@@ -18,6 +18,10 @@ ROLES = {'frontend','backend','architect','data','devops','qa','security','ux',
          'research','reviewer','writer','integrator'}
 ACTIVE = ('RESERVED','RUNNING')
 RETRYABLE = ('PLANNED','REWORK','FAILED','BLOCKED')
+# Before native invocation, preserve actionable host refusals as BLOCKED rather
+# than implying the user permanently cancelled an approved work item.
+RELEASE_REASONS = {'USER_CANCELLED','HOST_PERMISSION_DENIED','HOST_TOOL_UNAVAILABLE',
+                   'HOST_INVOCATION_FAILED','OTHER'}
 # Agent/host control files are persistence vectors for prompt injection; humans edit them directly.
 PROTECTED_SEGMENTS = {'.git','.orbit','.agents','.env','id_rsa','id_ed25519','credentials.json',
                       '.claude','.codex','.gemini','.cursor','.vscode','.mcp.json',
@@ -218,6 +222,9 @@ def reserve(conn,a,root):
         conflict=_revision(a,old)
         if conflict: conn.rollback();return conflict
         if old['status'] not in RETRYABLE: raise ValueError('Only PLANNED, REWORK, FAILED or BLOCKED tasks can reserve')
+        if (old['status']=='BLOCKED' and old.get('note','').startswith('HOST_PERMISSION_DENIED:')
+                and approval==old.get('approval_reference')):
+            raise ValueError('Host permission was denied: obtain fresh host/user approval; do not reuse the denied reference')
         for dep in json.loads(old['depends_on']):
             item=conn.execute('SELECT status FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                               (old['project'],old['project_root'],dep)).fetchone()
@@ -257,15 +264,33 @@ def started(conn,a,root):
 
 
 def release(conn,a,root):
-    if a.get('confirm_write') is not True:return {'status':'PREVIEW_ONLY'}
+    """Record why an unstarted native task stopped; never control host agents.
+
+    A host refusal is not a user cancellation. BLOCKED remains retryable only
+    after another genuine host approval; all references are caller-reported.
+    """
+    code=a.get('reason_code','USER_CANCELLED')
+    if code not in RELEASE_REASONS:
+        raise ValueError('Unknown host release reason_code')
     why=text(a,'reason',500,10)
+    target=('BLOCKED' if code in {'HOST_PERMISSION_DENIED','HOST_TOOL_UNAVAILABLE',
+                                  'HOST_INVOCATION_FAILED'} else 'CANCELLED')
+    if a.get('confirm_write') is not True:
+        return {'status':'PREVIEW_ONLY','proposed_status':target,'reason_code':code,
+                'agent_stopped_by_mcp':False,'host_permission_verified':False}
     with conn:
         old=_row(conn,a,root)
         conflict=_revision(a,old)
         if conflict:return conflict
-        if old['status'] not in ('PLANNED','RESERVED'): raise ValueError('Only unused PLANNED or RESERVED tasks can release; running tasks must be stopped in the host')
-        out=_update(conn,old,'CANCELLED',note=why)
-    return {'status':'CANCELLED','task':public(out),'agent_stopped_by_mcp':False}
+        if old['status'] not in ('PLANNED','RESERVED'):
+            raise ValueError('Only unstarted PLANNED or RESERVED tasks can release; running tasks must be stopped in the host')
+        if old['host_session']:
+            raise ValueError('A task with a host session cannot be released as unstarted; reconcile with the host first')
+        out=_update(conn,old,target,note=code+': '+why)
+    return {'status':target,'task':public(out),'reason_code':code,
+            'agent_stopped_by_mcp':False,'host_permission_verified':False,
+            'next':('Request new host/user approval before any retry; otherwise stop safely or work serially within existing permissions.'
+                    if target=='BLOCKED' else 'No host agent was started or stopped by Orbit.')}
 
 
 def scope_report(assigned,changed):
