@@ -293,6 +293,38 @@ class UniversalSetupTests(unittest.TestCase):
             self.assertEqual(namespaced['browser_workflow']['preferred']['id'],'host_browser')
             self.assertEqual(namespaced['browser_workflow']['providers'][4]['status'],'HOST_REPORTED_ACTION_TOOL')
 
+    def test_m3_denied_browser_permission_must_not_reroute_to_another_provider(self):
+        from unittest.mock import patch
+        from source.runtime import orbit_capabilities as cap
+        with patch('source.runtime.orbit_capabilities.importlib.util.find_spec',return_value=object()), \\
+             patch('source.runtime.orbit_capabilities.shutil.which',return_value='/usr/bin/chrome'):
+            tools=['browser_navigate','computer_use_click','agent_browser_open']
+            denied=cap.select(self.project,'orbit-qa: test browser',tools,
+                              home=self.home,permission_state='DENIED')
+            plan=denied['browser_workflow']
+            self.assertEqual(plan['decision'],'HOLD_PERMISSION_DENIED')
+            self.assertIsNone(plan['preferred'])
+            self.assertFalse(plan['permission_verified'])
+            self.assertEqual(denied['recommended_action'],'HOLD_PERMISSION_DENIED')
+            self.assertIn('Do not invoke any fallback',plan['next_action'])
+            self.assertIn('Never bypass',plan['fallback'])
+            self.assertFalse(plan['execution_verified'])
+            # A reported approval never becomes a trusted verification claim.
+            approved=cap.select(self.project,'orbit-qa: browser testing',tools,
+                                home=self.home,permission_state='APPROVED')
+            self.assertEqual(approved['browser_workflow']['preferred']['id'],'host_browser')
+            self.assertFalse(approved['browser_workflow']['permission_verified'])
+            ordinary=cap.select(self.project,'orbit-qa: browser testing',tools,home=self.home)
+            self.assertEqual(ordinary['browser_workflow']['permission_state'],'UNKNOWN')
+        with self.assertRaisesRegex(ValueError,'permission_state'):
+            cap.select(self.project,'orbit-qa: browser testing',[],
+                       home=self.home,permission_state='BYPASS')
+        self.assertIn('permission_state',orbit_mcp.TOOL_MAP['orbit_capability_select']['properties'])
+        valid={'project_root':str(self.project),'objective':'browser test','permission_state':'DENIED'}
+        orbit_mcp.validate('orbit_capability_select',valid)
+        with self.assertRaises(ValueError):
+            orbit_mcp.validate('orbit_capability_select',{**valid,'permission_state':'SILENT_OVERRIDE'})
+
     def test_optional_provider_upgrade_hashes_recognized(self):
         self.assertIn('0f929f83c43c11b46a666387dd3d7581e081876a4cf401e2f2928b1a3f97f85c',installer.OLD_STOCK_SHA256)
         self.assertIn('81bcd52a57163a9b071212a02ca9421a4df832ef6cfbaee9ff62dc46dc19aaa1',installer.OLD_STOCK_SHA256)
