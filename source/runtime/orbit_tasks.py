@@ -178,6 +178,29 @@ def plan(conn,a,root):
     return {'status':'PLANNED','task':public(_row(conn,a,root)),'agent_spawned':False}
 
 
+def active_reconciliation(conn,root,project,limit=8):
+    """Read-only recovery hints. A restarted MCP cannot know host agent liveness."""
+    if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='orbit_agent_tasks'"
+    ).fetchone():
+        return {'needs_host_reconciliation':False,'active':[],'agent_liveness_verified':False}
+    active=[{'task_key':row['task_key'],'revision':row['revision'],
+             'status':row['status'],'host_session':row['host_session'] or None,
+             'updated_at':row['updated_at'],
+             'next':('Inspect the real host agent panel/session before reporting its outcome; do not start a duplicate or release its scope.'
+                     if row['status']=='RUNNING' else
+                     'Verify that native invocation never started before releasing this reservation.')}
+            for row in conn.execute(
+                """SELECT task_key,revision,status,host_session,updated_at
+                   FROM orbit_agent_tasks
+                   WHERE project=? AND project_root=? AND status IN ('RESERVED','RUNNING')
+                   ORDER BY updated_at DESC,task_key LIMIT ?""",
+                (project,str(root),limit))]
+    return {'needs_host_reconciliation':bool(active),'active':active,
+            'agent_liveness_verified':False,
+            'warning':'Status is a local record, NOT proof that a host agent is alive or stopped. No automatic timeout, process termination or reservation release.'}
+
+
 def read_tasks(conn,a,root):
     max_results=a.get('limit',20)
     if type(max_results) is not int or not 1<=max_results<=40:
@@ -190,7 +213,8 @@ def read_tasks(conn,a,root):
     if status!='ALL': q+=' AND status=?';params.append(status)
     q+=' ORDER BY created_at DESC,task_key LIMIT ?';params.append(max_results)
     rows=[public(r) for r in conn.execute(q,params)]
-    return {'tasks':rows,'count':len(rows),'project':a['project'],'no_host_execution':True}
+    return {'tasks':rows,'count':len(rows),'project':a['project'],'no_host_execution':True,
+            'host_reconciliation':active_reconciliation(conn,root,a['project'])}
 
 
 def _revision(a,old):
@@ -305,22 +329,57 @@ def scope_check(conn,a,root):
     return {'task_key':old['task_key'],**scope_report(json.loads(old['write_paths']),a.get('changed_paths',[]))}
 
 
+# A host-reported terminal observation is not independent proof; it is enough
+# to prevent accidental status changes caused by MCP restart/unknown agent state.
+HOST_TERMINAL_STATES = {
+    'REPORTED_DONE': {'COMPLETED'},
+    'FAILED': {'FAILED'},
+    'BLOCKED': {'FAILED','CANCELLED','STOPPED'},
+    'CANCELLED': {'CANCELLED','STOPPED'},
+}
+HOST_STATES = {'COMPLETED','FAILED','CANCELLED','STOPPED','RUNNING','UNKNOWN'}
+
+
 def reported(conn,a,root):
-    if a.get('confirm_write') is not True: return {'status':'PREVIEW_ONLY'}
     outcome=text(a,'outcome',40)
-    if outcome not in ('REPORTED_DONE','FAILED','BLOCKED','CANCELLED'):
+    if outcome not in HOST_TERMINAL_STATES:
         raise ValueError('Outcome must be REPORTED_DONE, FAILED, BLOCKED or CANCELLED')
     evidence=text(a,'evidence',1600,12)
     paths=_scopes(a.get('changed_paths',[]),limit=60,allow_protected=True)
+    state=a.get('host_state','UNKNOWN')
+    if state not in HOST_STATES:
+        raise ValueError('Invalid host_state; use the actual host-observed agent state')
     with conn:
         old=_row(conn,a,root)
         conflict=_revision(a,old)
         if conflict: return conflict
         if old['status']!='RUNNING': raise ValueError('Only RUNNING tasks can report an outcome')
-        out=_update(conn,old,outcome,evidence=evidence,changed_paths=_serialize(paths))
+        # Never trust a caller to infer a stopped worker from an MCP restart or
+        # an expired timestamp; the real host's session is authoritative.
+        observed=a.get('observed_host_session')
+        if not isinstance(observed,str) or observed!=old['host_session'] or not old['host_session']:
+            return {'status':'HOLD_HOST_RECONCILIATION','reason':'Confirm the exact running session in the host before changing the task status.',
+                    'task_revision':old['revision'],'host_status_verified':False}
+        if state not in HOST_TERMINAL_STATES[outcome]:
+            return {'status':'HOLD_HOST_RECONCILIATION','reason':'Host has not reported a matching terminal state; inspect or stop the real agent before releasing its scope.',
+                    'host_state_reported':state,'task_revision':old['revision'],
+                    'host_status_verified':False}
+        if a.get('confirm_write') is not True:
+            return {'status':'PREVIEW_ONLY','proposed_status':outcome,
+                    'host_state_reported':state,'host_status_verified':False,
+                    'agent_stopped_by_mcp':False}
+        # Append a bounded observation without discarding existing notes or
+        # accepted task/checkpoint history. The observation remains untrusted.
+        previous=old['note'] or ''
+        marker='HOST_TERMINAL_REPORTED:'+state
+        note=previous+('; ' if previous else '')+marker
+        out=_update(conn,old,outcome,evidence=evidence,
+                    changed_paths=_serialize(paths),note=note)
     check=scope_report(json.loads(old['write_paths']),paths)
     return {'status':outcome,'task':public(out),'scope_report':check,
-            'verification':'NOT_VERIFIED_BY_MCP','next':'Inspect actual Git diff/tests; review separately before accepting dependencies or merging.'}
+            'host_state_reported':state,'host_status_verified':False,
+            'agent_stopped_by_mcp':False,'verification':'HOST_REPORTED_NOT_ATTESTED',
+            'next':'Inspect actual Git diff/tests; review separately before accepting dependencies or merging.'}
 
 
 def review(conn,a,root):

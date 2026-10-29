@@ -318,7 +318,8 @@ class TaskLedgerTests(Harness):
         self.plan('a'); self.plan('b', deps=['a'])
         self.reserve('a', 1)
         self.step('orbit_task_started', 'a', 2, host_session='session-12345')
-        self.step('orbit_task_report', 'a', 3, outcome='FAILED', evidence='tests failed on first attempt')
+        self.step('orbit_task_report', 'a', 3, outcome='FAILED', evidence='tests failed on first attempt',
+                  observed_host_session='session-12345', host_state='FAILED')
         retry = self.reserve('a', 4)
         self.assertEqual(retry.get('status'), 'RESERVED', retry)
 
@@ -356,6 +357,7 @@ class TaskLedgerTests(Harness):
         self.reserve('w', 1)
         self.step('orbit_task_started', 'w', 2, host_session='session-12345')
         out = self.step('orbit_task_report', 'w', 3, outcome='REPORTED_DONE', evidence='also edited .env by mistake',
+                        observed_host_session='session-12345',host_state='COMPLETED',
                         changed_paths=['src/a.py', '.env'])
         self.assertEqual(out['status'], 'REPORTED_DONE', out)
         self.assertEqual(out['scope_report']['outside_scope'], ['.env'])

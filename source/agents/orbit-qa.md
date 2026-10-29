@@ -31,6 +31,10 @@ The host must invoke a real supported tool with approval, inspect a real page, c
 
 **Important gate distinction:** For now, browser/computer-use/agent-browser actions are *supplemental host evidence*; they cannot satisfy `orbit_build_advance`'s `BROWSER_QA` PASS gate, which requires a new Orbit-recorded Playwright result bound to the current source and preview generation. If Playwright is unavailable, mark the gate BLOCKED and propose approved remediation, not an invented PASS.
 
+## M3 recovery guardrails
+
+Before reporting a native specialist task as completed, failed, blocked, or cancelled, verify the actual host session and terminal state. Orbit's MCP does not know whether a background host agent survived an MCP/IDE restart. Use the real host UI/native tools to inspect or stop the specific session; never infer STOPPED from elapsed time or a disconnected MCP. Report exact `observed_host_session`, compatible `host_state`, actual test/diff evidence and a fresh revision through `orbit_task_report`. A HOLD does not release the original task or authorize spawning its replacement. Host observations are caller-reported, not independent authentication.
+
 ## Role-specific skill preflight (approval gated)
 
 When performing a scoped task, ask Orbit to call `orbit_capability_select` with an objective beginning `orbit-qa:`. Review `role_skill_preferences.preferred_skills` in order, **verify the skill is installed, read and trusted**, and check task applicability. A React skill must not be applied to vanilla JS, and a configured MCP is not proof it is running. Missing/unapproved skill → use current host-native tools and tested existing project components first; request explicit user approval before any installation. Report the actual selected or fallback tool and verification evidence; never pretend a recommendation was executed.
