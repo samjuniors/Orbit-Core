@@ -782,6 +782,10 @@ def advance(conn,root,a):
         if (not rec or rec['status']!='PASS' or not isinstance(actions,list)
                 or not actions or not all(isinstance(x,dict) and x.get('status')=='PASS' for x in actions)):
             return {'status':'HOLD','reason':'No recorded passing interactive Playwright browser QA result for this build'}
+        # A test that attempted forbidden network access cannot certify PASS,
+        # even if a forged/legacy record lists only passing UI actions.
+        if recorded.get('blocked_remote_hosts'):
+            return {'status':'HOLD','reason':'Browser QA attempted a forbidden network origin; inspect the blocked hosts and rerun approved QA'}
         # Legacy/unbound records cannot certify currently edited code or a new preview.
         if recorded.get('qa_build_revision')!=row['revision']:
             return {'status':'HOLD','reason':'Browser QA record belongs to a different build revision; rerun QA'}
@@ -814,6 +818,8 @@ def save_browser(conn,root,a,result):
     row=get(conn,root,a)
     if not row or row['stage']!='BROWSER_QA':
         raise ValueError('Browser result requires an active BROWSER_QA build')
+    if result['status']=='PASS' and result.get('blocked_remote_hosts'):
+        raise ValueError('Browser QA attempted a forbidden network origin; rerun approved QA')
     if result['status']=='PASS' and (
             not result.get('source_fingerprint')
             or result['source_fingerprint']!=code_fingerprint(root)
@@ -822,7 +828,7 @@ def save_browser(conn,root,a,result):
         raise ValueError('QA source/preview changed or snapshot unavailable; rerun browser QA')
     summary={k:v for k,v in result.items() if k in {
         'url','viewport','title','actions','errors','failures','screenshot',
-        'source_fingerprint','preview_id','preview_started_at'}}
+        'blocked_remote_hosts','source_fingerprint','preview_id','preview_started_at'}}
     summary['qa_build_revision']=row['revision']
     with conn:
         conn.execute('INSERT INTO browser_results (project,root,build_id,status,summary,created_at) VALUES (?,?,?,?,?,?)',
