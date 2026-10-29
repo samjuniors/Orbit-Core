@@ -300,5 +300,5 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
             'browser_workflow':browser_plan,
             'permission_state_reported':permission_state,
             'permission_verified':False,
-        'recommended_action':'REUSE_AND_VERIFY_INSTALLED' if candidates else ('BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL' if research else 'USE_EXISTING_HOST_CAPABILITIES'),
+        'recommended_action':'HOLD_PERMISSION_DENIED' if permission_state=='DENIED' else ('REUSE_AND_VERIFY_INSTALLED' if candidates else ('BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL' if research else 'USE_EXISTING_HOST_CAPABILITIES')),
         'policy':['Prefer current built-in host abilities and already installed vetted skills.', 'If a needed capability is missing, the agent may web-search reputable official sources using host tools. Never claim MCP performed the search.', 'Never execute npx/curl/script, install packages, add MCP connections, grant OAuth/scopes, or modify agent rules without reviewing source and obtaining applicable host/user approval.', 'Use the minimal permission and project scope; re-check actual tool availability after approved install; no best-in-class guarantee.']}
