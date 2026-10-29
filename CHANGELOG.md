@@ -8,7 +8,7 @@ Source changes merged after the published **v0.25.1 prerelease** (NOT a new publ
 - **M3 host-denial bookkeeping:** real host permission denial or unavailable native delegation remains BLOCKED instead of being mistaken for a user's cancellation (#27).
 - **M3 interrupted-agent recovery:** terminal outcomes require a matching caller-reported native host session/state; uncertain work remains on HOLD and keeps its scope lock (#29).
 - **M3 durable attempt history:** additive local SQLite attempt ledger, bounded retries, pre-invocation refunds, legacy/cross-PC date safeguards and SQLite rollback regressions (#32).
-- Browser QA preview-origin isolation is reviewed separately in #33; do not claim it shipped until merged.
+- **M3 browser QA origin isolation:** exact managed preview-origin HTTP/WebSocket restrictions and fail-closed network-attempt QA gate merged to development `main` through #33; this remains unreleased and is not a complete OS/browser sandbox.
 
 All M3 source changes remain **development-only** until a separately authorized release. Real-host M3 acceptance, Issue #9 security and rollback tests are not complete. `NEXT_VERSION=0.25.2` remains planning metadata, not a release.
 
