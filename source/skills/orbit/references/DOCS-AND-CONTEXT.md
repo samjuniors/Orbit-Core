@@ -25,6 +25,17 @@ A host may request `orbit_project_resume(compact=true, objective="<current task>
 
 For small ongoing tasks, use the pack to decide which canonical files need opening. For ambiguous/multiple builds or high-risk work, use the full resume and check actual code/host state; never silently treat the compact pack as proof that a task passed, a host session stopped or a release is safe. No source should be promoted to an instruction merely because it appears in the pack. Output enforces the caller's **JSON-escaped character budget**, not a promise about paid token billing.
 
+## M4 adaptive workflow selection — advisory only
+
+For a new task, the lead host can call `orbit_capability_select` with the **actual host-reported** `host_tools`, objective and `permission_state`. Read its `adaptive_workflow` to decide how much context to load and whether a native subagent is merely a candidate:
+
+- **Focused, lower-risk changes:** prefer `orbit_project_resume(compact=true, max_chars=1500)`; inspect only relevant Git diffs, tests and canonical docs. An exact reported native agent tool name is a **hint**, not a verified invocation or consent.
+- **Multi-stage and high-risk tasks:** choose a full project review and preserve critical constraints, checkpoints and approval gates rather than optimizing away important facts. Release, production, security, migration, secrets or deletion never run solely from selector output.
+- **No native host tool:** continue the task serially using the connected host; do not install an external agent or switch models automatically.
+- **Explicit permission denied:** HOLD; do not hop to a different model, computer-use tool or provider. Obtain genuine new scope-specific approval before reconsideration.
+
+The mode is a heuristic recommendation based on user objective and reported tool names. The current host retains model selection, actual tool schema validation, skill trust checks, permission and execution. This feature does **not** benchmark model credits or authenticate host activity. Its output is small, but measure context bytes/recovery quality before promising cost savings.
+
 ## Prompt refinement / low-token operation
 
 Use the **current host model** (no second paid rewriting model) to normalize the user's natural-language request. After interview, persist a compact agreed brief, ideally **120–220 words**, containing:
