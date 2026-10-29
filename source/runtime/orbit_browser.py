@@ -113,11 +113,18 @@ def approved_preview_origin(target_url, port, *, websocket=False):
 def route_preview_request(route, port, blocked):
     """Intercept HTTP(S) requests; never follow redirects to another origin."""
     uri=route.request.url
-    kind=urlparse(uri).scheme
-    if approved_preview_origin(uri, port) or kind in {'data','blob','about'}:
+    try:
+        parsed=urlparse(uri)
+        kind=parsed.scheme
+        permitted=approved_preview_origin(uri,port) or kind in {'data','blob','about'}
+        label=parsed.hostname or kind
+    except ValueError:
+        permitted=False
+        label='malformed-url'
+    if permitted:
         route.continue_()
     else:
-        blocked.append(urlparse(uri).hostname or kind)
+        blocked.append(label)
         route.abort()
 
 
@@ -127,7 +134,12 @@ def route_preview_socket(ws_route, port, blocked):
     if approved_preview_origin(uri, port, websocket=True):
         ws_route.connect_to_server()
     else:
-        blocked.append(urlparse(uri).hostname or urlparse(uri).scheme)
+        try:
+            target=urlparse(uri)
+            label=target.hostname or target.scheme
+        except ValueError:
+            label='malformed-url'
+        blocked.append(label)
         ws_route.close(code=1008, reason='Orbit QA: non-preview WebSocket denied')
 
 
