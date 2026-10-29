@@ -87,6 +87,21 @@ def test_upgrade(previous_root, candidate_root=ROOT):
         pkg = base / "new-archive" / ("orbit-universal-" + new_version)
         new_command = [sys.executable, str(pkg / "installer.py"),
                        "--scope", "project", "--hosts", "codex", "--project", str(project)]
+        # A tiny owner edit to an *official* installed Orbit file must still
+        # stop the upgrade; exact stock digests never authorize edited content.
+        protected = project / ".agents" / "skills" / "orbit" / "references" / "TASK-LIFECYCLE.md"
+        if not protected.is_file():
+            raise RuntimeError("Previous stock task lifecycle reference missing")
+        original = protected.read_bytes()
+        owner_edit = original + b"\\n# Owner-specific workflow customization\\n"
+        protected.write_bytes(owner_edit)
+        blocked = subprocess.run(new_command, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True, env=env, timeout=45)
+        if blocked.returncode == 0 or "INSTALL BLOCKED" not in (blocked.stderr + blocked.stdout):
+            raise RuntimeError("Customized installed Orbit file must trigger explicit manual-review block")
+        if protected.read_bytes() != owner_edit:
+            raise RuntimeError("Blocked upgrade modified an owner-customized stock file")
+        protected.write_bytes(original)  # Restore only this isolated fixture for stock upgrade.
         preview = checked_run(new_command, env)
         if "PREVIEW ONLY" not in preview:
             raise RuntimeError("Upgrader must preview before writing")
