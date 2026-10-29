@@ -331,7 +331,7 @@ class UniversalSetupTests(unittest.TestCase):
         from source.runtime import orbit_capabilities as cap
         skill=self.project/'.agents/skills/local-ui-review/SKILL.md'
         skill.parent.mkdir(parents=True)
-        skill.write_text('---\\nname: local-ui-review\\ndescription: UI design and layout review\\n---\\nlocal') 
+        skill.write_text('---\nname: local-ui-review\ndescription: UI design and layout review\n---\nlocal') 
         simple=cap.select(self.project,'Fix frontend component layout',
                           ['spawn_agent'],home=self.home)
         plan=simple['adaptive_workflow']
