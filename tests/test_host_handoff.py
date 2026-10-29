@@ -163,6 +163,121 @@ class HostHandoffTests(unittest.TestCase):
         self.assertEqual(packet["status"], "HOLD_RESERVE_TASK_FIRST")
         self.assertFalse(packet["native_invoked"])
 
+    def test_m3_attempt_budget_counts_retries_of_same_task(self):
+        self.register()
+        for attempt in (1,2,3):
+            reservation=self.reserve()
+            self.assertEqual(reservation['status'],'RESERVED')
+            self.assertEqual(reservation['attempt_number'],attempt)
+            self.assertEqual(reservation['attempt_budget']['step_used'],attempt)
+            revision=reservation['task']['revision']
+            started=self.call('orbit_task_started',task_key='frontend',
+                expected_revision=revision,host_session=f'native-session-{attempt}-abc',
+                confirm_write=True)
+            failed=self.call('orbit_task_report',task_key='frontend',
+                expected_revision=started['task']['revision'],outcome='FAILED',
+                evidence='Host reported a real failing regression test result',
+                observed_host_session=f'native-session-{attempt}-abc',
+                host_state='FAILED',confirm_write=True)
+            self.assertEqual(failed['status'],'FAILED')
+        with self.assertRaisesRegex(ValueError,'Per-step agent budget exhausted'):
+            self.reserve()
+        records=self.db.execute(
+            'SELECT attempt_number,disposition FROM orbit_task_attempts WHERE task_key=? ORDER BY attempt_number',
+            ('frontend',)).fetchall()
+        self.assertEqual([x['attempt_number'] for x in records],[1,2,3])
+        self.assertEqual([x['disposition'] for x in records],['HOST_REPORTED_FAILED']*3)
+
+    def test_m3_daily_budget_counts_distinct_steps_and_retries(self):
+        # Distinct step labels previously concealed repeated same-day execution.
+        for n in range(12):
+            key=f'job-{n}'
+            planned=self.call('orbit_task_plan',task_key=key,
+                step=f'milestone-{n//3}',role='backend',
+                goal='Work on one bounded task and verify behavior with tests',
+                reason='Run a recorded attempt without assuming host permissions',
+                write_paths=[f'packages/module-{n}/'],confirm_write=True)
+            self.assertEqual(planned['status'],'PLANNED')
+            reservation=self.call('orbit_task_reserve',task_key=key,
+                expected_revision=1,approval_reference='host-consent-report-12345',
+                confirm_write=True)
+            self.assertEqual(reservation['status'],'RESERVED')
+            self.assertEqual(reservation['attempt_budget']['day_used'],n+1)
+            started=self.call('orbit_task_started',task_key=key,
+                expected_revision=2,host_session=f'native-{n}-session',confirm_write=True)
+            self.call('orbit_task_report',task_key=key,
+                expected_revision=started['task']['revision'],outcome='FAILED',
+                evidence='Host reported failed validation for this module',
+                observed_host_session=f'native-{n}-session',host_state='FAILED',
+                confirm_write=True)
+        planned=self.call('orbit_task_plan',task_key='over-limit',
+            step='new-step',role='backend',
+            goal='A separate new task that should be blocked by day budget',
+            reason='The daily attempt limit is shared by project root',
+            write_paths=['packages/over-limit/'],confirm_write=True)
+        self.assertEqual(planned['status'],'PLANNED')
+        with self.assertRaisesRegex(ValueError,'Daily agent budget exhausted'):
+            self.call('orbit_task_reserve',task_key='over-limit',expected_revision=1,
+                approval_reference='host-consent-report-12345',confirm_write=True)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orbit_task_attempts').fetchone()[0],12)
+
+    def test_m3_unused_reservations_are_refunded_without_erasing_history(self):
+        for n in range(4):
+            key=f'unused-{n}'
+            self.register(key=key,scope=[f'src/component-{n}/'])
+            reservation=self.reserve(key=key)
+            self.assertEqual(reservation['attempt_budget']['step_used'],1)
+            released=self.call('orbit_task_release',task_key=key,
+                expected_revision=reservation['task']['revision'],
+                reason='No native host agent was started; user cancelled the slot',
+                confirm_write=True)
+            self.assertEqual(released['status'],'CANCELLED')
+        rows=self.db.execute('SELECT disposition FROM orbit_task_attempts').fetchall()
+        self.assertEqual(len(rows),4)
+        self.assertEqual({row['disposition'] for row in rows},{'RELEASED_UNUSED'})
+
+    def test_m3_legacy_failed_task_is_counted_without_rewriting_history(self):
+        self.register()
+        with self.db:
+            self.db.execute("""UPDATE orbit_agent_tasks SET status='FAILED',
+                revision=4, host_session='previous-native-host-session',
+                reserved_at=? WHERE project='todo' AND task_key='frontend'""",
+                (orbit_tasks.utc_now(),))
+        first=self.call('orbit_task_reserve',task_key='frontend',
+            expected_revision=4,approval_reference='fresh-user-consent-12345',
+            confirm_write=True)
+        self.assertEqual(first['attempt_number'],2)
+        self.assertEqual(first['attempt_budget']['step_used'],2)
+        legacy=self.db.execute("""SELECT disposition,attempt_number FROM orbit_task_attempts
+                                  WHERE task_key='frontend' ORDER BY attempt_number""").fetchall()
+        self.assertEqual([(r['disposition'],r['attempt_number']) for r in legacy],
+                         [('LEGACY_UNVERIFIED',1),('RESERVED',2)])
+        self.assertEqual(first['task']['revision'],5)
+        self.assertEqual(first['task']['host_session'],'previous-native-host-session')
+        # Simulate a second terminal result after actual host invocation.
+        self.call('orbit_task_started',task_key='frontend',expected_revision=5,
+            host_session='current-real-native-session',confirm_write=True)
+        self.call('orbit_task_report',task_key='frontend',expected_revision=6,
+            outcome='FAILED',evidence='Host confirmed this second attempt failed',
+            observed_host_session='current-real-native-session',host_state='FAILED',
+            confirm_write=True)
+        third=self.call('orbit_task_reserve',task_key='frontend',
+            expected_revision=7,approval_reference='fresh-third-user-consent',
+            confirm_write=True)
+        self.assertEqual(third['attempt_number'],3)
+        self.assertEqual(third['attempt_budget']['step_used'],3)
+
+    def test_m3_stale_reservation_has_no_attempt_history_side_effect(self):
+        self.register()
+        stale=self.call('orbit_task_reserve',task_key='frontend',
+            expected_revision=99,approval_reference='user-consent-12345',
+            confirm_write=True)
+        self.assertEqual(stale['status'],'STALE_REVISION')
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orbit_task_attempts').fetchone()[0],0)
+        good=self.reserve()
+        self.assertEqual(good['attempt_number'],1)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orbit_task_attempts').fetchone()[0],1)
+
     def test_tool_contract_read_only_and_arguments_tight(self):
         tool = next(t for t in orbit_mcp.TOOLS if t["name"] == "orbit_task_handoff")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
