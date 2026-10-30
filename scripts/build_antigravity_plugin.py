@@ -104,7 +104,13 @@ def build_files(root: Path = ROOT) -> dict[str, bytes]:
     for name, value in (("plugin.json", manifest), ("mcp_config.json", mcp)):
         data[name] = (json.dumps(value, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
     for path in agents:
-        data[f"agents/{path.name}"] = path.read_bytes()
+        body = path.read_text(encoding="utf-8")
+        if path.stem == "orbit":
+            # The original standalone agent refers to global/project locations.
+            # Rewrite *only packaged references*, leaving canonical source unchanged.
+            body = body.replace(".agents/skills/orbit/", "skills/orbit/")
+            body = body.replace("`orbit-core-native`", "`orbit-core-plugin`")
+        data[f"agents/{path.name}"] = body.encode("utf-8")
     data["skills/orbit/SKILL.md"] = compact
     data["skills/orbit/references/FULL-LIFECYCLE-GUIDE.md"] = original
     for path in sorted((skill / "references").glob("*.md")):
