@@ -52,7 +52,7 @@ Execution and cancellation stay with the authorized host; no automatic
 
 ## Acceptance gates
 
-**2026-10-30 handoff:** six feature/fix PRs #49–54 are MERGED into `dev/v0.27.0` (not `main`). The merged source tree SHA `471a0d3e3fd59068c22b8915adcfbed9dec9e8c7` matches PR #54's [cross-platform 5/5 CI PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41069244024), including packaged MCP smoke. Current development tool inventory: **45** (three additional read-only Swarm tools over v0.26.0 source); Project Pulse is opt-in on `orbit_project_resume`, not a new tool. This evidence does not certify real host-native parallelism, permission dialogs, security, installer upgrades or publication.
+**2026-10-30 handoff:** six feature/fix PRs #49–54 are MERGED into `dev/v0.27.0` (not `main`). The merged source tree SHA `471a0d3e3fd59068c22b8915adcfbed9dec9e8c7` matches PR #54's [cross-platform 5/5 CI PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41069244024), including packaged MCP smoke. At that historical #54 checkpoint there were **45** development tools. **Current development inventory is 46**, including the additive read-only source-bound integration review (#61); Project Pulse is opt-in on `orbit_project_resume`, not a new tool. This evidence does not certify real host-native parallelism, permission dialogs, security, installer upgrades or publication.
 
 
 - [x] New project-scope DAG preview with bounded (40-task) reads, cycle/missing
@@ -69,10 +69,15 @@ Execution and cancellation stay with the authorized host; no automatic
   where actually supported, with denial, unsupported host and serial fallback.
 - [ ] Interrupted, crashed and cancelled host sessions: no false completion;
   explicit recovery before next reservation; safe retry and rework.
-- [ ] Concurrent and cross-process SQLite reservation/identity stress, Unicode
-  and Windows/Linux path alias tests, symlinks, protected controls and scopes.
-- [ ] Independent QA tied to exact source revisions, stale-result invalidation,
-  partial failure propagation and integration test execution.
+- [x] Disposable CI checks for cross-process SQLite contention, Unicode/casefold
+  aliases, Windows trailing-dot/space and symlink/protected scope validation
+  (PRs #57–58); not equivalent to two-PC or live-host acceptance.
+- [ ] Real multi-host/two-PC recovery, host-path behavior and permission review.
+- [x] Source/preview-bound browser freshness, read-only task integration
+  readiness, and transitive failure/rework propagation in disposable CI
+  (PRs #60–61). Local records remain caller-reported and unverified.
+- [ ] Real source-bound *integration test execution* and independently observed
+  native-host QA, session cancellation and review.
 - [ ] Measure actual context / usage and user experience, then decide whether
   native host progress visualization is beneficial.
 - [ ] Owner review of the feature and next release cutline. No automatic merge
@@ -174,17 +179,15 @@ permanent file, agent runner or automatic permission is introduced.
 **not** evidence of independent OS processes, actual host approval/session
 liveness, networked agents or two-PC portability. Those gates remain open.
 
-## Next slices (beyond the validated draft preflight)
+## Remaining acceptance after source development
 
-1. **Swarm mission input and bounded DAG draft preview:** accept a user-defined
-   task decomposition as *untrusted data*, validate schema, roots, cycles and
-   file ownership; obtain approval before committing individual task records.
-2. **Orchestration state machine:** safe per-host ready queue with genuine
-   session evidence, serialized fallback, transactional reservations and
-   permission failure handling. Do not spawn from the MCP.
-3. **Review and observability:** stale-QA rejection, project-scoped redacted
-   history and a compact, accessible progress surface. Reuse Project Pulse
-   once its separate PR is reviewed; avoid competing task databases.
+1. Test actual Antigravity, Codex and Claude Code host-native parallel workers,
+   scoped approvals/denials/cancellation/restart, and serial host-lead fallback.
+2. Run real independent combined-task integration tests against the exact
+   Git/source revision; inspect Git diffs and browser/native QA in the host.
+3. Measure Project Pulse UX and actual model context in signed-in hosts; verify
+   two-PC portable recovery, installer migration/rollback, security and release
+   provenance. Do not infer these results from disposable CI.
 
 **Research/decisions:** Orbit Core's existing Notion Research & References and
 Project Decisions hub; do not copy external harness code by default.
@@ -226,7 +229,7 @@ Task registration previews and confirmations inspect current filesystem aliases 
   verification is pending. Do not claim live host consent, test execution, cost
   savings or project completion from this proposal-only response.
 
-## v0.27 — source-bound Swarm integration QA gate (candidate)
+## v0.27 — source-bound Swarm integration QA gate (merged development source)
 
 **Branch:** `feat/v027-swarm-source-bound-integration-gate`, based on
 `89afb04a0811cb2fa42c1042f1cde8c6cb4362fd`.
@@ -251,8 +254,10 @@ changes. Actual browser QA already belongs to the existing
 `orbit_browser_qa` path; this new read-only tool never runs it.
 Native Android/iOS/desktop QA remains a separate host review gate.
 
-**Verification:** nine synthetic/disposable regression cases and normal
-exact-head Linux/Windows CI are required before this can join the
-development lane. Once integrated, the source development tool inventory
-will be 46 (not the previously verified 45); release and host
-documentation must never misrepresent this as a published tool inventory.
+**Verification:** [PR #61](https://github.com/samjuniors/Orbit-Core-MCP/pull/61)
+MERGED to `dev/v0.27.0` commit `0d231b3508cf7c69bef85412a8efb2f02c714382`.
+[Exact PR-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41085894528)
+on Ubuntu Python 3.10–3.13 and Windows Python 3.12 (361 tests,
+3 skips, zero failures on Ubuntu 3.12). The separate [post-merge dev CI](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41086243865)
+requires final verification. The development inventory is 46 tools;
+no release or real-host integration acceptance is implied.
