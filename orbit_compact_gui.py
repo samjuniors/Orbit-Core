@@ -345,7 +345,8 @@ def launch():
         filedialog.askdirectory(parent=app, title="Choose a project") or project.get()
     )).pack(side="left", padx=(6, 0))
 
-    label(options, "CODING APPS", color="quiet", size=8).pack(anchor="w")
+    apps_heading = label(options, "CODING APPS", color="quiet", size=8)
+    apps_heading.pack(anchor="w")
     hosts_row = tk.Frame(options, bg=c["background"])
     hosts_row.pack(fill="x", pady=(6, 4))
     for idx, (name, display) in enumerate(model.DISPLAY_NAMES.items()):
@@ -439,7 +440,7 @@ def launch():
 
     def scope_changed(*_):
         if scope.get() == "project":
-            path_row.pack(fill="x", pady=(0, 12), before=hosts_row)
+            path_row.pack(fill="x", pady=(0, 12), before=apps_heading)
         else:
             path_row.pack_forget()
         if expanded.get():
