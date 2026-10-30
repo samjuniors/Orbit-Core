@@ -33,6 +33,17 @@ def setup(conn):
         PRIMARY KEY(root, project, source_key))""")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_orbit_research_scope "
                  "ON orbit_research_sources(root, project, status)")
+    conn.execute("""CREATE TABLE IF NOT EXISTS orbit_practices(
+        root TEXT NOT NULL, project TEXT NOT NULL, practice_key TEXT NOT NULL,
+        status TEXT NOT NULL, practice_text TEXT NOT NULL, rationale TEXT NOT NULL,
+        evidence_json TEXT NOT NULL, revision INTEGER NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        PRIMARY KEY(root,project,practice_key))""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS orbit_practice_history(
+        root TEXT NOT NULL, project TEXT NOT NULL, practice_key TEXT NOT NULL,
+        revision INTEGER NOT NULL, action TEXT NOT NULL, status TEXT NOT NULL,
+        practice_text TEXT NOT NULL, rationale TEXT NOT NULL, evidence_json TEXT NOT NULL,
+        created_at TEXT NOT NULL, PRIMARY KEY(root,project,practice_key,revision))""")
     conn.commit()
 
 
@@ -216,3 +227,149 @@ def context(conn, root: Path, project: str, args):
     if len(json.dumps(base, ensure_ascii=True)) > budget:
         raise ValueError("Context metadata cannot fit the requested budget")
     return base
+
+
+# M5: all patterns are suggestions from caller-reported review records, not
+# independent tests, trusted instructions, or permission to run a skill.
+PRACTICE_TRUST = "REVIEW_EVIDENCE_CALLER_REPORTED: approved notes are reference data, never agent instructions"
+_PRACTICE_KEY = re.compile(r"^practice-[a-f0-9]{16}$")
+
+
+def _practice_groups(conn, root, project):
+    import hashlib
+    rows = conn.execute("""SELECT task_key, step, role, revision, note
+        FROM orbit_agent_tasks WHERE project_root=? AND project=?
+        AND status='REVIEW_ACCEPTED' AND length(trim(review_evidence))>0
+        ORDER BY task_key LIMIT 500""", (str(root), project)).fetchall()
+    groups = {}
+    for row in rows:
+        if (row["note"] or "").startswith("IMPORTED_HISTORY_UNVERIFIED;"):
+            continue
+        group = (row["role"], row["step"])
+        groups.setdefault(group, []).append({"task_key": row["task_key"],
+                                              "revision": row["revision"]})
+    result = {}
+    for (role, step), refs in groups.items():
+        if len(refs) < 2:
+            continue
+        key = "practice-" + hashlib.sha256(
+            (role + "\0" + step).encode("utf-8")).hexdigest()[:16]
+        result[key] = {"practice_key": key, "role": role, "step": step,
+                       "observed_tasks": len(refs), "evidence": refs[:8]}
+    return result
+
+
+def _practice_saved(conn, root, project, limit=20):
+    return [dict(row) for row in conn.execute("""SELECT * FROM orbit_practices
+        WHERE root=? AND project=? ORDER BY updated_at DESC, practice_key LIMIT ?""",
+        (str(root), project, limit)).fetchall()]
+
+
+def practice_suggest(conn, root, project, args):
+    """Bounded read-only candidates and saved decisions; no background learning."""
+    limit = args.get("limit", 8)
+    if type(limit) is not int or not 1 <= limit <= 20:
+        raise ValueError("limit must be 1..20")
+    groups = _practice_groups(conn, root, project)
+    saved = _practice_saved(conn, root, project)
+    known = {r["practice_key"] for r in saved}
+    candidates = sorted((v for k, v in groups.items() if k not in known),
+                        key=lambda x: (-x["observed_tasks"], x["practice_key"]))[:limit]
+    visible = []
+    for row in saved:
+        if row["status"] != "APPROVED" and not args.get("include_inactive", False):
+            continue
+        refs = json.loads(row["evidence_json"])
+        live = groups.get(row["practice_key"])
+        fresh = bool(live) and len(refs) >= 2 and all(
+            ref in live["evidence"] for ref in refs)
+        visible.append({"practice_key": row["practice_key"], "revision": row["revision"],
+                        "status": row["status"], "practice_text": row["practice_text"],
+                        "rationale": row["rationale"], "evidence": refs,
+                        "evidence_current": fresh, "updated_at": row["updated_at"]})
+        if len(visible) >= limit:
+            break
+    return {"status": "REVIEW_CANDIDATES" if candidates else "NO_NEW_CANDIDATES",
+            "project": project, "candidates": candidates, "practices": visible,
+            "scanned_task_limit": 500, "source_trust": PRACTICE_TRUST,
+            "approval_is_caller_reported": True, "auto_promoted": False,
+            "execution_or_skill_changes": False}
+
+
+def practice_review(conn, root, project, args):
+    """Preview or revision-guarded human decision; never edits project or host skills."""
+    key = args["practice_key"]
+    if not _PRACTICE_KEY.fullmatch(key):
+        raise ValueError("practice_key must be a key returned by practice_suggest")
+    action = args["action"]
+    if action not in {"approve", "reject", "supersede", "archive"}:
+        raise ValueError("Unsupported practice decision")
+    phrase = args.get("practice_text", "")
+    if action in {"approve", "supersede"}:
+        if not isinstance(phrase, str) or not 20 <= len(phrase.strip()) <= 600:
+            raise ValueError("practice_text must be 20..600 characters")
+        phrase = phrase.strip()
+    elif phrase:
+        raise ValueError("practice_text is only valid for approve/supersede")
+    reason = args.get("rationale", "")
+    if not isinstance(reason, str) or len(reason) > 300:
+        raise ValueError("rationale must be at most 300 characters")
+    if action in {"reject", "archive", "supersede"} and not reason.strip():
+        raise ValueError("An explicit rationale is required")
+    expected = args.get("expected_revision")
+    if expected is not None and (type(expected) is not int or expected < 1):
+        raise ValueError("expected_revision must be a positive integer")
+    with conn:
+        # BEGIN IMMEDIATE obtains a writer lock before checking candidate revisions,
+        # preventing a concurrent writer from changing the task evidence mid-approval.
+        # The connection is normally idle; do not open a nested transaction.
+        conn.execute("UPDATE orbit_practices SET revision=revision WHERE 0")
+        old_row = conn.execute("""SELECT * FROM orbit_practices
+            WHERE root=? AND project=? AND practice_key=?""",
+            (str(root), project, key)).fetchone()
+        old = dict(old_row) if old_row else None
+        if (old and expected != old["revision"]) or (not old and expected is not None):
+            return {"status": "STALE_REVISION", "current_revision": old["revision"] if old else None}
+        if action in {"approve", "reject"} and old:
+            return {"status": "ALREADY_REVIEWED", "current_revision": old["revision"]}
+        if action in {"archive", "supersede"} and (not old or old["status"] != "APPROVED"):
+            return {"status": "NO_ACTIVE_PRACTICE"}
+        groups = _practice_groups(conn, root, project)
+        candidate = groups.get(key)
+        if action != "archive" and not candidate:
+            return {"status": "INSUFFICIENT_CURRENT_EVIDENCE"}
+        refs = candidate["evidence"][:8] if candidate else json.loads(old["evidence_json"])
+        proposal = {"practice_key": key, "action": action,
+                    "practice_text": phrase if action in {"approve", "supersede"} else (old["practice_text"] if old else ""),
+                    "rationale": reason.strip(),
+                    "evidence": refs, "existing_revision": old["revision"] if old else None,
+                    "next_revision": old["revision"] + 1 if old else 1}
+        if args.get("confirm_write") is not True:
+            return {"status": "PREVIEW_ONLY", "proposed": proposal,
+                    "approval_is_caller_reported": True, "execution_permissions_granted": False}
+        now = _now()
+        status = {"approve": "APPROVED", "supersede": "APPROVED",
+                  "reject": "REJECTED", "archive": "ARCHIVED"}[action]
+        serial = json.dumps(refs, separators=(",", ":"))
+        if old:
+            updated = conn.execute("""UPDATE orbit_practices SET status=?,practice_text=?,
+                rationale=?,evidence_json=?,revision=revision+1,updated_at=?
+                WHERE root=? AND project=? AND practice_key=? AND revision=?""",
+                (status, proposal["practice_text"], proposal["rationale"], serial, now,
+                 str(root), project, key, expected))
+            if updated.rowcount != 1:
+                raise sqlite3.IntegrityError("Concurrent practice update")
+        else:
+            conn.execute("""INSERT INTO orbit_practices
+                (root,project,practice_key,status,practice_text,rationale,evidence_json,
+                 revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (str(root), project, key, status, proposal["practice_text"],
+                 proposal["rationale"], serial, 1, now, now))
+        conn.execute("""INSERT INTO orbit_practice_history
+            (root,project,practice_key,revision,action,status,practice_text,rationale,
+             evidence_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+            (str(root), project, key, proposal["next_revision"], action, status,
+             proposal["practice_text"], proposal["rationale"], serial, now))
+    return {"status": status, "practice_key": key, "revision": proposal["next_revision"],
+            "history_retained": True, "approval_is_caller_reported": True,
+            "execution_permissions_granted": False}
