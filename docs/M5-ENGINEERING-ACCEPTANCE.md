@@ -18,7 +18,8 @@
 - [x] Revision conflict, explicit approval, rejection, archive and supersession with append-only history (tests added; check CI before marking PASS).
 - [x] Stale source review invalidation and no automatic execution/tool installation (tests added; check CI before marking PASS).
 - [x] Reviewed M5 code head `cdf24fff67ef10490325b8058e2b407924167308`: [PR CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41003811478) and [push CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41003806658) on Ubuntu Python 3.10–3.13 and Windows Python 3.12; source/archive parity and disposable ZIP smoke included.
-- [ ] Disposable SQLite upgrade and MCP tool discovery/inventory on a real installed host.
+- [x] Local physical-Windows disposable source/ZIP/MCP smoke, 42-tool discovery, 262-test Python 3.15.2 run, simulated previous-version upgrade and headless Edge origin-denial probe **PASS**; detailed evidence in [v0.26.0 release acceptance](RELEASE-ACCEPTANCE-v0.26.0.md).
+- [ ] Actual user-installed host v0.26.0 package discovery/migration and authentic IDE permission UI remain NOT RUN; do not treat the disposable smoke as installed-host approval.
 - [ ] Human readback and review UI feedback with Antigravity/Codex; test refusal and no unintended use of saved note.
 - [ ] Security/privacy review, backup/restore and source-bound host evidence checks.
 

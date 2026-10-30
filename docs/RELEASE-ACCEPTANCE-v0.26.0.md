@@ -26,6 +26,25 @@ This is a **version-specific acceptance record**, not a second roadmap or author
 
 The owner approved M5 engineering integration after the original M3/M4 v0.26.0 source candidate. The **development** source now includes two additional opt-in practice review tools and additive SQLite tables. This supersedes the earlier 40-tool source inventory, not the publication HOLD. Reconfirm the complete 42-tool package manifest, migration/rollback, revised user-visible changelog, and all host/security gates before deciding whether v0.26.0 is the eventual published version. No tag or release is authorized.
 
+## 2026-10-30 — Connected Windows acceptance execution (partial real-host PASS)
+
+**Evidence boundary:** Connected authorized device `DESKTOP-5MBQ8IF` (Windows build 10.0.26300, Python 3.15.2). Inspected its active user-space Orbit v0.25.1 but **did not install or replace it**, modify personal IDE configuration or use owner projects. Reproduced reviewed `main` commit `0a25356ae53543bf17d59ec33cb8912403d23090` in a unique temporary checkout.
+
+| Test | Verified outcome |
+| --- | --- |
+| Windows M5 focused suite | **PASS — 12/12** including preview without writes, isolation, SQLite persistence, revision conflict and transactional rollback |
+| Full physical Windows Python 3.15.2 regression | **PASS — 262 tests, 10 skips** from direct logged rerun; an earlier piped display run exited 1 without a captured failure, so only the independent completed logged run is accepted |
+| Development tool inventory | **PASS — 42** tools including `orbit_practice_suggest` and `orbit_practice_review`; the installed v0.25.1 does **not** yet have M5 |
+| Strict desktop runtime/MCPB parity | **PASS** for disposable v0.26.0 bundle at reviewed merged commit |
+| Built universal ZIP and installed MCP stdio smoke | **PASS — DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS**, 42 tools; ZIP SHA256 `9f07a2a6775ea682d269f03a2728230972dc5aac31a026e5dbc19862f8a20950` |
+| Disposable v0.25.1 → v0.26.0 stock upgrade | **PASS — DISPOSABLE_STOCK_UPGRADE_PASS**; stock/custom `AGENTS.md`, checkpoint, prior DB bytes and old runtime retained |
+| Actual headless Windows browser QA | **PASS**, Playwright using locally installed Microsoft Edge, disposable Orbit-owned 127.0.0.1 preview, approved `expect_text` UI check |
+| Browser denied-origin negative case | **PASS of safety expectation**: injected `fetch('https://example.com/blocked-by-orbit')` was blocked, recorded `blocked_remote_hosts=['example.com']`, and correctly returned browser QA **FAIL** for the attempted prohibited network access; preview stopped afterward |
+| Actual Antigravity / Codex native approval, cancellation and restart | **NOT RUN** — Antigravity process was observed, Codex CLI 0.160.0 is present and configured, but no signed-in IDE permission UI was exercised |
+| Installed-user SQLite migration/rollback, second computer, independent security/provenance | **NOT RUN**; a disposable stock upgrade is not proof of an installed user upgrade |
+
+Local probe logs/test fixtures are in a distinct OS TEMP checkout; screenshots and preview logs use TEMP-only locations. The test launches isolated headless Edge, not the user's personal Chrome/Edge profile. The browser-origin test does **not** establish OS-level network sandboxing, authentic host approval or every multi-origin application case. A GitHub release and published version remain **HOLD**.
+
 ## Required before final release acceptance
 
 Run on **disposable projects and explicitly authorized hosts only**. A host claim from an MCP payload is not independent permission or execution evidence.
