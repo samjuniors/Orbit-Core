@@ -142,7 +142,7 @@ def verify_archive(root: Path, destination: Path) -> dict[str, str | int]:
                 raise ValueError(f"Plugin package content mismatch: {name}")
     digest = hashlib.sha256(destination.read_bytes()).hexdigest()
     checksum = destination.with_suffix(destination.suffix + ".sha256")
-    if not checksum.exists() or checksum.read_text(encoding="ascii") != f"{digest}  {destination.name}\\n":
+    if not checksum.exists() or checksum.read_text(encoding="ascii") != f"{digest}  {destination.name}\n":
         raise ValueError("Plugin package checksum missing or wrong")
     return {"version": (root / "VERSION").read_text().strip(), "files": len(expected),
             "package": str(destination), "sha256": digest}
