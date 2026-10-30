@@ -15,6 +15,7 @@ CANDIDATE_STATUSES = frozenset({"PLANNED"})
 TERMINAL_NOT_READY = frozenset({
     "FAILED", "REWORK", "BLOCKED", "CANCELLED", "REPORTED_DONE",
 })
+UPSTREAM_FAILURE_STATES = frozenset({"FAILED", "REWORK", "BLOCKED", "CANCELLED"})
 
 
 def _graph_cycle(rows):
@@ -113,11 +114,13 @@ def preview(conn, root, project, a):
                 raise ValueError("invalid dependency array")
             # The existing ledger owns path validation and overlap semantics.
             paths = orbit_tasks._scopes(paths)
+            resolved = orbit_tasks._resolved_scopes(root, paths)
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             return {**base, "status": "HOLD_INVALID_TASK_RECORD",
                     "task_key": row["task_key"], "ready_now": [],
                     "deferred": [], "reason": str(exc)[:150]}
-        rows[row["task_key"]] = {**row, "depends_on": deps, "write_paths": paths}
+        rows[row["task_key"]] = {**row, "depends_on": deps, "write_paths": paths,
+                                "resolved_write_paths": resolved}
 
     missing = sorted({dep for row in rows.values()
                       for dep in row["depends_on"] if dep not in rows})
@@ -145,6 +148,24 @@ def preview(conn, root, project, a):
                 "deferred": [],
                 "reason": "Inspect real host sessions and reservations before further delegation; stored status is not host liveness."}
 
+    # Surface actual upstream failures, including indirect failed ancestors.
+    # No task is automatically failed/cancelled and unrelated ready tasks stay
+    # eligible. All data is already restricted to the exact project and root.
+    blocked_memo = {}
+
+    def blocking_dependencies(key):
+        if key in blocked_memo:
+            return blocked_memo[key]
+        blockers = set()
+        for dep in rows[key]["depends_on"]:
+            state = rows[dep]["status"]
+            if state in UPSTREAM_FAILURE_STATES:
+                blockers.add(dep)
+            elif state != "REVIEW_ACCEPTED":
+                blockers.update(blocking_dependencies(dep))
+        blocked_memo[key] = sorted(blockers)
+        return blocked_memo[key]
+
     ready = []
     deferred = []
     selected_scopes = []
@@ -156,14 +177,21 @@ def preview(conn, root, project, a):
             deferred.append({"task_key": key, "reason": "REVIEW_TASK_STATE",
                              "recorded_status": status})
             continue
+        blocked = blocking_dependencies(key)
+        if blocked:
+            deferred.append({"task_key": key, "reason": "UPSTREAM_REWORK_REQUIRED",
+                             "blocking_task_keys": blocked,
+                             "next": "Review failed, cancelled or rework prerequisites before scheduling dependents."})
+            continue
         unmet = [dep for dep in task["depends_on"]
                  if rows[dep]["status"] != "REVIEW_ACCEPTED"]
         if unmet:
             deferred.append({"task_key": key, "reason": "DEPENDENCY_REVIEW_REQUIRED",
                              "unaccepted_dependencies": unmet})
             continue
-        clashes = [other for other, scopes in selected_scopes
-                   if orbit_tasks._collisions(task["write_paths"], scopes)]
+        clashes = [other for other, scopes, resolved in selected_scopes
+                   if orbit_tasks._collisions(task["write_paths"], scopes)
+                   or orbit_tasks._collisions(task["resolved_write_paths"], resolved)]
         if clashes:
             deferred.append({"task_key": key, "reason": "OVERLAPPING_WRITE_SCOPE",
                              "conflicts_with": clashes})
@@ -177,11 +205,23 @@ def preview(conn, root, project, a):
             "write_paths": task["write_paths"],
             "next": "Request actual host/user approval; then call orbit_task_reserve with this task revision before native handoff.",
         })
-        selected_scopes.append((key, task["write_paths"]))
+        selected_scopes.append((key, task["write_paths"], task["resolved_write_paths"]))
 
     state = ("HOLD_NATIVE_TOOL_UNAVAILABLE" if not native else
              "READY_FOR_HOST_REVIEW" if ready else "NO_READY_TASKS")
+    fallback = (None if native or not ready else {
+        "mode": "MANUAL_SERIAL_REVIEW_ONLY",
+        "task_key": ready[0]["task_key"],
+        "expected_revision": ready[0]["revision"],
+        "native_agent_invoked": False,
+        "host_permission_verified": False,
+        "next": ("With separate real user/host approval, the host lead may handle "
+                 "only this task serially within its allowed write scope; "
+                 "review source and tests before accepting it. Do not reserve "
+                 "or claim a native subagent session for a manual fallback."),
+    })
     return {**base, "status": state, "ready_now": ready,
+            "serial_fallback": fallback,
             "deferred": deferred, "candidate_count": len(ready),
             "native_invocation_required": True,
             "reason": ("Real host capability and permission must still be verified."
