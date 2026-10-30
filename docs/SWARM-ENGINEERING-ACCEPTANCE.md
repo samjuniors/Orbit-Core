@@ -204,3 +204,24 @@ Project Decisions hub; do not copy external harness code by default.
 Task registration previews and confirmations inspect current filesystem aliases for proposed writable scopes. Reservation checks again under its SQLite transaction, rejecting links escaping the selected workspace or resolving into protected control files. It also detects when two differently spelled assignments resolve to the same underlying path and holds the second reservation. A native handoff packet is withheld if the assigned path becomes unsafe after reservation. Rejections are generic and do not print external link targets.
 
 **Verification:** [PR #58](https://github.com/samjuniors/Orbit-Core-MCP/pull/58) merged to development commit `7130eb381ccdbc3d1792b55b2889e139385c9dbf`, with [exact-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41082050055) on Ubuntu Python 3.10–3.13 and Windows Python 3.12. Linux and Windows Python 3.12 each ran 346 tests, 3 skipped, zero failures, and the seven new symlink tests all passed. [Post-merge dev CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41082365287) verified the exact integrated development commit `7130eb381ccdbc3d1792b55b2889e139385c9dbf` on Ubuntu Python 3.10–3.13 and Windows Python 3.12. This is a point-in-time path guard, **not** a confinement sandbox; a host may mutate symlinks after reservation. Native host sandbox/permission enforcement, real two-PC acceptance, host-session cancellation, integration QA and release review remain OPEN.
+
+## v0.27 development follow-up — failed prerequisites, path aliases and serial fallback
+
+**Candidate branch:** `feat/v027-swarm-recovery-readiness`, based on verified
+`dev/v0.27.0` HEAD `3976ada5a046eb5c8acedda06a96af2236bfa8b4`.
+
+- The existing read-only `orbit_swarm_preview` now distinguishes a direct or transitive
+  `FAILED` / `REWORK` / `CANCELLED` / `BLOCKED` prerequisite from a merely
+  unreviewed `REPORTED_DONE` task. Dependent tasks HOLD until a reviewer
+  actually accepts the prerequisite; independent ready work can still proceed.
+- Scheduling proposals compare both lexical and current resolved writable path
+  scopes, and HOLD rather than expose symlink escapes. Reservations and native
+  handoffs remain separately checked; resolution is not host sandboxing.
+- Without a supported reported native agent tool, one deterministic candidate
+  is offered as `MANUAL_SERIAL_REVIEW_ONLY`, not a running task or permission.
+  The host lead must obtain separate actual authorization, implement only within
+  scope, inspect real tests and record the outcome honestly. No automatic status
+  transition, fabricated worker, reservation or third-party fallback runner.
+- **Candidate verification:** six disposable regression cases; source/CI
+  verification is pending. Do not claim live host consent, test execution, cost
+  savings or project completion from this proposal-only response.
