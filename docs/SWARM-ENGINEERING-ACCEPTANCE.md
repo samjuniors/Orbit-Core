@@ -1,8 +1,11 @@
 # v0.27.0 — Orbit-native Agent Swarm: engineering acceptance
 
-**Source scope:** First independent v0.27.0 engineering slice on
-`feat/v027-swarm-dag-preview`, targeting `dev/v0.27.0`.
-**Status:** READ-ONLY PLAN IMPLEMENTED; REAL NATIVE DELEGATION NOT VERIFIED.
+**Source scope:** Source integration on `dev/v0.27.0` through reviewed
+Project Pulse [PR #49](https://github.com/samjuniors/Orbit-Core-MCP/pull/49),
+Swarm [PRs #50–53](https://github.com/samjuniors/Orbit-Core-MCP/pulls?q=is%3Apr+is%3Amerged+swarm)
+and reservation safety [PR #54](https://github.com/samjuniors/Orbit-Core-MCP/pull/54).
+**Status:** DEVELOPMENT SOURCE MERGED / AUTOMATED CI PASS; REAL NATIVE DELEGATION,
+SECURITY REVIEW, HOST ACCEPTANCE AND RELEASE NOT VERIFIED.
 **External reference:** [Claude Swarm](https://github.com/affaan-m/claude-swarm)
 (MIT, reviewed as ideas only; no copied code or SDK dependency).
 
@@ -47,6 +50,9 @@ Execution and cancellation stay with the authorized host; no automatic
 
 ## Acceptance gates
 
+**2026-10-30 handoff:** six feature/fix PRs #49–54 are MERGED into `dev/v0.27.0` (not `main`). The merged source tree SHA `471a0d3e3fd59068c22b8915adcfbed9dec9e8c7` matches PR #54's [cross-platform 5/5 CI PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41069244024), including packaged MCP smoke. Current development tool inventory: **45** (three additional read-only Swarm tools over v0.26.0 source); Project Pulse is opt-in on `orbit_project_resume`, not a new tool. This evidence does not certify real host-native parallelism, permission dialogs, security, installer upgrades or publication.
+
+
 - [x] New project-scope DAG preview with bounded (40-task) reads, cycle/missing
   dependency validation, protected-path and casefolded directory/file overlap
   detection, hard candidate cap of 2, active-host reconciliation HOLD.
@@ -72,7 +78,7 @@ Execution and cancellation stay with the authorized host; no automatic
 
 ## Phase 2 — bounded user/host-proposed DAG preflight (stacked feature PR)
 
-**Status: SOURCE IMPLEMENTED IN A SEPARATE STACKED BRANCH; not merged, no host acceptance.**
+**Status: MERGED TO `dev/v0.27.0` via PR #51; real-host acceptance remains NOT RUN.**
 The additive read-only `orbit_swarm_draft_preview` MCP tool (44-tool
 development candidate) accepts **one to twelve user- or host-proposed
 structured tasks** with the same task identity, role, bounded text,
@@ -106,7 +112,7 @@ main or new release is authorized.
 
 ## Phase 3 — batch host-native handoff preflight (stacked feature PR)
 
-**Status: SOURCE IMPLEMENTED, actual native host execution NOT RUN.**
+**Status: MERGED TO `dev/v0.27.0` via PR #52; actual native host execution NOT RUN.**
 The new `orbit_swarm_host_preflight` is an all-or-nothing, **read-only**
 review of one or two existing, `RESERVED` tasks before the connected host
 invokes any specialist. Every selected task must have a fresh revision, no
@@ -162,8 +168,7 @@ stale-revision races and cross-project error redaction. The existing
 `BEGIN IMMEDIATE` write transaction is reused; no added SQLite table,
 permanent file, agent runner or automatic permission is introduced.
 
-**Verification:** source/test committed for CI; mark PASS only after exact-head
-cross-platform CI succeeds. This is shared-file, multi-connection concurrency,
+**Verification:** [exact integrated-tree CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41069244024) on PR #54, with SHA tree equal to development commit `7420da3675ddc1ffc330192fcc982081722a027d`. This is shared-file, multi-connection concurrency,
 **not** evidence of independent OS processes, actual host approval/session
 liveness, networked agents or two-PC portability. Those gates remain open.
 
