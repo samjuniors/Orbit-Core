@@ -89,8 +89,10 @@ def review(conn, root, project, args):
             assigned = orbit_tasks._scopes(json.loads(row["write_paths"]))
             changed = orbit_tasks._scopes(
                 json.loads(row["changed_paths"]), limit=60, allow_protected=True)
-            orbit_tasks._resolved_scopes(root, assigned)
+            assigned_resolved = orbit_tasks._resolved_scopes(root, assigned)
+            changed_resolved = orbit_tasks._resolved_scopes(root, changed)
             scope = orbit_tasks.scope_report(assigned, changed)
+            resolved_scope = orbit_tasks.scope_report(assigned_resolved, changed_resolved)
             deps = json.loads(row["depends_on"])
             if not isinstance(deps, list) or len(deps) > 8 or any(
                     not isinstance(dep, str) for dep in deps):
@@ -98,7 +100,7 @@ def review(conn, root, project, args):
         except (TypeError, ValueError, json.JSONDecodeError):
             issues.append({"task_key": key, "reason": "INVALID_TASK_RECORD"})
             continue
-        if not scope["allowed"]:
+        if not scope["allowed"] or not resolved_scope["allowed"]:
             issues.append({"task_key": key, "reason": "UNSAFE_CHANGED_PATHS"})
             continue
         for dep in deps:
