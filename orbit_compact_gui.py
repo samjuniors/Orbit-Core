@@ -183,6 +183,8 @@ def launch():
                          fill=c["secondary"], width=width-46,
                          font=("Segoe UI", 10))
     card.bind("<Configure>", draw_status_card)
+    status_text.trace_add("write", lambda *_: draw_status_card())
+    app_text.trace_add("write", lambda *_: draw_status_card())
 
     info = tk.StringVar(value="Local install · Your project data stays yours")
     label(main, textvariable=info, color="quiet", size=9,
@@ -448,7 +450,6 @@ def launch():
             current_state["plan"] = plan
             current_state["error"] = ""
             status_text.set(message)
-            draw_status_card()
             primary.set_action(name + ("  →" if available else ""), available)
             names = selected_names()
             app_text.set(" · ".join(names) if names else "No coding apps selected")
@@ -459,7 +460,6 @@ def launch():
             current_state["action"] = "review"
             current_state["error"] = str(exc)
             status_text.set("Choose an app or review your settings")
-            draw_status_card()
             names = selected_names()
             app_text.set(" · ".join(names) if names else "No coding apps selected")
             primary.set_action("Review setup  →", True)
