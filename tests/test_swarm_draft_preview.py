@@ -135,6 +135,14 @@ class SwarmDraftTests(unittest.TestCase):
         response = self.preview([draft("api")])
         self.assertEqual(response["status"], "DRAFT_VALIDATED")
 
+    def test_oversized_existing_ledger_holds_without_listing_tasks(self):
+        for index in range(41):
+            self.existing(f"existing-{index:02}")
+        response = self.preview([draft("new-task")])
+        self.assertEqual(response["status"], "HOLD_GRAPH_TOO_LARGE")
+        self.assertEqual(response["review_waves"], [])
+        self.assertNotIn("existing-00", json.dumps(response))
+
     def test_protected_paths_and_traversal_rejected(self):
         for path in (".git/config", ".gemini/rules.md", "../outside",
                      "C:/Users/x/notes", "src\\backslash.py", ".env/secret"):
