@@ -337,7 +337,16 @@ def reserve(conn,a,root):
         if len(active)>=MAX_CONCURRENT: raise ValueError('Active native-agent reservations reached the cap of 2')
         for other in active:
             conflicts=_collisions(json.loads(old['write_paths']),json.loads(other['write_paths']))
-            if conflicts: raise ValueError(f'Overlapping writable scopes with {other["task_key"]}: {conflicts}')
+            if conflicts:
+                # A different project key may share this workspace root. It must
+                # block an unsafe reservation, but its task identity and file
+                # ownership must not be disclosed to the current project.
+                if other['project'] != old['project']:
+                    raise ValueError(
+                        'Overlapping writable scopes with an active reservation '
+                        'in this workspace; reconcile authorized host sessions')
+                raise ValueError(
+                    f'Overlapping writable scopes with {other["task_key"]}: {conflicts}')
         today=utc_now()
         stepcount,daycount=_attempt_usage(conn,old['project'],root,old['step'],today[:10])
         if stepcount>=MAX_PER_STEP: raise ValueError('Per-step agent budget exhausted (3 attempts)')
