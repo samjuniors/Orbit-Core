@@ -49,6 +49,18 @@ Local probe logs/test fixtures are in a distinct OS TEMP checkout; screenshots a
 
 Run on **disposable projects and explicitly authorized hosts only**. A host claim from an MCP payload is not independent permission or execution evidence.
 
+### 0. Plugin-first host integrations and Antigravity main/subagent behavior — **PROTOTYPE MANIFEST PASS; RELEASE GATE OPEN**
+
+- [x] **Source and documentation audit:** 1 explicit Orbit main-agent profile (`mainAgent: true`, `subagent: false`), 12 explicit specialist subagents (`mainAgent: false`, `subagent: true`); host supports selectable primary custom agents and `invoke_subagent`. Official source: [Antigravity custom subagents](https://antigravity.google/docs/subagents?tab=cli).
+- [x] **Disposable local Antigravity plugin manifest-validation smoke:** with installed `agy 1.4.11`, `agy plugin validate --strict` returned PASS after using `mcp_config.json`, BOM-free JSON and a compact `skills/orbit/SKILL.md`; discovered 1 skill, 13 agents, 1 MCP server. **Not installed** into real Antigravity App; not a real agent/host/MCP connection test.
+- [ ] Package and review host plugin source/artifacts from a dedicated branch. Use `plugin.json`, `mcp_config.json`, `${PLUGIN_ROOT}` and appropriately reviewed durable data paths; current published v0.25.1 runtime, prior database, custom files and standalone configuration must be preserved with a verifiable rollback/repair path.
+- [ ] **Real UI**: install/enable Orbit plugin in a disposable Antigravity profile, select `orbit` as main agent, confirm its skill, all 12 specialist roles, 42 local MCP tools and zero duplicate original tools. Test the no-MCP fallback without claiming persisted Orbit work.
+- [ ] **Actual delegation and lifecycle**: `invoke_subagent` on a disposable task using `inherit` and isolated `branch` where relevant; verify fresh child context, real session references, `Running` vs re-awakenable `Idle` vs terminal `Killed`, host permission bubbling, denial, cancellation and restart reconciliation. No independent Orbit daemon or child spawning from MCP.
+- [ ] **Tool/feature guards**: validate *every* specialist `tools` allowlist against the installed host (including `write_to_file`) because unknown tool identifiers may hang the agent; confirm native built-in `browser` uses `/browser` rather than `invoke_subagent`. Never assume `/boost` or `/teamwork` plan entitlement.
+- [ ] Codex local-plugin and Claude Code plugin each must use their own actual format, user trust/permissions and signed-in host acceptance; preserve separate Claude Desktop `.mcpb`. Cross-host plugin install/upgrade/rollback tests and independent security/provenance are required before a versioned release.
+
+**Research status:** the user-supplied 2026-10-30 [Antigravity custom subagents reference](https://antigravity.google/docs/subagents?tab=cli) was reconciled with installed `agy` validation and [Orbit Core Notion research](https://app.notion.com/p/4074f681d488816e9fe7f4504982c948). Plugin-first direction was owner-requested, **implementation and actual installed-plugin acceptance are not yet complete**.
+
 ### 1. Native host interaction — **NOT RUN / NOT VERIFIED for v0.26.0**
 - [ ] Antigravity: connect Orbit and enumerate real tools; approve and deny disposable native-agent invocations using genuine permission UI. Verify correct task/status transitions, no unapproved fallback and actual session identity.
 - [ ] Codex: repeat real host discovery, task start/deny/interruption and approved retry; compare session observations with task ledger and scope lock.
