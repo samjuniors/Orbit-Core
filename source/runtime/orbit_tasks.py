@@ -116,6 +116,33 @@ def _collisions(a,b):
     return [(x,y) for x in a for y in b if _overlaps(x,y)]
 
 
+def _resolved_scopes(root, paths):
+    """Conservatively resolve current filesystem aliases before native writes.
+
+    A source checkout may already contain symlinks that redirect a seemingly
+    safe relative path outside the selected project, into a protected control
+    directory, or onto another task's write scope. Recheck at reservation
+    time because symlinks may change after a task was planned. This is a
+    point-in-time guard, NOT a substitute for host sandbox enforcement.
+    """
+    if not paths:
+        return []
+    try:
+        base = Path(root).resolve(strict=True)
+        resolved = []
+        for item in paths:
+            target = (base / item.rstrip('/')).resolve(strict=False)
+            relative = target.relative_to(base).as_posix()
+            if relative in ('', '.'):
+                raise ValueError('Scope aliases the project root')
+            resolved.extend(_scopes([relative + ('/' if item.endswith('/') else '')]))
+        return sorted(set(resolved))
+    except (OSError, RuntimeError, ValueError):
+        # Do not reveal symlink targets; those may point into another user's
+        # data or a differently scoped workspace.
+        raise ValueError('Unsafe resolved writable scope; inspect project symlinks and path ownership') from None
+
+
 def _row(conn, a, root):
     r=conn.execute('SELECT * FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                    (a['project'],str(root),key(a))).fetchone()
@@ -172,6 +199,7 @@ def _serialize(x):
 
 def plan(conn,a,root):
     project,step,role,goal,reason,paths,deps=spec(a)
+    _resolved_scopes(root,paths)
     current=conn.execute('SELECT * FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                          (project,str(root),key(a))).fetchone()
     payload={'project':project,'project_root':str(root),'task_key':key(a),'step':step,'role':role,
@@ -340,8 +368,13 @@ def reserve(conn,a,root):
                 raise ValueError('Dependency is not review-accepted: '+dep)
         active=[dict(x) for x in conn.execute('SELECT * FROM orbit_agent_tasks WHERE project_root=? AND status IN (\'RESERVED\',\'RUNNING\')',(str(root),))]
         if len(active)>=MAX_CONCURRENT: raise ValueError('Active native-agent reservations reached the cap of 2')
+        own_paths=json.loads(old['write_paths'])
+        own_resolved=_resolved_scopes(root,own_paths)
         for other in active:
-            conflicts=_collisions(json.loads(old['write_paths']),json.loads(other['write_paths']))
+            other_paths=json.loads(other['write_paths'])
+            other_resolved=_resolved_scopes(root,other_paths)
+            conflicts=(_collisions(own_paths,other_paths) or
+                       _collisions(own_resolved,other_resolved))
             if conflicts:
                 # A different project key may share this workspace root. It must
                 # block an unsafe reservation, but its task identity and file

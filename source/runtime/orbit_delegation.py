@@ -52,6 +52,16 @@ def handoff(conn, args, root):
         if status != "REVIEW_ACCEPTED":
             deps.append({"task_key": key, "status": status})
 
+    # Filesystem aliases may change after reservation. Fail closed again
+    # before exposing a native host invocation packet; the host must still
+    # enforce actual filesystem scope and user permission at invocation time.
+    unsafe_scope = False
+    if task['status'] == 'RESERVED':
+        try:
+            orbit_tasks._resolved_scopes(root, task['write_paths'])
+        except ValueError:
+            unsafe_scope = True
+
     # The host tool names are exact; installed agent Markdown metadata and MCP
     # configuration are not evidence of a running host-native agent.
     approved_tool = next(
@@ -63,6 +73,11 @@ def handoff(conn, args, root):
     elif deps:
         status = "HOLD_UNACCEPTED_DEPENDENCIES"
         next_step = "Review and accept every prerequisite before delegation."
+    elif unsafe_scope:
+        status = "HOLD_UNSAFE_WRITE_SCOPE"
+        next_step = ("Workspace symlink or path ownership changed after reservation. "
+                     "Do not invoke a native agent; reconcile the unused reservation "
+                     "with real host consent and repair the task scope.")
     elif not approved_tool:
         status = "HOLD_NATIVE_TOOL_UNAVAILABLE"
         next_step = ("Release an unused reservation with orbit_task_release, "
