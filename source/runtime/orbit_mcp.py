@@ -21,6 +21,7 @@ import orbit_decisions
 import orbit_updates
 import orbit_evidence
 import orbit_delegation
+import orbit_swarm
 import orbit_portable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -444,6 +445,7 @@ TOOLS = [
     {'name':'orbit_gate_evaluate','description':'Evaluate caller-supplied criteria (not independent test verification).','inputSchema':schema({'checks':{'type':'array','minItems':1,'items':{'type':'object'}}},['checks'])},
     # Product Kit-inspired native task ledger; no Git actions, model spawning or implicit approvals.
     {'name':'orbit_task_plan','description':'Preview/register one scoped specialist task. Does NOT launch agents.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'step':string(100),'role':{'type':'string','enum':sorted(orbit_tasks.ROLES)},'goal':string(1500),'reason':string(500),'write_paths':{'type':'array','maxItems':24,'items':{'type':'string'}},'depends_on':{'type':'array','maxItems':8,'items':{'type':'string'}},'confirm_write':{'type':'boolean'}},['project_root','project','task_key','step','role','goal','reason'])},
+    {'name':'orbit_swarm_preview','description':'Read-only preview of a bounded dependency DAG from existing project task records. Suggests at most two non-conflicting host-native handoffs. No task registration, reservation, host invocation or verified approval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},'max_parallel':{'type':'integer','minimum':1,'maximum':2}},['project_root','project'])},
     {'name':'orbit_task_handoff','description':'Read-only per-task host-native delegation packet. Requires a real reservation, accepted dependencies, and a native host tool explicitly reported as available; never spawns agents or authenticates approval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},'include_research':{'type':'boolean'}},['project_root','project','task_key','host'])},
     {'name':'orbit_task_list','description':'List scoped task registry (read-only).','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':40},'status':string(25)},['project_root','project'])},
     {'name':'orbit_task_reserve','description':'After actual host/user approval, reserve one native subagent slot. NO agent is spawned. Advisory caller approval reference; independent host permission still required.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'approval_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','approval_reference'])},
@@ -677,6 +679,9 @@ def execute(conn, name, a):
     if name=='orbit_memory_archive': return memory_archive(conn,a)
     if name=='orbit_project_checkpoint': return checkpoint(conn,a)
     if name=='orbit_gate_evaluate': return gate(a)
+    if name=='orbit_swarm_preview':
+        root=project_root(a)
+        return orbit_swarm.preview(conn,root,project_key(a),a)
     if name.startswith('orbit_task_'):
         root = project_root(a)
         a = {**a, 'project': project_key(a)}
