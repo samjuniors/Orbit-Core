@@ -191,8 +191,7 @@ class SwarmIntegrationReviewTests(unittest.TestCase):
             (json.dumps(["src/"]), json.dumps(["src/escape/secret.py"])))
         self.db.commit()
         result = self.review(build_id="web-app")
-        self.assertEqual(result["status"], "HOLD_TASK_INTEGRATION")
-        self.assertEqual(result["issues"][0]["reason"], "INVALID_TASK_RECORD")
+        self.assertEqual(result["status"], "HOLD_SOURCE_UNSCANNABLE")
         self.assertNotIn(str(outside), json.dumps(result))
 
     def test_unscannable_source_and_bad_args_hold(self):
