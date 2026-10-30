@@ -81,6 +81,50 @@ def launch():
         )
         return control
 
+    class RoundedPrimary(tk.Canvas):
+        """Keyboard-accessible, high-contrast rounded primary action."""
+        def __init__(self, parent, on_click):
+            super().__init__(parent, height=52, bg=c["background"],
+                             bd=0, highlightthickness=0, takefocus=True,
+                             cursor="hand2")
+            self.label = "Checking setup..."
+            self.enabled = False
+            self.hover = False
+            self.on_click = on_click
+            self.bind("<Configure>", lambda _: self.draw())
+            self.bind("<Enter>", lambda _: self.set_hover(True))
+            self.bind("<Leave>", lambda _: self.set_hover(False))
+            self.bind("<Button-1>", lambda _: self.press())
+            self.bind("<Return>", lambda _: self.press())
+            self.bind("<space>", lambda _: self.press())
+            self.bind("<FocusIn>", lambda _: self.draw())
+            self.bind("<FocusOut>", lambda _: self.draw())
+
+        def set_hover(self, hovered):
+            self.hover = hovered
+            self.draw()
+
+        def set_action(self, title, enabled):
+            self.label = title
+            self.enabled = enabled
+            self.configure(cursor="hand2" if enabled else "arrow")
+            self.draw()
+
+        def press(self):
+            if self.enabled:
+                self.on_click()
+
+        def draw(self):
+            self.delete("all")
+            width = max(self.winfo_width(), 100)
+            surface = (c["accent_hover"] if self.hover else c["accent"]) if self.enabled else c["line"]
+            rounded(self, 1, 1, width-1, 50, 15, surface)
+            self.create_text(width/2, 26, text=self.label,
+                             fill=c["background"] if self.enabled else c["secondary"],
+                             font=("Segoe UI", 11, "bold"))
+            if self.focus_get() is self:
+                rounded(self, 2, 2, width-2, 49, 14, "", c["text"])
+
     def show_message(heading, detail, *, error=False):
         popup = tk.Toplevel(app)
         popup.title("Orbit Core")
@@ -262,8 +306,8 @@ def launch():
             return
         modal_review(review)
 
-    primary = button(main, "Checking setup...", primary_clicked, accent=True)
-    primary.pack(fill="x", ipady=5)
+    primary = RoundedPrimary(main, primary_clicked)
+    primary.pack(fill="x")
 
     more = tk.Button(
         main, text="More options  ↓",
@@ -402,8 +446,7 @@ def launch():
             current_state["error"] = ""
             status_text.set(message)
             dot.itemconfig(1, fill=(c["warning"] if state == "review" else c["green"]))
-            primary.configure(text=name + ("  →" if available else ""),
-                              state="normal" if available else "disabled")
+            primary.set_action(name + ("  →" if available else ""), available)
             names = selected_names()
             app_text.set(" · ".join(names) if names else "No coding apps selected")
             info.set("This computer · Local setup · Memory preserved"
@@ -416,7 +459,7 @@ def launch():
             dot.itemconfig(1, fill=c["warning"])
             names = selected_names()
             app_text.set(" · ".join(names) if names else "No coding apps selected")
-            primary.configure(text="Review setup  →", state="normal")
+            primary.set_action("Review setup  →", True)
             info.set(str(exc)[:105])
 
     def schedule_refresh(*_):
