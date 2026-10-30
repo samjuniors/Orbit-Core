@@ -3,7 +3,7 @@ import hashlib, zipfile, argparse
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 VERSION=(ROOT/'VERSION').read_text().strip()
-FILES=['Orbit Setup.cmd','orbit_setup.py','orbit_cli.py','orbit_update_gui.py','installer.py','install_orbit_gui.pyw','README.md','VERSION','NEXT_VERSION','CHANGELOG.md','SECURITY.md','TODO-LAB-TEST.md','CAPABILITY-TEST.md',f'ORBIT-Claude-Desktop-v{VERSION}.mcpb']
+FILES=['Orbit Setup.cmd','orbit_setup.py','orbit_compact_gui.py','orbit_setup_ui_model.py','orbit_cli.py','orbit_update_gui.py','installer.py','install_orbit_gui.pyw','README.md','VERSION','NEXT_VERSION','CHANGELOG.md','SECURITY.md','TODO-LAB-TEST.md','CAPABILITY-TEST.md',f'ORBIT-Claude-Desktop-v{VERSION}.mcpb']
 FILES += sorted(p.relative_to(ROOT).as_posix() for d in ['source','tests','docs','scripts'] for p in (ROOT/d).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ['.pyc','.pyo'])
 parser=argparse.ArgumentParser();parser.add_argument('--verify',action='store_true');args=parser.parse_args()
 missing=[p for p in FILES if not (ROOT/p).is_file()]
@@ -30,3 +30,9 @@ plugin_zip = DEST / f'Orbit-Antigravity-Plugin-v{VERSION}.zip'
 plugin_result = (verify_antigravity(ROOT, plugin_zip) if plugin_zip.exists()
                  else build_antigravity(ROOT, plugin_zip))
 print(f"{plugin_zip.name}: {plugin_result['files']} files; sha256={plugin_result['sha256']}")
+
+# One download with separate host-native plugin manifests. Existing candidate
+# artifacts are verified against the current checkout rather than overwritten.
+from build_plugin_suite import build as build_suite
+suite = build_suite(ROOT)
+print(f"Orbit-Core-Plugin-Suite-v{VERSION}.zip: {suite['files']} files; sha256={suite['sha256']}")
