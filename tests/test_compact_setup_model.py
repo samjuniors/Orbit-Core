@@ -7,6 +7,12 @@ class ModelTests(unittest.TestCase):
     def test_import_has_no_gui_side_effect(self):
         self.assertTrue(callable(compact_gui.launch))
 
+    def test_compact_window_contract(self):
+        self.assertLessEqual(compact_gui.WINDOW_WIDTH, 540)
+        self.assertLessEqual(compact_gui.COLLAPSED_HEIGHT, 370)
+        self.assertGreater(compact_gui.EXPANDED_HEIGHT,
+                           compact_gui.COLLAPSED_HEIGHT + 170)
+
     def test_supported_host_labels(self):
         self.assertIn('antigravity', ui.DISPLAY_NAMES)
         self.assertIn('codex', ui.DISPLAY_NAMES)
