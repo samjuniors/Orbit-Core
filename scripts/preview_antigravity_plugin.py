@@ -66,13 +66,16 @@ def inspect(home: Path) -> dict:
                     if path.name in KNOWN_AGENTS)
     skill = config_dir / "skills" / "orbit"
     _ensure_tree(skill)
+    plugin = config_dir / "plugins" / "orbit-core"
+    _ensure_tree(plugin)
     return {
         "config": str(config),
         "legacy_mcp": legacy is not None,
         "additional_orbit_mcp_servers": conflicts,
         "global_agents": [str(p) for p in agents],
         "global_orbit_skill": str(skill) if skill.exists() else None,
-        "safe_to_install_now": legacy is None and not conflicts and not agents and not skill.exists(),
+        "installed_orbit_plugin": str(plugin) if plugin.exists() else None,
+        "safe_to_install_now": legacy is None and not conflicts and not agents and not skill.exists() and not plugin.exists(),
     }
 
 
@@ -83,6 +86,8 @@ def stage_migration(home: Path, confirm: str) -> dict:
     plan = inspect(home)
     if plan["additional_orbit_mcp_servers"]:
         raise ValueError("Other Orbit test/MCP servers present; review them separately")
+    if plan["installed_orbit_plugin"]:
+        raise ValueError("Existing Orbit plugin present; inspect update rather than migrate")
     if plan["safe_to_install_now"]:
         return {"status": "NO_LEGACY_INTEGRATION", "backups": None}
     config = Path(plan["config"])
