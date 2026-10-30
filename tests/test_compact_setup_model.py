@@ -17,6 +17,21 @@ class ModelTests(unittest.TestCase):
         with self.assertRaises(Exception):
             ui.preview('random-operation', ['codex'])
 
+    def test_single_primary_action_follows_real_local_state(self):
+        self.assertEqual(ui.presentation("install"), ("Install Orbit", "Ready to install", True))
+        self.assertEqual(ui.presentation("update")[0], "Update Orbit")
+        self.assertEqual(ui.presentation("current")[2], False)
+        self.assertEqual(ui.presentation("review")[0], "Review setup")
+        with self.assertRaises(ValueError):
+            ui.presentation("latest-on-internet")
+
+    def test_preserved_custom_files_never_look_up_to_date(self):
+        from types import SimpleNamespace
+        from pathlib import Path
+        change = SimpleNamespace(action="PRESERVE", target=Path("user-owned"))
+        plan = ui.SetupPreview("install", (change,), (), ("codex",), "machine", None)
+        self.assertEqual(ui.local_state(plan), "review")
+
     def test_uninstall_never_erases_memory_implicitly(self):
         with self.assertRaises(Exception):
             ui.preview('uninstall', ['codex'], delete_memory=True)
