@@ -83,7 +83,8 @@ Orbit itself. Custom user tasks are equally valid.
 
 The preflight refuses duplicate or previously registered task keys,
 unresolved dependencies, self/cyclic dependencies, unaccepted existing
-prerequisites, oversized existing task ledgers, protected/invalid paths,
+prerequisites, graphs exceeding 40 combined existing + proposed task nodes,
+protected/invalid paths,
 and active same-root host reservations that require actual reconciliation.
 A validated graph produces **deterministic review waves (maximum two tasks
 per wave)**, serializing overlapping scopes and waiting for real
