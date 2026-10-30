@@ -194,3 +194,11 @@ Project Decisions hub; do not copy external harness code by default.
 - Reject writable scope path components ending in dots or spaces, because Windows can resolve those aliases to the same file while the scope comparer otherwise regards them as different paths. Existing casefold/Unicode-normalized collision rules remain in place.
 - Add disposable regression tests that launch independent Python interpreters against one SQLite database to check same-scope/Unicode collisions, the two-reservation cap, stale-revision races, cross-project error redaction and unchanged attempts after rejected reservations. No native agents are started or stopped.
 - **Verification: NOT RUN / CI pending on this exact branch.** GitHub Actions must demonstrate the Linux/Windows matrix before the change may merge into `dev/v0.27.0`. This is one-machine OS-process coverage; actual IDE permission, agent execution, cancellation, two-PC portability and release gates still remain OPEN.
+
+## Development candidate — existing symlink scope containment and alias collision
+
+**Branch:** `fix/v027-swarm-symlink-scope-isolation`, based on merged development commit `ec3f49bf00dcd1c60c7ce5c51f1fff82e24c67f3`.
+
+Task registration previews and confirmations now inspect current filesystem aliases for proposed writable scopes. Reservation checks again under its SQLite transaction, rejecting links escaping the selected workspace or resolving into protected control files. It also detects when two differently spelled assignments resolve to the same underlying path and holds the second reservation. Rejections are generic and do not print external link targets.
+
+**Verification:** candidate source and six disposable regression tests added; exact-head CI required before integration. Windows machines that prohibit creating symlinks may explicitly skip those particular symlink tests, so Linux coverage and Windows normal-path regression coverage must be distinguished. This is a point-in-time path guard, **not** a confinement sandbox; a host may mutate symlinks after reservation. Native host sandbox/permission enforcement, real two-PC acceptance, host-session cancellation, integration QA and release review remain OPEN.
