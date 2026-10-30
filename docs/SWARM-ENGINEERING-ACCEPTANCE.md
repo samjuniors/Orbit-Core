@@ -251,7 +251,7 @@ changes. Actual browser QA already belongs to the existing
 `orbit_browser_qa` path; this new read-only tool never runs it.
 Native Android/iOS/desktop QA remains a separate host review gate.
 
-**Verification:** eight synthetic/disposable regression cases and normal
+**Verification:** nine synthetic/disposable regression cases and normal
 exact-head Linux/Windows CI are required before this can join the
 development lane. Once integrated, the source development tool inventory
 will be 46 (not the previously verified 45); release and host
