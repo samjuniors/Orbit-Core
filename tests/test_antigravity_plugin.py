@@ -191,6 +191,20 @@ class MigrationTests(unittest.TestCase):
                 migration.stage_migration(home, "ARCHIVE_LEGACY_ORBIT_AND_KEEP_BACKUPS")
             self.assertTrue((config / "agents" / "orbit.md").exists())
 
+    def test_custom_legacy_sqlite_path_requires_explicit_data_migration(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            config, old = self._legacy(home)
+            old["mcpServers"]["orbit-core-native"]["env"] = {
+                "ORBIT_LOCAL_DB": "C:/SomeUser/OrbitCustom/memory.sqlite3"
+            }
+            (config / "mcp_config.json").write_text(json.dumps(old), encoding="utf-8")
+            self.assertTrue(migration.inspect(home)["legacy_custom_database_override"])
+            with self.assertRaisesRegex(ValueError, "ORBIT_LOCAL_DB"):
+                migration.stage_migration(home, "ARCHIVE_LEGACY_ORBIT_AND_KEEP_BACKUPS")
+            self.assertTrue((config / "agents" / "orbit.md").exists())
+            self.assertIn("orbit-core-native", json.loads((config / "mcp_config.json").read_text())["mcpServers"])
+
     def test_existing_plugin_is_not_silently_replaced(self):
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder)
