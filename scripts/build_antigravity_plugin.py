@@ -117,6 +117,9 @@ def build_files(root: Path = ROOT) -> dict[str, bytes]:
         data[f"skills/orbit/references/{path.name}"] = path.read_bytes()
     for path in runtime:
         data[f"runtime/{path.name}"] = path.read_bytes()
+    data["scripts/preview_antigravity_plugin.py"] = (
+        root / "scripts" / "preview_antigravity_plugin.py"
+    ).read_bytes()
     data["INSTALL-REVIEW.md"] = (
         "# Orbit Core — Antigravity plugin installation safety\n\n"
         "Do NOT install this plugin alongside an enabled legacy orbit-core-native MCP "
