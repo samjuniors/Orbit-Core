@@ -485,7 +485,7 @@ TOOLS += [
 ]
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
-    'orbit_task_list','orbit_task_handoff','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
+    'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
     'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
