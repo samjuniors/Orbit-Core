@@ -148,6 +148,25 @@ the host's tool registry, measure real token costs or certify test results.
 The next mission must test actual host invocation and denial/recovery with
 the owner's authorized disposable fixture.
 
+## v0.27 safety follow-up — reservation error privacy and shared SQLite contention
+
+**Feature branch:** `fix/v027-swarm-reservation-isolation` (development only).
+`orbit_task_reserve` must reject an overlapping write scope from any active
+reservation at the same root, **without exposing other projects' task keys,
+private paths or project labels** in a public error. Same-project diagnostics
+may identify the conflicting scoped task.
+
+An isolated regression suite uses separate simultaneous SQLite connections to
+exercise overlapping writes, disjoint writes within the two-slot cap, duplicate
+stale-revision races and cross-project error redaction. The existing
+`BEGIN IMMEDIATE` write transaction is reused; no added SQLite table,
+permanent file, agent runner or automatic permission is introduced.
+
+**Verification:** source/test committed for CI; mark PASS only after exact-head
+cross-platform CI succeeds. This is shared-file, multi-connection concurrency,
+**not** evidence of independent OS processes, actual host approval/session
+liveness, networked agents or two-PC portability. Those gates remain open.
+
 ## Next slices (beyond the validated draft preflight)
 
 1. **Swarm mission input and bounded DAG draft preview:** accept a user-defined
