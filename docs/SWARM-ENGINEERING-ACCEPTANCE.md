@@ -3,7 +3,9 @@
 **Source scope:** Source integration on `dev/v0.27.0` through reviewed
 Project Pulse [PR #49](https://github.com/samjuniors/Orbit-Core-MCP/pull/49),
 Swarm [PRs #50–53](https://github.com/samjuniors/Orbit-Core-MCP/pulls?q=is%3Apr+is%3Amerged+swarm)
-and reservation safety [PR #54](https://github.com/samjuniors/Orbit-Core-MCP/pull/54).
+and reservation safety [PR #54](https://github.com/samjuniors/Orbit-Core-MCP/pull/54),
+OS-process/Windows alias hardening [PR #57](https://github.com/samjuniors/Orbit-Core-MCP/pull/57),
+and symlink containment [PR #58](https://github.com/samjuniors/Orbit-Core-MCP/pull/58).
 **Status:** DEVELOPMENT SOURCE MERGED / AUTOMATED CI PASS; REAL NATIVE DELEGATION,
 SECURITY REVIEW, HOST ACCEPTANCE AND RELEASE NOT VERIFIED.
 **External reference:** [Claude Swarm](https://github.com/affaan-m/claude-swarm)
@@ -195,10 +197,10 @@ Project Decisions hub; do not copy external harness code by default.
 - Add disposable regression tests that launch independent Python interpreters against one SQLite database to check same-scope/Unicode collisions, the two-reservation cap, stale-revision races, cross-project error redaction and unchanged attempts after rejected reservations. No native agents are started or stopped.
 - **Verified merged to development:** [PR #57](https://github.com/samjuniors/Orbit-Core-MCP/pull/57) merge commit `ec3f49bf00dcd1c60c7ce5c51f1fff82e24c67f3`; [PR-head CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41079246959) and [post-merge development CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41081386868) passed on Ubuntu Python 3.10–3.13 and Windows Python 3.12. This is one-machine OS-process coverage; real IDE permission, agents, cancellation, two-PC portability and release gates remain OPEN.
 
-## Development candidate — existing symlink scope containment and alias collision
+## Merged development hardening — existing symlink scope containment and alias collision
 
 **Branch:** `fix/v027-swarm-symlink-scope-isolation`, based on merged development commit `ec3f49bf00dcd1c60c7ce5c51f1fff82e24c67f3`.
 
 Task registration previews and confirmations inspect current filesystem aliases for proposed writable scopes. Reservation checks again under its SQLite transaction, rejecting links escaping the selected workspace or resolving into protected control files. It also detects when two differently spelled assignments resolve to the same underlying path and holds the second reservation. A native handoff packet is withheld if the assigned path becomes unsafe after reservation. Rejections are generic and do not print external link targets.
 
-**Verification:** candidate source and seven disposable regression tests added; exact-head CI required before integration. Windows machines that prohibit creating symlinks may explicitly skip those particular symlink tests, so Linux coverage and Windows normal-path regression coverage must be distinguished. This is a point-in-time path guard, **not** a confinement sandbox; a host may mutate symlinks after reservation. Native host sandbox/permission enforcement, real two-PC acceptance, host-session cancellation, integration QA and release review remain OPEN.
+**Verification:** [PR #58](https://github.com/samjuniors/Orbit-Core-MCP/pull/58) merged to development commit `7130eb381ccdbc3d1792b55b2889e139385c9dbf`, with [exact-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41082050055) on Ubuntu Python 3.10–3.13 and Windows Python 3.12. Linux and Windows Python 3.12 each ran 346 tests, 3 skipped, zero failures, and the seven new symlink tests all passed. [Post-merge dev CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41082365287) verified the exact integrated development commit `7130eb381ccdbc3d1792b55b2889e139385c9dbf` on Ubuntu Python 3.10–3.13 and Windows Python 3.12. This is a point-in-time path guard, **not** a confinement sandbox; a host may mutate symlinks after reservation. Native host sandbox/permission enforcement, real two-PC acceptance, host-session cancellation, integration QA and release review remain OPEN.
