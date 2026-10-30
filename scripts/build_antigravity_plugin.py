@@ -128,6 +128,26 @@ def build_files(root: Path = ROOT) -> dict[str, bytes]:
     return data
 
 
+def verify_archive(root: Path, destination: Path) -> dict[str, str | int]:
+    """Verify exact bundled source bytes without rewriting an existing artifact."""
+    root, destination = Path(root).resolve(), Path(destination)
+    expected = build_files(root)
+    with zipfile.ZipFile(destination) as archive:
+        names = sorted(archive.namelist())
+        desired = sorted(f"{PLUGIN_NAME}/{name}" for name in expected)
+        if names != desired:
+            raise ValueError("Plugin package file inventory differs from canonical source")
+        for name, body in expected.items():
+            if archive.read(f"{PLUGIN_NAME}/{name}") != body:
+                raise ValueError(f"Plugin package content mismatch: {name}")
+    digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+    checksum = destination.with_suffix(destination.suffix + ".sha256")
+    if not checksum.exists() or checksum.read_text(encoding="ascii") != f"{digest}  {destination.name}\\n":
+        raise ValueError("Plugin package checksum missing or wrong")
+    return {"version": (root / "VERSION").read_text().strip(), "files": len(expected),
+            "package": str(destination), "sha256": digest}
+
+
 def build(root: Path = ROOT, destination: Path | None = None) -> dict[str, str | int]:
     root = Path(root).resolve()
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
