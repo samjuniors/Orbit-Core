@@ -191,6 +191,19 @@ class MigrationTests(unittest.TestCase):
                 migration.stage_migration(home, "ARCHIVE_LEGACY_ORBIT_AND_KEEP_BACKUPS")
             self.assertTrue((config / "agents" / "orbit.md").exists())
 
+    def test_existing_plugin_is_not_silently_replaced(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            plugin = home / ".gemini" / "config" / "plugins" / "orbit-core"
+            plugin.mkdir(parents=True)
+            (plugin / "plugin.json").write_text('{"name":"orbit-core"}', encoding="utf-8")
+            plan = migration.inspect(home)
+            self.assertFalse(plan["safe_to_install_now"])
+            self.assertEqual(plan["installed_orbit_plugin"], str(plugin))
+            with self.assertRaises(ValueError):
+                migration.stage_migration(home, "ARCHIVE_LEGACY_ORBIT_AND_KEEP_BACKUPS")
+            self.assertTrue((plugin / "plugin.json").is_file())
+
     def test_unrecognized_server_config_blocks_migration(self):
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder)
