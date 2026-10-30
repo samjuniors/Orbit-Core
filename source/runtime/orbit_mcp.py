@@ -477,11 +477,15 @@ TOOLS += [
     {'name':'orbit_decision_route','description':'Read-only, platform-specific workflow and reviewed component/library research candidates; permits custom designs.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']}},['project_root','project'])},
     {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
 ]
+TOOLS += [
+    {'name':'orbit_practice_suggest','description':'Read-only opt-in M5 practice candidates from repeated, separately reviewer-accepted tasks in this exact project root/key; approvals and evidence remain caller-reported. Lists approved and optionally inactive practices without injecting instructions or running skills.','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':20},'include_inactive':{'type':'boolean'}},['project_root','project'])},
+    {'name':'orbit_practice_review','description':'Preview or explicitly approve/reject/archive/supersede a repeated task pattern as a project-scoped reference note. Revision-guarded SQLite event history; no automatic adoption, agent/model execution, or independent consent attestation.','inputSchema':schema({'project_root':string(2000),'project':string(80),'practice_key':string(80),'action':{'type':'string','enum':['approve','reject','supersede','archive']},'practice_text':{'type':'string','maxLength':600},'rationale':{'type':'string','maxLength':300},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','practice_key','action'])},
+]
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
     'orbit_task_list','orbit_task_handoff','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
-    'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context'}
+    'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
 for _tool in TOOLS:
     _name=_tool['name']
@@ -543,6 +547,12 @@ def execute(conn, name, a):
         if name=='orbit_research_source_save':
             return orbit_evidence.save(conn,root,project,a)
         return orbit_evidence.context(conn,root,project,a)
+    if name in {'orbit_practice_suggest', 'orbit_practice_review'}:
+        root = project_root(a)
+        project = project_key(a)
+        if name == 'orbit_practice_suggest':
+            return orbit_evidence.practice_suggest(conn, root, project, a)
+        return orbit_evidence.practice_review(conn, root, project, a)
     if name=='orbit_update_status':
         if a.get('refresh'):
             orbit_updates.check_now()
