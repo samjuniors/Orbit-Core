@@ -515,8 +515,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.gui:
-            import runpy
-            runpy.run_path(str(installer.PACKAGE / 'install_orbit_gui.pyw'), run_name='__main__')
+            from orbit_compact_gui import launch
+            launch()
             return 0
         if args.action == "status":
             from orbit_cli import doctor

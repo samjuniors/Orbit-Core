@@ -29,19 +29,19 @@ class PackageTests(unittest.TestCase):
     def test_inventory_and_roles(self):
         files = builder.build_files(ROOT)
         self.assertEqual(len([x for x in files if x.startswith("agents/")]), 13)
-        self.assertIn("agents/orbit.md", files)
+        self.assertIn("agents/orbit-lead-agent.md", files)
         self.assertIn("scripts/preview_antigravity_plugin.py", files)
-        self.assertIn(b"mainAgent: true", files["agents/orbit.md"])
-        self.assertIn(b"subagent: false", files["agents/orbit.md"])
+        self.assertIn(b"mainAgent: true", files["agents/orbit-lead-agent.md"])
+        self.assertIn(b"subagent: false", files["agents/orbit-lead-agent.md"])
         for filename, content in files.items():
-            if filename.startswith("agents/") and filename != "agents/orbit.md":
+            if filename.startswith("agents/") and filename != "agents/orbit-lead-agent.md":
                 self.assertIn(b"mainAgent: false", content)
                 self.assertIn(b"subagent: true", content)
-        self.assertLess(len(files["skills/orbit/SKILL.md"]), 24000)
-        self.assertIn("skills/orbit/references/FULL-LIFECYCLE-GUIDE.md", files)
-        self.assertNotIn(b".agents/skills/orbit/", files["agents/orbit.md"])
-        self.assertNotIn(b"`orbit-core-native`", files["agents/orbit.md"])
-        self.assertIn(b"`orbit-core-plugin`", files["agents/orbit.md"])
+        self.assertLess(len(files["skills/orbit-workflow-skill/SKILL.md"]), 24000)
+        self.assertIn("skills/orbit-workflow-skill/references/FULL-LIFECYCLE-GUIDE.md", files)
+        self.assertNotIn(b".agents/skills/orbit/", files["agents/orbit-lead-agent.md"])
+        self.assertNotIn(b"`orbit-core-native`", files["agents/orbit-lead-agent.md"])
+        self.assertIn(b"`orbit-core-mcp`", files["agents/orbit-lead-agent.md"])
 
     def test_manifest_and_local_stdio_db_continuity(self):
         files = builder.build_files(ROOT)
@@ -49,7 +49,7 @@ class PackageTests(unittest.TestCase):
         mcp = json.loads(files["mcp_config.json"])
         self.assertEqual(manifest["name"], "orbit-core")
         self.assertEqual(manifest["version"], (ROOT / "VERSION").read_text().strip())
-        server = mcp["mcpServers"]["orbit-core-plugin"]
+        server = mcp["mcpServers"]["orbit-core-mcp"]
         self.assertEqual(server["command"], "python")
         self.assertEqual(server["args"], ["${PLUGIN_ROOT}/runtime/orbit_mcp.py"])
         self.assertNotIn("ORBIT_LOCAL_DB", server.get("env", {}))

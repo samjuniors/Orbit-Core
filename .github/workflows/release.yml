@@ -81,6 +81,7 @@ jobs:
           python scripts/build_release.py --verify
           (cd dist && sha256sum --check "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256")
           (cd dist && sha256sum --check "Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256")
+          (cd dist && sha256sum --check "Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256")
       - name: Generate version-specific release notes
         shell: bash
         run: |
