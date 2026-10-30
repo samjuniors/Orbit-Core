@@ -24,12 +24,29 @@ Orbit Core MCP uses Semantic Versioning `MAJOR.MINOR.PATCH`. `VERSION` is author
 - `ORBIT-Universal-Setup-vX.Y.Z.zip` — portable installer and source bundle.
 - `Orbit-Antigravity-Plugin-vX.Y.Z.zip` — host-native Antigravity lead/skills/agents/local-MCP plugin, subject to host installation/migration acceptance.
 - `Orbit-Antigravity-Plugin-vX.Y.Z.zip.sha256` — integrity checksum for the plugin ZIP.
+- `Orbit-Core-Plugin-Suite-vX.Y.Z.zip` — unified downloadable archive with separate host-specific adapters and the Windows setup (native host activation acceptance required).
+- `Orbit-Core-Plugin-Suite-vX.Y.Z.zip.sha256` — integrity checksum for the unified suite.
 - `ORBIT-Universal-Setup-vX.Y.Z.zip.sha256` — SHA-256 checksum.
 - `ORBIT-Claude-Desktop-vX.Y.Z.mcpb` — Claude Desktop extension.
 - `ORBIT-Claude-Desktop-vX.Y.Z.mcpb.sha256` — checksum.
 - GitHub's automatically generated source archives for the immutable tag.
 
 The release body is generated from the matching section `## [X.Y.Z]` in `CHANGELOG.md`. Releases for version `0.x` are marked **pre-release candidates** until live host acceptance has been separately verified. The installed Orbit updater defaults to the explicit `candidate` channel for these 0.x assets. A stable channel is opt-in with `--channel stable`, and no production suitability is implied.
+
+## Reusable release writing and concurrent development
+
+Follow the researched [release communication and parallel-version guide](RELEASE-COMMUNICATION-GUIDE.md). Four reusable, product-neutral templates live in `docs/templates/`:
+
+- [Changelog entry](templates/CHANGELOG-ENTRY.md) — draft human-readable `[Unreleased]` and versioned updates in the existing root `CHANGELOG.md`.
+- [GitHub release notes](templates/GITHUB-RELEASE-NOTES.md) — benefit-led public headline, platform coverage, migration, downloads, evidence and known limitations. For **this repository**, adapt its content into the matching `## [X.Y.Z]` changelog section: the release workflow generates notes from that section, not an independent notes file.
+- [Version mission](templates/VERSION-MISSION.md) — owner-approved scope and feature freeze per version.
+- [Release readiness](templates/RELEASE-READINESS.md) — precise PASS / FAIL / BLOCKED / NOT RUN statuses and owner publication approval.
+
+**Branching decision:** Use short-lived feature branches while a `release/vX.Y.Z-candidate` stabilization branch is undergoing host acceptance. After freeze, only relevant fixes and release documentation belong on the candidate branch. Future work can continue on `feat/*` branches without delaying that candidate. A new version that depends on an unmerged prior candidate must be explicitly stacked, and its branch/PR retargeted or rebased after the earlier version merges. No need for a permanent `develop` branch or a branch for every trivial patch.
+
+**Publication consistency:** The existing publication workflow tests and tags `main`. A release candidate branch is **not a published version**. Merge it into `main` only after review, CI, user/host acceptance and explicit owner approval; publish exactly the reviewed main commit. **Do not merge unfinished work intended for a later version into main before releasing an older version via this workflow.** If main has advanced past the release cutline, stop and reconcile the scope, or separately review a secure branch-pinned release workflow instead of accidentally shipping newer untested work.
+
+**Per-project separation:** These templates may be copied into other GitHub projects, but their versions, approvals, source tags, Notion records, and release assets are independent. Editing Orbit Core documentation does not change Helm, Aro, or other repositories.
 
 ## Safety and consistency rules
 
