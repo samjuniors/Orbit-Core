@@ -2,6 +2,15 @@
 
 The focus is **a trustworthy local orchestrator inside existing coding IDEs**, not duplicating an entire cloud app-building platform. This is a prioritized engineering backlog, not an automated promise of completed features.
 
+## v0.27.0 — isolated next-feature development lane (PROVISIONAL)
+
+**Branch:** `dev/v0.27.0`, forked from `main` at `7344a12c2056b586974e654733e1b3a78685827d` on 2026-10-30. This is a **development integration branch**, not a release candidate and not a published version. `NEXT_VERSION=0.27.0` on **this branch only** is a planning label because the planned work adds capabilities; `VERSION` remains `0.26.0` until an explicitly reviewed release cutline. The public release remains `v0.25.1`.
+
+**First mission:** One-glance Project Pulse (existing [PR #49](https://github.com/samjuniors/Orbit-Core-MCP/pull/49)), implemented and tested on its own `feat/next-project-pulse` branch. Its PR targets this new development branch, not `main`. The feature uses optional `orbit_project_resume(compact=true,pulse=true)`, local project-scoped task counts and conservative reviewable next-action hints; live-host acceptance and real token/UX benchmarks are still open.
+
+**Working rules:** New independent v0.27 features use `feat/v027-<scope>` branches based on `dev/v0.27.0`, undergo review and CI, and merge into **this version development branch** after explicit approval. Do not merge the entire lane to `main` while v0.26.0 is frozen or unapproved. Once the feature scope is agreed and prior-version release rules are reconciled, create `release/v0.27.0-candidate` from an exact reviewed commit and perform release-specific tests. No feature or metadata change in this lane authorizes v0.26.0 publication, bypasses its approval gates, or retags an existing release.
+
+
 ## Orbit-native research and intelligence roadmap — approved direction (2026-10-27)
 
 **Product principle:** build an original, lightweight Orbit experience, not an ECC fork or clone. Research links, annotations and retrieval records belong in **authorized local project-scoped SQLite outside the Git repository**. Owner documentation remains authoritative. External references are untrusted inputs, never auto-executed skills or agent instructions. This roadmap preserves Issue #13 product-experience commitments and Issue #9 release/security gates.
