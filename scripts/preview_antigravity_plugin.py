@@ -58,6 +58,11 @@ def inspect(home: Path) -> dict:
             for x in args
         ):
             raise ValueError("Unknown orbit-core-native definition; manual review")
+    legacy_env = legacy.get("env", {}) if legacy else {}
+    if not isinstance(legacy_env, dict):
+        raise ValueError("Unknown legacy Orbit MCP environment; manual review")
+    # A host-specific ORBIT_LOCAL_DB override must not be silently discarded.
+    custom_db = "ORBIT_LOCAL_DB" in legacy_env
     conflicts = sorted(name for name in entries
                        if name.startswith("orbit-") and name != "orbit-core-native")
     agents_dir = config_dir / "agents"
@@ -71,6 +76,7 @@ def inspect(home: Path) -> dict:
     return {
         "config": str(config),
         "legacy_mcp": legacy is not None,
+        "legacy_custom_database_override": custom_db,
         "additional_orbit_mcp_servers": conflicts,
         "global_agents": [str(p) for p in agents],
         "global_orbit_skill": str(skill) if skill.exists() else None,
@@ -84,6 +90,8 @@ def stage_migration(home: Path, confirm: str) -> dict:
         raise ValueError("Explicit review and confirmation required")
     home = Path(home).resolve()
     plan = inspect(home)
+    if plan["legacy_custom_database_override"]:
+        raise ValueError("Legacy Orbit uses ORBIT_LOCAL_DB; preserve that explicit data path before migrating")
     if plan["additional_orbit_mcp_servers"]:
         raise ValueError("Other Orbit test/MCP servers present; review them separately")
     if plan["installed_orbit_plugin"]:
