@@ -27,6 +27,7 @@ class PackageTests(unittest.TestCase):
         files = builder.build_files(ROOT)
         self.assertEqual(len([x for x in files if x.startswith("agents/")]), 13)
         self.assertIn("agents/orbit.md", files)
+        self.assertIn("scripts/preview_antigravity_plugin.py", files)
         self.assertIn(b"mainAgent: true", files["agents/orbit.md"])
         self.assertIn(b"subagent: false", files["agents/orbit.md"])
         for filename, content in files.items():
