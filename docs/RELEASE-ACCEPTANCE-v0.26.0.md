@@ -14,7 +14,7 @@ This is a **version-specific acceptance record**, not a second roadmap or author
 | M4 compact resume | **MERGED; automated PASS only** | [PR #34](https://github.com/samjuniors/Orbit-Core-MCP/pull/34) |
 | M3 permission-denial fallback hardening | **MERGED; automated PASS only** | [PR #37](https://github.com/samjuniors/Orbit-Core-MCP/pull/37): denied consent cannot silently switch browser/computer-use providers |
 | M4.2 adaptive workflow/context routing | **MERGED; automated PASS only** | [PR #38](https://github.com/samjuniors/Orbit-Core-MCP/pull/38): focused compact vs full context, high-risk review and unverified host-native/serial recommendations; real context/token benchmarks pending |
-| M5 opt-in project practice review | **OWNER-APPROVED FOR SOURCE INTEGRATION; automated PASS only** | [PR #40](https://github.com/samjuniors/Orbit-Core-MCP/pull/40), reviewed [M5 acceptance](M5-ENGINEERING-ACCEPTANCE.md): 42-tool expanded source, isolated SQLite decisions, read-only preview and revision history; live-host acceptance NOT VERIFIED |
+| M5 opt-in project practice review | **MERGED; automated PASS; Antigravity real-agent read-only PASS only** | [PR #40](https://github.com/samjuniors/Orbit-Core-MCP/pull/40), reviewed [M5 acceptance](M5-ENGINEERING-ACCEPTANCE.md): 42-tool expanded source, isolated SQLite decisions, read-only preview and revision history; confirmed-write, permissions and restart acceptance NOT VERIFIED |
 | Exact reviewed M3/M4 heads | **5/5 PASS each** | [M3 #40893382550](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40893382550), [M4 #40894592371](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40894592371): Ubuntu Python 3.10–3.13, Windows 3.12; final main CI checked separately |
 | Candidate package and installer test | **PASS in CI** | [Actions #40869882650](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40869882650): source/MCPB parity, ZIP integrity, disposable fresh setup |
 | Upgrade compatibility | **PASS in disposable CI** | v0.24.1 and v0.25.1 → v0.26.0, Windows/Linux; customized stock guidance safely blocks overwrite |
@@ -68,8 +68,9 @@ Run on **disposable projects and explicitly authorized hosts only**. A host clai
 - [ ] Complete two-authorized-computer project transfer; imported approvals and sessions must be historical/untrusted, and no cross-PC attempt quota continuity may be assumed.
 - [ ] Run real approved Linux/macOS host acceptance when suitable devices are available (Ubuntu CI does **not** substitute for it).
 
-### 4. M5 practice review in a real host — **NOT RUN / NOT VERIFIED**
-- [ ] Verify 42-tool discovery, prompt/display labeling, preview-only decisions, explicit host approval, rejection, stale-evidence handling and restart readback on a disposable authorized Antigravity/Codex project.
+### 4. M5 practice review in a real host — **ANTIGRAVITY READ-ONLY PASS; WRITES / RECOVERY NOT VERIFIED**
+- [x] **Antigravity real-agent discovery and read-only M5:** owner-provided actual agent-tool responses exposed `orbit_practice_suggest` and `orbit_practice_review`; suggest returned `REVIEW_CANDIDATES` with 1 synthetic candidate, `auto_promoted=false`; preview-only approval (`confirm_write=false`) returned `PREVIEW_ONLY`, `execution_permissions_granted=false`. Local registry inspection confirmed both M5 schema files; read-only DB query confirmed 2 synthetic fixture task records, **0 practices, 0 practice history**. This test used separate `orbit-m5-test` registry with reviewed v0.26.0 source and isolated SQLite; installed v0.25.1 preserved. **No permission dialog occurred and none was expected for non-writing operations.**
+- [ ] Test genuine explicit host approval/denial, confirmed-write approval/rejection, stale evidence after change, readback after MCP/IDE restart, and prohibit treating saved notes as executable instructions. Codex/Claude real-agent M5 remains unverified.
 - [ ] Confirm additive practice/history tables preserve prior SQLite data and rollback/backup can recover from interrupted migrations. Ensure notes stay local, do not cross projects and do not become executable instructions.
 
 ### 5. Security and release verification — **NOT VERIFIED**
@@ -84,6 +85,6 @@ Use [docs/RELEASE-PROCESS.md](RELEASE-PROCESS.md) and the GitHub `Publish versio
 
 ## Known blockers at this assessment
 
-No connected computer was available through the authorized remote-device connector to perform the necessary live IDE/browser tests, and no fresh real-host v0.26.0 acceptance reports were provided. Previous M1/M2 host acceptance for v0.25.1 does not establish M3/M4/M5 acceptance for the expanded v0.26.0 source. The [M3 engineering checklist](M3-ENGINEERING-ACCEPTANCE.md) contains detailed host-level cases; this document summarizes the **release-specific** go/no-go decision.
+An authorized Windows device was connected and the disposable Edge browser test and Antigravity M5 read-only real-agent test were completed. Permission dialogs, agent cancellation/recovery, installed-profile migration/rollback, other host integrations, independent security and cross-device checks remain outstanding. Previous M1/M2 host acceptance for v0.25.1 does not establish M3/M4/M5 acceptance for the expanded v0.26.0 source. The [M3 engineering checklist](M3-ENGINEERING-ACCEPTANCE.md) contains detailed host-level cases; this document summarizes the **release-specific** go/no-go decision.
 
 **Current decision: HOLD.** The v0.26.0 source is verified with automated checks; the full mission is not finished and its downloadable GitHub Release remains unpublished.
