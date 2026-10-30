@@ -33,4 +33,29 @@ def entries(root=ROOT):
         "command": "python", "args": ["${PLUGIN_ROOT}/runtime/orbit_mcp.py"]}}})
     for name, blob in codex.items():
         mapped[f"orbit-core-suite/codex/orbit-core/{name}"] = blob
+    claude = dict(common)
+    claude[".claude-plugin/plugin.json"] = json_bytes({
+        "name": "orbit-core", "version": version,
+        "description": "Orbit Core local workflow, MCP and specialist agents"})
+    claude[".mcp.json"] = json_bytes({"mcpServers": {"orbit-core-mcp": {
+        "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/runtime/orbit_mcp.py"]}}})
+    for name, body in source.items():
+        if not name.startswith("agents/") or name == "agents/orbit-lead-agent.md":
+            continue
+        raw = body.decode("utf-8")
+        header, _, details = raw[4:].partition("\n---\n")
+        description = next((line.split(":", 1)[1].strip()
+                            for line in header.splitlines()
+                            if line.startswith("description:")), Path(name).stem)
+        claude[name] = (f"---\nname: {Path(name).stem}\n"
+                        f"description: {description}\nmodel: inherit\n---\n" +
+                        details).encode("utf-8")
+    for name, blob in claude.items():
+        mapped[f"orbit-core-suite/claude-code/orbit-core/{name}"] = blob
+    mapped["orbit-core-suite/README.md"] = (
+        "One Orbit Core ZIP, separate Antigravity/Codex/Claude Code adapters.\n"
+        "DeepSeek Harness requires a separate Cordis adapter; NOT supported.\n"
+        "No cloud server is needed; locally launched MCP still requires Python.\n"
+        "Native plugin activation, paths and permissions require real-host tests.\n"
+        "Extracting this archive does not modify any host configuration.\n").encode()
     return mapped
