@@ -27,3 +27,7 @@
 ## Example native task split
 
 Task `m2-frontend`: role `frontend`, `write_paths=["src/ui/"]`, goal implement accessible UI, no editing backend. Task `m2-backend`: role `backend`, `write_paths=["src/api/"]`, goal implement validated endpoint. Both may be reserved concurrently when host permission permits. Integration task `m2-integration` with `depends_on=["m2-frontend","m2-backend"]` may start only after each has separately reported completion and review acceptance. A reviewer should verify the actual diffs, tests and generated assets before any merge.
+
+## v0.27 bounded Swarm integration check
+
+Before an integration decision on multiple accepted specialists, request a read-only `orbit_swarm_integration_review` with 1–12 exact task keys/current revisions, the expected bounded source fingerprint from a previous inspection and, for web apps with an Orbit-recorded browser QA run, `build_id`. The gate rejects stale code, missing/reworked task reviews, scope violations and stale or failed recorded browser QA. It **does not** execute Git, tests or a browser and never attests user consent or worker sessions. Its strongest outcome is `READY_FOR_INDEPENDENT_REVIEW`; the host integrator must still inspect real Git diffs and run tests before accepting the milestone. Mobile/desktop/native test evidence requires real host acceptance, not fabricated browser records.

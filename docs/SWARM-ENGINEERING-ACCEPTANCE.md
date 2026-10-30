@@ -225,3 +225,34 @@ Task registration previews and confirmations inspect current filesystem aliases 
 - **Candidate verification:** six disposable regression cases; source/CI
   verification is pending. Do not claim live host consent, test execution, cost
   savings or project completion from this proposal-only response.
+
+## v0.27 — source-bound Swarm integration QA gate (candidate)
+
+**Branch:** `feat/v027-swarm-source-bound-integration-gate`, based on
+`89afb04a0811cb2fa42c1042f1cde8c6cb4362fd`.
+The additive read-only `orbit_swarm_integration_review` checks up to 12
+revision-guarded `REVIEW_ACCEPTED` tasks against the **current bounded
+local source snapshot**, per-task scoped `changed_paths` and accepted
+dependencies. Any same-root active reservation or running record, even under
+another project key, requires genuine host reconciliation first without
+exposing private task identities. For a web build, it also requires the latest existing
+`browser_results` PASS to be source-matched, interactive, unblocked and
+consistent with the same project's build. Source changes or newer FAIL
+records invalidate an older PASS. An unavailable/unscannable source, no
+recorded QA, stale revisions or malformed evidence HOLD rather than
+claiming success. No new persistent table, network call, executable tool,
+agent, model or project write.
+
+A positive result is **`READY_FOR_INDEPENDENT_REVIEW`** rather than
+PASS or verification. Neither host permission nor session, Git diff,
+native mobile QA or test execution is authenticated by these local
+records; the host/human must independently run tests and inspect source
+changes. Actual browser QA already belongs to the existing
+`orbit_browser_qa` path; this new read-only tool never runs it.
+Native Android/iOS/desktop QA remains a separate host review gate.
+
+**Verification:** nine synthetic/disposable regression cases and normal
+exact-head Linux/Windows CI are required before this can join the
+development lane. Once integrated, the source development tool inventory
+will be 46 (not the previously verified 45); release and host
+documentation must never misrepresent this as a published tool inventory.
