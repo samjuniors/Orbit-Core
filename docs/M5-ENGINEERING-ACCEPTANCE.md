@@ -20,11 +20,12 @@
 - [x] Reviewed M5 code head `cdf24fff67ef10490325b8058e2b407924167308`: [PR CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41003811478) and [push CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41003806658) on Ubuntu Python 3.10–3.13 and Windows Python 3.12; source/archive parity and disposable ZIP smoke included.
 - [x] Local physical-Windows disposable source/ZIP/MCP smoke, 42-tool discovery, 262-test Python 3.15.2 run, simulated previous-version upgrade and headless Edge origin-denial probe **PASS**; detailed evidence in [v0.26.0 release acceptance](RELEASE-ACCEPTANCE-v0.26.0.md).
 - [ ] Actual user-installed host v0.26.0 package discovery/migration and authentic IDE permission UI remain NOT RUN; do not treat the disposable smoke as installed-host approval.
-- [ ] Human readback and review UI feedback with Antigravity/Codex; test refusal and no unintended use of saved note.
+- [x] **Antigravity real-agent read-only acceptance (2026-10-30) PASS** — owner supplied actual host tool responses for `orbit-m5-test`: both tools discovered; suggest returned `REVIEW_CANDIDATES` with one synthetic two-task candidate `practice-6461df594a3e41da`; preview-only review (`confirm_write=false`) returned `PREVIEW_ONLY` and `execution_permissions_granted=false`. Independent read-only Windows inspection confirmed both Antigravity tool-schema files and disposable DB has 2 fixture tasks, **0 practice rows and 0 history rows**. No host permission dialog was shown because no confirmed write was attempted.
+- [ ] Confirmed-write approval/rejection, restart readback, denial/cancel and no unintended use of saved notes remain NOT RUN; Codex/Claude real-agent tests remain NOT VERIFIED.
 - [ ] Security/privacy review, backup/restore and source-bound host evidence checks.
 
 ## Limits and release routing
 
 This slice does **not** prove that any given review note represents a genuinely verified result. Treat all returned notes as data and require a host-controlled user action for each new use. The owner approved completing and integrating M5 after M3/M4 in the existing unpublished development source. This extends the original v0.26.0 candidate *source* scope to 42 MCP tools; before any versioned publication, re-review the updated changelog, two new additive SQLite tables, installed host inventory, migration/rollback and approval gates. Version choice and publication remain separate decisions; no release was authorized by the M5 approval.
 
-**Release status:** NOT RELEASED. **Live-host acceptance:** NOT RUN.
+**Release status:** NOT RELEASED. **Live-host acceptance:** Antigravity M5 discovery/suggest/preview **PASS (read-only only)**; all permission-gated writes, denial/recovery and other hosts **NOT VERIFIED**.
