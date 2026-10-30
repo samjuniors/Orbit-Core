@@ -10,6 +10,7 @@ import ipaddress
 import json
 import sqlite3
 import re
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -259,9 +260,13 @@ def _practice_groups(conn, root, project):
     return result
 
 
-def _practice_saved(conn, root, project, limit=20):
+def _practice_saved(conn, root, project, limit=20, *, include_inactive=False):
+    # Filter BEFORE limiting, or a recent backlog of rejected/archived notes
+    # can hide an older approved practice that is still useful.
+    status_clause = "" if include_inactive else " AND status='APPROVED'"
     return [dict(row) for row in conn.execute("""SELECT * FROM orbit_practices
-        WHERE root=? AND project=? ORDER BY updated_at DESC, practice_key LIMIT ?""",
+        WHERE root=? AND project=?""" + status_clause +
+        """ ORDER BY updated_at DESC, practice_key LIMIT ?""",
         (str(root), project, limit)).fetchall()]
 
 
@@ -271,8 +276,13 @@ def practice_suggest(conn, root, project, args):
     if type(limit) is not int or not 1 <= limit <= 20:
         raise ValueError("limit must be 1..20")
     groups = _practice_groups(conn, root, project)
-    saved = _practice_saved(conn, root, project)
-    known = {r["practice_key"] for r in saved}
+    saved = _practice_saved(conn, root, project, limit,
+                            include_inactive=args.get("include_inactive", False))
+    # All previously reviewed keys suppress repeat candidates, not just the
+    # first page of approved/inactive records.
+    known = {r[0] for r in conn.execute(
+        "SELECT practice_key FROM orbit_practices WHERE root=? AND project=?",
+        (str(root), project)).fetchall()}
     candidates = sorted((v for k, v in groups.items() if k not in known),
                         key=lambda x: (-x["observed_tasks"], x["practice_key"]))[:limit]
     visible = []
@@ -319,11 +329,15 @@ def practice_review(conn, root, project, args):
     expected = args.get("expected_revision")
     if expected is not None and (type(expected) is not int or expected < 1):
         raise ValueError("expected_revision must be a positive integer")
-    with conn:
-        # BEGIN IMMEDIATE obtains a writer lock before checking candidate revisions,
-        # preventing a concurrent writer from changing the task evidence mid-approval.
-        # The connection is normally idle; do not open a nested transaction.
-        conn.execute("UPDATE orbit_practices SET revision=revision WHERE 0")
+    # Preview is strictly read-only; take a SQLite write reservation only when
+    # confirm_write was supplied by the host. Caller-reported confirmation is
+    # not independently authenticated user consent.
+    confirmed = args.get("confirm_write") is True
+    with (conn if confirmed else nullcontext()):
+        if confirmed:
+            # Lock BEFORE rereading revisions and supporting task records.
+            # A no-row UPDATE starts a transaction without altering history.
+            conn.execute("UPDATE orbit_practices SET revision=revision WHERE 0")
         old_row = conn.execute("""SELECT * FROM orbit_practices
             WHERE root=? AND project=? AND practice_key=?""",
             (str(root), project, key)).fetchone()
@@ -344,7 +358,7 @@ def practice_review(conn, root, project, args):
                     "rationale": reason.strip(),
                     "evidence": refs, "existing_revision": old["revision"] if old else None,
                     "next_revision": old["revision"] + 1 if old else 1}
-        if args.get("confirm_write") is not True:
+        if not confirmed:
             return {"status": "PREVIEW_ONLY", "proposed": proposal,
                     "approval_is_caller_reported": True, "execution_permissions_granted": False}
         now = _now()
