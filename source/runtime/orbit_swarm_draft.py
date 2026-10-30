@@ -115,7 +115,7 @@ def preview(conn, root, project, args):
         waves.append({
             "wave": len(waves) + 1,
             "task_keys": wave,
-            "requires_prior_wave_review": len(waves) > 1,
+            "requires_prior_wave_review": len(waves) > 0,
         })
         completed.update(wave)
         remaining.difference_update(wave)
