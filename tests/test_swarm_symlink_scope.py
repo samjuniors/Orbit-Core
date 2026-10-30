@@ -15,6 +15,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source" / "runtime"))
 import orbit_tasks
+import orbit_delegation
 
 
 class SymlinkWriteScopeTests(unittest.TestCase):
@@ -111,6 +112,21 @@ class SymlinkWriteScopeTests(unittest.TestCase):
         self.assertEqual(self.reserve("api")["status"], "RESERVED")
         self.assertEqual(self.reserve("ui")["status"], "RESERVED")
         self.assertEqual(self.counts(), (2, 2))
+
+    def test_handoff_refuses_symlink_changed_after_reservation(self):
+        self.assertEqual(self.plan("late-handoff", "src/external/")["status"], "PLANNED")
+        self.assertEqual(self.reserve("late-handoff")["status"], "RESERVED")
+        self.link(self.outside, self.root / "src" / "external")
+        packet = orbit_delegation.handoff(self.conn, {
+            "project": "scope-lab", "task_key": "late-handoff",
+            "host": "antigravity", "available_host_tools": ["invoke_subagent"],
+        }, self.root)
+        self.assertEqual(packet["status"], "HOLD_UNSAFE_WRITE_SCOPE")
+        self.assertIsNone(packet["handoff"])
+        self.assertFalse(packet["native_invoked"])
+        self.assertEqual(self.counts(), (1, 1))
+        self.assertEqual(self.conn.execute(
+            "SELECT status FROM orbit_agent_tasks").fetchone()[0], "RESERVED")
 
     def test_preview_is_read_only_and_unsafe_alias_is_not_silently_approved(self):
         self.link(self.outside, self.root / "external")
