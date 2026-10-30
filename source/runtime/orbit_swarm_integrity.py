@@ -46,6 +46,18 @@ def review(conn, root, project, args):
                  "sessions and user approval. Do not merge or accept based only "
                  "on local ledger states or a stored browser record."),
     }
+    # Even a perfect stored QA record must not certify a workspace in which
+    # another native worker may still be editing. Never expose the other
+    # project's task/session identities in this scope-wide safeguard.
+    active = conn.execute(
+        "SELECT COUNT(*) FROM orbit_agent_tasks "
+        "WHERE project_root=? AND status IN ('RESERVED','RUNNING')",
+        (str(root),)).fetchone()[0]
+    if active:
+        return {**base, "status": "HOLD_HOST_RECONCILIATION",
+                "active_records_same_root": active,
+                "reason": "Inspect and reconcile active host sessions before integration."}
+
     fingerprint = orbit_build.code_fingerprint(root)
     if fingerprint is None:
         return {**base, "status": "HOLD_SOURCE_UNSCANNABLE",
