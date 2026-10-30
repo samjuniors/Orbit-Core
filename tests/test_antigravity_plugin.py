@@ -35,6 +35,9 @@ class PackageTests(unittest.TestCase):
                 self.assertIn(b"subagent: true", content)
         self.assertLess(len(files["skills/orbit/SKILL.md"]), 24000)
         self.assertIn("skills/orbit/references/FULL-LIFECYCLE-GUIDE.md", files)
+        self.assertNotIn(b".agents/skills/orbit/", files["agents/orbit.md"])
+        self.assertNotIn(b"`orbit-core-native`", files["agents/orbit.md"])
+        self.assertIn(b"`orbit-core-plugin`", files["agents/orbit.md"])
 
     def test_manifest_and_local_stdio_db_continuity(self):
         files = builder.build_files(ROOT)
@@ -62,8 +65,14 @@ class PackageTests(unittest.TestCase):
                 self.assertEqual(len(paths), len(set(paths)))
                 self.assertTrue(all(p.startswith("orbit-core/") for p in paths))
                 self.assertIn("orbit-core/mcp_config.json", paths)
+            self.assertEqual(builder.verify_archive(ROOT, one)["sha256"], a["sha256"])
             with self.assertRaises(FileExistsError):
                 builder.build(ROOT, one)
+            # An altered entry is not accepted as an already-built package.
+            with zipfile.ZipFile(one, "a") as archive:
+                archive.writestr("orbit-core/unexpected.py", b"unreviewed")
+            with self.assertRaisesRegex(ValueError, "inventory"):
+                builder.verify_archive(ROOT, one)
 
     def test_unknown_agent_role_metadata_is_rejected(self):
         agents = sorted((ROOT / "source" / "agents").glob("orbit*.md"))
