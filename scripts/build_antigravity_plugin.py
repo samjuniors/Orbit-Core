@@ -19,7 +19,7 @@ MAIN_HEADER = ("name: orbit", "mainAgent: true", "subagent: false")
 CHILD_HEADER = ("mainAgent: false", "subagent: true")
 
 COMPACT_SKILL = """---
-name: orbit
+name: orbit-workflow-skill
 description: Coordinate new, existing, maintained or stalled software projects in the current host, with local Orbit tools when available.
 ---
 # Orbit Core — host-native coordinator
@@ -94,7 +94,7 @@ def build_files(root: Path = ROOT) -> dict[str, bytes]:
     # PLUGIN_DATA via ORBIT_LOCAL_DB here would silently fork a user's memory.
     mcp = {
         "mcpServers": {
-            "orbit-core-plugin": {
+            "orbit-core-mcp": {
                 "command": "python",
                 "args": ["${PLUGIN_ROOT}/runtime/orbit_mcp.py"],
             }
@@ -103,18 +103,26 @@ def build_files(root: Path = ROOT) -> dict[str, bytes]:
     data: dict[str, bytes] = {}
     for name, value in (("plugin.json", manifest), ("mcp_config.json", mcp)):
         data[name] = (json.dumps(value, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    agent_names = {
+        path.stem: ("orbit-lead-agent" if path.stem == "orbit" else path.stem + "-agent")
+        for path in agents
+    }
     for path in agents:
         body = path.read_text(encoding="utf-8")
-        if path.stem == "orbit":
-            # The original standalone agent refers to global/project locations.
-            # Rewrite *only packaged references*, leaving canonical source unchanged.
-            body = body.replace(".agents/skills/orbit/", "skills/orbit/")
-            body = body.replace("`orbit-core-native`", "`orbit-core-plugin`")
-        data[f"agents/{path.name}"] = body.encode("utf-8")
-    data["skills/orbit/SKILL.md"] = compact
-    data["skills/orbit/references/FULL-LIFECYCLE-GUIDE.md"] = original
+        # Canonical source remains backward compatible; only the packaged
+        # host-native component names carry their unambiguous suffixes.
+        body = re.sub(r"(?m)^name:\s*[^\n]+", "name: " + agent_names[path.stem], body, count=1)
+        body = body.replace(".agents/skills/orbit/", "skills/orbit-workflow-skill/")
+        body = body.replace("skills/orbit/", "skills/orbit-workflow-skill/")
+        body = body.replace("orbit-core-native", "orbit-core-mcp")
+        for former in sorted(agent_names, key=len, reverse=True):
+            body = re.sub(r"(?<![A-Za-z0-9-])" + re.escape(former) + r"(?![A-Za-z0-9-])",
+                          agent_names[former], body)
+        data[f"agents/{agent_names[path.stem]}.md"] = body.encode("utf-8")
+    data["skills/orbit-workflow-skill/SKILL.md"] = compact
+    data["skills/orbit-workflow-skill/references/FULL-LIFECYCLE-GUIDE.md"] = original
     for path in sorted((skill / "references").glob("*.md")):
-        data[f"skills/orbit/references/{path.name}"] = path.read_bytes()
+        data[f"skills/orbit-workflow-skill/references/{path.name}"] = path.read_bytes()
     for path in runtime:
         data[f"runtime/{path.name}"] = path.read_bytes()
     data["scripts/preview_antigravity_plugin.py"] = (
