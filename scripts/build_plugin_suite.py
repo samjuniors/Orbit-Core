@@ -20,6 +20,19 @@ def entries(root=ROOT):
     version = (root / "VERSION").read_text().strip()
     source = build_files(root)
     mapped = {}
+    # The same download also contains the working Windows launcher and the
+    # legacy safe host setup backend; users do not need a second installer ZIP.
+    launcher = (
+        "Orbit Setup.cmd", "orbit_setup.py", "orbit_setup_ui_model.py",
+        "orbit_compact_gui.py", "installer.py", "install_orbit_gui.pyw",
+        "orbit_cli.py", "orbit_update_gui.py", "VERSION", "NEXT_VERSION",
+        "CHANGELOG.md", "README.md",
+    )
+    for item in launcher:
+        mapped["orbit-core-suite/" + item] = (root / item).read_bytes()
+    for item in sorted((root / "source").rglob("*")):
+        if item.is_file() and not item.is_symlink() and "__pycache__" not in item.parts:
+            mapped["orbit-core-suite/" + item.relative_to(root).as_posix()] = item.read_bytes()
     for name, blob in source.items():
         mapped[f"orbit-core-suite/antigravity/orbit-core/{name}"] = blob
     common = {name: blob for name, blob in source.items()
