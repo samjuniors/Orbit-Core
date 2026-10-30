@@ -91,6 +91,11 @@ def _scopes(items, *, limit=24, allow_protected=False):
         segments=bare.split('/')
         if any(s in ('','.','..') for s in segments) or bare.startswith('/') or ':' in bare:
             raise ValueError('Absolute, traversal and empty path segments are forbidden')
+        # Windows strips trailing spaces and dots from ordinary path components.
+        # Refuse ambiguous aliases in every writable scope, not only in
+        # protected-path checks: file.py. and file.py may be the same file.
+        if any(segment.rstrip(' .') != segment for segment in segments):
+            raise ValueError('Trailing dots or spaces in path segments are forbidden (Windows alias)')
         # Windows ignores trailing dots/spaces, so '.git ' addresses '.git'.
         guarded=[unicodedata.normalize('NFC',s).rstrip(' .').casefold() for s in segments]
         if not allow_protected and any(g in PROTECTED_SEGMENTS or g.startswith('.env.') for g in guarded):

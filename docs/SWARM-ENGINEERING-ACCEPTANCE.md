@@ -186,3 +186,11 @@ liveness, networked agents or two-PC portability. Those gates remain open.
 
 **Research/decisions:** Orbit Core's existing Notion Research & References and
 Project Decisions hub; do not copy external harness code by default.
+
+## Candidate follow-up — OS-process reservations and Windows alias hardening
+
+**Feature branch:** `fix/v027-swarm-path-alias-process-tests` from exact `dev/v0.27.0` commit `6d3e21f4112f4a98e5dfff9177155e49d408dfc5`.
+
+- Reject writable scope path components ending in dots or spaces, because Windows can resolve those aliases to the same file while the scope comparer otherwise regards them as different paths. Existing casefold/Unicode-normalized collision rules remain in place.
+- Add disposable regression tests that launch independent Python interpreters against one SQLite database to check same-scope/Unicode collisions, the two-reservation cap, stale-revision races, cross-project error redaction and unchanged attempts after rejected reservations. No native agents are started or stopped.
+- **Verification: NOT RUN / CI pending on this exact branch.** GitHub Actions must demonstrate the Linux/Windows matrix before the change may merge into `dev/v0.27.0`. This is one-machine OS-process coverage; actual IDE permission, agent execution, cancellation, two-PC portability and release gates still remain OPEN.
