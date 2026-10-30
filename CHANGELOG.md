@@ -5,6 +5,7 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 ## [Unreleased] — beyond v0.26.0 candidate
 
 ### v0.27.0 development (NOT PUBLISHED)
+- **Swarm host preflight:** Add a read-only, all-or-nothing check of up to two existing reserved native-agent tasks, with per-task fresh revision and scope checks, conservative recovery guidance, and zero partial invocation packets on unsafe conditions. Actual host invocation/permission/QA remains externally required and unverified.
 - **Swarm draft preflight:** New optional, read-only `orbit_swarm_draft_preview` validates up to twelve proposed specialist tasks and their dependencies before registration, suggests bounded non-overlapping review waves, and holds on unresolved/conflicting or unsafe records. No autonomous model-based task generation, agent execution, or approval is implied.
 - **Agent Swarm planning:** New opt-in read-only `orbit_swarm_preview` MCP tool proposes at most two non-conflicting, dependency-ready native handoffs from the existing project task ledger. Missing dependencies, cycles, protected paths, active sessions or oversized graphs HOLD. Does not spawn agents or grant approvals. Cross-host acceptance and launch/rollback remain unverified.
 
