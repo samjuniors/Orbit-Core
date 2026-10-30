@@ -143,6 +143,23 @@ class SwarmDraftTests(unittest.TestCase):
         self.assertEqual(response["review_waves"], [])
         self.assertNotIn("existing-00", json.dumps(response))
 
+    def test_capacity_includes_proposed_tasks_at_40_task_boundary(self):
+        # 39 existing tasks plus one draft fits the scheduler's hard cap;
+        # two drafts cannot later be registered into an unschedulable graph.
+        for index in range(39):
+            self.existing(f"existing-{index:02}")
+        before = self.conn.total_changes
+        accepted = self.preview([draft("new-one")])
+        self.assertEqual(accepted["status"], "DRAFT_VALIDATED")
+        self.assertEqual(accepted["review_waves"][0]["task_keys"], ["new-one"])
+        blocked = self.preview([draft("new-one"), draft("new-two")])
+        self.assertEqual(blocked["status"], "HOLD_GRAPH_TOO_LARGE")
+        self.assertEqual(blocked["review_waves"], [])
+        self.assertFalse(blocked["task_registration_performed"])
+        self.assertFalse(blocked["state_written"])
+        self.assertNotIn("existing-00", json.dumps(blocked))
+        self.assertEqual(self.conn.total_changes, before)
+
     def test_protected_paths_and_traversal_rejected(self):
         for path in (".git/config", ".gemini/rules.md", "../outside",
                      "C:/Users/x/notes", "src\\backslash.py", ".env/secret"):
