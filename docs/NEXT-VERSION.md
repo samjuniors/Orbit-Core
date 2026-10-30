@@ -59,6 +59,25 @@ The focus is **a trustworthy local orchestrator inside existing coding IDEs**, n
 
 **v0.26.0 acceptance gate:** [ ] strict plugin manifest/skills/agent/allowlist tests; [ ] disposable real App installation and Orbit lead selectable in chat; [ ] authorized `invoke_subagent` with observed session ID, `branch` worktree, correct permission bubbling/deny/cancel/idle/restart; [ ] browser `/browser` routing and no fake BROWSER_QA PASS; [ ] 42 actual local MCP tools + SQLite readback without duplicate old/new registration; [ ] clean upgrade/rollback from v0.25.1 with existing database and customizations; [ ] distinct Codex and Claude plugin QA; [ ] independent security/provenance review and owner publication decision. **Do not equate validator success with real-host or release PASS.**
 
+## Next-version mission — one-glance project pulse (development branch, version TBD; 2026-10-30)
+
+**Status: P1/P2 PRODUCT EXPERIENCE IN PROGRESS, NOT MERGED / NOT RELEASED.** This mission begins independently on `feat/next-project-pulse` so v0.26.0 can complete its real-host plugin acceptance without being widened by future features. The future public SemVer is deliberately **not assigned** until v0.26.0's eventual release/scope is decided; current `VERSION=0.26.0` and `NEXT_VERSION=0.26.1` remain unchanged and do not authorize publication.
+
+**Goal:** On resuming an existing project, show the owner what work is recorded, whether actual host sessions require reconciliation, and one *safe, reviewable next-action category* without expanding full project history or creating a dashboard UI/service.
+
+**Existing implementation reused:** the existing `orbit_project_resume(compact=true)` already reads bounded local checkpoint, approved (caller-reported) intake, build recovery and optional source pointers. Instead of a new MCP tool, an opt-in `pulse=true` field adds scoped task counts and one generic next-action hint. It must not invent task progress percentages, verified tests, permission approvals or host process liveness.
+
+**Acceptance criteria:**
+- [x] Initial scoped read-only source implementation and five focused disposable Windows unit tests (2026-10-30). See `tests/test_project_pulse.py`. This is only focused test evidence; full CI and real-host benchmarks are tracked separately.
+- [ ] Cross-platform exact-head CI and complete regression suite PASS, including versioned runtime/packaging compatibility.
+- [ ] Real Antigravity and another coding host show a useful one-glance overview on new/existing/stalled/completed projects without changing memory or duplicating tasks.
+- [ ] Verify host delegation state before claiming Running/Killed/Completed, keep blocked/rework separate from accepted results, and fail safely on project key/root conflicts.
+- [ ] Benchmark actual context turns/bytes and host token usage; do not mislabel JSON serialization size as billed token savings.
+- [ ] Decide whether a thin native host task/progress panel is helpful after observing users; no automatic extension of the scope to a large dashboard.
+- [ ] Owner reviews feature evidence and assigns eventual version/scope after the v0.26.0 release decision.
+
+**Implementation details:** `source/runtime/orbit_pulse.py` and an additive, optional schema field on `orbit_project_resume`. Only project + normalized root counts are accessed. Safe action precedence: check active reservations with the real host; review blocked work; inspect unreviewed reports; verify local checkpoint advice; inspect existing tasks; otherwise inspect source/tests. Caller-reported task rows are data, not instructions, and the compact response honors its existing JSON character budget. No additional MCP tool or SQLite table.
+
 ## P0: release and host acceptance
 
 - Validate Windows Antigravity/Codex/Claude Code setup from **downloaded, signed-in, authorized machines**, including preview/backup of customized files, restart, actual tool discovery and user decision flow.
