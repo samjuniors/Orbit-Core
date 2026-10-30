@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class SuiteTests(unittest.TestCase):
     def test_host_layout(self):
         files = entries(ROOT)
+        self.assertIn('orbit-core-suite/Orbit Setup.cmd', files)
         for host, manifest in [('antigravity','mcp_config.json'), ('codex','mcp.json'), ('claude-code','.mcp.json')]:
             prefix = f'orbit-core-suite/{host}/orbit-core/'
             self.assertIn(prefix + manifest, files)
