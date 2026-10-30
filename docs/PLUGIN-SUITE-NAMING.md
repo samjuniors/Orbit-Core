@@ -30,12 +30,15 @@ No remote/cloud server is required for locally supported MCP stdio. The host sta
 
 ## Windows compact setup
 
-Double-click `Orbit Setup.cmd`: select this computer or one project, view detected Antigravity/Codex/Claude Code/VS Code hosts, then **Install**, **Update** or **Uninstall**. The compact UI uses the existing **preview-first direct host integration backend**; it is not yet a one-click native plugin marketplace installer.
+Double-click `Orbit Setup.cmd` to open the **minimal setup view (504 × 350 pixels)**. The default screen displays Orbit Core, detected coding apps, a short installation status and **one context-aware primary button**. No separate Install/Update tabs or detailed file lists occupy the main window.
 
-- **Install** enables only when the selected local source integration is missing.
-- **Update** enables when the bundled source would change the selected integration. This is **not** a claim that an online release exists; no update downloads are silently performed.
-- **Uninstall** offers *preserve memory (recommended)* and *clean reset*, with explicit memory deletion and typed confirmation for clean reset.
-- Every action previews affected files and asks for user confirmation. Modified user files, unknown host configurations and recorded memory are preserved or blocked by existing safety guards. A success dialog appears only after the installer returns successfully.
+- **Install Orbit** appears for a new local integration. **Update Orbit** appears when the selected bundled source differs from a recognized existing installation. **You're up to date** is disabled when no changes are needed. **Review setup** appears for customized or conflicting files; technical error messages remain in the detailed review rather than the default view.
+- The small **More options** disclosure expands the window (approximately 504 × 590 pixels) to reveal coding-host checkboxes, machine vs. one-project installation, folder selection, rediscovery and an optional **Uninstall** flow. These options collapse completely when not needed.
+- **Uninstall** preserves memory and checkpoints by default. A separate **Clean reset** offers optional memory deletion and requires typing `REMOVE ORBIT`. No destructive operation is executed from a normal Install/Update click.
+- The primary action opens a compact confirmation dialog with a short summary. Full file-by-file changes are behind **View file details**; nothing is written before explicit confirmation. Existing safe backup and revalidation logic stays in force.
+- This is a **bundled local source** update indicator, **not** an unverified online-update claim. The compact window uses the existing preview-first host integration backend, not yet one-click native plugin marketplace activation. No Python dependency outside the standard Tkinter stack has been introduced.
+
+The design uses a dark, high-contrast style with a vector-drawn Orbit mark and rounded keyboard-accessible primary control. Real Windows Tkinter open/expand/collapse checks are required before promoting this source candidate.
 
 The existing detailed setup GUI remains available as `install_orbit_gui.pyw` for compatibility while the new compact window is verified.
 
