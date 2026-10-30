@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -74,6 +77,37 @@ class PackageTests(unittest.TestCase):
                 archive.writestr("orbit-core/unexpected.py", b"unreviewed")
             with self.assertRaisesRegex(ValueError, "inventory"):
                 builder.verify_archive(ROOT, one)
+
+    def test_extracted_mcp_starts_locally_with_real_tool_inventory(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            archive = root / "orbit.zip"
+            builder.build(ROOT, archive)
+            with zipfile.ZipFile(archive) as package:
+                package.extractall(root / "extracted")
+            script = root / "extracted" / "orbit-core" / "runtime" / "orbit_mcp.py"
+            self.assertTrue(script.is_file())
+            env = os.environ.copy()
+            env["ORBIT_LOCAL_DB"] = str(root / "isolated-smoke.sqlite3")
+            requests = [
+                {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                    "protocolVersion": "2025-03-26", "capabilities": {},
+                    "clientInfo": {"name": "plugin-regression", "version": "1"}}},
+                {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+            ]
+            result = subprocess.run(
+                [sys.executable, str(script)], input="\n".join(json.dumps(req) for req in requests) + "\n",
+                text=True, capture_output=True, env=env, timeout=20
+            )
+            self.assertEqual(result.returncode, 0, result.stderr[-1500:])
+            frames = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+            responses = {frame.get("id"): frame for frame in frames}
+            self.assertEqual(responses[1]["result"]["serverInfo"]["version"],
+                             (ROOT / "VERSION").read_text().strip())
+            tools = {item["name"] for item in responses[2]["result"]["tools"]}
+            self.assertEqual(len(tools), 42)
+            self.assertIn("orbit_practice_suggest", tools)
+            self.assertIn("orbit_practice_review", tools)
 
     def test_unknown_agent_role_metadata_is_rejected(self):
         agents = sorted((ROOT / "source" / "agents").glob("orbit*.md"))
