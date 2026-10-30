@@ -73,7 +73,10 @@ def local_state(preview_result: SetupPreview) -> str:
     """Classify a verified *bundled local* setup plan; not an online update query."""
     if preview_result.action in ("uninstall", "clean"):
         return preview_result.action
-    writable = [c for c in preview_result.changes if c.action not in {"SKIP", "PRESERVE"}]
+    if any(c.action == "PRESERVE" for c in preview_result.changes):
+        # A guarded/customized target needs review, not a false up-to-date banner.
+        return "review"
+    writable = [c for c in preview_result.changes if c.action != "SKIP"]
     if not writable:
         return "current"
     if any(c.action in {"UPGRADE", "MERGE", "APPEND"} for c in writable):
@@ -116,3 +119,25 @@ def apply(review: SetupPreview, *, confirmation: str, delete_memory: bool = Fals
     if current.changes != review.changes:
         raise installer.SetupError("Files changed after preview; review the new plan")
     return installer.install(list(review.changes))
+
+# Presentation labels are deliberately pure: GUI and tests share one decision.
+# "update" means the selected *local bundle*, not a checked online release.
+PRIMARY_LABELS = {
+    "install": "Install Orbit",
+    "update": "Update Orbit",
+    "current": "You're up to date",
+    "review": "Review setup",
+}
+STATE_MESSAGES = {
+    "install": "Ready to install",
+    "update": "Update available in this package",
+    "current": "Installed and up to date",
+    "review": "Existing custom files need review",
+}
+
+
+def presentation(state: str) -> tuple[str, str, bool]:
+    """Primary button label, concise status text and whether action is enabled."""
+    if state not in PRIMARY_LABELS:
+        raise ValueError("Unknown setup presentation state")
+    return PRIMARY_LABELS[state], STATE_MESSAGES[state], state != "current"
