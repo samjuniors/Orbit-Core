@@ -4,11 +4,12 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] — beyond v0.26.0 candidate
 
-No additional user-facing changes are scheduled in this entry. `NEXT_VERSION=0.26.1` is a planning marker, not a published release or update.
+The next published release/version remains undecided until the expanded v0.26.0 source scope passes its live-host and security gates. `NEXT_VERSION=0.26.1` remains a tentative planning marker, not a release authorization.
 
 ## [0.26.0] — Development release candidate (NOT PUBLISHED; NOT production-certified)
 
 **Additional v0.26.0 development work (still not a published release)**
+- **M5 opt-in practice learning (owner-approved source integration):** `orbit_practice_suggest` identifies candidate patterns from repeated same-project reviewer-accepted task records; `orbit_practice_review` previews and records user-reviewed approve/reject/archive/supersede decisions, with revision guards, append-only SQLite history, stale-evidence visibility and cross-project isolation. This is reference data only: no automatic skill creation, model/subagent execution, Notion sync, independent host approval attestation or background learner. Two additive SQLite tables are created on startup; prior data stays intact. The previous 40-tool source inventory becomes **42**. M5 live-host/security acceptance is pending and no release is authorized.
 - **M3 consent hardening:** the existing capability selector now accepts optional caller-reported `permission_state`; denied browser/computer use yields a HOLD instead of recommending another provider.
 - **M4 adaptive guidance:** a small `adaptive_workflow` recommendation chooses focused compact resume or full review according to task risk/complexity, and suggests only available host-native or serial execution paths. All tool/permission/model execution remains host-controlled; no new MCP tool or automatic installation.
 - Automated regression tests, including simulated context-byte comparisons, are required before integrating into the v0.26.0 source candidate. Real host/context savings remain unverified.
@@ -32,7 +33,7 @@ No additional user-facing changes are scheduled in this entry. `NEXT_VERSION=0.2
 **Compatibility / behavior changes**
 - Clients reporting terminal native-agent outcomes for RUNNING tasks should now supply the correct `observed_host_session` and compatible `host_state` to `orbit_task_report`. Missing or uncertain observations return HOLD instead of clearing a possibly live worker. Verify host-side cancellation independently.
 - The additive `orbit_task_attempts` SQLite table preserves old task records, but **backing up SQLite (including WAL files) before upgrading is recommended**; older runtimes may not understand every newer state/behavior. Never silently downgrade user databases.
-- Source runtime and installer version move to **0.26.0**; `NEXT_VERSION=0.26.1` remains tentative. MCP tool inventory is unchanged at 40; no new model runtime, implicit subagent spawning, cloud synchronization or extra installation is introduced.
+- Source runtime and installer version move to **0.26.0**; `NEXT_VERSION=0.26.1` remains tentative. MCP tool inventory is **42** in the expanded development source (40 baseline + 2 optional M5 review tools); no new model runtime, implicit subagent spawning, cloud synchronization or extra installation is introduced.
 
 **Requirements, packaging and verification**
 - Python 3.10–3.13 CI targets; Windows Python 3.12 recommended. Host-native delegation is limited to tools actually supplied and authorized by Antigravity, Codex, Claude Code or other supported hosts.
