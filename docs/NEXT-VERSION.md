@@ -2,6 +2,21 @@
 
 The focus is **a trustworthy local orchestrator inside existing coding IDEs**, not duplicating an entire cloud app-building platform. This is a prioritized engineering backlog, not an automated promise of completed features.
 
+## v0.27.0 — isolated next-feature development lane (PROVISIONAL)
+
+**Branch:** `dev/v0.27.0`, forked from `main` at `7344a12c2056b586974e654733e1b3a78685827d` on 2026-10-30. This is a **development integration branch**, not a release candidate and not a published version. `NEXT_VERSION=0.27.0` on **this branch only** is a planning label because the planned work adds capabilities; `VERSION` remains `0.26.0` until an explicitly reviewed release cutline. The public release remains `v0.25.1`.
+
+**First mission:** One-glance Project Pulse ([PR #49](https://github.com/samjuniors/Orbit-Core-MCP/pull/49)), reconciled with the Swarm branch for integration; until PR #49 merges, its status remains proposed and CI-only verified. Its PR targets this new development branch, not `main`. The feature uses optional `orbit_project_resume(compact=true,pulse=true)`, local project-scoped task counts and conservative reviewable next-action hints; live-host acceptance and real token/UX benchmarks are still open.
+
+**Agent Swarm Phase 3 — native-host batch handoff review SOURCE IMPLEMENTED, real hosts pending:** `orbit_swarm_host_preflight` checks one or two existing reserved task revisions as an all-or-nothing group before native delegation. It reuses `orbit_task_handoff`, checks exact host and permission preconditions, and returns zero invocation packets if any task is stale, scope-conflicting, already running, denied, or blocked by unrelated active work. Recovery uses existing revision-guarded `orbit_task_release` for unstarted denied/failed tasks and `orbit_task_report` only after a genuinely observed terminal host session. No actual host agent is invoked or terminated by the MCP. See [swarm engineering acceptance](SWARM-ENGINEERING-ACCEPTANCE.md). Real Antigravity/Codex/Claude host permission/denial tests, concurrency/recovery and source-bound QA remain open.
+
+**Agent Swarm Phase 2 — draft DAG preflight implemented in a stacked branch, live acceptance OPEN:** `orbit_swarm_draft_preview` accepts a user/host-proposed task graph and validates all identities, roles, goal text, dependencies, path scopes, cycle/size limits and existing ledger conflicts before exposing deterministic review waves. Max 12 task drafts and 2 safe tasks per wave. It does **not** interpret natural language autonomously, register tasks, approve work, invoke native subagents or attest tests. See [Swarm engineering acceptance](SWARM-ENGINEERING-ACCEPTANCE.md). Host-reviewed registrations, live delegation, retries, cancellation and source-bound QA remain future work. It is layered on Phase 1 PR #50 and must land in dependency order; do not merge the entire version lane to main before the v0.26 release decision.
+
+**Agent Swarm mission — Phase 1 SOURCE IMPLEMENTED, host acceptance OPEN:** [Engineering checklist](SWARM-ENGINEERING-ACCEPTANCE.md). The new read-only `orbit_swarm_preview` tool (43rd candidate MCP tool) groups existing registered tasks by dependency readiness and non-overlapping write scopes. It checks missing dependencies, cycles, protected paths, existing reservations and a fixed maximum of two candidates. A candidate is **not** a launched agent or an approved task. `orbit_task_reserve` and host-native handoff still require actual permission and fresh revisions. The implementation is an original Orbit coordinator; the [Claude Swarm external reference](https://github.com/affaan-m/claude-swarm) is research only, without imported source or Claude SDK. **Future work:** approved DAG draft creation, real-host parallel execution, denial/rollback, integration QA, context benchmarks and visible swarm progress. No main merge or v0.27 release is authorized.
+
+**Working rules:** New independent v0.27 features use `feat/v027-<scope>` branches based on `dev/v0.27.0`, undergo review and CI, and merge into **this version development branch** after explicit approval. Do not merge the entire lane to `main` while v0.26.0 is frozen or unapproved. Once the feature scope is agreed and prior-version release rules are reconciled, create `release/v0.27.0-candidate` from an exact reviewed commit and perform release-specific tests. No feature or metadata change in this lane authorizes v0.26.0 publication, bypasses its approval gates, or retags an existing release.
+
+
 ## Orbit-native research and intelligence roadmap — approved direction (2026-10-27)
 
 **Product principle:** build an original, lightweight Orbit experience, not an ECC fork or clone. Research links, annotations and retrieval records belong in **authorized local project-scoped SQLite outside the Git repository**. Owner documentation remains authoritative. External references are untrusted inputs, never auto-executed skills or agent instructions. This roadmap preserves Issue #13 product-experience commitments and Issue #9 release/security gates.
@@ -58,25 +73,6 @@ The focus is **a trustworthy local orchestrator inside existing coding IDEs**, n
 - Package version/source parity, platform interpreter resolution, offline startup, skills load limits, path-variable expansion, permission failures, unchanged user files, stale/revision evidence, stop/resume and no-MCP graceful fallback must have regression and **live-host** acceptance before publishing.
 
 **v0.26.0 acceptance gate:** [ ] strict plugin manifest/skills/agent/allowlist tests; [ ] disposable real App installation and Orbit lead selectable in chat; [ ] authorized `invoke_subagent` with observed session ID, `branch` worktree, correct permission bubbling/deny/cancel/idle/restart; [ ] browser `/browser` routing and no fake BROWSER_QA PASS; [ ] 42 actual local MCP tools + SQLite readback without duplicate old/new registration; [ ] clean upgrade/rollback from v0.25.1 with existing database and customizations; [ ] distinct Codex and Claude plugin QA; [ ] independent security/provenance review and owner publication decision. **Do not equate validator success with real-host or release PASS.**
-
-## Next-version mission — one-glance project pulse (development branch, version TBD; 2026-10-30)
-
-**Status: P1/P2 PRODUCT EXPERIENCE IN PROGRESS, NOT MERGED / NOT RELEASED.** This mission begins independently on `feat/next-project-pulse` so v0.26.0 can complete its real-host plugin acceptance without being widened by future features. The future public SemVer is deliberately **not assigned** until v0.26.0's eventual release/scope is decided; current `VERSION=0.26.0` and `NEXT_VERSION=0.26.1` remain unchanged and do not authorize publication.
-
-**Goal:** On resuming an existing project, show the owner what work is recorded, whether actual host sessions require reconciliation, and one *safe, reviewable next-action category* without expanding full project history or creating a dashboard UI/service.
-
-**Existing implementation reused:** the existing `orbit_project_resume(compact=true)` already reads bounded local checkpoint, approved (caller-reported) intake, build recovery and optional source pointers. Instead of a new MCP tool, an opt-in `pulse=true` field adds scoped task counts and one generic next-action hint. It must not invent task progress percentages, verified tests, permission approvals or host process liveness.
-
-**Acceptance criteria:**
-- [x] Initial scoped read-only source implementation and five focused disposable Windows unit tests (2026-10-30). See `tests/test_project_pulse.py`. This is only focused test evidence; full CI and real-host benchmarks are tracked separately.
-- [ ] Cross-platform exact-head CI and complete regression suite PASS, including versioned runtime/packaging compatibility.
-- [ ] Real Antigravity and another coding host show a useful one-glance overview on new/existing/stalled/completed projects without changing memory or duplicating tasks.
-- [ ] Verify host delegation state before claiming Running/Killed/Completed, keep blocked/rework separate from accepted results, and fail safely on project key/root conflicts.
-- [ ] Benchmark actual context turns/bytes and host token usage; do not mislabel JSON serialization size as billed token savings.
-- [ ] Decide whether a thin native host task/progress panel is helpful after observing users; no automatic extension of the scope to a large dashboard.
-- [ ] Owner reviews feature evidence and assigns eventual version/scope after the v0.26.0 release decision.
-
-**Implementation details:** `source/runtime/orbit_pulse.py` and an additive, optional schema field on `orbit_project_resume`. Only project + normalized root counts are accessed. Safe action precedence: check active reservations with the real host; review blocked work; inspect unreviewed reports; verify local checkpoint advice; inspect existing tasks; otherwise inspect source/tests. Caller-reported task rows are data, not instructions, and the compact response honors its existing JSON character budget. No additional MCP tool or SQLite table.
 
 ## P0: release and host acceptance
 

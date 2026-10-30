@@ -4,8 +4,11 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] — beyond v0.26.0 candidate
 
-### Next-version development (not released)
-- **Opt-in project pulse:** `orbit_project_resume(compact=true,pulse=true)` adds a bounded, read-only task count and safe next-action hint sourced only from project-scoped local records. No new MCP tool, host invocation, approval, state write or promise of live agent/test verification. The default compact response remains unchanged; genuine host/test acceptance and actual token-savings measurements are still required.
+### v0.27.0 development (NOT PUBLISHED)
+- **Opt-in Project Pulse:** `orbit_project_resume(compact=true,pulse=true)` exposes a bounded, read-only project task-count and next-action summary; local records remain unverified. No extra MCP tool, automatic approval or model invocation. Real-host UX remains pending.
+- **Swarm host preflight:** Add a read-only, all-or-nothing check of up to two existing reserved native-agent tasks, with per-task fresh revision and scope checks, conservative recovery guidance, and zero partial invocation packets on unsafe conditions. Actual host invocation/permission/QA remains externally required and unverified.
+- **Swarm draft preflight:** New optional, read-only `orbit_swarm_draft_preview` validates up to twelve proposed specialist tasks and their dependencies before registration, suggests bounded non-overlapping review waves, and holds on unresolved/conflicting or unsafe records. No autonomous model-based task generation, agent execution, or approval is implied.
+- **Agent Swarm planning:** New opt-in read-only `orbit_swarm_preview` MCP tool proposes at most two non-conflicting, dependency-ready native handoffs from the existing project task ledger. Missing dependencies, cycles, protected paths, active sessions or oversized graphs HOLD. Does not spawn agents or grant approvals. Cross-host acceptance and launch/rollback remain unverified.
 
 
 The next published release/version remains undecided until the expanded v0.26.0 source scope passes its live-host and security gates. `NEXT_VERSION=0.26.1` remains a tentative planning marker, not a release authorization.
