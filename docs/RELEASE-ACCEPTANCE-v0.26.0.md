@@ -1,6 +1,6 @@
 # v0.26.0 — release readiness and acceptance record
 
-**Assessment:** 2026-10-29 · **Status:** **HOLD / NOT YET PUBLISHED**
+**Assessment:** 2026-10-30 · **Status:** **HOLD / NOT YET PUBLISHED**
 
 This is a **version-specific acceptance record**, not a second roadmap or authority to publish. Product decisions remain in the [Orbit Core Notion hub](https://app.notion.com/p/4074f681d48881a7a407c3bdc2054409). Source code, CI, tags and releases are verified in GitHub. Preserve every previously published tag and asset.
 
@@ -14,12 +14,17 @@ This is a **version-specific acceptance record**, not a second roadmap or author
 | M4 compact resume | **MERGED; automated PASS only** | [PR #34](https://github.com/samjuniors/Orbit-Core-MCP/pull/34) |
 | M3 permission-denial fallback hardening | **MERGED; automated PASS only** | [PR #37](https://github.com/samjuniors/Orbit-Core-MCP/pull/37): denied consent cannot silently switch browser/computer-use providers |
 | M4.2 adaptive workflow/context routing | **MERGED; automated PASS only** | [PR #38](https://github.com/samjuniors/Orbit-Core-MCP/pull/38): focused compact vs full context, high-risk review and unverified host-native/serial recommendations; real context/token benchmarks pending |
+| M5 opt-in project practice review | **OWNER-APPROVED FOR SOURCE INTEGRATION; automated PASS only** | [PR #40](https://github.com/samjuniors/Orbit-Core-MCP/pull/40), reviewed [M5 acceptance](M5-ENGINEERING-ACCEPTANCE.md): 42-tool expanded source, isolated SQLite decisions, read-only preview and revision history; live-host acceptance NOT VERIFIED |
 | Exact reviewed M3/M4 heads | **5/5 PASS each** | [M3 #40893382550](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40893382550), [M4 #40894592371](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40894592371): Ubuntu Python 3.10–3.13, Windows 3.12; final main CI checked separately |
 | Candidate package and installer test | **PASS in CI** | [Actions #40869882650](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40869882650): source/MCPB parity, ZIP integrity, disposable fresh setup |
 | Upgrade compatibility | **PASS in disposable CI** | v0.24.1 and v0.25.1 → v0.26.0, Windows/Linux; customized stock guidance safely blocks overwrite |
 | Downloadable candidate | **CI ARTIFACT ONLY** | `orbit-v0.26.0-host-acceptance` in [Actions #40869882650](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40869882650); not a signed publication |
 | Current latest published release | **v0.25.1 prerelease** | [GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases) |
 | `v0.26.0` published tag / GitHub Release | **NOT DONE** | No matching published release found on 2026-10-29 |
+
+## Scope correction (2026-10-30)
+
+The owner approved M5 engineering integration after the original M3/M4 v0.26.0 source candidate. The **development** source now includes two additional opt-in practice review tools and additive SQLite tables. This supersedes the earlier 40-tool source inventory, not the publication HOLD. Reconfirm the complete 42-tool package manifest, migration/rollback, revised user-visible changelog, and all host/security gates before deciding whether v0.26.0 is the eventual published version. No tag or release is authorized.
 
 ## Required before final release acceptance
 
@@ -44,7 +49,11 @@ Run on **disposable projects and explicitly authorized hosts only**. A host clai
 - [ ] Complete two-authorized-computer project transfer; imported approvals and sessions must be historical/untrusted, and no cross-PC attempt quota continuity may be assumed.
 - [ ] Run real approved Linux/macOS host acceptance when suitable devices are available (Ubuntu CI does **not** substitute for it).
 
-### 4. Security and release verification — **NOT VERIFIED**
+### 4. M5 practice review in a real host — **NOT RUN / NOT VERIFIED**
+- [ ] Verify 42-tool discovery, prompt/display labeling, preview-only decisions, explicit host approval, rejection, stale-evidence handling and restart readback on a disposable authorized Antigravity/Codex project.
+- [ ] Confirm additive practice/history tables preserve prior SQLite data and rollback/backup can recover from interrupted migrations. Ensure notes stay local, do not cross projects and do not become executable instructions.
+
+### 5. Security and release verification — **NOT VERIFIED**
 - [ ] Independently review authentic host user consent, workspace-root authorization, handling of caller-reported approvals/sessions, prompt injection and data privacy.
 - [ ] Review release provenance: SHA256 sidecars are **integrity checks**, not proof of publisher identity or binary signing.
 - [ ] Review installer compatibility, file backups, release manifest and rollback plan. Preserve existing `v0.25.1` assets.
@@ -56,6 +65,6 @@ Use [docs/RELEASE-PROCESS.md](RELEASE-PROCESS.md) and the GitHub `Publish versio
 
 ## Known blockers at this assessment
 
-No connected computer was available through the authorized remote-device connector to perform the necessary live IDE/browser tests, and no fresh real-host v0.26.0 acceptance reports were provided. Previous M1/M2 host acceptance for v0.25.1 does not establish M3/M4 acceptance for v0.26.0. The [M3 engineering checklist](M3-ENGINEERING-ACCEPTANCE.md) contains detailed host-level cases; this document summarizes the **release-specific** go/no-go decision.
+No connected computer was available through the authorized remote-device connector to perform the necessary live IDE/browser tests, and no fresh real-host v0.26.0 acceptance reports were provided. Previous M1/M2 host acceptance for v0.25.1 does not establish M3/M4/M5 acceptance for the expanded v0.26.0 source. The [M3 engineering checklist](M3-ENGINEERING-ACCEPTANCE.md) contains detailed host-level cases; this document summarizes the **release-specific** go/no-go decision.
 
 **Current decision: HOLD.** The v0.26.0 source is verified with automated checks; the full mission is not finished and its downloadable GitHub Release remains unpublished.
