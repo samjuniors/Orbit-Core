@@ -160,6 +160,20 @@ class SwarmIntegrationReviewTests(unittest.TestCase):
         self.assertEqual(self.review(build_id="web-app")["issues"][0]["reason"],
                          "DEPENDENCY_REVIEW_REQUIRED")
 
+    def test_unrelated_live_agent_at_same_workspace_blocks_integration_privately(self):
+        self.build()
+        self.qa()
+        self.task("private-secret-worker", project="other-project",
+                  status="RUNNING", revision=1,
+                  paths=["private/secret.py"], changed=[])
+        before = self.db.total_changes
+        result = self.review(build_id="web-app")
+        self.assertEqual(result["status"], "HOLD_HOST_RECONCILIATION")
+        self.assertEqual(result["active_records_same_root"], 1)
+        self.assertNotIn("private-secret-worker", json.dumps(result))
+        self.assertNotIn("other-project", json.dumps(result))
+        self.assertEqual(self.db.total_changes, before)
+
     def test_unscannable_source_and_bad_args_hold(self):
         (self.root / "index.html").unlink()
         result = self.review()
