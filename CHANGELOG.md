@@ -2,17 +2,71 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — beyond v0.26.0 candidate
+## [Unreleased] — after the v0.27.0 candidate
 
-### v0.27.0 development (NOT PUBLISHED)
-- **Swarm reservation reliability:** Preserve root-wide writable scope locks without leaking other-project task identity/path details in cross-project conflict messages; stress simultaneous SQLite connections, stale revisions and the two-slot cap. Cross-process, real native-agent and host-permission acceptance remain unverified.
-- **Opt-in Project Pulse:** `orbit_project_resume(compact=true,pulse=true)` exposes a bounded, read-only project task-count and next-action summary; local records remain unverified. No extra MCP tool, automatic approval or model invocation. Real-host UX remains pending.
-- **Swarm host preflight:** Add a read-only, all-or-nothing check of up to two existing reserved native-agent tasks, with per-task fresh revision and scope checks, conservative recovery guidance, and zero partial invocation packets on unsafe conditions. Actual host invocation/permission/QA remains externally required and unverified.
-- **Swarm draft preflight:** New optional, read-only `orbit_swarm_draft_preview` validates up to twelve proposed specialist tasks and their dependencies before registration, suggests bounded non-overlapping review waves, and holds on unresolved/conflicting or unsafe records. No autonomous model-based task generation, agent execution, or approval is implied.
-- **Agent Swarm planning:** New opt-in read-only `orbit_swarm_preview` MCP tool proposes at most two non-conflicting, dependency-ready native handoffs from the existing project task ledger. Missing dependencies, cycles, protected paths, active sessions or oversized graphs HOLD. Does not spawn agents or grant approvals. Cross-host acceptance and launch/rollback remain unverified.
+No newer release has been approved or published. Planned v0.28.0 work is
+tracked separately; it must not be silently included in this candidate.
 
+## [0.27.0] — Unpublished release candidate (owner-approved preparation; acceptance HOLD)
 
-The next published release/version remains undecided until the expanded v0.26.0 source scope passes its live-host and security gates. On this isolated development branch, `NEXT_VERSION=0.27.0` is a planning label and `VERSION=0.26.0` still names the unpublished prior release candidate; neither metadata field authorizes publication.
+**Status:** Candidate source only. This version has **not** been published or
+installed for the owner. The previous v0.26.0 release is still on hold.
+Real host-native acceptance, independent QA/provenance, and approval of the
+verified final release artifact remain required. No production claim.
+
+### Added
+
+- **Orbit-native Agent Swarm coordination:** `orbit_swarm_preview` suggests
+  at most two disjoint and dependency-accepted specialist tasks from existing
+  project records, with a deterministic reason for tasks that cannot run yet.
+  It never executes or directly spawns an agent.
+- **Custom task DAG draft preflight:** `orbit_swarm_draft_preview` validates
+  up to twelve owner/host-proposed tasks, graph cycles, dependencies, roles,
+  size and file ownership before any task is registered or approved.
+- **Native host batch handoff preflight:** `orbit_swarm_host_preflight` checks
+  up to two separately reserved tasks together with an all-or-nothing result,
+  without claiming actual host permissions or sessions.
+- **Source-bound integration readiness:** `orbit_swarm_integration_review`
+  uses fresh task revisions, accepted dependencies, bounded current source
+  fingerprints, safe paths, and the latest recorded source-linked browser QA
+  metadata to hold stale/unreviewed changes. It does not run tests or
+  independently attest results; actual Git/source/test review remains with
+  the authorized host and human reviewer.
+- **Opt-in Project Pulse:** Compact project resume can show bounded, project-
+  scoped task counts and unverified next-action hints through
+  `orbit_project_resume(compact=true,pulse=true)`. No new model runtime,
+  agent spawning, or remote memory synchronization.
+
+### Reliability and safety
+
+- Root-wide, transaction-guarded SQLite reservations limit simultaneous
+  specialist handoffs to two. Independent OS-process, stale-revision,
+  same-key collision and cross-project redaction regressions were added.
+- Windows trailing-dot/space aliases, casefold/Unicode collisions and
+  symlink escapes into outside/protected writable paths are rejected during
+  task planning, reservation or handoff. Point-in-time checks are **not**
+  an authenticated filesystem sandbox; the host enforces permissions.
+- The Swarm preview distinguishes failed, cancelled, blocked and rework
+  prerequisites, including transitive dependency chains; independent ready
+  tasks may still proceed. Where no native tool is reported, one explicit
+  **manual serial review suggestion** is returned, not a fabricated worker.
+- Installer runtime manifest, packaged MCP tool counts, host guidance and
+  regression checks were reconciled for the **46-tool development source**
+  (four additional read-only Swarm tools beyond the 42-tool prior candidate).
+
+### Verification boundary
+
+- Source PRs [#49–62](https://github.com/samjuniors/Orbit-Core-MCP/pulls?q=is%3Apr+is%3Amerged)
+  were reviewed and merged to `dev/v0.27.0`; [exact final source CI
+  5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41086717617)
+  covered Ubuntu Python 3.10–3.13 and Windows Python 3.12.
+- This is **automated source/package verification** only. Real Antigravity,
+  Codex and Claude Code subagent permission, cancellation and restart; actual
+  combined-task QA, two-PC recovery, user installer migration/rollback,
+  security/provenance and live context/UX measurements are NOT VERIFIED.
+- Preserve v0.25.1 and earlier releases and keep v0.26.0 acceptance independent.
+  Do not tag, publish, install or merge to main until the verified release
+  process and owner-approved cutline permit it.
 
 ## [0.26.0] — Development release candidate (NOT PUBLISHED; NOT production-certified)
 
