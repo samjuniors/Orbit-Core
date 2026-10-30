@@ -187,15 +187,16 @@ def launch():
         detail.insert("1.0", model.preview_lines(review))
         detail.configure(state="disabled")
         def toggle_details():
-            if detail_on.get():
+            show = not detail_on.get()
+            detail_on.set(show)
+            if show:
                 detail.pack(fill="both", expand=True, pady=(5, 0))
-                popup.geometry("480x465")
+                popup.geometry("480x510" if review.action == "clean" else "480x465")
                 details_btn.configure(text="Hide file details  ↑")
             else:
                 detail.pack_forget()
-                popup.geometry("480x315")
+                popup.geometry("480x370" if review.action == "clean" else "480x315")
                 details_btn.configure(text="View file details  ↓")
-            detail_on.set(not detail_on.get())
         details_btn = tk.Button(
             detail_holder, text="View file details  ↓", command=toggle_details,
             bg=c["background"], fg=c["secondary"], activeforeground=c["text"],
