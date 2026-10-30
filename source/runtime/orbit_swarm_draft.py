@@ -32,13 +32,16 @@ def preview(conn, root, project, args):
             "depends_on": deps,
         }
 
-    existing = {row["task_key"]: row["status"] for row in conn.execute(
-        "SELECT task_key,status FROM orbit_agent_tasks "
-        "WHERE project=? AND project_root=?", (project, str(root)))}
-    if len(existing) > orbit_swarm.MAX_GRAPH_TASKS:
+    existing_count = conn.execute(
+        "SELECT COUNT(*) FROM orbit_agent_tasks WHERE project=? AND project_root=?",
+        (project, str(root))).fetchone()[0]
+    if existing_count > orbit_swarm.MAX_GRAPH_TASKS:
         return {**base, "status": "HOLD_GRAPH_TOO_LARGE",
                 "review_waves": [],
                 "reason": "Review and scope existing project tasks before proposing another swarm."}
+    existing = {row["task_key"]: row["status"] for row in conn.execute(
+        "SELECT task_key,status FROM orbit_agent_tasks "
+        "WHERE project=? AND project_root=?", (project, str(root)))}
     collisions = sorted(set(proposed).intersection(existing))
     base = {
         "mode": "READ_ONLY_DRAFT_PREVIEW",
