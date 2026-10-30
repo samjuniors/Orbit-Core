@@ -22,3 +22,11 @@ with zipfile.ZipFile(archive) as z:
  assert all(n.startswith(f'orbit-universal-{VERSION}/') and '..' not in Path(n).parts for n in names)
  assert len([n for n in names if n.endswith('source/runtime/orbit_mcp.py')])==1
 print(f'{archive.name}: {len(names)} files; sha256={digest}')
+
+# Host-native Antigravity package is a separate, deterministic local plugin.
+# Never overwrite an existing artifact: verify exact source parity instead.
+from build_antigravity_plugin import build as build_antigravity, verify_archive as verify_antigravity
+plugin_zip = DEST / f'Orbit-Antigravity-Plugin-v{VERSION}.zip'
+plugin_result = (verify_antigravity(ROOT, plugin_zip) if plugin_zip.exists()
+                 else build_antigravity(ROOT, plugin_zip))
+print(f"{plugin_zip.name}: {plugin_result['files']} files; sha256={plugin_result['sha256']}")
