@@ -233,7 +233,9 @@ Task registration previews and confirmations inspect current filesystem aliases 
 The additive read-only `orbit_swarm_integration_review` checks up to 12
 revision-guarded `REVIEW_ACCEPTED` tasks against the **current bounded
 local source snapshot**, per-task scoped `changed_paths` and accepted
-dependencies. For a web build, it also requires the latest existing
+dependencies. Any same-root active reservation or running record, even under
+another project key, requires genuine host reconciliation first without
+exposing private task identities. For a web build, it also requires the latest existing
 `browser_results` PASS to be source-matched, interactive, unblocked and
 consistent with the same project's build. Source changes or newer FAIL
 records invalidate an older PASS. An unavailable/unscannable source, no
@@ -249,7 +251,7 @@ changes. Actual browser QA already belongs to the existing
 `orbit_browser_qa` path; this new read-only tool never runs it.
 Native Android/iOS/desktop QA remains a separate host review gate.
 
-**Verification:** seven synthetic/disposable regression cases and normal
+**Verification:** eight synthetic/disposable regression cases and normal
 exact-head Linux/Windows CI are required before this can join the
 development lane. Once integrated, the source development tool inventory
 will be 46 (not the previously verified 45); release and host
