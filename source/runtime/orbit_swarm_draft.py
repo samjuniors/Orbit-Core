@@ -5,9 +5,6 @@ validation. No model calls, subprocesses, reservations or agent execution.
 """
 from __future__ import annotations
 
-from collections import deque
-import json
-
 import orbit_tasks
 import orbit_swarm
 
@@ -24,7 +21,7 @@ def preview(conn, root, project, args):
         if not isinstance(item, dict):
             raise ValueError("Every draft task must be an object")
         # Reuse the ledger's role, Unicode/path guard, text and key rules.
-        task = {"project": project, **item}
+        task = {**item, "project": project}
         name = orbit_tasks.key(task)
         if name in proposed:
             raise ValueError("Duplicate task key in draft: " + name)
@@ -118,7 +115,7 @@ def preview(conn, root, project, args):
         waves.append({
             "wave": len(waves) + 1,
             "task_keys": wave,
-            "requires_prior_wave_review": len(waves) > 0,
+            "requires_prior_wave_review": len(waves) > 1,
         })
         completed.update(wave)
         remaining.difference_update(wave)
