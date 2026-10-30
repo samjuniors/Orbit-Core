@@ -4,6 +4,10 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] — beyond v0.26.0 candidate
 
+### Next-version development (not released)
+- **Opt-in project pulse:** `orbit_project_resume(compact=true,pulse=true)` adds a bounded, read-only task count and safe next-action hint sourced only from project-scoped local records. No new MCP tool, host invocation, approval, state write or promise of live agent/test verification. The default compact response remains unchanged; genuine host/test acceptance and actual token-savings measurements are still required.
+
+
 The next published release/version remains undecided until the expanded v0.26.0 source scope passes its live-host and security gates. `NEXT_VERSION=0.26.1` remains a tentative planning marker, not a release authorization.
 
 ## [0.26.0] — Development release candidate (NOT PUBLISHED; NOT production-certified)
