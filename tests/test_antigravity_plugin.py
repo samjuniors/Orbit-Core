@@ -199,7 +199,9 @@ class MigrationTests(unittest.TestCase):
             (plugin / "plugin.json").write_text('{"name":"orbit-core"}', encoding="utf-8")
             plan = migration.inspect(home)
             self.assertFalse(plan["safe_to_install_now"])
-            self.assertEqual(plan["installed_orbit_plugin"], str(plugin))
+            # Windows CI TEMP can contain an 8.3 alias (RUNNER~1) that
+            # resolves to a long user-profile name; compare canonical paths.
+            self.assertEqual(Path(plan["installed_orbit_plugin"]).resolve(), plugin.resolve())
             with self.assertRaises(ValueError):
                 migration.stage_migration(home, "ARCHIVE_LEGACY_ORBIT_AND_KEEP_BACKUPS")
             self.assertTrue((plugin / "plugin.json").is_file())
