@@ -20,6 +20,10 @@ class PracticeLearningTests(unittest.TestCase):
         self.two = Path(self.tmp.name) / "two"
         self.one.mkdir()
         self.two.mkdir()
+        # The MCP canonicalizes existing roots; seed fixture rows with that same
+        # Windows/Unix normalized identity rather than the raw temp-dir spelling.
+        self.one = self.one.resolve(strict=True)
+        self.two = self.two.resolve(strict=True)
         self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
         self.addCleanup(self.conn.close)
