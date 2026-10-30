@@ -165,21 +165,24 @@ def launch():
     version = label(top, "v" + installer.VERSION, size=9, color="quiet")
     version.pack(side="right", anchor="n", pady=7)
 
-    # The card tells users exactly what is detected, without showing configuration.
-    card = tk.Frame(main, bg=c["surface"], padx=18, pady=18,
-                    highlightbackground=c["line"], highlightthickness=1)
-    card.pack(fill="x")
-    status_row = tk.Frame(card, bg=c["surface"])
-    status_row.pack(fill="x")
-    dot = tk.Canvas(status_row, width=12, height=15,
-                    bg=c["surface"], borderwidth=0, highlightthickness=0)
-    dot.pack(side="left", padx=(0, 7))
-    dot.create_oval(2, 4, 11, 13, fill=c["green"], outline="")
+    # A vector-drawn status card keeps the compact view visually quiet.
     status_text = tk.StringVar(value="Checking this computer")
-    label(status_row, textvariable=status_text, size=11, bold=True).pack(side="left")
     app_text = tk.StringVar(value="Detecting coding tools...")
-    label(card, textvariable=app_text, size=9, color="secondary",
-          wraplength=400, justify="left").pack(fill="x", pady=(8, 0))
+    card = tk.Canvas(main, height=113, bg=c["background"], bd=0,
+                     highlightthickness=0)
+    card.pack(fill="x")
+    def draw_status_card(_=None):
+        card.delete("all")
+        width = max(card.winfo_width(), 400)
+        rounded(card, 1, 1, width-1, 112, 18, c["surface"], c["line"])
+        dot_color = c["warning"] if current_state["action"] == "review" else c["green"]
+        card.create_oval(21, 28, 31, 38, fill=dot_color, outline="")
+        card.create_text(42, 32, text=status_text.get(), anchor="w",
+                         fill=c["text"], font=("Segoe UI", 12, "bold"))
+        card.create_text(22, 72, text=app_text.get(), anchor="w",
+                         fill=c["secondary"], width=width-46,
+                         font=("Segoe UI", 10))
+    card.bind("<Configure>", draw_status_card)
 
     info = tk.StringVar(value="Local install · Your project data stays yours")
     label(main, textvariable=info, color="quiet", size=9,
@@ -445,7 +448,7 @@ def launch():
             current_state["plan"] = plan
             current_state["error"] = ""
             status_text.set(message)
-            dot.itemconfig(1, fill=(c["warning"] if state == "review" else c["green"]))
+            draw_status_card()
             primary.set_action(name + ("  →" if available else ""), available)
             names = selected_names()
             app_text.set(" · ".join(names) if names else "No coding apps selected")
@@ -456,7 +459,7 @@ def launch():
             current_state["action"] = "review"
             current_state["error"] = str(exc)
             status_text.set("Choose an app or review your settings")
-            dot.itemconfig(1, fill=c["warning"])
+            draw_status_card()
             names = selected_names()
             app_text.set(" · ".join(names) if names else "No coding apps selected")
             primary.set_action("Review setup  →", True)
