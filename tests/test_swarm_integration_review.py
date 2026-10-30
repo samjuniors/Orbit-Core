@@ -7,6 +7,7 @@ verified QA and never performs an approval or Git operation.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -173,6 +174,26 @@ class SwarmIntegrationReviewTests(unittest.TestCase):
         self.assertNotIn("private-secret-worker", json.dumps(result))
         self.assertNotIn("other-project", json.dumps(result))
         self.assertEqual(self.db.total_changes, before)
+
+    def test_declared_directory_does_not_allow_changed_symlink_escape(self):
+        self.build()
+        self.qa()
+        assigned = self.root / "src"
+        assigned.mkdir()
+        outside = self.root.parent / "outside"
+        outside.mkdir()
+        try:
+            os.symlink(str(outside), str(assigned / "escape"), target_is_directory=True)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest("OS symlink unavailable: " + type(error).__name__)
+        self.db.execute(
+            "UPDATE orbit_agent_tasks SET write_paths=?, changed_paths=? WHERE task_key='ui'",
+            (json.dumps(["src/"]), json.dumps(["src/escape/secret.py"])))
+        self.db.commit()
+        result = self.review(build_id="web-app")
+        self.assertEqual(result["status"], "HOLD_TASK_INTEGRATION")
+        self.assertEqual(result["issues"][0]["reason"], "INVALID_TASK_RECORD")
+        self.assertNotIn(str(outside), json.dumps(result))
 
     def test_unscannable_source_and_bad_args_hold(self):
         (self.root / "index.html").unlink()
