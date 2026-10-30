@@ -59,3 +59,42 @@ def entries(root=ROOT):
         "Native plugin activation, paths and permissions require real-host tests.\n"
         "Extracting this archive does not modify any host configuration.\n").encode()
     return mapped
+
+def verify(root, path):
+    desired = entries(root)
+    with zipfile.ZipFile(path) as archive:
+        if sorted(archive.namelist()) != sorted(desired):
+            raise ValueError("Plugin suite inventory differs from canonical source")
+        for name, content in desired.items():
+            if archive.read(name) != content:
+                raise ValueError("Plugin suite differs from source: " + name)
+    digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    checksum = Path(str(path) + ".sha256")
+    if not checksum.is_file() or checksum.read_text(encoding="ascii") != f"{digest}  {Path(path).name}\n":
+        raise ValueError("Plugin suite checksum missing or incorrect")
+    return {"files": len(desired), "sha256": digest}
+
+def build(root=ROOT, path=None):
+    root = Path(root)
+    version = (root / "VERSION").read_text().strip()
+    path = Path(path) if path else root / "dist" / f"Orbit-Core-Plugin-Suite-v{version}.zip"
+    if path.is_symlink():
+        raise ValueError("Refusing symlinked suite archive")
+    if path.exists():
+        return verify(root, path)
+    path.parent.mkdir(exist_ok=True, parents=True)
+    with zipfile.ZipFile(path, "x", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, body in sorted(entries(root).items()):
+            if ".." in Path(name).parts or name.startswith("/"):
+                raise ValueError("Unsafe ZIP path")
+            info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, body)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    Path(str(path) + ".sha256").write_text(
+        f"{digest}  {path.name}\n", encoding="ascii")
+    return verify(root, path)
+
+if __name__ == "__main__":
+    print(json.dumps(build(), indent=2))
