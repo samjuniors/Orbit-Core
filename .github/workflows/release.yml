@@ -80,6 +80,7 @@ jobs:
           set -euo pipefail
           python scripts/build_release.py --verify
           (cd dist && sha256sum --check "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256")
+          (cd dist && sha256sum --check "Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256")
       - name: Generate version-specific release notes
         shell: bash
         run: |
@@ -132,6 +133,8 @@ jobs:
           gh release create "$ORBIT_RELEASE_TAG" \
             "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip" \
             "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
+            "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip" \
+            "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
             "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb" \
             "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256" \
             --repo "$GITHUB_REPOSITORY" \

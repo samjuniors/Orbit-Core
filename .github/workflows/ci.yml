@@ -78,5 +78,7 @@ jobs:
             ORBIT-Claude-Desktop-v${{ env.ORBIT_CANDIDATE_VERSION }}.mcpb
             dist/ORBIT-Universal-Setup-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip
             dist/ORBIT-Universal-Setup-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip.sha256
+            dist/Orbit-Antigravity-Plugin-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip
+            dist/Orbit-Antigravity-Plugin-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip.sha256
           if-no-files-found: error
           retention-days: 14
