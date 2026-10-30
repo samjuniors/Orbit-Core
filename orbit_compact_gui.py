@@ -423,6 +423,11 @@ def launch():
 
     button(utilities, "Uninstall...", uninstall_clicked, danger=True).pack(side="right")
 
+    def resize_main_window():
+        new_height = (EXPANDED_HEIGHT + (47 if scope.get() == "project" else 0)
+                      if expanded.get() else COLLAPSED_HEIGHT)
+        app.geometry(f"{WINDOW_WIDTH}x{new_height}")
+
     def toggle_options():
         expanded.set(not expanded.get())
         if expanded.get():
@@ -430,15 +435,15 @@ def launch():
         else:
             options.pack_forget()
         more.configure(text="Less options  ↑" if expanded.get() else "More options  ↓")
-        app.geometry(f"{WINDOW_WIDTH}x"
-                     f"{EXPANDED_HEIGHT + (47 if scope.get() == 'project' else 0)
-                        if expanded.get() else COLLAPSED_HEIGHT}")
+        resize_main_window()
 
     def scope_changed(*_):
         if scope.get() == "project":
             path_row.pack(fill="x", pady=(0, 12), before=hosts_row)
         else:
             path_row.pack_forget()
+        if expanded.get():
+            resize_main_window()
         schedule_refresh()
 
     def refresh():
