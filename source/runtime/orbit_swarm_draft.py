@@ -62,6 +62,16 @@ def preview(conn, root, project, args):
                 "conflicting_keys": collisions,
                 "review_waves": [], "reason": "Never overwrite registered tasks."}
 
+    # The registered-task preview hard-caps the entire project DAG at 40.
+    # Account for proposed (not-yet-registered) task nodes as well, otherwise
+    # this preview could approve a plan that the next preview cannot schedule.
+    if existing_count + len(proposed) > orbit_swarm.MAX_GRAPH_TASKS:
+        return {**base, "status": "HOLD_GRAPH_TOO_LARGE",
+                "review_waves": [],
+                "reason": ("Existing and proposed tasks exceed the 40-task "
+                           "swarm graph limit. Complete or split the scope "
+                           "before registering additional tasks.")}
+
     missing = sorted({dep for task in proposed.values() for dep in task["depends_on"]
                       if dep not in proposed and dep not in existing})
     if missing:
