@@ -96,7 +96,7 @@ class PracticeLearningTests(unittest.TestCase):
         self.assertEqual(inactive["candidates"], [])
         self.assertEqual(self.call("orbit_practice_review", practice_key=key,
                          action="approve", practice_text="A repeated pattern should be reviewed",
-                         confirm_write=True)["status"], "ALREADY_REVIEWED")
+                         expected_revision=1, confirm_write=True)["status"], "ALREADY_REVIEWED")
 
     def test_supersede_and_archive_keep_history_with_revision_checks(self):
         self.seed("one")
