@@ -79,7 +79,9 @@ def local_state(preview_result: SetupPreview) -> str:
     if any(c.action in {"UPGRADE", "MERGE", "APPEND"} for c in writable):
         return "update"
     # An already present file must never be presented as a clean new install.
-    if any(c.target.exists() for c in writable):
+    if any(c.target.exists() for c in preview_result.changes):
+        # An already-installed host with a missing component is a repair/update,
+        # not a new installation. Keep the UI to three requested actions.
         return "update"
     return "install"
 
@@ -93,7 +95,7 @@ def preview_lines(review: SetupPreview) -> str:
         else:
             lines.append(f"{c.action:8} {c.target}")
     lines.extend(review.notes)
-    lines.append(f"\\n{len(review.changes)} planned entries. Nothing has changed.")
+    lines.append(f"\n{len(review.changes)} planned entries. Nothing has changed.")
     return "\n".join(lines)
 
 
