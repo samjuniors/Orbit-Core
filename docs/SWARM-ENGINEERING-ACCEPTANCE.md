@@ -103,6 +103,50 @@ cross-process contention, interruption/restart recovery and actual
 usage/token measurements. Version `0.27.0` is provisional; no merge to
 main or new release is authorized.
 
+## Phase 3 — batch host-native handoff preflight (stacked feature PR)
+
+**Status: SOURCE IMPLEMENTED, actual native host execution NOT RUN.**
+The new `orbit_swarm_host_preflight` is an all-or-nothing, **read-only**
+review of one or two existing, `RESERVED` tasks before the connected host
+invokes any specialist. Every selected task must have a fresh revision, no
+already recorded host session, valid bounded writable scopes, accepted
+prerequisites and an existing `orbit_task_handoff` result of
+`HOST_INVOCATION_REQUIRED`. The caller must report host-native tools for
+Antigravity, Codex or Claude Code; Orbit never treats those claims as
+authenticated capability or permission.
+
+**Fail-closed batch behavior:** If any selected task is stale, missing,
+unreserved, running, previously denied, scope-conflicting or has an
+unavailable native tool, Orbit returns `HOLD_HOST_PREFLIGHT` with **zero**
+runnable handoffs. It also holds if an unrelated task at the same workspace
+root still has a RESERVED/RUNNING record; it does not reveal another
+project's task identity. Never infer a host worker was stopped from an
+MCP restart, timestamp or local status.
+
+**Native host action remains explicit:**
+1. Preview proposed specialist tasks; obtain owner approval separately,
+   register individually, then reserve each with current revision and
+   caller-reported approval reference.
+2. Call `orbit_swarm_host_preflight` with each reserved task key and exact
+   revision; review its all-or-nothing packets.
+3. For EACH packet, the connected host independently checks capability and
+   user permission, invokes its true native subagent tool and captures the
+   real session reference; use `orbit_task_started` only after invocation.
+4. If host permission is denied or invocation fails **before starting**,
+   call the existing revision-guarded `orbit_task_release` with
+   `HOST_PERMISSION_DENIED`, `HOST_TOOL_UNAVAILABLE` or
+   `HOST_INVOCATION_FAILED` and explicit confirmation. Do not reuse
+   denied consent.
+5. If a task is already RUNNING, inspect the actual host session and
+   host-confirmed terminal state before calling `orbit_task_report`.
+   No automatic cancellation, process control or silent forced recovery.
+
+**This is coordination guidance, NOT proof of running parallel agents.**
+The tool does not spawn agents, grant permissions, write SQLite, enforce
+the host's tool registry, measure real token costs or certify test results.
+The next mission must test actual host invocation and denial/recovery with
+the owner's authorized disposable fixture.
+
 ## Next slices (beyond the validated draft preflight)
 
 1. **Swarm mission input and bounded DAG draft preview:** accept a user-defined
