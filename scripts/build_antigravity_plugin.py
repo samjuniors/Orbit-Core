@@ -62,7 +62,7 @@ def validate_agents(files: list[Path]) -> None:
     for path in files:
         header = _frontmatter(path)
         required = MAIN_HEADER if path.stem == "orbit" else CHILD_HEADER
-        if not all(re.search(rf"(?m)^{re.escape(line)}\\s*$", header) for line in required):
+        if not all(line in header.splitlines() for line in required):
             raise ValueError(f"Unsafe main/subagent role flags: {path.name}")
         if "model: inherit" not in header:
             raise ValueError(f"Host should select the model: {path.name}")
