@@ -11,8 +11,8 @@ import installer
 import orbit_setup_ui_model as model
 
 WINDOW_WIDTH = 504
-COLLAPSED_HEIGHT = 365
-EXPANDED_HEIGHT = 612
+COLLAPSED_HEIGHT = 350
+EXPANDED_HEIGHT = 590
 
 PALETTE = {
     "background": "#0D1422",
@@ -149,7 +149,7 @@ def launch():
     main.pack(fill="both", expand=True, padx=28)
 
     top = tk.Frame(main, bg=c["background"])
-    top.pack(fill="x", pady=(24, 18))
+    top.pack(fill="x", pady=(19, 12))
     mark = tk.Canvas(top, width=42, height=42, bg=c["background"],
                      borderwidth=0, highlightthickness=0)
     mark.pack(side="left")
@@ -168,18 +168,18 @@ def launch():
     # A vector-drawn status card keeps the compact view visually quiet.
     status_text = tk.StringVar(value="Checking this computer")
     app_text = tk.StringVar(value="Detecting coding tools...")
-    card = tk.Canvas(main, height=113, bg=c["background"], bd=0,
+    card = tk.Canvas(main, height=101, bg=c["background"], bd=0,
                      highlightthickness=0)
     card.pack(fill="x")
     def draw_status_card(_=None):
         card.delete("all")
         width = max(card.winfo_width(), 400)
-        rounded(card, 1, 1, width-1, 112, 18, c["surface"], c["line"])
+        rounded(card, 1, 1, width-1, 100, 18, c["surface"], c["line"])
         dot_color = c["warning"] if current_state["action"] == "review" else c["green"]
-        card.create_oval(21, 28, 31, 38, fill=dot_color, outline="")
-        card.create_text(42, 32, text=status_text.get(), anchor="w",
+        card.create_oval(21, 24, 31, 34, fill=dot_color, outline="")
+        card.create_text(42, 28, text=status_text.get(), anchor="w",
                          fill=c["text"], font=("Segoe UI", 12, "bold"))
-        card.create_text(22, 72, text=app_text.get(), anchor="w",
+        card.create_text(22, 66, text=app_text.get(), anchor="w",
                          fill=c["secondary"], width=width-46,
                          font=("Segoe UI", 10))
     card.bind("<Configure>", draw_status_card)
@@ -188,7 +188,7 @@ def launch():
 
     info = tk.StringVar(value="Local install · Your project data stays yours")
     label(main, textvariable=info, color="quiet", size=9,
-          wraplength=440).pack(fill="x", pady=(12, 16))
+          wraplength=440).pack(fill="x", pady=(8, 12))
 
     def selected():
         return [key for key, var in hostvars.items() if var.get()]
@@ -321,7 +321,7 @@ def launch():
         bd=0, relief="flat", cursor="hand2", font=("Segoe UI", 9),
         command=lambda: toggle_options(), takefocus=True,
     )
-    more.pack(pady=(12, 0))
+    more.pack(pady=(10, 0))
 
     options = tk.Frame(main, bg=c["background"])
     separator = tk.Frame(options, bg=c["line"], height=1)
@@ -431,7 +431,8 @@ def launch():
             options.pack_forget()
         more.configure(text="Less options  ↑" if expanded.get() else "More options  ↓")
         app.geometry(f"{WINDOW_WIDTH}x"
-                     f"{EXPANDED_HEIGHT if expanded.get() else COLLAPSED_HEIGHT}")
+                     f"{EXPANDED_HEIGHT + (47 if scope.get() == 'project' else 0)
+                        if expanded.get() else COLLAPSED_HEIGHT}")
 
     def scope_changed(*_):
         if scope.get() == "project":
@@ -459,11 +460,12 @@ def launch():
         except (installer.SetupError, OSError, ValueError) as exc:
             current_state["action"] = "review"
             current_state["error"] = str(exc)
-            status_text.set("Choose an app or review your settings")
+            status_text.set("Review existing setup")
             names = selected_names()
             app_text.set(" · ".join(names) if names else "No coding apps selected")
             primary.set_action("Review setup  →", True)
-            info.set(str(exc)[:105])
+            info.set("Review required before changes can be applied."
+                     if names else "Choose an app in More options.")
 
     def schedule_refresh(*_):
         if current_state["after_id"] is not None:
