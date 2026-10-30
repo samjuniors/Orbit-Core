@@ -4,6 +4,10 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] — beyond v0.26.0 candidate
 
+### v0.27.0 development (NOT PUBLISHED)
+- **Agent Swarm planning:** New opt-in read-only `orbit_swarm_preview` MCP tool proposes at most two non-conflicting, dependency-ready native handoffs from the existing project task ledger. Missing dependencies, cycles, protected paths, active sessions or oversized graphs HOLD. Does not spawn agents or grant approvals. Cross-host acceptance and launch/rollback remain unverified.
+
+
 The next published release/version remains undecided until the expanded v0.26.0 source scope passes its live-host and security gates. `NEXT_VERSION=0.26.1` remains a tentative planning marker, not a release authorization.
 
 ## [0.26.0] — Development release candidate (NOT PUBLISHED; NOT production-certified)
