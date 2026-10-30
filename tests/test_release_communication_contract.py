@@ -40,7 +40,7 @@ class ReleaseCommunicationTests(unittest.TestCase):
     def test_publish_notes_continue_to_use_version_specific_changelog(self):
         workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
         self.assertIn("CHANGELOG.md", workflow)
-        self.assertIn("## [", workflow)
+        self.assertIn("re.escape(version)", workflow)
         self.assertIn("--notes-file", workflow)
         self.assertIn("refs/heads/main", workflow)
         self.assertIn("Existing tag", workflow)
