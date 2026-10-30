@@ -163,6 +163,84 @@ class PracticeLearningTests(unittest.TestCase):
                          action="approve", practice_text="A fully reviewed note is required.",
                          expected_revision=4, confirm_write=True)["status"], "STALE_REVISION")
 
+    def test_old_decisions_never_resurface_after_many_reviews(self):
+        # Regression: candidate suppression must not depend on the 20 most
+        # recent saved rows or on the optional inactive display filter.
+        self.seed("initial-a", step="first-reviewed-step")
+        self.seed("initial-b", step="first-reviewed-step")
+        first = self.key()
+        self.call("orbit_practice_review", practice_key=first,
+                  action="approve", confirm_write=True,
+                  practice_text="Keep a reviewer-accepted practice even as later notes grow.")
+        for number in range(23):
+            step = f"later-reviewed-step-{number}"
+            self.seed(f"task-{number}-a", step=step)
+            self.seed(f"task-{number}-b", step=step)
+            pending = self.call("orbit_practice_suggest")["candidates"]
+            self.assertEqual(len(pending), 1)
+            self.call("orbit_practice_review",
+                      practice_key=pending[0]["practice_key"], action="reject",
+                      rationale="Not sufficiently general for reuse", confirm_write=True)
+        result = self.call("orbit_practice_suggest")
+        self.assertEqual(result["candidates"], [])
+        self.assertEqual([r["practice_key"] for r in result["practices"]], [first])
+        inactive = self.call("orbit_practice_suggest", include_inactive=True, limit=20)
+        self.assertEqual(len(inactive["practices"]), 20)
+        self.assertEqual(inactive["candidates"], [])
+
+    def test_preview_never_executes_a_sqlite_write(self):
+        self.seed("one")
+        self.seed("two")
+        key = self.key()
+        traced = []
+        self.conn.set_trace_callback(traced.append)
+        try:
+            preview = self.call("orbit_practice_review", practice_key=key,
+                                action="approve", practice_text="Use reviewer notes as scoped data.")
+        finally:
+            self.conn.set_trace_callback(None)
+        self.assertEqual(preview["status"], "PREVIEW_ONLY")
+        self.assertFalse(any(command.lstrip().upper().startswith(("BEGIN", "UPDATE", "INSERT"))
+                             for command in traced))
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM orbit_practices").fetchone()[0], 0)
+
+    def test_failed_decision_history_insert_rolls_back_state(self):
+        self.seed("one")
+        self.seed("two")
+        key = self.key()
+        self.conn.execute("""CREATE TRIGGER reject_practice_history BEFORE INSERT
+            ON orbit_practice_history BEGIN SELECT RAISE(ABORT, 'history write failed'); END""")
+        with self.assertRaises(sqlite3.DatabaseError):
+            self.call("orbit_practice_review", practice_key=key, action="approve",
+                      practice_text="Only save decisions with a durable history.",
+                      confirm_write=True)
+        self.assertIsNone(self.conn.execute("SELECT * FROM orbit_practices").fetchone())
+        self.assertIsNone(self.conn.execute("SELECT * FROM orbit_practice_history").fetchone())
+
+    def test_sqlite_restart_preserves_practice_review_history(self):
+        self.seed("one")
+        self.seed("two")
+        key = self.key()
+        self.call("orbit_practice_review", practice_key=key, action="approve",
+                  practice_text="Preserve reviewed knowledge after an SQLite restart.",
+                  confirm_write=True)
+        dbfile = Path(self.tmp.name) / "persist.sqlite3"
+        disk = sqlite3.connect(dbfile)
+        try:
+            self.conn.backup(disk)
+        finally:
+            disk.close()
+        recovered = sqlite3.connect(dbfile)
+        recovered.row_factory = sqlite3.Row
+        self.addCleanup(recovered.close)
+        orbit_tasks.setup(recovered)
+        orbit_evidence.setup(recovered)
+        response = orbit_evidence.practice_suggest(recovered, self.one, "orbit", {})
+        self.assertEqual(response["practices"][0]["practice_key"], key)
+        self.assertTrue(response["practices"][0]["evidence_current"])
+        self.assertEqual(recovered.execute(
+            "SELECT COUNT(*) FROM orbit_practice_history").fetchone()[0], 1)
+
     def test_tool_contract_does_not_accept_unknown_fields(self):
         tools = {tool["name"]: tool for tool in orbit_mcp.TOOLS}
         self.assertTrue(tools["orbit_practice_suggest"]["annotations"]["readOnlyHint"])
