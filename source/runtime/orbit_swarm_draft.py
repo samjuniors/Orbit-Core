@@ -32,17 +32,6 @@ def preview(conn, root, project, args):
             "depends_on": deps,
         }
 
-    existing_count = conn.execute(
-        "SELECT COUNT(*) FROM orbit_agent_tasks WHERE project=? AND project_root=?",
-        (project, str(root))).fetchone()[0]
-    if existing_count > orbit_swarm.MAX_GRAPH_TASKS:
-        return {**base, "status": "HOLD_GRAPH_TOO_LARGE",
-                "review_waves": [],
-                "reason": "Review and scope existing project tasks before proposing another swarm."}
-    existing = {row["task_key"]: row["status"] for row in conn.execute(
-        "SELECT task_key,status FROM orbit_agent_tasks "
-        "WHERE project=? AND project_root=?", (project, str(root)))}
-    collisions = sorted(set(proposed).intersection(existing))
     base = {
         "mode": "READ_ONLY_DRAFT_PREVIEW",
         "project": project, "project_root": str(root),
@@ -57,6 +46,17 @@ def preview(conn, root, project, args):
                  "using orbit_task_plan with confirm_write only after explicit "
                  "approval. Separately reserve and invoke through the real host."),
     }
+    existing_count = conn.execute(
+        "SELECT COUNT(*) FROM orbit_agent_tasks WHERE project=? AND project_root=?",
+        (project, str(root))).fetchone()[0]
+    if existing_count > orbit_swarm.MAX_GRAPH_TASKS:
+        return {**base, "status": "HOLD_GRAPH_TOO_LARGE",
+                "review_waves": [],
+                "reason": "Review and scope existing project tasks before proposing another swarm."}
+    existing = {row["task_key"]: row["status"] for row in conn.execute(
+        "SELECT task_key,status FROM orbit_agent_tasks "
+        "WHERE project=? AND project_root=?", (project, str(root)))}
+    collisions = sorted(set(proposed).intersection(existing))
     if collisions:
         return {**base, "status": "HOLD_EXISTING_TASK_KEYS",
                 "conflicting_keys": collisions,
