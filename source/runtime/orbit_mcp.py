@@ -21,11 +21,16 @@ import orbit_decisions
 import orbit_updates
 import orbit_evidence
 import orbit_delegation
+import orbit_swarm
+import orbit_swarm_draft
+import orbit_swarm_host
+import orbit_swarm_integrity
 import orbit_portable
+import orbit_pulse
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = '0.26.0'
+VERSION = '0.27.0'
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_STATE_BYTES = 24000
 SUPPORTED_PROTOCOLS = ('2025-11-25', '2025-06-18', '2025-03-26')
@@ -357,6 +362,8 @@ def compact_resume(conn, root, project, a):
                 checkpoint['warning']='Checkpoint project key does not match; do not reuse its content'
         else:
             checkpoint['warning']='Checkpoint is not recognized as a bounded Orbit-managed block'
+    if a.get('pulse') is True:
+        offer('project_pulse',orbit_pulse.summarize(conn,root,project,checkpoint))
     offer('checkpoint',checkpoint)
 
     saved=orbit_intake.status(conn,root,{'project':project})
@@ -433,7 +440,7 @@ def string(n=4000):
 
 TOOLS = [
     {'name':'orbit_project_scan','description':'Read-only bounded project checkpoint and document metadata.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
-    {'name':'orbit_project_resume','description':'Resume full project state, or request an objective-scoped compact local context envelope without unrelated memory history. Compact output is read-only and cannot attest owner approvals or Git/test status.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'compact':{'type':'boolean'},'objective':string(600),'max_chars':{'type':'integer','minimum':900,'maximum':3500}},['project_root','project'])},
+    {'name':'orbit_project_resume','description':'Resume full project state, or request an objective-scoped compact local context envelope without unrelated memory history. Compact output is read-only and cannot attest owner approvals or Git/test status.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'compact':{'type':'boolean'},'objective':string(600),'max_chars':{'type':'integer','minimum':900,'maximum':3500},'pulse':{'type':'boolean'}},['project_root','project'])},
     {'name':'orbit_update_status','description':'Read-only update notice; optional refresh fetches only published GitHub release metadata. It NEVER downloads code, executes an installer or changes a project. User opens Orbit Update Manager to approve installation.', 'inputSchema':schema({'refresh':{'type':'boolean'}},[])}, 
     {'name':'orbit_research_source_save','description':'Preview or save one reviewed external research pointer in folder+project-scoped SQLite; revision-guarded, no downloads, skills, Git writes or independent approval attestation.','inputSchema':schema({'project_root':string(2000),'project':string(80),'source_key':string(80),'url':string(500),'title':string(140),'tags':{'type':'array','minItems':1,'maxItems':8,'items':string(32)},'note':string(1100),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','source_key','url','title','tags','note'])},
     {'name':'orbit_research_context','description':'Read a tiny objective-relevant pack of saved source pointers from this exact project folder+key. No network calls, no execution, no bulk document retrieval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'objective':string(600),'limit':{'type':'integer','minimum':1,'maximum':6},'max_chars':{'type':'integer','minimum':600,'maximum':4500}},['project_root','project','objective'])},
@@ -444,13 +451,17 @@ TOOLS = [
     {'name':'orbit_gate_evaluate','description':'Evaluate caller-supplied criteria (not independent test verification).','inputSchema':schema({'checks':{'type':'array','minItems':1,'items':{'type':'object'}}},['checks'])},
     # Product Kit-inspired native task ledger; no Git actions, model spawning or implicit approvals.
     {'name':'orbit_task_plan','description':'Preview/register one scoped specialist task. Does NOT launch agents.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'step':string(100),'role':{'type':'string','enum':sorted(orbit_tasks.ROLES)},'goal':string(1500),'reason':string(500),'write_paths':{'type':'array','maxItems':24,'items':{'type':'string'}},'depends_on':{'type':'array','maxItems':8,'items':{'type':'string'}},'confirm_write':{'type':'boolean'}},['project_root','project','task_key','step','role','goal','reason'])},
+    {'name':'orbit_swarm_host_preflight','description':'Read-only all-or-nothing review for one or two RESERVED specialist tasks before host-native invocation. Checks fresh revisions, conflicts, active sessions and existing per-task handoff gates; never invokes, grants permission, releases or writes.','inputSchema':schema({'project_root':string(2000),'project':string(80),'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},'tasks':{'type':'array','minItems':1,'maxItems':2,'items':{'type':'object','properties':{'task_key':string(80),'expected_revision':{'type':'integer','minimum':1}},'required':['task_key','expected_revision'],'additionalProperties':False}}},['project_root','project','host','tasks'])},
+    {'name':'orbit_swarm_draft_preview','description':'Validate a host/user-proposed bounded specialist task DAG and review waves against the existing task ledger. No task creation, model call, approval, reservation or agent launch.','inputSchema':schema({'project_root':string(2000),'project':string(80),'tasks':{'type':'array','minItems':1,'maxItems':12,'items':{'type':'object','properties':{'task_key':string(80),'step':string(100),'role':{'type':'string','enum':sorted(orbit_tasks.ROLES)},'goal':string(1500),'reason':string(500),'write_paths':{'type':'array','maxItems':24,'items':{'type':'string'}},'depends_on':{'type':'array','maxItems':8,'items':string(80)}},'required':['task_key','step','role','goal','reason'],'additionalProperties':False}}},['project_root','project','tasks'])},
+    {'name':'orbit_swarm_preview','description':'Read-only preview of a bounded dependency DAG from existing project task records. Suggests at most two non-conflicting host-native handoffs. No task registration, reservation, host invocation or verified approval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},'max_parallel':{'type':'integer','minimum':1,'maximum':2}},['project_root','project'])},
+    {'name':'orbit_swarm_integration_review','description':'Read-only source-fingerprint and recorded-browser-QA freshness gate for 1..12 review-accepted specialist tasks. Never runs tests, attests host approval, merges or publishes.','inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_source_fingerprint':string(64),'build_id':string(40),'tasks':{'type':'array','minItems':1,'maxItems':12,'items':{'type':'object','properties':{'task_key':string(80),'expected_revision':{'type':'integer','minimum':1}},'required':['task_key','expected_revision'],'additionalProperties':False}}},['project_root','project','expected_source_fingerprint','tasks'])},
     {'name':'orbit_task_handoff','description':'Read-only per-task host-native delegation packet. Requires a real reservation, accepted dependencies, and a native host tool explicitly reported as available; never spawns agents or authenticates approval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},'include_research':{'type':'boolean'}},['project_root','project','task_key','host'])},
     {'name':'orbit_task_list','description':'List scoped task registry (read-only).','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':40},'status':string(25)},['project_root','project'])},
     {'name':'orbit_task_reserve','description':'After actual host/user approval, reserve one native subagent slot. NO agent is spawned. Advisory caller approval reference; independent host permission still required.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'approval_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','approval_reference'])},
     {'name':'orbit_task_started','description':'Mark RESERVED task RUNNING only AFTER the authorized host confirms an actual subagent invocation and returns its reference. Does not invoke host.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'host_session':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','host_session'])},
     {'name':'orbit_task_release','description':'Record user cancellation or pre-invocation host denial/unavailability, releasing an unstarted slot. No native agent is stopped; denied tasks remain BLOCKED until fresh host consent.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'reason':string(500),'reason_code':{'type':'string','enum':sorted(orbit_tasks.RELEASE_REASONS)},'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','reason'])},
     {'name':'orbit_task_scope_check','description':'Check caller-supplied changed file paths against registered writable scope; independently inspect Git diff.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'changed_paths':{'type':'array','maxItems':60,'items':{'type':'string'}}},['project_root','project','task_key','changed_paths'])},
-    {'name':'orbit_task_report','description':'Record an observed terminal native-agent outcome only after checking exact host session and terminal state. UNKNOWN/RUNNING leaves task on HOLD; host evidence is caller-reported, not independently attested. Does not stop agents.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['REPORTED_DONE','FAILED','BLOCKED','CANCELLED']},'evidence':string(1600),'observed_host_session':string(240),'host_state':{'type':'string','enum':sorted(orbit_tasks.HOST_STATES)},'changed_paths':{'type':'array','maxItems':60,'items':{'type':'string'}},'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','outcome','evidence'])},
+    {'name':'orbit_task_report','description':'Record an observed terminal native-agent outcome only after checking exact host session and terminal state. UNKNOWN/RUNNING leaves task on HOLD. BLOCKED with host COMPLETED requires objective_completed=false and no reported changed paths; real host outcome remains caller-reported. Does not stop agents.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['REPORTED_DONE','FAILED','BLOCKED','CANCELLED']},'evidence':string(1600),'observed_host_session':string(240),'host_state':{'type':'string','enum':sorted(orbit_tasks.HOST_STATES)},'changed_paths':{'type':'array','maxItems':60,'items':{'type':'string'}},'objective_completed':{'type':'boolean'},'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','outcome','evidence'])},
     {'name':'orbit_task_review','description':'Record separately inspected review result; never merge Git or independently attest evidence.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'verdict':{'type':'string','enum':['ACCEPT','REWORK']},'review_evidence':string(1600),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','verdict','review_evidence'])},
 ]
 TOOLS += [
@@ -483,7 +494,7 @@ TOOLS += [
 ]
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
-    'orbit_task_list','orbit_task_handoff','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
+    'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_swarm_draft_preview','orbit_swarm_host_preflight','orbit_swarm_integration_review','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
     'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
@@ -677,6 +688,18 @@ def execute(conn, name, a):
     if name=='orbit_memory_archive': return memory_archive(conn,a)
     if name=='orbit_project_checkpoint': return checkpoint(conn,a)
     if name=='orbit_gate_evaluate': return gate(a)
+    if name=='orbit_swarm_host_preflight':
+        root=project_root(a)
+        return orbit_swarm_host.review(conn,root,project_key(a),a)
+    if name=='orbit_swarm_draft_preview':
+        root=project_root(a)
+        return orbit_swarm_draft.preview(conn,root,project_key(a),a)
+    if name=='orbit_swarm_preview':
+        root=project_root(a)
+        return orbit_swarm.preview(conn,root,project_key(a),a)
+    if name=='orbit_swarm_integration_review':
+        root=project_root(a)
+        return orbit_swarm_integrity.review(conn,root,project_key(a),a)
     if name.startswith('orbit_task_'):
         root = project_root(a)
         a = {**a, 'project': project_key(a)}

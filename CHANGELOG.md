@@ -2,9 +2,82 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — next planned v0.27.0
+## [Unreleased] — next planned v0.28.0
 
-v0.27.0 is the planned follow-on to the reviewed v0.26.0 candidate. `NEXT_VERSION=0.27.0` is a planning marker; it does not authorize publication of either version.
+Future v0.28.0 work is tracked independently. It is not included in
+v0.27.0, and this planning marker does not authorize publication.
+
+## [0.27.0] — Prerelease candidate (2026-10-31)
+
+### Highlights
+
+- **Orbit-native Swarm coordination (four read-only MCP tools):** Preview up
+  to two independent specialist tasks with `orbit_swarm_preview`; validate
+  a proposed task dependency graph before registration using
+  `orbit_swarm_draft_preview`. Orbit orchestrates only; the connected host
+  executes agents using its own available tools and permissions.
+- **Accurate stopped-worker reconciliation:** A native host session
+  can end normally even when its assigned task failed to produce files.
+  Orbit now records this as a blocked objective **only after** exact-session
+  reporting, explicit incomplete-objective evidence, no reported file
+  changes and a confirmed write. A new worker attempt requires new approval;
+  uncertain sessions remain on HOLD.
+- **Safer parallel handoffs:** `orbit_swarm_host_preflight` checks paired
+  reservations without falsely claiming a native host session; SQLite
+  transactions bound concurrent task handoffs, retries and file ownership.
+- **Integration evidence before acceptance:** `orbit_swarm_integration_review`
+  checks dependency acceptance, source-linked freshness and recorded QA
+  evidence, returning HOLD on stale or unverified work rather than
+  claiming tests were executed.
+- **Opt-in Project Pulse:** `orbit_project_resume(compact=true,pulse=true)`
+  offers scoped task counts and concise next-action suggestions without
+  a new model, cloud service or automatic subagent execution.
+- **46 MCP tools:** Four new Swarm preview/preflight/review tools expand the
+  previous published 42-tool runtime. Protected path checks also reject
+  Windows path aliases, collisions and symlink escapes in proposed work.
+
+### Install and upgrade
+
+- Download the corresponding v0.27.0 Universal Setup ZIP and SHA-256
+  sidecar from the [official GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)
+  **only after the version is published**. The separate Antigravity plugin
+  ZIP, combined Antigravity/Codex/Claude Code plugin-suite ZIP, and Claude
+  Desktop MCPB are different supported packaging formats.
+- The local MCP runs with Python 3.10–3.13 (3.12 recommended for Windows).
+  Windows setup requires Tkinter and uses `Orbit Setup.cmd`; macOS/Linux
+  use `python3 orbit_setup.py` from the extracted Universal Setup ZIP.
+- Preview exactly which host registrations, skills and runtimes will change,
+  preserve custom files, approve only authorized changes, and refresh the
+  coding host's MCP connection. Verify the reported version and 46 tool
+  registrations with a real host read-only tool call after installation.
+
+### Compatibility
+
+- Back up local SQLite databases **and WAL files**, project checkpoints,
+  custom MCP configurations and existing host skills before upgrading.
+  Existing approved task/checkpoint records must be retained; a data
+  downgrade to older runtimes is not automatic.
+- Task delegation, reservation and integration review are host-mediated:
+  no automatic spawning, no independent user-consent authentication,
+  and no silent installation of new dependencies.
+- Swarm suggestions cap concurrency at two separately authorized tasks;
+  dependency cycles, unsafe ownership/path overlaps, uncertain sessions
+  and stale source evidence fail closed.
+
+### Known limitations
+
+- Native Antigravity, Codex and Claude Code Swarm permission/denial,
+  cancellation/restart, true parallel worker execution and cross-agent
+  integration outcomes are **NOT VERIFIED** by source or CI tests alone.
+- Real installed-user migration and rollback, cross-PC recovery,
+  interactive setup/HiDPI accessibility, signed publisher provenance,
+  independent security review and live performance/context-saving claims
+  remain **NOT VERIFIED**.
+- SHA-256 sidecars check download integrity, not publisher identity.
+  Orbit is not a sandbox, a separate LLM, an automatic native-agent
+  executor or a cloud synchronization service. This version is a
+  prerelease candidate and is **not production-certified**.
+
 
 ## [0.26.0] — Prerelease candidate (live-host certification pending)
 

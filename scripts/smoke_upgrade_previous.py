@@ -32,8 +32,8 @@ def test_upgrade(previous_root, candidate_root=ROOT):
     candidate_root = Path(candidate_root).resolve(strict=True)
     old_version = (previous_root / "VERSION").read_text(encoding="utf-8").strip()
     new_version = (candidate_root / "VERSION").read_text(encoding="utf-8").strip()
-    supported_source_versions = {"0.24.1", "0.25.1"}
-    reviewed_candidate_versions = {"0.25.0", "0.25.1", "0.26.0"}
+    supported_source_versions = {"0.24.1", "0.25.1", "0.26.0"}
+    reviewed_candidate_versions = {"0.25.0", "0.25.1", "0.26.0", "0.27.0"}
     if (old_version not in supported_source_versions
             or new_version not in reviewed_candidate_versions
             or tuple(map(int, new_version.split("."))) <= tuple(map(int, old_version.split(".")))):

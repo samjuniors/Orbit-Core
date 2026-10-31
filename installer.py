@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
-VERSION = '0.26.0'
+VERSION = '0.27.0'
 SERVER = "orbit-core-native"
 HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
@@ -87,6 +87,9 @@ OLD_STOCK_SHA256 = {
     '2ba28070239300b080994879a8df81996172df90c5910ad346c76114252fd2ff',  # v0.25.1 HANDOFF.md
     'b45ad9da0a259838c16a84ed8f4f3440973761e9bc1174e82527d10206d8c418',  # v0.25.1 PROJECT-INTAKE.md
     'ab5dd7d29724a966f80dbc0c540be6c3e7042671959d5d85e266d8b480d98829',  # v0.25.1 TASK-LIFECYCLE.md
+    # Exact official v0.26.0 stock TASK-LIFECYCLE.md (verified from immutable
+    # published v0.26.0 tag). Modified files still trigger manual review.
+    'f8d5293d2869f01008b4126b80d1c0e2a11e049fe72019daa51624864343876a',  # v0.26.0 installed TASK-LIFECYCLE.md
     # Previous official Edge/Chrome QA candidate (c027e73) stock files.
     # Exact SHA256 only; unknown/customized content remains protected.
     '8fb102a9b367332ef92d9f1204e69996f6ef1bee033354dd1971735ccd46ba1a',  # source/runtime/orbit_mcp.py
@@ -392,7 +395,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
     runtime=runtime_folder()
     if any(p.is_symlink() for p in [runtime,runtime.parent]):raise SetupError('Runtime directory is a symlink')
     changes=[]
-    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py','orbit_intake.py','orbit_decisions.py','orbit_updates.py','orbit_evidence.py','orbit_delegation.py','orbit_portable.py']:
+    for name in ['orbit_mcp.py','orbit_tasks.py','orbit_capabilities.py','orbit_preview.py','orbit_browser.py','orbit_build.py','orbit_intake.py','orbit_decisions.py','orbit_updates.py','orbit_evidence.py','orbit_delegation.py','orbit_portable.py','orbit_swarm.py','orbit_swarm_draft.py','orbit_swarm_host.py','orbit_swarm_integrity.py','orbit_pulse.py']:
         p=src/'runtime'/name
         same_or_create(changes,runtime/name,p.read_bytes(),None,'Shared Orbit stdio MCP runtime')
     def add_references(dest: Path, boundary: Path) -> None:

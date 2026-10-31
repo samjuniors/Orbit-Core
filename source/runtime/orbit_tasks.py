@@ -91,6 +91,11 @@ def _scopes(items, *, limit=24, allow_protected=False):
         segments=bare.split('/')
         if any(s in ('','.','..') for s in segments) or bare.startswith('/') or ':' in bare:
             raise ValueError('Absolute, traversal and empty path segments are forbidden')
+        # Windows strips trailing spaces and dots from ordinary path components.
+        # Refuse ambiguous aliases in every writable scope, not only in
+        # protected-path checks: file.py. and file.py may be the same file.
+        if any(segment.rstrip(' .') != segment for segment in segments):
+            raise ValueError('Trailing dots or spaces in path segments are forbidden (Windows alias)')
         # Windows ignores trailing dots/spaces, so '.git ' addresses '.git'.
         guarded=[unicodedata.normalize('NFC',s).rstrip(' .').casefold() for s in segments]
         if not allow_protected and any(g in PROTECTED_SEGMENTS or g.startswith('.env.') for g in guarded):
@@ -109,6 +114,33 @@ def _overlaps(x,y):
 
 def _collisions(a,b):
     return [(x,y) for x in a for y in b if _overlaps(x,y)]
+
+
+def _resolved_scopes(root, paths):
+    """Conservatively resolve current filesystem aliases before native writes.
+
+    A source checkout may already contain symlinks that redirect a seemingly
+    safe relative path outside the selected project, into a protected control
+    directory, or onto another task's write scope. Recheck at reservation
+    time because symlinks may change after a task was planned. This is a
+    point-in-time guard, NOT a substitute for host sandbox enforcement.
+    """
+    if not paths:
+        return []
+    try:
+        base = Path(root).resolve(strict=True)
+        resolved = []
+        for item in paths:
+            target = (base / item.rstrip('/')).resolve(strict=False)
+            relative = target.relative_to(base).as_posix()
+            if relative in ('', '.'):
+                raise ValueError('Scope aliases the project root')
+            resolved.extend(_scopes([relative + ('/' if item.endswith('/') else '')]))
+        return sorted(set(resolved))
+    except (OSError, RuntimeError, ValueError):
+        # Do not reveal symlink targets; those may point into another user's
+        # data or a differently scoped workspace.
+        raise ValueError('Unsafe resolved writable scope; inspect project symlinks and path ownership') from None
 
 
 def _row(conn, a, root):
@@ -167,6 +199,7 @@ def _serialize(x):
 
 def plan(conn,a,root):
     project,step,role,goal,reason,paths,deps=spec(a)
+    _resolved_scopes(root,paths)
     current=conn.execute('SELECT * FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                          (project,str(root),key(a))).fetchone()
     payload={'project':project,'project_root':str(root),'task_key':key(a),'step':step,'role':role,
@@ -325,9 +358,11 @@ def reserve(conn,a,root):
         conflict=_revision(a,old)
         if conflict: conn.rollback();return conflict
         if old['status'] not in RETRYABLE: raise ValueError('Only PLANNED, REWORK, FAILED or BLOCKED tasks can reserve')
-        if (old['status']=='BLOCKED' and old.get('note','').startswith('HOST_PERMISSION_DENIED:')
-                and approval==old.get('approval_reference')):
-            raise ValueError('Host permission was denied: obtain fresh host/user approval; do not reuse the denied reference')
+        # A BLOCKED task ended without fulfilling its approved objective,
+        # including a normally completed native worker that produced no work.
+        # No earlier approval reference authorizes a new worker attempt.
+        if old['status']=='BLOCKED' and approval==old.get('approval_reference'):
+            raise ValueError('Blocked task requires fresh host/user approval; do not reuse the earlier reference')
         for dep in json.loads(old['depends_on']):
             item=conn.execute('SELECT status FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                               (old['project'],old['project_root'],dep)).fetchone()
@@ -335,9 +370,23 @@ def reserve(conn,a,root):
                 raise ValueError('Dependency is not review-accepted: '+dep)
         active=[dict(x) for x in conn.execute('SELECT * FROM orbit_agent_tasks WHERE project_root=? AND status IN (\'RESERVED\',\'RUNNING\')',(str(root),))]
         if len(active)>=MAX_CONCURRENT: raise ValueError('Active native-agent reservations reached the cap of 2')
+        own_paths=json.loads(old['write_paths'])
+        own_resolved=_resolved_scopes(root,own_paths)
         for other in active:
-            conflicts=_collisions(json.loads(old['write_paths']),json.loads(other['write_paths']))
-            if conflicts: raise ValueError(f'Overlapping writable scopes with {other["task_key"]}: {conflicts}')
+            other_paths=json.loads(other['write_paths'])
+            other_resolved=_resolved_scopes(root,other_paths)
+            conflicts=(_collisions(own_paths,other_paths) or
+                       _collisions(own_resolved,other_resolved))
+            if conflicts:
+                # A different project key may share this workspace root. It must
+                # block an unsafe reservation, but its task identity and file
+                # ownership must not be disclosed to the current project.
+                if other['project'] != old['project']:
+                    raise ValueError(
+                        'Overlapping writable scopes with an active reservation '
+                        'in this workspace; reconcile authorized host sessions')
+                raise ValueError(
+                    f'Overlapping writable scopes with {other["task_key"]}: {conflicts}')
         today=utc_now()
         stepcount,daycount=_attempt_usage(conn,old['project'],root,old['step'],today[:10])
         if stepcount>=MAX_PER_STEP: raise ValueError('Per-step agent budget exhausted (3 attempts)')
@@ -421,7 +470,10 @@ def scope_check(conn,a,root):
 HOST_TERMINAL_STATES = {
     'REPORTED_DONE': {'COMPLETED'},
     'FAILED': {'FAILED'},
-    'BLOCKED': {'FAILED','CANCELLED','STOPPED'},
+    # A native agent can terminate normally after *refusing or failing its*
+    # assigned objective. This is not REPORTED_DONE; allow it only via
+    # the explicit incomplete-objective and no-changed-files guard below.
+    'BLOCKED': {'FAILED','CANCELLED','STOPPED','COMPLETED'},
     'CANCELLED': {'CANCELLED','STOPPED'},
 }
 HOST_STATES = {'COMPLETED','FAILED','CANCELLED','STOPPED','RUNNING','UNKNOWN'}
@@ -451,6 +503,15 @@ def reported(conn,a,root):
             return {'status':'HOLD_HOST_RECONCILIATION','reason':'Host has not reported a matching terminal state; inspect or stop the real agent before releasing its scope.',
                     'host_state_reported':state,'task_revision':old['revision'],
                     'host_status_verified':False}
+        completed_but_blocked = outcome == 'BLOCKED' and state == 'COMPLETED'
+        if completed_but_blocked and (a.get('objective_completed') is not False or paths):
+            # Exit status and work outcome are different. Never release a scope
+            # from an ordinary completed native agent without an explicit,
+            # separately inspected failed objective and no reported writes.
+            return {'status':'HOLD_HOST_RECONCILIATION',
+                    'reason':'COMPLETED host + BLOCKED task needs objective_completed=false, independent evidence, and empty changed_paths.',
+                    'host_state_reported':state,'task_revision':old['revision'],
+                    'host_status_verified':False,'agent_stopped_by_mcp':False}
         if a.get('confirm_write') is not True:
             return {'status':'PREVIEW_ONLY','proposed_status':outcome,
                     'host_state_reported':state,'host_status_verified':False,
@@ -459,6 +520,8 @@ def reported(conn,a,root):
         # accepted task/checkpoint history. The observation remains untrusted.
         previous=old['note'] or ''
         marker='HOST_TERMINAL_REPORTED:'+state
+        if completed_but_blocked:
+            marker+='; TASK_OBJECTIVE_REPORTED_INCOMPLETE'
         note=previous+('; ' if previous else '')+marker
         out=_update(conn,old,outcome,evidence=evidence,
                     changed_paths=_serialize(paths),note=note)

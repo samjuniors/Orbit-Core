@@ -1,10 +1,10 @@
 name: CI
 on:
   push:
-    branches: [main, 'feat/**', 'fix/**', 'release/**']
+    branches: [main, 'dev/v0.27.0', 'feat/**', 'fix/**', 'docs/**', 'release/**']
     tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [main, 'dev/v0.27.0']
 permissions:
   contents: read
 jobs:
@@ -64,6 +64,15 @@ jobs:
       - name: Rehearse published v0.25.1 upgrade without owner data loss
         if: matrix.python-version == '3.12'
         run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.25.1
+      - name: Check out immutable v0.26.0 for previous-release upgrade rehearsal
+        if: matrix.python-version == '3.12'
+        uses: actions/checkout@v4
+        with:
+          ref: v0.26.0
+          path: previous-0.26.0
+      - name: Rehearse published v0.26.0 upgrade preserving local data
+        if: matrix.python-version == '3.12'
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.26.0
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle
