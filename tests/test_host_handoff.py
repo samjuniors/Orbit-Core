@@ -77,6 +77,11 @@ class HostHandoffTests(unittest.TestCase):
         self.assertEqual(packet["native_tool"], "invoke_subagent")
         self.assertEqual(packet["handoff"]["write_paths"], ["src/ui/"])
         self.assertEqual(packet["handoff"]["task_revision"], 2)
+        self.assertEqual(packet["handoff"]["specialist_agent_hint"], "orbit-frontend")
+        self.assertFalse(packet["handoff"]["specialist_verified_in_host"])
+        self.assertFalse(packet["handoff"]["model_selected_by_orbit"])
+        self.assertIn("source revision", packet["handoff"]["output"])
+        self.assertEqual(len(packet["handoff"]["host_return_checklist"]), 3)
         self.assertFalse(packet["native_invoked"])
         self.assertIsNone(packet.get("host_session"))
         now = self.db.execute("SELECT revision,status FROM orbit_agent_tasks").fetchone()
@@ -113,6 +118,113 @@ class HostHandoffTests(unittest.TestCase):
                     self.handoff(host=host, tools=["invoke_subagent"])["status"],
                     "HOLD_NATIVE_TOOL_UNAVAILABLE")
         self.assertEqual(self.handoff(tools=[])["status"], "HOLD_NATIVE_TOOL_UNAVAILABLE")
+
+    def test_disjoint_parallel_reservations_keep_direct_handoffs_available(self):
+        self.register()
+        self.assertEqual(self.reserve()["status"], "RESERVED")
+        other = self.call(
+            "orbit_task_plan", task_key="backend", step="IMPLEMENT",
+            role="backend", goal="Create a bounded and testable backend service",
+            reason="Independent API work for an approved application feature",
+            write_paths=["src/api/"], depends_on=[], confirm_write=True)
+        reserved = self.call(
+            "orbit_task_reserve", task_key="backend",
+            expected_revision=other["task"]["revision"],
+            approval_reference="host-approved-plan-456", confirm_write=True)
+        self.assertEqual(reserved["status"], "RESERVED")
+        before = self.db.total_changes
+        for key, expected in (("frontend", "orbit-frontend"),
+                              ("backend", "orbit-backend")):
+            with self.subTest(key=key):
+                out = self.handoff(key=key)
+                self.assertEqual(out["status"], "HOST_INVOCATION_REQUIRED")
+                self.assertEqual(out["handoff"]["specialist_agent_hint"], expected)
+                self.assertFalse(out["handoff"]["specialist_verified_in_host"])
+        self.assertEqual(self.db.total_changes, before)
+
+    def test_direct_handoff_blocks_imported_cross_project_scope_conflict_without_leak(self):
+        self.register()
+        self.reserve()
+        ghost = orbit_tasks.plan(self.db, {
+            "project": "confidential-other-project", "task_key": "hidden",
+            "step": "IMPLEMENT", "role": "backend",
+            "goal": "Implement a different owner's confidential backend code",
+            "reason": "Synthetic imported ledger record for scope isolation",
+            "write_paths": ["src/ui/subdir/"], "depends_on": [],
+            "confirm_write": True,
+        }, self.root.resolve())
+        self.assertEqual(ghost["status"], "PLANNED")
+        self.db.execute(
+            "UPDATE orbit_agent_tasks SET status='RESERVED' "
+            "WHERE project='confidential-other-project'")
+        self.db.commit()
+        before = self.db.total_changes
+        out = self.handoff()
+        self.assertEqual(out["status"], "HOLD_ACTIVE_SCOPE_CONFLICT")
+        self.assertIsNone(out["handoff"])
+        self.assertFalse(out["native_invoked"])
+        self.assertNotIn("confidential-other-project", json.dumps(out))
+        self.assertNotIn("subdir", json.dumps(out))
+        self.assertEqual(self.db.total_changes, before)
+
+    def test_direct_handoff_blocks_corrupt_other_active_scope(self):
+        self.register()
+        self.reserve()
+        ghost = orbit_tasks.plan(self.db, {
+            "project": "hidden-scope", "task_key": "other",
+            "step": "IMPLEMENT", "role": "backend",
+            "goal": "Implement unrelated source with independent test evidence",
+            "reason": "Simulate imported corrupt project ledger state",
+            "write_paths": ["unrelated/"], "depends_on": [],
+            "confirm_write": True,
+        }, self.root.resolve())
+        self.assertEqual(ghost["status"], "PLANNED")
+        self.db.execute(
+            "UPDATE orbit_agent_tasks SET status='RESERVED',write_paths='invalid-json' "
+            "WHERE project='hidden-scope'")
+        self.db.commit()
+        before = self.db.total_changes
+        out = self.handoff()
+        self.assertEqual(out["status"], "HOLD_OTHER_ACTIVE_SCOPE_UNVERIFIED")
+        self.assertIsNone(out["handoff"])
+        self.assertNotIn("hidden-scope", json.dumps(out))
+        self.assertEqual(self.db.total_changes, before)
+
+    def test_direct_handoff_holds_reserved_session_already_recorded(self):
+        self.register()
+        self.reserve()
+        self.db.execute(
+            "UPDATE orbit_agent_tasks SET host_session='prior-native-session-123' "
+            "WHERE task_key='frontend'")
+        self.db.commit()
+        before = self.db.total_changes
+        out = self.handoff()
+        self.assertEqual(out["status"], "HOLD_SESSION_ALREADY_RECORDED")
+        self.assertIsNone(out["handoff"])
+        self.assertFalse(out["native_invoked"])
+        self.assertEqual(before, self.db.total_changes)
+
+    def test_direct_handoff_blocks_broken_capacity_state(self):
+        self.register()
+        self.reserve()
+        for key in ("other-1", "other-2"):
+            ghost = orbit_tasks.plan(self.db, {
+                "project": "hidden-project", "task_key": key,
+                "step": "IMPLEMENT", "role": "qa",
+                "goal": "Independently test an isolated historical workload",
+                "reason": "Simulate imported extra active records at workspace root",
+                "write_paths": [key + "/"], "depends_on": [],
+                "confirm_write": True,
+            }, self.root.resolve())
+            self.assertEqual(ghost["status"], "PLANNED")
+        self.db.execute("UPDATE orbit_agent_tasks SET status='RESERVED' WHERE project='hidden-project'")
+        self.db.commit()
+        before = self.db.total_changes
+        out = self.handoff()
+        self.assertEqual(out["status"], "HOLD_ACTIVE_CAPACITY_UNVERIFIED")
+        self.assertIsNone(out["handoff"])
+        self.assertNotIn("hidden-project", json.dumps(out))
+        self.assertEqual(self.db.total_changes, before)
 
     def test_delegation_does_not_enable_cross_project_or_folder_access(self):
         self.register()
