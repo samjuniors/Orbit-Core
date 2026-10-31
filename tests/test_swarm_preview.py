@@ -62,7 +62,7 @@ class SwarmPreviewTests(unittest.TestCase):
         self.assertTrue(tool["annotations"]["readOnlyHint"])
         self.assertTrue(tool["annotations"]["idempotentHint"])
         self.assertFalse(tool["annotations"]["destructiveHint"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 46)
+        self.assertEqual(len(orbit_mcp.TOOLS), 47)
 
     def test_different_paths_parallel_and_strict_cap(self):
         self.task("backend", paths=["src/backend/"])

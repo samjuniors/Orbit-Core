@@ -71,7 +71,7 @@ class SwarmDraftTests(unittest.TestCase):
         self.assertEqual(self.conn.total_changes, before)
         tool = next(t for t in orbit_mcp.TOOLS if t["name"] == "orbit_swarm_draft_preview")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 46)
+        self.assertEqual(len(orbit_mcp.TOOLS), 47)
 
     def test_dependency_waves_are_ordered(self):
         items = [draft("qa", dependencies=["api", "ui"], paths=["tests/"]),
