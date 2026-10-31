@@ -1,6 +1,10 @@
 # v0.26.0 — release readiness and acceptance record
 
-**Assessment:** 2026-10-30 · **Status:** **HOLD / NOT YET PUBLISHED**
+**Assessment:** 2026-10-31 · **Status:** **RELEASE PREPARATION APPROVED / ACCEPTANCE HOLD / NOT YET PUBLISHED**
+
+**Owner publication sequence (2026-10-31):** Owner requested **v0.26.0 first, then v0.27.0**. This authorizes preparing the ordered releases, not bypassing the remaining host/security/rollback acceptance below. Prepare and review the 42-tool `main` snapshot, **not** the older 40-tool `release/v0.26.0-candidate` branch. See [v0.26 final-review PR #64](https://github.com/samjuniors/Orbit-Core-MCP/pull/64) for the versioned release ZIP asset-inventory correction and later v0.27 planning marker. The PR must not be merged/published until real release gates are verified.
+
+**2026-10-31 authorized Windows regression evidence:** On `DESKTOP-AND1FUJ` at `main` commit `7344a12c2056b586974e654733e1b3a78685827d`, Python 3.12.10 completed **283 tests, 10 skips, zero failures**. Strict 0.26.0 bundle check, package build, disposable ZIP setup and 42-tool MCP stdio smoke **PASS**. Disposable stock upgrades from published v0.24.1 and v0.25.1 to the `main` v0.26.0 candidate **PASS**, preserving user-data fixtures. Tests were done in separate TEMP checkouts/isolated profiles, not real installed Orbit. Cross-version v0.23/v0.24 unit-suite symlink permission errors are historical/environment-only and are **not** silently relabeled PASS. The native IDE permission UI, signed-in host agent delegation/cancellation, installed-user migration/rollback, security/provenance and cross-device acceptance below remain **NOT VERIFIED**; source/CI success is not production signoff.
 
 This is a **version-specific acceptance record**, not a second roadmap or authority to publish. Product decisions remain in the [Orbit Core Notion hub](https://app.notion.com/p/4074f681d48881a7a407c3bdc2054409). Source code, CI, tags and releases are verified in GitHub. Preserve every previously published tag and asset.
 
