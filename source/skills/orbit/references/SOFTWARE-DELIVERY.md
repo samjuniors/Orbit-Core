@@ -88,6 +88,24 @@ This original Orbit workflow remains portable and project-scoped: GitHub
 source confirms implementation, Notion holds product decisions/research, and
 local SQLite/.orbit stores only its operational state. No automatic sync.
 
+## Evidence-first delivery and targeted redesign (v0.28 follow-up)
+
+For new builds and feature work, the architect identifies the actual test runner
+and the acceptance behavior **before** assigning implementation. Each implementing
+specialist should establish an appropriate failing or baseline test first, then
+make the bounded change, rerun the same check, and report the exact command,
+source ref and result. When test-first is infeasible (for example an untestable
+host integration), explicitly mark the verification blocked and name the
+authorized alternative; never invent a RED/GREEN result or impose a universal
+coverage threshold. QA and independent review remain separate release gates.
+
+For a visual `redesign`, preserve the current application contracts and scope
+the initial slice to UX and frontend behavior. Do **not** propose automatic schema
+migration or backend rewriting merely because the app normally has services
+or storage. If source inspection proves that a backend/data change is necessary,
+revise the blueprint and file scopes with owner consent before proceeding.
+This avoids unnecessary rewrites while preserving functional UI testing.
+
 ## Repeated slices and targeted fixes
 
 Use a fresh, explicitly reviewed lowercase slice_key (such as alerts) for each later vertical slice. Each task and dependency key gets that prefix; original accepted tasks and append-only attempts remain untouched. Without a new key, a collision returns HOLD. For a fix or debug operation, focus_role may be frontend, backend, data, devops, security or qa after inspecting the actual affected code. Stage-specific ledger step labels preserve per-step reservation limits. No model switching or host permission occurs during the preview.
