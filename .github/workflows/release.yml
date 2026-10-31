@@ -68,6 +68,8 @@ jobs:
           echo "ORBIT_RELEASE_TAG=$tag" >> "$GITHUB_ENV"
       - name: Prepare versioned candidate bundle from canonical runtime
         run: python scripts/prepare_release_candidate.py
+      - name: Enforce reusable public release readiness checks
+        run: python scripts/check_release_readiness.py
       - name: Compile code
         run: python -m compileall -q source installer.py scripts tests
       - name: Run unit and MCP protocol tests
@@ -136,6 +138,8 @@ jobs:
             "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
             "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip" \
             "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
+            "dist/Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip" \
+            "dist/Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
             "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb" \
             "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256" \
             --repo "$GITHUB_REPOSITORY" \

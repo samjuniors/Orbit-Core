@@ -1,6 +1,6 @@
 # Orbit install-once update experience
 
-**Status:** source implementation merged into `main` in PR #14, but public installers do not gain this feature until the owner approves and publishes a newer release and installations upgrade to that version once. This document is not evidence of real IDE UI integration.
+**Status:** Source implementation was merged in PR #14 and shipped in later public prereleases, including [v0.26.0](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.26.0). This does **not** establish authentic IDE UI integration or installed-user rollback acceptance.
 
 ## What an installed user sees
 

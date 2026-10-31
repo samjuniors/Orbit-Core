@@ -2,83 +2,88 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — after the v0.27.0 candidate
+## [Unreleased] — next planned v0.28.0
 
-No newer release has been approved or published. Planned v0.28.0 work is
-tracked separately; it must not be silently included in this candidate.
+Future v0.28.0 work is tracked independently. It is not included in
+v0.27.0, and this planning marker does not authorize publication.
 
-## [0.27.0] — Unpublished release candidate (owner-approved preparation; acceptance HOLD)
+## [0.27.0] — Prerelease candidate (2026-10-31)
 
-**Status:** Candidate source only. This version has **not** been published or
-installed for the owner. The previous v0.26.0 release is still on hold.
-Real host-native acceptance, independent QA/provenance, and approval of the
-verified final release artifact remain required. No production claim.
+### Highlights
 
-### Added
+- **Orbit-native Swarm coordination (four read-only MCP tools):** Preview up
+  to two independent specialist tasks with `orbit_swarm_preview`; validate
+  a proposed task dependency graph before registration using
+  `orbit_swarm_draft_preview`. Orbit orchestrates only; the connected host
+  executes agents using its own available tools and permissions.
+- **Safer parallel handoffs:** `orbit_swarm_host_preflight` checks paired
+  reservations without falsely claiming a native host session; SQLite
+  transactions bound concurrent task handoffs, retries and file ownership.
+- **Integration evidence before acceptance:** `orbit_swarm_integration_review`
+  checks dependency acceptance, source-linked freshness and recorded QA
+  evidence, returning HOLD on stale or unverified work rather than
+  claiming tests were executed.
+- **Opt-in Project Pulse:** `orbit_project_resume(compact=true,pulse=true)`
+  offers scoped task counts and concise next-action suggestions without
+  a new model, cloud service or automatic subagent execution.
+- **46 MCP tools:** Four new Swarm preview/preflight/review tools expand the
+  previous published 42-tool runtime. Protected path checks also reject
+  Windows path aliases, collisions and symlink escapes in proposed work.
 
-- **Orbit-native Agent Swarm coordination:** `orbit_swarm_preview` suggests
-  at most two disjoint and dependency-accepted specialist tasks from existing
-  project records, with a deterministic reason for tasks that cannot run yet.
-  It never executes or directly spawns an agent.
-- **Custom task DAG draft preflight:** `orbit_swarm_draft_preview` validates
-  up to twelve owner/host-proposed tasks, graph cycles, dependencies, roles,
-  size and file ownership before any task is registered or approved.
-- **Native host batch handoff preflight:** `orbit_swarm_host_preflight` checks
-  up to two separately reserved tasks together with an all-or-nothing result,
-  without claiming actual host permissions or sessions.
-- **Source-bound integration readiness:** `orbit_swarm_integration_review`
-  uses fresh task revisions, accepted dependencies, bounded current source
-  fingerprints, safe paths, and the latest recorded source-linked browser QA
-  metadata to hold stale/unreviewed changes. It does not run tests or
-  independently attest results; actual Git/source/test review remains with
-  the authorized host and human reviewer.
-- **Opt-in Project Pulse:** Compact project resume can show bounded, project-
-  scoped task counts and unverified next-action hints through
-  `orbit_project_resume(compact=true,pulse=true)`. No new model runtime,
-  agent spawning, or remote memory synchronization.
+### Install and upgrade
 
-### Reliability and safety
+- Download the corresponding v0.27.0 Universal Setup ZIP and SHA-256
+  sidecar from the [official GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)
+  **only after the version is published**. The separate Antigravity plugin
+  ZIP, combined Antigravity/Codex/Claude Code plugin-suite ZIP, and Claude
+  Desktop MCPB are different supported packaging formats.
+- The local MCP runs with Python 3.10–3.13 (3.12 recommended for Windows).
+  Windows setup requires Tkinter and uses `Orbit Setup.cmd`; macOS/Linux
+  use `python3 orbit_setup.py` from the extracted Universal Setup ZIP.
+- Preview exactly which host registrations, skills and runtimes will change,
+  preserve custom files, approve only authorized changes, and refresh the
+  coding host's MCP connection. Verify the reported version and 46 tool
+  registrations with a real host read-only tool call after installation.
 
-- Root-wide, transaction-guarded SQLite reservations limit simultaneous
-  specialist handoffs to two. Independent OS-process, stale-revision,
-  same-key collision and cross-project redaction regressions were added.
-- Windows trailing-dot/space aliases, casefold/Unicode collisions and
-  symlink escapes into outside/protected writable paths are rejected during
-  task planning, reservation or handoff. Point-in-time checks are **not**
-  an authenticated filesystem sandbox; the host enforces permissions.
-- The Swarm preview distinguishes failed, cancelled, blocked and rework
-  prerequisites, including transitive dependency chains; independent ready
-  tasks may still proceed. Where no native tool is reported, one explicit
-  **manual serial review suggestion** is returned, not a fabricated worker.
-- Installer runtime manifest, packaged MCP tool counts, host guidance and
-  regression checks were reconciled for the **46-tool development source**
-  (four additional read-only Swarm tools beyond the 42-tool prior candidate).
+### Compatibility
 
-### Verification boundary
+- Back up local SQLite databases **and WAL files**, project checkpoints,
+  custom MCP configurations and existing host skills before upgrading.
+  Existing approved task/checkpoint records must be retained; a data
+  downgrade to older runtimes is not automatic.
+- Task delegation, reservation and integration review are host-mediated:
+  no automatic spawning, no independent user-consent authentication,
+  and no silent installation of new dependencies.
+- Swarm suggestions cap concurrency at two separately authorized tasks;
+  dependency cycles, unsafe ownership/path overlaps, uncertain sessions
+  and stale source evidence fail closed.
 
-- Source PRs [#49–62](https://github.com/samjuniors/Orbit-Core-MCP/pulls?q=is%3Apr+is%3Amerged)
-  were reviewed and merged to `dev/v0.27.0`; [exact final source CI
-  5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41086717617)
-  covered Ubuntu Python 3.10–3.13 and Windows Python 3.12.
-- This is **automated source/package verification** only. Real Antigravity,
-  Codex and Claude Code subagent permission, cancellation and restart; actual
-  combined-task QA, two-PC recovery, user installer migration/rollback,
-  security/provenance and live context/UX measurements are NOT VERIFIED.
-- Preserve v0.25.1 and earlier releases and keep v0.26.0 acceptance independent.
-  Do not tag, publish, install or merge to main until the verified release
-  process and owner-approved cutline permit it.
+### Known limitations
 
-## [0.26.0] — Development release candidate (NOT PUBLISHED; NOT production-certified)
+- Native Antigravity, Codex and Claude Code Swarm permission/denial,
+  cancellation/restart, true parallel worker execution and cross-agent
+  integration outcomes are **NOT VERIFIED** by source or CI tests alone.
+- Real installed-user migration and rollback, cross-PC recovery,
+  interactive setup/HiDPI accessibility, signed publisher provenance,
+  independent security review and live performance/context-saving claims
+  remain **NOT VERIFIED**.
+- SHA-256 sidecars check download integrity, not publisher identity.
+  Orbit is not a sandbox, a separate LLM, an automatic native-agent
+  executor or a cloud synchronization service. This version is a
+  prerelease candidate and is **not production-certified**.
 
-**Additional v0.26.0 development work (still not a published release)**
-- **Multi-host suite and compact setup (source candidate only):** one deterministic `Orbit-Core-Plugin-Suite-v0.26.0.zip` with distinct Antigravity, Codex and Claude Code plugin manifests generated from canonical Orbit runtime/skill; new packaged suffix naming `orbit-lead-agent` / `orbit-<role>-agent` / `orbit-workflow-skill` / `orbit-core-mcp`; small Windows Install/Update/Uninstall setup UI with host detection, scope, reviewed file changes and memory-preserving default. This does **not** claim tested native-marketplace installation or DeepSeek Harness compatibility; those are release gates. See `docs/PLUGIN-SUITE-NAMING.md`.
 
-- **Antigravity native plugin candidate (not installed/published):** deterministic `Orbit-Antigravity-Plugin-v0.26.0.zip` with SHA256, existing Orbit main-agent + 12 specialist definitions, compact skill with retained full references and all 42 canonical local MCP tools. Adds backup-first, explicit opt-in Antigravity legacy-profile migration preview to avoid duplicate MCP/agent registrations. Requires host Python; no remote server. Manifest validation, real plugin-origin delegation/permission UI, clean host migration and separate Codex/Claude plugin adapters remain release gates. See [plugin guide](docs/ANTIGRAVITY-PLUGIN.md).
+## [0.26.0] — Prerelease candidate (live-host certification pending)
 
-- **M5 opt-in practice learning (owner-approved source integration):** `orbit_practice_suggest` identifies candidate patterns from repeated same-project reviewer-accepted task records; `orbit_practice_review` previews and records user-reviewed approve/reject/archive/supersede decisions, with revision guards, append-only SQLite history, stale-evidence visibility and cross-project isolation. This is reference data only: no automatic skill creation, model/subagent execution, Notion sync, independent host approval attestation or background learner. Two additive SQLite tables are created on startup; prior data stays intact. The previous 40-tool source inventory becomes **42**. M5 live-host/security acceptance is pending and no release is authorized.
+**Included in the v0.26.0 prerelease candidate**
+- **Multi-host suite and compact setup (candidate package):** one deterministic `Orbit-Core-Plugin-Suite-v0.26.0.zip` with distinct Antigravity, Codex and Claude Code plugin manifests generated from canonical Orbit runtime/skill; new packaged suffix naming `orbit-lead-agent` / `orbit-<role>-agent` / `orbit-workflow-skill` / `orbit-core-mcp`; small Windows Install/Update/Uninstall setup UI with host detection, scope, reviewed file changes and memory-preserving default. This does **not** claim tested native-marketplace installation or DeepSeek Harness compatibility; those are release gates. See `docs/PLUGIN-SUITE-NAMING.md`.
+
+- **Antigravity native plugin candidate (not host-certified):** deterministic `Orbit-Antigravity-Plugin-v0.26.0.zip` with SHA256, existing Orbit main-agent + 12 specialist definitions, compact skill with retained full references and all 42 canonical local MCP tools. Adds backup-first, explicit opt-in Antigravity legacy-profile migration preview to avoid duplicate MCP/agent registrations. Requires host Python; no remote server. Manifest validation, real plugin-origin delegation/permission UI, clean host migration and separate Codex/Claude plugin adapters remain release gates. See [plugin guide](docs/ANTIGRAVITY-PLUGIN.md).
+
+- **M5 opt-in practice learning (owner-approved source integration):** `orbit_practice_suggest` identifies candidate patterns from repeated same-project reviewer-accepted task records; `orbit_practice_review` previews and records user-reviewed approve/reject/archive/supersede decisions, with revision guards, append-only SQLite history, stale-evidence visibility and cross-project isolation. This is reference data only: no automatic skill creation, model/subagent execution, Notion sync, independent host approval attestation or background learner. Two additive SQLite tables are created on startup; prior data stays intact. The previous 40-tool source inventory becomes **42**. M5 live-host/security acceptance remains pending; automated checks do not attest genuine host permission.
 - **M3 consent hardening:** the existing capability selector now accepts optional caller-reported `permission_state`; denied browser/computer use yields a HOLD instead of recommending another provider.
 - **M4 adaptive guidance:** a small `adaptive_workflow` recommendation chooses focused compact resume or full review according to task risk/complexity, and suggests only available host-native or serial execution paths. All tool/permission/model execution remains host-controlled; no new MCP tool or automatic installation.
-- Automated regression tests, including simulated context-byte comparisons, are required before integrating into the v0.26.0 source candidate. Real host/context savings remain unverified.
+- Automated regression tests and simulated context-byte comparisons passed in the source candidate; real host/context savings remain unverified.
 
 **What’s new**
 - **Compact context on resume (M4.1):** the existing `orbit_project_resume` accepts opt-in `compact=true`, an objective and a bounded JSON-character budget. It summarizes approved local intake (approval is caller-reported), a project-matched checkpoint, a local build recovery hint and relevant research source pointers. Full resume remains the default. It does not fetch full Notion pages, reuse unscoped memories or invoke another AI model.
@@ -99,13 +104,13 @@ verified final release artifact remain required. No production claim.
 **Compatibility / behavior changes**
 - Clients reporting terminal native-agent outcomes for RUNNING tasks should now supply the correct `observed_host_session` and compatible `host_state` to `orbit_task_report`. Missing or uncertain observations return HOLD instead of clearing a possibly live worker. Verify host-side cancellation independently.
 - The additive `orbit_task_attempts` SQLite table preserves old task records, but **backing up SQLite (including WAL files) before upgrading is recommended**; older runtimes may not understand every newer state/behavior. Never silently downgrade user databases.
-- Source runtime and installer version move to **0.26.0**; `NEXT_VERSION=0.26.1` remains tentative. MCP tool inventory is **42** in the expanded development source (40 baseline + 2 optional M5 review tools); no new model runtime, implicit subagent spawning, cloud synchronization or extra installation is introduced.
+- Source runtime and installer version move to **0.26.0**; `NEXT_VERSION=0.27.0` names the next planned development line. MCP tool inventory is **42** in the expanded development source (40 baseline + 2 optional M5 review tools); no new model runtime, implicit subagent spawning, cloud synchronization or extra installation is introduced.
 
 **Requirements, packaging and verification**
 - Python 3.10–3.13 CI targets; Windows Python 3.12 recommended. Host-native delegation is limited to tools actually supplied and authorized by Antigravity, Codex, Claude Code or other supported hosts.
-- Candidate artifacts are built from the exact current runtime and packaged through GitHub Actions as **unpublished host-acceptance artifacts**; versioned ZIP/MCPB and SHA256 integrity checks are part of CI. Successful checksum verification is not publisher signing.
+- Candidate artifacts are built from the exact current runtime and packaged through GitHub Actions as **host-acceptance artifacts before publication**; versioned ZIP/MCPB and SHA256 integrity checks are part of CI. Successful checksum verification is not publisher signing.
 - Independent signed-in host permission/cancellation, physical browser/device QA, upgrade/rollback, two-computer transfer and Issue #9 security gates remain **NOT VERIFIED / OWNER-DEFERRED**. CI success and merging this source branch do **not** certify a production release.
-- **Publication:** No `v0.26.0` tag or GitHub Release is authorized by this candidate alone; publication requires a separate explicit owner go-ahead and completed release gates.
+- **Release status:** This v0.26.0 package is a prerelease candidate; it is **not production-certified**. Publishing is permitted only from the reviewed `main` commit after the release acceptance gates and owner approval are satisfied. It does not certify native IDE permissions, plugin marketplace compatibility, security, or recovery.
 
 ## [0.25.1] — Published prerelease (2026-10-29; NOT production-certified)
 

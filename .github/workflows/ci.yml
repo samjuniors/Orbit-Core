@@ -32,6 +32,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Prepare reproducible desktop bundle for current source version
         run: python scripts/prepare_release_candidate.py
+      - name: Validate public release notes, docs and desktop metadata
+        run: python scripts/check_release_readiness.py
       - name: Compile Python sources
         run: python -m compileall -q source installer.py orbit_setup.py scripts tests
       - name: Compile Windows GUI script
@@ -62,6 +64,15 @@ jobs:
       - name: Rehearse published v0.25.1 upgrade without owner data loss
         if: matrix.python-version == '3.12'
         run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.25.1
+      - name: Check out immutable v0.26.0 for previous-release upgrade rehearsal
+        if: matrix.python-version == '3.12'
+        uses: actions/checkout@v4
+        with:
+          ref: v0.26.0
+          path: previous-0.26.0
+      - name: Rehearse published v0.26.0 upgrade preserving local data
+        if: matrix.python-version == '3.12'
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.26.0
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle
