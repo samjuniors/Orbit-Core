@@ -100,6 +100,10 @@ def handoff(conn, args, root):
         status = "HOLD_RESERVE_TASK_FIRST"
         next_step = ("Reserve this existing task using orbit_task_reserve with "
                      "the latest revision and genuine host/user consent.")
+    elif task['role'] not in orbit_tasks.ROLES:
+        status = "HOLD_INVALID_SPECIALIST_ROLE"
+        next_step = ("Reconcile the saved task role against supported Orbit "
+                     "specialists before any native host invocation.")
     elif task['host_session']:
         status = "HOLD_SESSION_ALREADY_RECORDED"
         next_step = ("Inspect the actual host session before delegating again. "
@@ -150,7 +154,8 @@ def handoff(conn, args, root):
         "role": task["role"],
         # Name is a *candidate*, not proof a specialist agent is installed
         # or permitted in the connected host; let the host resolve/fallback.
-        "specialist_agent_hint": "orbit-" + task["role"],
+        "specialist_agent_hint": ("orbit-" + task["role"]
+                                  if task["role"] in orbit_tasks.ROLES else None),
         "specialist_verified_in_host": False,
         "model_selected_by_orbit": False,
         "goal": task["goal"],
