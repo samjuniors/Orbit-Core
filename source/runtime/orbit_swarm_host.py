@@ -108,16 +108,29 @@ def review(conn, root, project, args):
     scopes = {}
     for key in sorted(rows):
         try:
-            paths = json.loads(rows[key]["write_paths"])
-            scopes[key] = orbit_tasks._scopes(paths)
+            paths = orbit_tasks._scopes(json.loads(rows[key]["write_paths"]))
         except (ValueError, TypeError, json.JSONDecodeError):
             issues.append({"task_key": key, "status": "HOLD_INVALID_WRITE_SCOPE",
                            "next": "Repair the saved task definition through an approved task workflow."})
+            continue
+        try:
+            # A symlink may have changed after task reservation. Check both
+            # original and physically resolved ownership before returning any
+            # parallel host invocation packets.
+            resolved = orbit_tasks._resolved_scopes(root, paths)
+        except ValueError:
+            issues.append({"task_key": key, "status": "HOLD_UNSAFE_WRITE_SCOPE",
+                           "next": "Inspect changed workspace aliases and replan safely; do not invoke any native worker."})
+            continue
+        scopes[key] = (paths, resolved)
     if len(scopes) == len(rows):
         keys = sorted(rows)
         for i, key in enumerate(keys):
             for other in keys[i + 1:]:
-                if orbit_tasks._collisions(scopes[key], scopes[other]):
+                paths, resolved = scopes[key]
+                other_paths, other_resolved = scopes[other]
+                if (orbit_tasks._collisions(paths, other_paths)
+                        or orbit_tasks._collisions(resolved, other_resolved)):
                     issues.append({"status": "HOLD_WRITE_SCOPE_CONFLICT",
                                    "task_keys": [key, other],
                                    "next": "Do not run overlapping tasks simultaneously. Replan or run serially after approval."})
