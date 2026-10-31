@@ -109,6 +109,42 @@ class HostHandoffTests(unittest.TestCase):
                 self.assertEqual(packet["native_tool"], expected)
                 self.assertEqual(packet["status"], "HOST_INVOCATION_REQUIRED")
 
+    def test_direct_handoff_holds_writable_task_in_read_only_host(self):
+        self.register()
+        self.reserve()
+        before = self.db.total_changes
+        blocked = self.handoff(host_workspace_mode="read-only")
+        self.assertEqual(blocked["status"], "HOLD_HOST_WORKSPACE_READ_ONLY")
+        self.assertIsNone(blocked["handoff"])
+        self.assertFalse(blocked["native_invoked"])
+        self.assertFalse(blocked["host_workspace_writes_verified"])
+        self.assertEqual(blocked["host_workspace_mode_reported"], "read-only")
+        self.assertEqual(before, self.db.total_changes)
+        permitted_hint = self.handoff(host_workspace_mode="workspace-write")
+        self.assertEqual(permitted_hint["status"], "HOST_INVOCATION_REQUIRED")
+        self.assertFalse(permitted_hint["approval_verified"])
+        self.assertFalse(permitted_hint["host_workspace_writes_verified"])
+
+    def test_direct_read_only_task_still_handoffs_and_invalid_mode_is_rejected(self):
+        planned = self.call(
+            "orbit_task_plan", task_key="audit", step="DISCOVER",
+            role="research", goal="Inspect project files without editing source or data",
+            reason="Provide independent evidence for the reviewed application",
+            write_paths=[], depends_on=[], confirm_write=True)
+        self.assertEqual(planned["status"], "PLANNED")
+        reserved = self.call(
+            "orbit_task_reserve", task_key="audit",
+            expected_revision=planned["task"]["revision"],
+            approval_reference="host-approved-audit-456", confirm_write=True)
+        self.assertEqual(reserved["status"], "RESERVED")
+        packet = self.handoff(key="audit", host_workspace_mode="read-only")
+        self.assertEqual(packet["status"], "HOST_INVOCATION_REQUIRED")
+        self.assertEqual(packet["handoff"]["write_paths"], [])
+        self.assertEqual(packet["handoff"]["specialist_agent_hint"], "orbit-research")
+        self.assertFalse(packet["host_workspace_writes_verified"])
+        with self.assertRaises(ValueError):
+            self.handoff(key="audit", host_workspace_mode="unrestricted")
+
     def test_unsupported_hosts_and_empty_tool_set_fail_closed(self):
         self.register()
         self.reserve()
