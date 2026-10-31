@@ -42,6 +42,18 @@ def build(root=ROOT, template_version=None):
                   if name != "manifest.json" and not (name.startswith("server/") and name.endswith(".py"))]
 
     manifest["version"] = version
+    # Published extensions must not inherit legacy mojibake or stale prose from
+    # older templates. Keep the stable MCP identity and non-code resources.
+    manifest["display_name"] = "Orbit Core - Memory & Agent Tasks"
+    manifest["description"] = (
+        "Local-first MCP for project planning, specialist task coordination and checkpoints."
+    )
+    manifest["long_description"] = (
+        "Orbit Core coordinates approved plans, local project memory, specialist task "
+        "handoffs and verification evidence across supported coding hosts. "
+        "The host controls model selection, permissions and actual code execution; "
+        "Orbit does not install providers or execute subagents by itself."
+    )
     entries = [("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False).encode("utf-8"))]
     entries.extend(extras)
     entries.extend((f"server/{p.name}", p.read_bytes())

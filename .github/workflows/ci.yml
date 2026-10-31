@@ -32,6 +32,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Prepare reproducible desktop bundle for current source version
         run: python scripts/prepare_release_candidate.py
+      - name: Validate public release notes, docs and desktop metadata
+        run: python scripts/check_release_readiness.py
       - name: Compile Python sources
         run: python -m compileall -q source installer.py orbit_setup.py scripts tests
       - name: Compile Windows GUI script

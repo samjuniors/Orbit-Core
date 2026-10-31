@@ -1,6 +1,10 @@
 # v0.26.0 — release readiness and acceptance record
 
-**Assessment:** 2026-10-31 · **Status:** **RELEASE PREPARATION APPROVED / ACCEPTANCE HOLD / NOT YET PUBLISHED**
+**Assessment:** 2026-10-31 · **Publication:** **PUBLISHED PRERELEASE** · **Production host-acceptance:** **OPEN / NOT CERTIFIED**
+
+**Actual published result (2026-10-31):** [GitHub v0.26.0 prerelease](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.26.0) at 04:07:44 UTC via [successful official release workflow #41167232405](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41167232405). Annotated tag `v0.26.0` points to tested `main` merge commit `51e60395fbbc56102c4c513086d4cf89427296c8`; [exact merge CI #41166904996](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41166904996) was **5/5 PASS**. Eight actual public downloadable assets: Universal Setup ZIP, Antigravity plugin ZIP, combined plugin-suite ZIP, Claude Desktop MCPB, each with SHA-256 sidecar. Actual public downloads all matched checksums and passed a targeted archive-safety scan. The downloaded Universal Setup ZIP passed disposable install/stdin MCP smoke (**42 tools**). Candidate-channel v0.25.1 updater correctly detected v0.26.0 in a read-only test. No previously published tag, asset, user installation or private DB was modified. The annotated tag is **unsigned**; SHA256 provides integrity, not signed provenance.
+
+**Post-publication QA boundary:** Despite publication, real host permission/denial/cancellation/restart, fully interactive UI/high-DPI setup, signed-in agent delegation, real installed-user rollback and multi-PC recovery are still **NOT VERIFIED**. The public release is explicitly a prerelease; do not label it stable or production-certified. The prior preparation and HOLD notes below are retained as **historical prerelease evidence**, not the current publication status. Public README and installer documents had stale `v0.25.1`/not-published text at tag time; fix current `main` via reviewed PR without repointing or rewriting `v0.26.0`. Claude Desktop `display_name` contained mojibake, and `long_description` had `switching..`; correct **future** bundle generation and add tests; do not silently replace published `.mcpb`.
 
 **Owner publication sequence (2026-10-31):** Owner requested **v0.26.0 first, then v0.27.0**. This authorizes preparing the ordered releases, not bypassing the remaining host/security/rollback acceptance below. Prepare and review the 42-tool `main` snapshot, **not** the older 40-tool `release/v0.26.0-candidate` branch. See [v0.26 final-review PR #64](https://github.com/samjuniors/Orbit-Core-MCP/pull/64) for the versioned release ZIP asset-inventory correction and later v0.27 planning marker. The PR must not be merged/published until real release gates are verified.
 
@@ -22,9 +26,9 @@ This is a **version-specific acceptance record**, not a second roadmap or author
 | Exact reviewed M3/M4 heads | **5/5 PASS each** | [M3 #40893382550](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40893382550), [M4 #40894592371](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40894592371): Ubuntu Python 3.10–3.13, Windows 3.12; final main CI checked separately |
 | Candidate package and installer test | **PASS in CI** | [Actions #40869882650](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40869882650): source/MCPB parity, ZIP integrity, disposable fresh setup |
 | Upgrade compatibility | **PASS in disposable CI** | v0.24.1 and v0.25.1 → v0.26.0, Windows/Linux; customized stock guidance safely blocks overwrite |
-| Downloadable candidate | **CI ARTIFACT ONLY** | `orbit-v0.26.0-host-acceptance` in [Actions #40869882650](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40869882650); not a signed publication |
-| Current latest published release | **v0.25.1 prerelease** | [GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases) |
-| `v0.26.0` published tag / GitHub Release | **NOT DONE** | No matching published release found on 2026-10-29 |
+| Historical prepublication acceptance artifact | **CI ARTIFACT (prepublication)** | `orbit-v0.26.0-host-acceptance` in [Actions #40869882650](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40869882650); not a signed publication |
+| Current latest published release | **v0.26.0 prerelease** | [GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.26.0) |
+| `v0.26.0` published tag / GitHub Release | **PASS — published 2026-10-31** | [Release](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.26.0), [workflow](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41167232405) |
 
 ## Scope correction (2026-10-30)
 
@@ -105,4 +109,4 @@ Use [docs/RELEASE-PROCESS.md](RELEASE-PROCESS.md) and the GitHub `Publish versio
 
 An authorized Windows device was connected and the disposable Edge browser test and Antigravity M5 read-only real-agent test were completed. Permission dialogs, agent cancellation/recovery, installed-profile migration/rollback, other host integrations, independent security and cross-device checks remain outstanding. Previous M1/M2 host acceptance for v0.25.1 does not establish M3/M4/M5 acceptance for the expanded v0.26.0 source. The [M3 engineering checklist](M3-ENGINEERING-ACCEPTANCE.md) contains detailed host-level cases; this document summarizes the **release-specific** go/no-go decision.
 
-**Current decision: HOLD.** The v0.26.0 source is verified with automated checks; the full mission is not finished and its downloadable GitHub Release remains unpublished.
+**Current decision: PUBLISHED PRERELEASE; PRODUCTION CERTIFICATION HOLD.** The live host, security and installed-user recovery gates above remain open. Never relabel a passing publication workflow as complete end-user acceptance.

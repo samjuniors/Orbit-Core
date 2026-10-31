@@ -1,6 +1,6 @@
 # Orbit Core v0.26.0 — one package, multiple native hosts
 
-**Implementation status:** source candidate; not a published release. The plugin suite and compact Windows setup are in development. Host-native plugin installation and full permission/rollback acceptance are not yet complete.
+**Publication status:** v0.26.0 is a [published GitHub prerelease](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.26.0). This specification describes the shipped 42-tool package; authentic host-native plugin activation, IDE permission UI, installed-user rollback and independent security certification remain **NOT VERIFIED**. Publication does not imply production certification.
 
 ## Naming and identity contract
 
@@ -38,7 +38,7 @@ Double-click `Orbit Setup.cmd` to open the **minimal setup view (504 × 350 pixe
 - The primary action opens a compact confirmation dialog with a short summary. Full file-by-file changes are behind **View file details**; nothing is written before explicit confirmation. Existing safe backup and revalidation logic stays in force.
 - This is a **bundled local source** update indicator, **not** an unverified online-update claim. The compact window uses the existing preview-first host integration backend, not yet one-click native plugin marketplace activation. No Python dependency outside the standard Tkinter stack has been introduced.
 
-The design uses a dark, high-contrast style with a vector-drawn Orbit mark and rounded keyboard-accessible primary control. Real Windows Tkinter open/expand/collapse checks are required before promoting this source candidate.
+The design uses a dark, high-contrast style with a vector-drawn Orbit mark and rounded keyboard-accessible primary control. Real Windows Tkinter open/expand/collapse checks are required before declaring the published prerelease production-ready.
 
 The existing detailed setup GUI remains available as `install_orbit_gui.pyw` for compatibility while the new compact window is verified.
 
