@@ -1,5 +1,42 @@
 # v0.27.0 — Orbit-native Agent Swarm: engineering acceptance
 
+## 2026-10-31 — real coding-host CLI acceptance (PARTIAL PASS; RELEASE HOLD)
+
+**Test source:** `release/v0.27.0-candidate` at
+`24dbc7c99bcc88386ca7416111646122b02aea6e`, Windows
+build 26200; Python 3.12.10, Codex CLI 0.154.0, Claude Code 2.1.307.
+All testing used an isolated `%TEMP%/Orbit-v027-RealHost-*` synthetic
+project, a temporary project-specific stdio MCP configuration and
+non-persistent/read-only host commands. The existing installed Orbit,
+personal IDE configurations and real projects were not modified.
+Antigravity was running, but its permission UI was not available through
+the terminal-only access in this session.
+
+| Gate | Actual observed evidence | Status |
+| --- | --- | --- |
+| Codex genuine MCP connectivity | `codex mcp list` recognized temporary `orbit_v027`. A signed-in Codex session actually called `orbit_swarm_preview` once; its tool event ended `completed` and the returned result was `NO_READY_TASKS` with zero tasks, `agent_spawned=false`, `approval_verified=false`, `host_liveness_verified=false`. | **PASS — read-only MCP invocation only** |
+| Codex native delegation | A separate read-only `spawn_agent` probe exposed a native host tool, but actual invocation failed with `no thread with id: ...`. No worker was created or accepted. This was an `--ephemeral` CLI session; check whether the failure is a CLI/session limitation before attributing it to Orbit. | **BLOCKED — no successful worker** |
+| Claude Code genuine MCP delegation | `claude auth status` reported a connected OAuth session, but a print-mode MCP session returned `authentication_failed` / `Not logged in — Please run /login`; an ordinary one-turn read-only authentication probe then timed out after 50 seconds. No actual Claude MCP/Agent invocation or consent prompt was observed. Do not change user tokens or auth settings without approval. | **BLOCKED — host authentication/session** |
+| Antigravity native UI and permissions | Antigravity running, but no authorized GUI control to inspect real agent approval/denial or session lifecycle. No claims of successful delegation. | **NOT RUN** |
+| Disposable install and uninstall | `orbit_setup.py` preview, explicit `install --apply`, uninstall preview and `uninstall --apply` all exited successfully in a fake current-user profile and disposable project. Custom `AGENTS.md`, `.orbit/STATE.md` and local memory sentinel survived unchanged. | **PASS — isolated setup/uninstall data preservation** |
+| Candidate archive hygiene | Local 0.27.0 ZIPs passed byte/checksum sidecars, ZIP member path/duplicate/symlink and selected sensitive-filename checks; Claude Desktop MCPB contained expected source metadata and is SHA256-hashed by the official release workflow at publication, not by source ZIP builder. | **PASS — bounded content checks, not provenance/security certification** |
+| Actual native permission denial, cancellation/restart, two worker integration and owner-installed rollback | Not performed. Caller-reported approval fields and a successful read-only MCP call do not certify permission UI or native worker outcomes. | **NOT VERIFIED** |
+| Cross-computer recovery | Second enrolled PC offline during test; no two-PC transfer run. | **NOT RUN** |
+| Independent security/provenance sign-off | No signed publisher attestation or independent assessment. The existing security Issue #9 remains open for these risks. | **NOT VERIFIED** |
+
+**Decision: HOLD.** Automated [exact-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41168999283),
+367 local tests (19 skips, zero failures), 46-tool disposable ZIP/MCP
+smoke and published v0.26.0→candidate upgrade regression remain valid.
+This new testing adds authentic Codex **MCP discovery and read-only use**
+and disposable setup/uninstall evidence; it does **not** close native
+delegation, denied-permission, cancellation/recovery or independent
+security gates. Before un-drafting PR #63 and publishing, resolve
+Codex native spawn thread failure, establish Claude Code signed-in
+MCP session, observe actual approval/denial and worker completion in
+at least the supported hosts, and validate a real-user-like backup
+and rollback/restart in an isolated host profile.
+
+
 **Source scope:** Source integration on `dev/v0.27.0` through reviewed
 Project Pulse [PR #49](https://github.com/samjuniors/Orbit-Core-MCP/pull/49),
 Swarm [PRs #50–53](https://github.com/samjuniors/Orbit-Core-MCP/pulls?q=is%3Apr+is%3Amerged+swarm)
