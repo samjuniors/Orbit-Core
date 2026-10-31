@@ -25,6 +25,8 @@ Orbit Core MCP uses Semantic Versioning `MAJOR.MINOR.PATCH`. `VERSION` is author
 - `Orbit-Antigravity-Plugin-vX.Y.Z.zip` — host-native Antigravity lead/skills/agents/local-MCP plugin, subject to host installation/migration acceptance.
 - `Orbit-Antigravity-Plugin-vX.Y.Z.zip.sha256` — integrity checksum for the plugin ZIP.
 - `ORBIT-Universal-Setup-vX.Y.Z.zip.sha256` — SHA-256 checksum.
+- `Orbit-Core-Plugin-Suite-vX.Y.Z.zip` — separate Antigravity, Codex and Claude Code host-native plugin manifests bundled into one download.
+- `Orbit-Core-Plugin-Suite-vX.Y.Z.zip.sha256` — SHA-256 integrity checksum for the plugin-suite ZIP.
 - `ORBIT-Claude-Desktop-vX.Y.Z.mcpb` — Claude Desktop extension.
 - `ORBIT-Claude-Desktop-vX.Y.Z.mcpb.sha256` — checksum.
 - GitHub's automatically generated source archives for the immutable tag.
