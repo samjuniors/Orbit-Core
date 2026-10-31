@@ -13,7 +13,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-REPO='samjuniors/Orbit-Core-MCP'
+REPO='samjuniors/Orbit-Core'
 RELEASE_ARCHIVE_URL='https://github.com/'+REPO+'/releases'
 VERS=re.compile(r'^[0-9]+\.[0-9]+\.[0-9]+$')
 HOSTS=('antigravity','codex','claude-code','vscode')

@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-REPOSITORY = "samjuniors/Orbit-Core-MCP"
+REPOSITORY = "samjuniors/Orbit-Core"
 SHA = re.compile(r"^[a-f0-9]{40}$")
 BRANCH = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,150}$")
 PROTECTED = {"main", "master", "develop", "development", "production", "staging"}

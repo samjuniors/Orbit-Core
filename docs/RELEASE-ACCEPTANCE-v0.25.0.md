@@ -2,7 +2,7 @@
 
 > **Historical checklist:** v0.25.0 source was merged without a public v0.25.0 release. This document preserves its earlier acceptance plan and is superseded for packaging by [v0.25.1 release acceptance](RELEASE-ACCEPTANCE-v0.25.1.md). Its branch-only statements reflect the historical testing period, not current repository state.
 
-**Status: NOT PUBLISHED / NOT PRODUCTION CERTIFIED.** This document is a checklist, not evidence of completion. Owner-led real-host testing is required under [Issue #9](https://github.com/samjuniors/Orbit-Core-MCP/issues/9).
+**Status: NOT PUBLISHED / NOT PRODUCTION CERTIFIED.** This document is a checklist, not evidence of completion. Owner-led real-host testing is required under [Issue #9](https://github.com/samjuniors/Orbit-Core/issues/9).
 
 ## 1. Candidate artifact and provenance
 

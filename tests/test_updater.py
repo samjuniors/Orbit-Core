@@ -37,7 +37,7 @@ class TestUpdater(unittest.TestCase):
 
  def test_release_channel_prioritizes_highest_valid_asset(self):
   from unittest.mock import patch
-  base='https://github.com/samjuniors/Orbit-Core-MCP/releases/download/'
+  base='https://github.com/samjuniors/Orbit-Core/releases/download/'
   def release(v,pre,draft=False,assets=True):
    name='ORBIT-Universal-Setup-v'+v+'.zip'
    items=[{'name':name,'browser_download_url':base+'v'+v+'/'+name},

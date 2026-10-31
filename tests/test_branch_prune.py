@@ -12,7 +12,7 @@ class BranchPruneTests(unittest.TestCase):
         return {"name": name, "head_sha": sha, "pr": pr}
 
     def manifest(self, rows):
-        return {"repository": "samjuniors/Orbit-Core-MCP", "branches": rows}
+        return {"repository": "samjuniors/Orbit-Core", "branches": rows}
 
     def test_rejects_unsafe_branch_patterns_and_other_repository(self):
         for name in ("main", "refs/heads/x", "feature/../../main", "tags/v1",

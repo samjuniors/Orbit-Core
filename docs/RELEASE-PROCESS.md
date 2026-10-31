@@ -4,7 +4,7 @@ Orbit Core MCP uses Semantic Versioning `MAJOR.MINOR.PATCH`. `VERSION` is author
 
 ## Published versus planned versions
 
-- `VERSION` is the version being built in the active checkout, not proof that GitHub published it. `NEXT_VERSION` is a proposal, not release authorization. The **only current publication authority** is [GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). The v0.26.0 prerelease was published 2026-10-31; subsequent versions must follow the same verification and owner-approval procedure. Source may be ahead of released desktop artifacts.
+- `VERSION` is the version being built in the active checkout, not proof that GitHub published it. `NEXT_VERSION` is a proposal, not release authorization. The **only current publication authority** is [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases). The v0.27.0 prerelease was published 2026-10-31; subsequent versions must follow the same verification and owner-approval procedure. Source may be ahead of released desktop artifacts.
 - Never change `VERSION` alone. On a reviewed release branch, update `VERSION`, `NEXT_VERSION` (to the next planned version), `installer.py`, `source/runtime/orbit_mcp.py`, and add the release's `CHANGELOG.md` entry together.
 - Prepare a **new, unpublished** MCPB from an immutable prior bundle via `python scripts/prepare_release_candidate.py` (CI does this before tests). The helper detects the latest older bundled release, copies non-code resources/metadata into the new version and enforces exact runtime module/source parity. It does **not** modify the older published artifact, tag, or release. CI uploads the candidate ZIP/MCPB as downloadable *test artifacts* for host evaluation. Do **not** mark these test artifacts as published releases or as cryptographically attested.
 - Explicitly verify upgrade compatibility with customized user installs, including stock digest allowlist updates; an unknown file must stay protected. Do **not** delete old versioned bundles, Git tags, owner documents or other work to make a new version appear clean.
@@ -16,7 +16,7 @@ This is the **single maintained release procedure**; do not create a new competi
 
 ### Gate A — Prepare the correct code, scope and notes
 
-1. Confirm the repo is **Orbit-Core-MCP**, inspect `main`, active release/development branches, past published tags and current Notion decisions. Select the exact version and reviewed source branch. Never substitute an older candidate branch with a different MCP inventory.
+1. Confirm the repo is **Orbit-Core**, inspect `main`, active release/development branches, past published tags and current Notion decisions. Select the exact version and reviewed source branch. Never substitute an older candidate branch with a different MCP inventory.
 2. Create **one** `release/vX.Y.Z-candidate` branch from the reviewed source/appropriate `main`. Ensure `VERSION`, `NEXT_VERSION`, `installer.py`, `source/runtime/orbit_mcp.py`, manifests and all ZIP/MCPB package names are consistent; `NEXT_VERSION` must be greater than `VERSION`.
 3. Update **the existing `CHANGELOG.md`** under `## [X.Y.Z]` with a public-facing version note: short user benefits under `### Highlights`, host/OS/Python requirements and steps under `### Install and upgrade`, compatibility and migration/backup under `### Compatibility`, and truthful unverified behavior under `### Known limitations`. Leave older entries and tags intact. The GitHub workflow builds the release body from this section; **no manual release-note copy/paste**.
 4. Ensure the public `README.md`, `docs/RELEASE-QUICKSTART.md`, installation/plugin docs and `docs/RELEASE-PROCESS.md` match the actual release: no stale “latest is …” or “not published” statements. Prefer a live link to Releases instead of a hard-coded “latest” number. The **version-specific acceptance document** must distinguish publish status from actual host/production certification.
@@ -95,5 +95,5 @@ The release body is generated from the matching section `## [X.Y.Z]` in `CHANGEL
 ## Links
 
 - [Release workflow](../.github/workflows/release.yml)
-- [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)
-- [Tags](https://github.com/samjuniors/Orbit-Core-MCP/tags)
+- [Releases](https://github.com/samjuniors/Orbit-Core/releases)
+- [Tags](https://github.com/samjuniors/Orbit-Core/tags)

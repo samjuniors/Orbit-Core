@@ -2,10 +2,10 @@
 
 ## 2026-10-31 — release consolidation after Codex recovery fix merge
 
-**Verified source:** focused [PR #66](https://github.com/samjuniors/Orbit-Core-MCP/pull/66)
+**Verified source:** focused [PR #66](https://github.com/samjuniors/Orbit-Core/pull/66)
 merged into the `release/v0.27.0-candidate` branch at
 `ced0a370040d57d939433b787e6c5ea6e984a460`.
-The [exact merge-commit Windows/Linux CI #41175033914](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41175033914)
+The [exact merge-commit Windows/Linux CI #41175033914](https://github.com/samjuniors/Orbit-Core/actions/runs/41175033914)
 completed **5/5 PASS** on Ubuntu Python 3.10–3.13 and Windows
 Python 3.12. Existing v0.26.0 published tag and assets are unchanged.
 
@@ -111,7 +111,7 @@ gate 7 **NOT VERIFIED**; gate 8 **NOT RUN**. Codex separately
 passed a real native two-worker run with beta accepted, but alpha
 blocked and a supposed denial action **actually approved**. The
 focused guarded alpha reconciliation is staged in
-[PR #66](https://github.com/samjuniors/Orbit-Core-MCP/pull/66),
+[PR #66](https://github.com/samjuniors/Orbit-Core/pull/66),
 base `release/v0.27.0-candidate`, and its exact original
 Windows/Linux CI was **5/5 PASS**. Do not confuse CI, genuine native
 execution, user-chat denial, and host permission enforcement.
@@ -161,7 +161,7 @@ Missing, mismatched or ambiguous evidence **HOLD** and does not unlock
 the task's active write scope.
 
 The fix passed nine focused regressions, the full Windows suite (376 tests,
-19 skipped, zero failures), and [exact-head Windows/Linux CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41172499805).
+19 skipped, zero failures), and [exact-head Windows/Linux CI 5/5](https://github.com/samjuniors/Orbit-Core/actions/runs/41172499805).
 The source fix was integrated after owner request and exact-head 5/5 CI; genuine host safety acceptance remains separate. Applying the fix
 to the **original alpha SQLite row** is a separate, explicit,
 human-authorized host-state reconciliation; do not silently manipulate
@@ -260,7 +260,7 @@ the terminal-only access in this session.
 | Cross-computer recovery | Second enrolled PC offline during test; no two-PC transfer run. | **NOT RUN** |
 | Independent security/provenance sign-off | No signed publisher attestation or independent assessment. The existing security Issue #9 remains open for these risks. | **NOT VERIFIED** |
 
-**Decision: HOLD.** Automated [exact-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41168999283),
+**Decision: HOLD.** Automated [exact-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core/actions/runs/41168999283),
 367 local tests (19 skips, zero failures), 46-tool disposable ZIP/MCP
 smoke and published v0.26.0→candidate upgrade regression remain valid.
 This new testing adds authentic Codex **MCP discovery and read-only use**
@@ -274,11 +274,11 @@ and rollback/restart in an isolated host profile.
 
 
 **Source scope:** Source integration on `dev/v0.27.0` through reviewed
-Project Pulse [PR #49](https://github.com/samjuniors/Orbit-Core-MCP/pull/49),
-Swarm [PRs #50–53](https://github.com/samjuniors/Orbit-Core-MCP/pulls?q=is%3Apr+is%3Amerged+swarm)
-and reservation safety [PR #54](https://github.com/samjuniors/Orbit-Core-MCP/pull/54),
-OS-process/Windows alias hardening [PR #57](https://github.com/samjuniors/Orbit-Core-MCP/pull/57),
-and symlink containment [PR #58](https://github.com/samjuniors/Orbit-Core-MCP/pull/58).
+Project Pulse [PR #49](https://github.com/samjuniors/Orbit-Core/pull/49),
+Swarm [PRs #50–53](https://github.com/samjuniors/Orbit-Core/pulls?q=is%3Apr+is%3Amerged+swarm)
+and reservation safety [PR #54](https://github.com/samjuniors/Orbit-Core/pull/54),
+OS-process/Windows alias hardening [PR #57](https://github.com/samjuniors/Orbit-Core/pull/57),
+and symlink containment [PR #58](https://github.com/samjuniors/Orbit-Core/pull/58).
 **Status:** DEVELOPMENT SOURCE MERGED / AUTOMATED CI PASS; REAL NATIVE DELEGATION,
 SECURITY REVIEW, HOST ACCEPTANCE AND RELEASE NOT VERIFIED.
 **External reference:** [Claude Swarm](https://github.com/affaan-m/claude-swarm)
@@ -289,9 +289,9 @@ SECURITY REVIEW, HOST ACCEPTANCE AND RELEASE NOT VERIFIED.
 **Source status: DRAFT release candidate, NOT published / NOT production-certified.**
 The original `dev/v0.27.0` 46-tool Swarm work and prior candidate were
 reconciled through a normal Git merge with reviewed [v0.26.0 published
-`main`](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.26.0)
-and merged release-quality [PR #65](https://github.com/samjuniors/Orbit-Core-MCP/pull/65).
-See [draft release PR #63](https://github.com/samjuniors/Orbit-Core-MCP/pull/63),
+`main`](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.26.0)
+and merged release-quality [PR #65](https://github.com/samjuniors/Orbit-Core/pull/65).
+See [draft release PR #63](https://github.com/samjuniors/Orbit-Core/pull/63),
 now based on `main`, and integration merge SHA
 `00c2d978a9b52cc2ceafb6d6fd802e369fdd5761`. All v0.26.0
 published tag/assets are preserved; `VERSION=0.27.0`,
@@ -361,7 +361,7 @@ Execution and cancellation stay with the authorized host; no automatic
 
 ## Acceptance gates
 
-**2026-10-30 handoff:** six feature/fix PRs #49–54 are MERGED into `dev/v0.27.0` (not `main`). The merged source tree SHA `471a0d3e3fd59068c22b8915adcfbed9dec9e8c7` matches PR #54's [cross-platform 5/5 CI PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41069244024), including packaged MCP smoke. At that historical #54 checkpoint there were **45** development tools. **Current development inventory is 46**, including the additive read-only source-bound integration review (#61); Project Pulse is opt-in on `orbit_project_resume`, not a new tool. This evidence does not certify real host-native parallelism, permission dialogs, security, installer upgrades or publication.
+**2026-10-30 handoff:** six feature/fix PRs #49–54 are MERGED into `dev/v0.27.0` (not `main`). The merged source tree SHA `471a0d3e3fd59068c22b8915adcfbed9dec9e8c7` matches PR #54's [cross-platform 5/5 CI PASS](https://github.com/samjuniors/Orbit-Core/actions/runs/41069244024), including packaged MCP smoke. At that historical #54 checkpoint there were **45** development tools. **Current development inventory is 46**, including the additive read-only source-bound integration review (#61); Project Pulse is opt-in on `orbit_project_resume`, not a new tool. This evidence does not certify real host-native parallelism, permission dialogs, security, installer upgrades or publication.
 
 
 - [x] New project-scope DAG preview with bounded (40-task) reads, cycle/missing
@@ -484,7 +484,7 @@ stale-revision races and cross-project error redaction. The existing
 `BEGIN IMMEDIATE` write transaction is reused; no added SQLite table,
 permanent file, agent runner or automatic permission is introduced.
 
-**Verification:** [exact integrated-tree CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41069244024) on PR #54, with SHA tree equal to development commit `7420da3675ddc1ffc330192fcc982081722a027d`. This is shared-file, multi-connection concurrency,
+**Verification:** [exact integrated-tree CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core/actions/runs/41069244024) on PR #54, with SHA tree equal to development commit `7420da3675ddc1ffc330192fcc982081722a027d`. This is shared-file, multi-connection concurrency,
 **not** evidence of independent OS processes, actual host approval/session
 liveness, networked agents or two-PC portability. Those gates remain open.
 
@@ -507,7 +507,7 @@ Project Decisions hub; do not copy external harness code by default.
 
 - Reject writable scope path components ending in dots or spaces, because Windows can resolve those aliases to the same file while the scope comparer otherwise regards them as different paths. Existing casefold/Unicode-normalized collision rules remain in place.
 - Add disposable regression tests that launch independent Python interpreters against one SQLite database to check same-scope/Unicode collisions, the two-reservation cap, stale-revision races, cross-project error redaction and unchanged attempts after rejected reservations. No native agents are started or stopped.
-- **Verified merged to development:** [PR #57](https://github.com/samjuniors/Orbit-Core-MCP/pull/57) merge commit `ec3f49bf00dcd1c60c7ce5c51f1fff82e24c67f3`; [PR-head CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41079246959) and [post-merge development CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41081386868) passed on Ubuntu Python 3.10–3.13 and Windows Python 3.12. This is one-machine OS-process coverage; real IDE permission, agents, cancellation, two-PC portability and release gates remain OPEN.
+- **Verified merged to development:** [PR #57](https://github.com/samjuniors/Orbit-Core/pull/57) merge commit `ec3f49bf00dcd1c60c7ce5c51f1fff82e24c67f3`; [PR-head CI 5/5](https://github.com/samjuniors/Orbit-Core/actions/runs/41079246959) and [post-merge development CI 5/5](https://github.com/samjuniors/Orbit-Core/actions/runs/41081386868) passed on Ubuntu Python 3.10–3.13 and Windows Python 3.12. This is one-machine OS-process coverage; real IDE permission, agents, cancellation, two-PC portability and release gates remain OPEN.
 
 ## Merged development hardening — existing symlink scope containment and alias collision
 
@@ -515,7 +515,7 @@ Project Decisions hub; do not copy external harness code by default.
 
 Task registration previews and confirmations inspect current filesystem aliases for proposed writable scopes. Reservation checks again under its SQLite transaction, rejecting links escaping the selected workspace or resolving into protected control files. It also detects when two differently spelled assignments resolve to the same underlying path and holds the second reservation. A native handoff packet is withheld if the assigned path becomes unsafe after reservation. Rejections are generic and do not print external link targets.
 
-**Verification:** [PR #58](https://github.com/samjuniors/Orbit-Core-MCP/pull/58) merged to development commit `7130eb381ccdbc3d1792b55b2889e139385c9dbf`, with [exact-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41082050055) on Ubuntu Python 3.10–3.13 and Windows Python 3.12. Linux and Windows Python 3.12 each ran 346 tests, 3 skipped, zero failures, and the seven new symlink tests all passed. [Post-merge dev CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41082365287) verified the exact integrated development commit `7130eb381ccdbc3d1792b55b2889e139385c9dbf` on Ubuntu Python 3.10–3.13 and Windows Python 3.12. This is a point-in-time path guard, **not** a confinement sandbox; a host may mutate symlinks after reservation. Native host sandbox/permission enforcement, real two-PC acceptance, host-session cancellation, integration QA and release review remain OPEN.
+**Verification:** [PR #58](https://github.com/samjuniors/Orbit-Core/pull/58) merged to development commit `7130eb381ccdbc3d1792b55b2889e139385c9dbf`, with [exact-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core/actions/runs/41082050055) on Ubuntu Python 3.10–3.13 and Windows Python 3.12. Linux and Windows Python 3.12 each ran 346 tests, 3 skipped, zero failures, and the seven new symlink tests all passed. [Post-merge dev CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core/actions/runs/41082365287) verified the exact integrated development commit `7130eb381ccdbc3d1792b55b2889e139385c9dbf` on Ubuntu Python 3.10–3.13 and Windows Python 3.12. This is a point-in-time path guard, **not** a confinement sandbox; a host may mutate symlinks after reservation. Native host sandbox/permission enforcement, real two-PC acceptance, host-session cancellation, integration QA and release review remain OPEN.
 
 ## v0.27 development follow-up — failed prerequisites, path aliases and serial fallback
 
@@ -563,10 +563,10 @@ changes. Actual browser QA already belongs to the existing
 `orbit_browser_qa` path; this new read-only tool never runs it.
 Native Android/iOS/desktop QA remains a separate host review gate.
 
-**Verification:** [PR #61](https://github.com/samjuniors/Orbit-Core-MCP/pull/61)
+**Verification:** [PR #61](https://github.com/samjuniors/Orbit-Core/pull/61)
 MERGED to `dev/v0.27.0` commit `0d231b3508cf7c69bef85412a8efb2f02c714382`.
-[Exact PR-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41085894528)
+[Exact PR-head CI 5/5 PASS](https://github.com/samjuniors/Orbit-Core/actions/runs/41085894528)
 on Ubuntu Python 3.10–3.13 and Windows Python 3.12 (361 tests,
-3 skips, zero failures on Ubuntu 3.12). The separate [post-merge dev CI](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41086243865)
+3 skips, zero failures on Ubuntu 3.12). The separate [post-merge dev CI](https://github.com/samjuniors/Orbit-Core/actions/runs/41086243865)
 requires final verification. The development inventory is 46 tools;
 no release or real-host integration acceptance is implied.

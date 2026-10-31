@@ -73,6 +73,15 @@ jobs:
       - name: Rehearse published v0.26.0 upgrade preserving local data
         if: matrix.python-version == '3.12'
         run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.26.0
+      - name: Check out immutable v0.27.0 for rename-patch compatibility rehearsal
+        if: matrix.python-version == '3.12'
+        uses: actions/checkout@v4
+        with:
+          ref: v0.27.0
+          path: previous-0.27.0
+      - name: Rehearse published v0.27.0 upgrade preserving customized files and SQLite
+        if: matrix.python-version == '3.12'
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.27.0
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle

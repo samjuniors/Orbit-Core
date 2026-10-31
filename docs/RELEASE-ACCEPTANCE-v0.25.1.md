@@ -1,11 +1,11 @@
 # Orbit v0.25.1 — Release acceptance checklist
 
-**Status: PUBLISHED PRERELEASE on 2026-10-29; production certification still HOLD.** GitHub Release [`v0.25.1`](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.25.1) contains all four ZIP/MCPB/checksum assets. The source version and successful CI are not independent attestation of host approvals, real GUI interactions, cross-PC migration, or Issue #9 security closure. This checklist is a historical acceptance ledger with open post-publication verification.
+**Status: PUBLISHED PRERELEASE on 2026-10-29; production certification still HOLD.** GitHub Release [`v0.25.1`](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.25.1) contains all four ZIP/MCPB/checksum assets. The source version and successful CI are not independent attestation of host approvals, real GUI interactions, cross-PC migration, or Issue #9 security closure. This checklist is a historical acceptance ledger with open post-publication verification.
 
 ## Published release and older version controls
 - [ ] Confirm the v0.25.1 `CHANGELOG.md` section accurately states new features, fixes, security warnings, and limits. `.github/workflows/release.yml` uses this section as the published GitHub Release description.
-- [x] Published GitHub Release has four versioned ZIP/MCPB/checksum assets and release notes ([release](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.25.1), [successful publication workflow](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40832407417)). This confirms publication, **not** provenance signing.
-- [ ] Verify the **Older versions** link from the GUI and `orbit versions` open the official `https://github.com/samjuniors/Orbit-Core-MCP/releases` archive and **do not** invoke a downgrade or execute installer code.
+- [x] Published GitHub Release has four versioned ZIP/MCPB/checksum assets and release notes ([release](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.25.1), [successful publication workflow](https://github.com/samjuniors/Orbit-Core/actions/runs/40832407417)). This confirms publication, **not** provenance signing.
+- [ ] Verify the **Older versions** link from the GUI and `orbit versions` open the official `https://github.com/samjuniors/Orbit-Core/releases` archive and **do not** invoke a downgrade or execute installer code.
 - [x] v0.23.0 and v0.24.1 remain listed with release assets, alongside v0.25.1 (checked 2026-10-29); do not repoint, replace, or hide older tags.
 - [ ] Older version installation or rollback requires user choice, backups, workspace/profile compatibility review and a documented restoration plan; do not assume an older runtime can parse newer SQLite schema or checkpoint documents.
 
@@ -38,7 +38,7 @@
 - **Scope:** M1/M2 core host-functional milestones are **OWNER-ACCEPTED**; Issue #9 threat-model checks, broader fallback/denial paths and M3 independent QA remain open. See [roadmap](NEXT-VERSION.md).
 
 ## Automated evidence
-- [x] GitHub `main` CI passed 5/5 (Ubuntu Python 3.10–3.13, Windows Python 3.12) at commit `47f3721` ([run #40818364910](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40818364910)); separate versioned publication workflow passed ([run #40832407417](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40832407417)).
+- [x] GitHub `main` CI passed 5/5 (Ubuntu Python 3.10–3.13, Windows Python 3.12) at commit `47f3721` ([run #40818364910](https://github.com/samjuniors/Orbit-Core/actions/runs/40818364910)); separate versioned publication workflow passed ([run #40832407417](https://github.com/samjuniors/Orbit-Core/actions/runs/40832407417)).
 - [x] Versioned release completed with v0.25.1 ZIP, MCPB and SHA256 assets; release notes report 40 MCP tools. Full real-host inventory is a separate acceptance condition.
 - [x] CI includes disposable installation, protocol/tool inventory and prior-tag stock upgrade checks on Linux/Windows. Released inventory is **40 tools**, not the older 36-/39-tool candidate count; customized-profile and physical GUI tests remain open.
 - [ ] Update/older version/release notes unit tests pass (publisher notes bounded, no draft or incomplete asset eligible, no implicit downgrade, no code download on status).

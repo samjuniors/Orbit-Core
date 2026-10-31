@@ -1,6 +1,6 @@
 # Orbit Core v0.26.0 — one package, multiple native hosts
 
-**Publication status:** v0.26.0 is a [published GitHub prerelease](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.26.0). This specification describes the shipped 42-tool package; authentic host-native plugin activation, IDE permission UI, installed-user rollback and independent security certification remain **NOT VERIFIED**. Publication does not imply production certification.
+**Publication status:** v0.26.0 is a [published GitHub prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.26.0). This specification describes the shipped 42-tool package; authentic host-native plugin activation, IDE permission UI, installed-user rollback and independent security certification remain **NOT VERIFIED**. Publication does not imply production certification.
 
 ## Naming and identity contract
 

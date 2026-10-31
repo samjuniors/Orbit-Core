@@ -14,7 +14,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-REPO = "samjuniors/Orbit-Core-MCP"
+REPO = "samjuniors/Orbit-Core"
 RELEASES = "https://api.github.com/repos/" + REPO + "/releases?per_page=100"
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 CHECK_INTERVAL_SECONDS = 24 * 60 * 60
