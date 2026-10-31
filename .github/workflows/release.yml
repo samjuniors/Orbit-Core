@@ -136,6 +136,8 @@ jobs:
             "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
             "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip" \
             "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
+            "dist/Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip" \
+            "dist/Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
             "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb" \
             "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256" \
             --repo "$GITHUB_REPOSITORY" \

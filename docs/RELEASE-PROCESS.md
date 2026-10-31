@@ -4,7 +4,7 @@ Orbit Core MCP uses Semantic Versioning `MAJOR.MINOR.PATCH`. `VERSION` is author
 
 ## Published versus planned versions
 
-- `VERSION` is the **current repository source/package candidate** (prepared for `0.26.0` after M3/M4 source merges), not proof that GitHub has published a release. `NEXT_VERSION` records the **proposed** next version (`0.26.1`), not authorization to publish it. The latest GitHub published version is **v0.25.1 (prerelease; 2026-10-29)**. Every new release requires a matching `CHANGELOG.md` section and independently reviewed packaging, host acceptance and explicit owner publication approval. The main source may include fixes that do not exist in any published desktop bundle.
+- `VERSION` is the **current repository source/package candidate** (prepared for `0.26.0` after M3/M4 source merges), not proof that GitHub has published a release. `NEXT_VERSION` records the **proposed** next version (`0.27.0`), not authorization to publish it. The latest GitHub published version is **v0.25.1 (prerelease; 2026-10-29)**. Every new release requires a matching `CHANGELOG.md` section and independently reviewed packaging, host acceptance and explicit owner publication approval. The main source may include fixes that do not exist in any published desktop bundle.
 - Never change `VERSION` alone. On a reviewed release branch, update `VERSION`, `NEXT_VERSION` (to the next planned version), `installer.py`, `source/runtime/orbit_mcp.py`, and add the release's `CHANGELOG.md` entry together.
 - Prepare a **new, unpublished** MCPB from an immutable prior bundle via `python scripts/prepare_release_candidate.py` (CI does this before tests). The helper detects the latest older bundled release, copies non-code resources/metadata into the new version and enforces exact runtime module/source parity. It does **not** modify the older published artifact, tag, or release. CI uploads the candidate ZIP/MCPB as downloadable *test artifacts* for host evaluation. Do **not** mark these test artifacts as published releases or as cryptographically attested.
 - Explicitly verify upgrade compatibility with customized user installs, including stock digest allowlist updates; an unknown file must stay protected. Do **not** delete old versioned bundles, Git tags, owner documents or other work to make a new version appear clean.
@@ -25,6 +25,8 @@ Orbit Core MCP uses Semantic Versioning `MAJOR.MINOR.PATCH`. `VERSION` is author
 - `Orbit-Antigravity-Plugin-vX.Y.Z.zip` — host-native Antigravity lead/skills/agents/local-MCP plugin, subject to host installation/migration acceptance.
 - `Orbit-Antigravity-Plugin-vX.Y.Z.zip.sha256` — integrity checksum for the plugin ZIP.
 - `ORBIT-Universal-Setup-vX.Y.Z.zip.sha256` — SHA-256 checksum.
+- `Orbit-Core-Plugin-Suite-vX.Y.Z.zip` — separate Antigravity, Codex and Claude Code host-native plugin manifests bundled into one download.
+- `Orbit-Core-Plugin-Suite-vX.Y.Z.zip.sha256` — SHA-256 integrity checksum for the plugin-suite ZIP.
 - `ORBIT-Claude-Desktop-vX.Y.Z.mcpb` — Claude Desktop extension.
 - `ORBIT-Claude-Desktop-vX.Y.Z.mcpb.sha256` — checksum.
 - GitHub's automatically generated source archives for the immutable tag.
