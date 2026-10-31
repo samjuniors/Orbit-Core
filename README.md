@@ -158,6 +158,7 @@ From a source checkout with a supported Python interpreter:
 
 ```sh
 python3 scripts/prepare_release_candidate.py
+python3 scripts/check_release_readiness.py
 python3 -m compileall -q source installer.py orbit_setup.py scripts tests
 python3 -m unittest discover -s tests -v
 python3 scripts/check_version.py
@@ -176,6 +177,7 @@ The CI matrix covers Ubuntu with Python **3.10–3.13** and Windows with Python 
 | [Installation and updates](docs/MCP-INSTALLATION-OPTIONS.md) | Host setup, scope and configuration |
 | [Security](SECURITY.md) | Threat boundaries, approval caveats and known gaps |
 | [Roadmap](docs/NEXT-VERSION.md) | M1–M5 implementation and outstanding acceptance gates |
+| [Release and QA checklist](docs/RELEASE-PROCESS.md) | Repeatable checks and automatic publication workflow for every version |
 | [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.26.0.md) | v0.26.0 published status and remaining host/security gates |
 | [Changelog](CHANGELOG.md) | Recorded source and release changes |
 
