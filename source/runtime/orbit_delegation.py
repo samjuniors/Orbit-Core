@@ -56,11 +56,41 @@ def handoff(conn, args, root):
     # before exposing a native host invocation packet; the host must still
     # enforce actual filesystem scope and user permission at invocation time.
     unsafe_scope = False
+    own_scopes = []
+    resolved_scopes = []
     if task['status'] == 'RESERVED':
         try:
-            orbit_tasks._resolved_scopes(root, task['write_paths'])
-        except ValueError:
+            own_scopes = orbit_tasks._scopes(task['write_paths'])
+            resolved_scopes = orbit_tasks._resolved_scopes(root, own_scopes)
+        except (TypeError, ValueError):
             unsafe_scope = True
+
+    # A direct per-task handoff must not bypass the all-or-nothing swarm
+    # preflight. Imported/corrupt state or filesystem aliases can introduce
+    # a conflicting reservation *after* reserve() checked the same root.
+    # Never disclose another project's task keys, file paths or identities.
+    competing_status = None
+    if task['status'] == 'RESERVED' and not unsafe_scope:
+        active = conn.execute(
+            """SELECT project, task_key, write_paths FROM orbit_agent_tasks
+               WHERE project_root=? AND status IN ('RESERVED','RUNNING')""",
+            (str(root),)).fetchall()
+        if len(active) > orbit_tasks.MAX_CONCURRENT:
+            competing_status = "HOLD_ACTIVE_CAPACITY_UNVERIFIED"
+        else:
+            for other in active:
+                if (other['project'], other['task_key']) == (task['project'], task['task_key']):
+                    continue
+                try:
+                    other_scopes = orbit_tasks._scopes(json.loads(other['write_paths']))
+                    other_resolved = orbit_tasks._resolved_scopes(root, other_scopes)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    competing_status = "HOLD_OTHER_ACTIVE_SCOPE_UNVERIFIED"
+                    break
+                if (orbit_tasks._collisions(own_scopes, other_scopes)
+                        or orbit_tasks._collisions(resolved_scopes, other_resolved)):
+                    competing_status = "HOLD_ACTIVE_SCOPE_CONFLICT"
+                    break
 
     # The host tool names are exact; installed agent Markdown metadata and MCP
     # configuration are not evidence of a running host-native agent.
@@ -70,6 +100,10 @@ def handoff(conn, args, root):
         status = "HOLD_RESERVE_TASK_FIRST"
         next_step = ("Reserve this existing task using orbit_task_reserve with "
                      "the latest revision and genuine host/user consent.")
+    elif task['host_session']:
+        status = "HOLD_SESSION_ALREADY_RECORDED"
+        next_step = ("Inspect the actual host session before delegating again. "
+                     "Never reuse a reserved task with a recorded session.")
     elif deps:
         status = "HOLD_UNACCEPTED_DEPENDENCIES"
         next_step = "Review and accept every prerequisite before delegation."
@@ -78,6 +112,11 @@ def handoff(conn, args, root):
         next_step = ("Workspace symlink or path ownership changed after reservation. "
                      "Do not invoke a native agent; reconcile the unused reservation "
                      "with real host consent and repair the task scope.")
+    elif competing_status:
+        status = competing_status
+        next_step = ("Reconcile existing active workspace reservations and "
+                     "their file ownership in the real host; do not start a "
+                     "worker or expose unrelated project details.")
     elif not approved_tool:
         status = "HOLD_NATIVE_TOOL_UNAVAILABLE"
         next_step = ("Release an unused reservation with orbit_task_release, "
@@ -109,6 +148,11 @@ def handoff(conn, args, root):
         "task_revision": task["revision"],
         "milestone_step": task["step"],
         "role": task["role"],
+        # Name is a *candidate*, not proof a specialist agent is installed
+        # or permitted in the connected host; let the host resolve/fallback.
+        "specialist_agent_hint": "orbit-" + task["role"],
+        "specialist_verified_in_host": False,
+        "model_selected_by_orbit": False,
         "goal": task["goal"],
         "reason": task["reason"],
         "write_paths": task["write_paths"],
@@ -116,7 +160,12 @@ def handoff(conn, args, root):
         "dependent_task_keys": task["depends_on"],
         "requires": "Actual host consent; inspect Git diff and run real tests",
         "prohibited_actions": NO_SIDE_EFFECTS,
-        "output": "Real host session ID, changed files, tests/exit codes, risks and blockers",
+        "output": "Actual host session ID, source revision, changed paths, test commands and exit codes, risks and blockers",
+        "host_return_checklist": [
+            "Identify the real native specialist and host tool used",
+            "Confirm the host-approved scope and independent session reference",
+            "Inspect source diff and executed tests before separate task review",
+        ],
         "research_pointers_untrusted": sources,
     }
     # Never truncate a scope or expectation silently. A broad packet requires
