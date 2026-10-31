@@ -80,6 +80,35 @@ class SoftwareDeliveryPreviewTests(unittest.TestCase):
         self.assertIn("security",keys)
         self.assertIn("release",keys)
 
+    def test_visual_redesign_preserves_existing_data_and_service_contracts(self):
+        x=self.preview(product_type="web-app",operation="redesign",maturity="completed",
+                       objective="Redesign navigation and loading states without API changes")
+        self.assertEqual(x["status"],"BLUEPRINT_READY")
+        tasks={task["task_key"]:task for task in x["proposed_tasks"]}
+        self.assertIn("experience",tasks)
+        self.assertIn("interface",tasks)
+        self.assertNotIn("contracts",tasks)
+        self.assertNotIn("service",tasks)
+        self.assertEqual(tasks["interface"]["depends_on"],["experience"])
+        self.assertEqual(tasks["integration"]["depends_on"],["interface"])
+        self.assertIn("preserve behavior",tasks["experience"]["goal"])
+        self.assertIn("preserve those contracts",tasks["interface"]["goal"])
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0],0)
+
+    def test_implementation_requires_test_first_or_explicit_blocker(self):
+        for product_type in ("web-app","cli","api-service"):
+            with self.subTest(product_type=product_type):
+                x=self.preview(product_type=product_type,operation="build",maturity="new")
+                tasks={task["task_key"]:task for task in x["proposed_tasks"]}
+                self.assertIn("test runner",tasks["scope"]["goal"])
+                self.assertIn("test-first is blocked",tasks["scope"]["goal"])
+                for key in ("service","interface","implementation"):
+                    if key in tasks:
+                        self.assertIn("before implementation",tasks[key]["goal"].lower())
+                self.assertTrue(all(not item["write_paths"] for item in x["proposed_tasks"]))
+                self.assertFalse(x["agent_spawned"])
+                self.assertFalse(x["tests_verified"])
+
     def test_bugfix_is_small_and_reproduces_before_repair_without_release(self):
         x=self.preview(product_type="api-service",operation="fix",maturity="stalled",
                        objective="Fix failing validation without altering existing API")
