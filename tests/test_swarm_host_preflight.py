@@ -106,6 +106,36 @@ class HostPreflightTests(unittest.TestCase):
         self.assertEqual(result["handoffs"], [])
         self.assertIn("orbit_task_release", result["recovery"])
 
+    def test_reported_read_only_host_holds_writable_batch_without_partial_handoffs(self):
+        self.create("api", paths=["backend/"])
+        self.create("ui", paths=["frontend/"])
+        r1 = self.reserve("api")
+        r2 = self.reserve("ui")
+        before = self.db.total_changes
+        out = self.preflight([self.slot("api", r1), self.slot("ui", r2)],
+                             host_workspace_mode="read-only")
+        self.assertEqual(out["status"], "HOLD_HOST_PREFLIGHT")
+        self.assertEqual(out["handoffs"], [])
+        self.assertEqual(
+            [issue["status"] for issue in out["issues"]],
+            ["HOLD_HOST_WORKSPACE_READ_ONLY", "HOLD_HOST_WORKSPACE_READ_ONLY"])
+        self.assertEqual(out["host_workspace_mode_reported"], "read-only")
+        self.assertFalse(out["host_workspace_writes_verified"])
+        self.assertFalse(out["native_invoked"])
+        self.assertEqual(self.db.total_changes, before)
+
+    def test_read_only_native_task_may_handoff_in_read_only_workspace(self):
+        self.create("inspect", paths=[])
+        revision = self.reserve("inspect")
+        out = self.preflight([self.slot("inspect", revision)],
+                             host_workspace_mode="read-only")
+        self.assertEqual(out["status"], "HOST_INVOCATIONS_REQUIRED")
+        self.assertEqual(out["handoffs"][0]["handoff"]["write_paths"], [])
+        self.assertFalse(out["host_workspace_writes_verified"])
+        with self.assertRaises(ValueError):
+            self.preflight([self.slot("inspect", revision)],
+                           host_workspace_mode="force-write")
+
     def test_duplicate_and_stale_revisions_hold(self):
         self.create("api")
         rev = self.reserve("api")
