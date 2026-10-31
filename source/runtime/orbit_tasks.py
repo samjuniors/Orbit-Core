@@ -358,9 +358,11 @@ def reserve(conn,a,root):
         conflict=_revision(a,old)
         if conflict: conn.rollback();return conflict
         if old['status'] not in RETRYABLE: raise ValueError('Only PLANNED, REWORK, FAILED or BLOCKED tasks can reserve')
-        if (old['status']=='BLOCKED' and old.get('note','').startswith('HOST_PERMISSION_DENIED:')
-                and approval==old.get('approval_reference')):
-            raise ValueError('Host permission was denied: obtain fresh host/user approval; do not reuse the denied reference')
+        # A BLOCKED task ended without fulfilling its approved objective,
+        # including a normally completed native worker that produced no work.
+        # No earlier approval reference authorizes a new worker attempt.
+        if old['status']=='BLOCKED' and approval==old.get('approval_reference'):
+            raise ValueError('Blocked task requires fresh host/user approval; do not reuse the earlier reference')
         for dep in json.loads(old['depends_on']):
             item=conn.execute('SELECT status FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                               (old['project'],old['project_root'],dep)).fetchone()
@@ -468,7 +470,10 @@ def scope_check(conn,a,root):
 HOST_TERMINAL_STATES = {
     'REPORTED_DONE': {'COMPLETED'},
     'FAILED': {'FAILED'},
-    'BLOCKED': {'FAILED','CANCELLED','STOPPED'},
+    # A native agent can terminate normally after *refusing or failing its*
+    # assigned objective. This is not REPORTED_DONE; allow it only via
+    # the explicit incomplete-objective and no-changed-files guard below.
+    'BLOCKED': {'FAILED','CANCELLED','STOPPED','COMPLETED'},
     'CANCELLED': {'CANCELLED','STOPPED'},
 }
 HOST_STATES = {'COMPLETED','FAILED','CANCELLED','STOPPED','RUNNING','UNKNOWN'}
@@ -498,6 +503,15 @@ def reported(conn,a,root):
             return {'status':'HOLD_HOST_RECONCILIATION','reason':'Host has not reported a matching terminal state; inspect or stop the real agent before releasing its scope.',
                     'host_state_reported':state,'task_revision':old['revision'],
                     'host_status_verified':False}
+        completed_but_blocked = outcome == 'BLOCKED' and state == 'COMPLETED'
+        if completed_but_blocked and (a.get('objective_completed') is not False or paths):
+            # Exit status and work outcome are different. Never release a scope
+            # from an ordinary completed native agent without an explicit,
+            # separately inspected failed objective and no reported writes.
+            return {'status':'HOLD_HOST_RECONCILIATION',
+                    'reason':'COMPLETED host + BLOCKED task needs objective_completed=false, independent evidence, and empty changed_paths.',
+                    'host_state_reported':state,'task_revision':old['revision'],
+                    'host_status_verified':False,'agent_stopped_by_mcp':False}
         if a.get('confirm_write') is not True:
             return {'status':'PREVIEW_ONLY','proposed_status':outcome,
                     'host_state_reported':state,'host_status_verified':False,
@@ -506,6 +520,8 @@ def reported(conn,a,root):
         # accepted task/checkpoint history. The observation remains untrusted.
         previous=old['note'] or ''
         marker='HOST_TERMINAL_REPORTED:'+state
+        if completed_but_blocked:
+            marker+='; TASK_OBJECTIVE_REPORTED_INCOMPLETE'
         note=previous+('; ' if previous else '')+marker
         out=_update(conn,old,outcome,evidence=evidence,
                     changed_paths=_serialize(paths),note=note)

@@ -1,5 +1,54 @@
 # v0.27.0 — Orbit-native Agent Swarm: engineering acceptance
 
+## 2026-10-31 — real approved Codex two-worker acceptance: recovery gap reproduced
+
+The owner explicitly approved synthetic Codex task registration, reservation,
+native execution, task report and evidence writing in a TEMP-only project. The
+actual host returned `/root/alpha` and `/root/beta` from native subagent
+spawns; `orbit_task_plan` and `orbit_task_reserve` succeeded for both,
+and preflight/handoff requested actual host invocation.
+
+**Verified original v0.27.0 fixture evidence:**
+- **BETA PASS (limited):** actual worker completed, `beta.txt` exists
+  and independent file read returned `ORBIT_BETA_PASS` (15 bytes); Orbit
+  marked beta `REVIEW_ACCEPTED`, revision 5. These are task/objective
+  acceptance results, not a native UI permission attestation.
+- **ALPHA BLOCKED:** worker `/root/alpha` ended without writing;
+  independent lookup of `alpha.txt` returned ENOENT. Orbit's
+  `orbit_task_report` rejected `outcome=BLOCKED, host_state=COMPLETED`
+  as `HOLD_HOST_RECONCILIATION`, leaving alpha `RUNNING` at revision
+  3. This is a host-end-versus-task-objective mismatch, not proof the
+  worker is still active.
+- **DENIAL NOT VERIFIED / intended no-write FAIL:** an escalated
+  permission request to create `permission-denied.txt` was **approved**,
+  not denied; the command returned exit 0 and the file exists containing
+  `ORBIT_PERMISSION_TEST`. An approval does not exercise or prove
+  refusal enforcement. No new denial result was assumed.
+- **Host shell BLOCKED:** ordinary Codex exec intermittently failed
+  `CryptUnprotectData failed: 2148073483`; no credential bypass
+  attempted. Cancellation and restart **NOT RUN**.
+- The exact original SQLite attempt records, files and evidence were
+  preserved. No direct database edits, deletions or fake host states
+  are authorized by this report.
+
+**Candidate fix staged separately (not yet part of this branch):**
+Allow a native session with observed state `COMPLETED` to report an
+**incomplete objective** as `BLOCKED` only with matching exact session,
+`objective_completed=false`, zero reported changed paths, explicit
+evidence and `confirm_write=true`; retain original host session, attempt
+history and `HOST_REPORTED_NOT_ATTESTED` boundaries. The failed objective
+cannot be reviewed ACCEPTED. Any subsequent `BLOCKED` retry requires
+a *fresh* approval reference, not reuse of a previous permission grant.
+Missing, mismatched or ambiguous evidence **HOLD** and does not unlock
+the task's active write scope.
+
+The fix must pass focused tests, full Windows/Linux regression and owner
+review before integration into this 0.27.0 candidate. Applying the fix
+to the **original alpha SQLite row** is a separate, explicit,
+human-authorized host-state reconciliation; do not silently manipulate
+the user's test ledger. Genuine denial and host cancel/restart checks
+remain required for acceptance. See existing release gate below.
+
 ## 2026-10-31 — focused Codex + Antigravity follow-up (owner-scoped test round)
 
 The owner narrowed **this acceptance round** to Codex and Antigravity.
