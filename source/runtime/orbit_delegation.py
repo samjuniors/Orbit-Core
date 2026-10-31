@@ -28,9 +28,19 @@ NO_SIDE_EFFECTS = (
     "model-provider switches without separate real host/user approval."
 )
 ALLOWED_TOOL_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+HOST_WORKSPACE_MODES = ("unknown", "read-only", "workspace-write")
+
+
+def workspace_mode(args):
+    """Caller-observed hint, never a host-sandbox or approval attestation."""
+    mode = args.get("host_workspace_mode", "unknown")
+    if mode not in HOST_WORKSPACE_MODES:
+        raise ValueError("host_workspace_mode must be unknown, read-only or workspace-write")
+    return mode
 
 
 def handoff(conn, args, root):
+    mode = workspace_mode(args)
     host = args.get("host")
     tools = args.get("available_host_tools", [])
     if host not in HOST_NATIVE_TOOLS:
@@ -116,6 +126,12 @@ def handoff(conn, args, root):
         next_step = ("Workspace symlink or path ownership changed after reservation. "
                      "Do not invoke a native agent; reconcile the unused reservation "
                      "with real host consent and repair the task scope.")
+    elif mode == "read-only" and own_scopes:
+        status = "HOLD_HOST_WORKSPACE_READ_ONLY"
+        next_step = ("The connected host reports a read-only workspace. Do not "
+                     "invoke a writable specialist; ask the host for legitimate "
+                     "workspace permissions or use a read-only task. Reconcile "
+                     "any unused reservation through orbit_task_release.")
     elif competing_status:
         status = competing_status
         next_step = ("Reconcile existing active workspace reservations and "
@@ -184,6 +200,8 @@ def handoff(conn, args, root):
         "task_status": task["status"],
         "host": host,
         "available_host_tools_are_caller_reported": True,
+        "host_workspace_mode_reported": mode,
+        "host_workspace_writes_verified": False,
         "native_tool": approved_tool if status == "HOST_INVOCATION_REQUIRED" else None,
         "native_invoked": False,
         "host_session_verified": False,
