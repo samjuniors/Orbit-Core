@@ -106,6 +106,23 @@ or storage. If source inspection proves that a backend/data change is necessary,
 revise the blueprint and file scopes with owner consent before proceeding.
 This avoids unnecessary rewrites while preserving functional UI testing.
 
+## M2 parallel-agent filesystem safety
+
+Before proposing parallel native-agent work, `orbit_swarm_draft_preview`
+now evaluates both declared project-relative write paths and their
+symlink-resolved targets in the selected workspace. Paths escaping the
+workspace or resolving to protected control files fail closed; two
+different-looking paths resolving to the same directory are scheduled in
+separate review waves, not approved as parallel edits.
+
+Before returning **any** native invocation packet for a selected batch,
+`orbit_swarm_host_preflight` rechecks the saved scopes and current
+resolved targets. If a link was retargeted after reservation, or imported
+reservation records overlap physically, the whole batch returns HOLD with
+no partial handoffs. Neither preview nor preflight is a filesystem sandbox:
+the coding host must separately enforce write permissions at the time of
+actual execution. These guards never launch, stop or impersonate agents.
+
 ## Repeated slices and targeted fixes
 
 Use a fresh, explicitly reviewed lowercase slice_key (such as alerts) for each later vertical slice. Each task and dependency key gets that prefix; original accepted tasks and append-only attempts remain untouched. Without a new key, a collision returns HOLD. For a fix or debug operation, focus_role may be frontend, backend, data, devops, security or qa after inspecting the actual affected code. Stage-specific ledger step labels preserve per-step reservation limits. No model switching or host permission occurs during the preview.
