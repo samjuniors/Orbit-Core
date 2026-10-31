@@ -1,5 +1,70 @@
 # v0.27.0 — Orbit-native Agent Swarm: engineering acceptance
 
+## 2026-10-31 — Antigravity real host acceptance: six PASS, two gates open
+
+**Source tested:** `v0.27.0` candidate at `110de679b16955cc556ecee8aadee0371632326a`,
+through a dedicated local Antigravity MCP entry `orbit-v027-acceptance`
+with 46 tools. The fixture was the existing temporary directory
+`%TEMP%\\Orbit-v027-Antigravity-cf02fc346e\\project`, with its own SQLite
+`antigravity-acceptance.sqlite3`. See the preserved readback file
+`project/evidence/ANTIGRAVITY-RESULT.md`; it is a host test record,
+not a source-controlled assertion.
+
+**Read-only, independent post-test verification (DESKTOP-AND1FUJ):**
+- **PASS — 46-tool Orbit connection and read-only previews.** The real
+  Antigravity test reported successful `orbit_project_scan`,
+  `orbit_swarm_preview(NO_READY_TASKS, agent_spawned=false)` and
+  `orbit_swarm_draft_preview(DRAFT_VALIDATED, two disjoint scopes)`.
+  An earlier separate protocol invocation using the exact workspace
+  MCP command independently confirmed version `0.27.0`, 46 tools and
+  read-only `orbit_swarm_preview` with no registered tasks.
+- **PASS — actual native specialist sessions and objective files.** The
+  actual host reported Antigravity native `invoke_subagent` workers
+  `8c74f139-5d5b-4bb7-b74c-034945a7565d` (`orbit-backend`,
+  alpha) and `9f2fdee5-6961-417e-a858-287ce6791383`
+  (`orbit-frontend`, beta). The **exact two reported native
+  transcript files exist** under the host's session directory and
+  contain multiple actual recorded events, including test-file path
+  mentions. These observations support genuine native host activity;
+  they do not attest host permission dialogs.
+- **PASS — file contents and size verified independently.**
+  `alpha.txt` contains exactly 16 bytes `ORBIT_ALPHA_PASS`;
+  `beta.txt` contains exactly 15 bytes `ORBIT_BETA_PASS`.
+- **PASS — durable task lifecycle.** A read-only SQLite query of the
+  fixture's original database found **two** `orbit_agent_tasks`
+  records scoped to the exact fixture project (`orbit-acceptance`),
+  each `REVIEW_ACCEPTED` revision 5, changed paths respectively
+  `["alpha.txt"]` and `["beta.txt"]`, and native session values
+  matching the two reported transcript IDs. Each task has one
+  persisted attempt with host-reported completed disposition.
+  This independently supports the host report's transitions
+  `PLANNED → RESERVED → RUNNING → REPORTED_DONE → REVIEW_ACCEPTED`.
+- **Conversation refusal respected, but host UI denial NOT VERIFIED.**
+  The owner explicitly **DENIED** the separate `task-denied`
+  proposal in chat; no corresponding task exists in the ledger and
+  `denied.txt` is absent. **No native IDE permission prompt was
+  denied**; therefore permission enforcement is NOT VERIFIED and must
+  not be called a host-security PASS.
+- **Cancellation/restart NOT RUN** by explicit scope; the owner did
+  not authorize native worker interruption. Interactive denial and
+  cancellation/recovery remain open for Codex/Antigravity.
+- Original fixture files, database, and native transcripts were only
+  **read** in the independent verification. No global host
+  configuration, installed user environment, permission grant,
+  or two-PC recovery received production certification from this test.
+
+**Gate summary:** Antigravity gates 1–6 **PASS (verified)**;
+gate 7 **NOT VERIFIED**; gate 8 **NOT RUN**. Codex separately
+passed a real native two-worker run with beta accepted, but alpha
+blocked and a supposed denial action **actually approved**. The
+focused guarded alpha reconciliation is staged in
+[PR #66](https://github.com/samjuniors/Orbit-Core-MCP/pull/66),
+base `release/v0.27.0-candidate`, and its exact original
+Windows/Linux CI was **5/5 PASS**. Do not confuse CI, genuine native
+execution, user-chat denial, and host permission enforcement.
+The v0.27.0 **release remains on HOLD / PR #63 remains a draft**;
+nothing here authorizes silent merging or publication.
+
 ## 2026-10-31 — real approved Codex two-worker acceptance: recovery gap reproduced
 
 The owner explicitly approved synthetic Codex task registration, reservation,
@@ -31,7 +96,7 @@ and preflight/handoff requested actual host invocation.
   preserved. No direct database edits, deletions or fake host states
   are authorized by this report.
 
-**Candidate fix staged separately (not yet part of this branch):**
+**Candidate fix implemented in this focused PR #66, not yet merged into the main v0.27 candidate:**
 Allow a native session with observed state `COMPLETED` to report an
 **incomplete objective** as `BLOCKED` only with matching exact session,
 `objective_completed=false`, zero reported changed paths, explicit
@@ -42,8 +107,9 @@ a *fresh* approval reference, not reuse of a previous permission grant.
 Missing, mismatched or ambiguous evidence **HOLD** and does not unlock
 the task's active write scope.
 
-The fix must pass focused tests, full Windows/Linux regression and owner
-review before integration into this 0.27.0 candidate. Applying the fix
+The fix passed nine focused regressions, the full Windows suite (376 tests,
+19 skipped, zero failures), and [exact-head Windows/Linux CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41172499805).
+It still requires owner review before merging into this v0.27 candidate. Applying the fix
 to the **original alpha SQLite row** is a separate, explicit,
 human-authorized host-state reconciliation; do not silently manipulate
 the user's test ledger. Genuine denial and host cancel/restart checks
