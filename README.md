@@ -189,6 +189,8 @@ Open items—including publisher authenticity, real-host acceptance and independ
 
 ## Community and contributing
 
+For contribution workflow and project compatibility expectations, read [CONTRIBUTING.md](CONTRIBUTING.md). No open-source license has been selected; public visibility is not an unrestricted license to reuse the code.
+
 Bugs, feature proposals and implementation discussions belong in [GitHub Issues](https://github.com/samjuniors/Orbit-Core/issues). For proposed changes, open an issue first, keep the patch scoped, include tests and explain how behavior was verified. Consult [the release process](docs/RELEASE-PROCESS.md) before changing release or packaging files.
 
 **License:** This repository currently has **no general open-source license grant**. Public visibility does not itself authorize redistribution or use under an assumed open-source license. Contact the repository owner about permissions before reuse or redistribution.
