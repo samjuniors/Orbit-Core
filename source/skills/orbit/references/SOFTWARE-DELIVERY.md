@@ -106,6 +106,27 @@ or storage. If source inspection proves that a backend/data change is necessary,
 revise the blueprint and file scopes with owner consent before proceeding.
 This avoids unnecessary rewrites while preserving functional UI testing.
 
+## M2 direct host handoff contract
+
+A per-task `orbit_task_handoff` must enforce the same workspace-reservation
+privacy boundary as the two-task `orbit_swarm_host_preflight`. In
+particular, it must HOLD if the same root has too many active reservations,
+an overlapping physical or declared write scope, a corrupt/unsafe active
+scope, or a recorded session on a supposedly unstarted reservation. Never
+expose other project names or paths in these HOLD responses.
+
+For a successful handoff, `specialist_agent_hint` identifies the matching
+Orbit specialist name (for example `orbit-frontend`), **not** an installed
+or authenticated agent. The host must verify that its own native subagent
+and requested specialization are genuinely available, then invoke with its
+own authorized parameters. If the specialized agent is missing, use the
+host's permitted equivalent or an explicitly approved serial fallback.
+There is no vendor-specific command, agent install, model override or
+host execution inside the MCP. The packet asks for a real session
+reference, source revision, changed paths, executed test commands and exit
+codes, and blockers; an agent's self-report never independently proves
+acceptance.
+
 ## M2 parallel-agent filesystem safety
 
 Before proposing parallel native-agent work, `orbit_swarm_draft_preview`
