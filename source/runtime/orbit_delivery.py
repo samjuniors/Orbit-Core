@@ -50,8 +50,12 @@ def _workflow(product_type, operation, maturity, objective, constraints, *, limi
     existing = maturity != "new"
     incident = operation in {"fix", "debug"}
     visual = product_type in VISUAL
-    service = product_type in SERVICES
-    data = product_type in DATA
+    # A redesign proposes a bounded UI/UX slice, not unapproved schema or API rewrites.
+    # Preserve existing behavior and defer backend/data changes until code inspection
+    # proves they are necessary and the owner extends the reviewed scope.
+    redesign = operation == "redesign" and visual
+    service = product_type in SERVICES and not redesign
+    data = product_type in DATA and not redesign
 
     tasks = []
     checks = {}
@@ -74,7 +78,9 @@ def _workflow(product_type, operation, maturity, objective, constraints, *, limi
     add("scope", "architect", "Approve requirements and vertical-slice plan",
         ("Produce a concise product brief with user journeys or API use cases, "
          "non-goals, platform, acceptance criteria, architecture choices and "
-         "a sequence of thin, deployable vertical slices. "
+         "a sequence of thin, deployable vertical slices. Specify the actual "
+         "test runner and a failing or baseline test for changed behavior before "
+         "implementing when feasible; otherwise explain why test-first is blocked. "
          + ("Reproduce the bug first and state expected behavior. " if incident else "")
          + ("Preserve current user functionality and data. " if existing else "")
          + ("Honor constraints: " + constraints if constraints else "Avoid unapproved stack and hosting decisions.")),
@@ -92,7 +98,7 @@ def _workflow(product_type, operation, maturity, objective, constraints, *, limi
 
     if visual and not incident:
         add("experience", "ux", "Map accessible experience",
-            "Design the first complete user journey with responsive states, keyboard/focus access, feedback, error/empty/loading behavior, and reduced-motion handling. Reuse UI components compatible with the existing stack.",
+            "Design the first complete user journey with responsive states, keyboard/focus access, feedback, error/empty/loading behavior, and reduced-motion handling. Reuse UI components compatible with the existing stack. For redesign, preserve behavior and existing service/data contracts unless separately approved.",
             "Choose interaction patterns before implementing visuals.", implement_deps,
             "Approved UX states, accessible acceptance and actual platform constraint.")
         implement_deps=["experience"]
@@ -106,20 +112,20 @@ def _workflow(product_type, operation, maturity, objective, constraints, *, limi
 
     if service and not incident:
         add("service", "backend", "Build service vertical slice",
-            "Implement the smallest working service/business-domain path with tests, error handling and declared write scopes only after host approval.",
+            "Before implementation, establish a failing or baseline contract test when feasible. Implement the smallest working service/business-domain path with tests, error handling and declared write scopes only after host approval; rerun and report the test evidence.",
             "Produce a demonstrable domain path rather than disconnected scaffolding.", implement_deps,
             "Executed service contract tests and actual changed paths.")
         implement_deps=["service"]
 
     if visual and not incident:
         add("interface", "frontend", "Build the first UI vertical slice",
-            "Implement the smallest functional user journey against the real data/service contract or an approved local-only substitute. Include keyboard support, responsive error/empty/loading states and appropriate design-system reuse.",
+            "Before implementation, establish a failing or baseline UI interaction test when feasible. Implement the smallest functional user journey against the existing data/service contract or an approved local-only substitute; preserve those contracts during redesign. Include keyboard support, responsive error/empty/loading states and appropriate design-system reuse; rerun and report the tests.",
             "A tested end-to-end experience is more valuable than a set of static screens.", implement_deps,
             "Real interaction tests, user journey result and source-backed component review.")
         implement_deps=["interface"]
     elif not service and not incident:
         add("implementation", "backend", "Implement first functional slice",
-            "Build a working CLI/library/website/API-path vertical slice for the approved scope using the existing stack; document public contracts and test behavior.",
+            "Establish a failing or baseline test before implementation when feasible. Build a working CLI/library/website/API-path vertical slice for the approved scope using the existing stack; document public contracts and execute relevant tests.",
             "Deliver useful functionality without creating an unnecessary UI runtime.", implement_deps,
             "Executed target-language/unit tests and documented public contract.")
         implement_deps=["implementation"]
