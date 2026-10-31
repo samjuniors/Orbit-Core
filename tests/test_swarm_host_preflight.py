@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 import tempfile
@@ -166,6 +167,48 @@ class HostPreflightTests(unittest.TestCase):
         self.assertEqual(out["handoffs"], [])
         self.assertIn("HOLD_WRITE_SCOPE_CONFLICT",
                       [i["status"] for i in out["issues"]])
+
+    def test_resolved_parallel_alias_collision_holds_all_handoffs(self):
+        real = self.root / "src" / "real"
+        real.mkdir(parents=True)
+        try:
+            os.symlink(real, self.root / "src" / "alias",
+                       target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest("Symlinks unavailable on this host: " + type(exc).__name__)
+        self.create("real", paths=["src/real/"])
+        self.create("alias", paths=["src/alias/"])
+        # An imported/corrupt ledger can bypass the normal reservation
+        # collision check; final batch preflight must still block it.
+        self.db.execute("UPDATE orbit_agent_tasks SET status='RESERVED',revision=2")
+        self.db.commit()
+        before = self.db.total_changes
+        out = self.preflight([self.slot("real", 2), self.slot("alias", 2)])
+        self.assertEqual(out["status"], "HOLD_HOST_PREFLIGHT")
+        self.assertEqual(out["handoffs"], [])
+        self.assertIn("HOLD_WRITE_SCOPE_CONFLICT",
+                      [issue["status"] for issue in out["issues"]])
+        self.assertEqual(self.db.total_changes, before)
+        self.assertFalse(out["native_invoked"])
+
+    def test_symlink_escape_added_after_reservation_blocks_batch(self):
+        self.create("api", paths=["src/late/"])
+        revision = self.reserve("api")
+        self.other.mkdir(parents=True, exist_ok=True)
+        (self.root / "src").mkdir(exist_ok=True)
+        try:
+            os.symlink(self.other, self.root / "src" / "late",
+                       target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest("Symlinks unavailable on this host: " + type(exc).__name__)
+        before = self.db.total_changes
+        out = self.preflight([self.slot("api", revision)])
+        self.assertEqual(out["status"], "HOLD_HOST_PREFLIGHT")
+        self.assertEqual(out["handoffs"], [])
+        self.assertIn("HOLD_UNSAFE_WRITE_SCOPE",
+                      [issue["status"] for issue in out["issues"]])
+        self.assertEqual(self.db.total_changes, before)
+        self.assertFalse(out["native_invoked"])
 
     def test_missing_and_wrong_project_rejected(self):
         self.create("api")
