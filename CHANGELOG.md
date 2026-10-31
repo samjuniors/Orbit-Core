@@ -16,6 +16,12 @@ v0.27.0, and this planning marker does not authorize publication.
   a proposed task dependency graph before registration using
   `orbit_swarm_draft_preview`. Orbit orchestrates only; the connected host
   executes agents using its own available tools and permissions.
+- **Accurate stopped-worker reconciliation:** A native host session
+  can end normally even when its assigned task failed to produce files.
+  Orbit now records this as a blocked objective **only after** exact-session
+  reporting, explicit incomplete-objective evidence, no reported file
+  changes and a confirmed write. A new worker attempt requires new approval;
+  uncertain sessions remain on HOLD.
 - **Safer parallel handoffs:** `orbit_swarm_host_preflight` checks paired
   reservations without falsely claiming a native host session; SQLite
   transactions bound concurrent task handoffs, retries and file ownership.
