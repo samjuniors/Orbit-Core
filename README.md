@@ -1,17 +1,17 @@
-# Orbit Core MCP
+# Orbit Core
 
-[![CI](https://github.com/samjuniors/Orbit-Core-MCP/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/samjuniors/Orbit-Core-MCP/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/samjuniors/Orbit-Core-MCP?include_prereleases&label=published%20release)](https://github.com/samjuniors/Orbit-Core-MCP/releases)
-[![Python](https://img.shields.io/badge/Python-3.10%E2%80%933.13-3776AB)](https://github.com/samjuniors/Orbit-Core-MCP/actions)
+[![CI](https://github.com/samjuniors/Orbit-Core/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/samjuniors/Orbit-Core/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/samjuniors/Orbit-Core?include_prereleases&label=published%20release)](https://github.com/samjuniors/Orbit-Core/releases)
+[![Python](https://img.shields.io/badge/Python-3.10%E2%80%933.13-3776AB)](https://github.com/samjuniors/Orbit-Core/actions)
 
 **A local-first project orchestrator for AI-assisted software development.**
 
 Orbit connects to the coding environment you already use. It helps turn requirements into an approved plan, coordinate specialist work, track progress, retain concise project context, and resume from the last checkpoint—without replacing your IDE or choosing an external model for you.
 
-**[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)**
+**[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core/releases)**
 
 > [!IMPORTANT]
-> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core-MCP/releases) for the current published version and verified downloads. Published `0.x` packages are **prereleases**, not production certifications. Check the individual release notes and [acceptance record](docs/RELEASE-ACCEPTANCE-v0.26.0.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
+> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. Published `0.x` packages are **prereleases**, not production certifications. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
 
 ## What is Orbit?
 
@@ -35,17 +35,17 @@ Orbit does **not** provide its own LLM, silently install AI providers, launch ba
 
 ### Option A — Published package
 
-From **[GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)**, choose the latest reviewed prerelease, download the matching **Universal Setup ZIP** and its `.sha256` file, and verify the checksum. Extract the ZIP, then double-click `Orbit Setup.cmd` on Windows (Python 3.10–3.13 with Tkinter required), or run `python3 orbit_setup.py` on macOS/Linux. Select the intended host and scope, **review the exact file changes**, approve the installation, and refresh the host's MCP connection. If you need a host-native plugin ZIP or Claude Desktop extension, select that separate published artifact instead.
+From **[GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases)**, choose the latest reviewed prerelease, download the matching **Universal Setup ZIP** and its `.sha256` file, and verify the checksum. Extract the ZIP, then double-click `Orbit Setup.cmd` on Windows (Python 3.10–3.13 with Tkinter required), or run `python3 orbit_setup.py` on macOS/Linux. Select the intended host and scope, **review the exact file changes**, approve the installation, and refresh the host's MCP connection. If you need a host-native plugin ZIP or Claude Desktop extension, select that separate published artifact instead.
 
-The v0.26.0 prerelease adds 42 MCP tools and the unified setup launcher; later versions may change the inventory. The existence of a published package or green CI does not establish live GUI, update/rollback or security acceptance.
+The published v0.27.0 prerelease contains 46 MCP tools and the unified setup launcher; check the release page for later versions and known limitations. The existence of a published package or green CI does not establish live GUI, update/rollback or security acceptance.
 
 ### Option B — Current development source
 
 For testing the latest merged features, clone `main` or update your existing clean checkout:
 
 ```sh
-git clone https://github.com/samjuniors/Orbit-Core-MCP.git
-cd Orbit-Core-MCP
+git clone https://github.com/samjuniors/Orbit-Core.git
+cd Orbit-Core
 ```
 
 **Windows — graphical setup:** Double-click **`Orbit Setup.cmd`**. The launcher selects an available CI-tested Python with Tkinter and opens a guided window for scope, coding tools, and file preview. One primary action selects **Install**, **Update**, or **Repair** from the actual file state; current installations show **Orbit is up to date**. Published updates and backup-first uninstall remain separate actions. Verified older agent templates upgrade with backups; edited or unrecognized files require review.
@@ -185,10 +185,10 @@ The CI matrix covers Ubuntu with Python **3.10–3.13** and Windows with Python 
 
 Orbit uses preview-first operations, revision checks and bounded task scopes, but it is **not a security sandbox**. Some approval and test-evidence fields are caller-reported, and a host with command access can run project code. Install only in trusted workspaces, review proposed changes, and keep the host's own permission controls enabled.
 
-Open items—including publisher authenticity, real-host acceptance and independently verifiable QA—are tracked in [security issue #9](https://github.com/samjuniors/Orbit-Core-MCP/issues/9) and the [roadmap](docs/NEXT-VERSION.md). Do not interpret a recorded `PASS` or a merged candidate as a production certification.
+Open items—including publisher authenticity, real-host acceptance and independently verifiable QA—are tracked in [security issue #9](https://github.com/samjuniors/Orbit-Core/issues/9) and the [roadmap](docs/NEXT-VERSION.md). Do not interpret a recorded `PASS` or a merged candidate as a production certification.
 
 ## Community and contributing
 
-Bugs, feature proposals and implementation discussions belong in [GitHub Issues](https://github.com/samjuniors/Orbit-Core-MCP/issues). For proposed changes, open an issue first, keep the patch scoped, include tests and explain how behavior was verified. Consult [the release process](docs/RELEASE-PROCESS.md) before changing release or packaging files.
+Bugs, feature proposals and implementation discussions belong in [GitHub Issues](https://github.com/samjuniors/Orbit-Core/issues). For proposed changes, open an issue first, keep the patch scoped, include tests and explain how behavior was verified. Consult [the release process](docs/RELEASE-PROCESS.md) before changing release or packaging files.
 
 **License:** This repository currently has **no general open-source license grant**. Public visibility does not itself authorize redistribution or use under an assumed open-source license. Contact the repository owner about permissions before reuse or redistribution.

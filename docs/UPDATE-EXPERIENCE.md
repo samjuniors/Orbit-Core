@@ -1,6 +1,6 @@
 # Orbit install-once update experience
 
-**Status:** Source implementation was merged in PR #14 and shipped in later public prereleases, including [v0.26.0](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.26.0). This does **not** establish authentic IDE UI integration or installed-user rollback acceptance.
+**Status:** Source implementation was merged in PR #14 and shipped in later public prereleases, including [v0.26.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.26.0). This does **not** establish authentic IDE UI integration or installed-user rollback acceptance.
 
 ## What an installed user sees
 

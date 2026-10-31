@@ -8,16 +8,16 @@ Owner product intent and historical decisions live in the [Orbit Core Notion hub
 
 | Work | PR | Engineering state |
 | --- | --- | --- |
-| M3.1 source/preview-bound Playwright QA | [#25](https://github.com/samjuniors/Orbit-Core-MCP/pull/25) | MERGED to main; automated CI recorded |
-| Host-first browser/computer-use selection | [#26](https://github.com/samjuniors/Orbit-Core-MCP/pull/26) | MERGED to main; provider execution remains host-owned |
-| M3.2 pre-invocation permission denial | [#27](https://github.com/samjuniors/Orbit-Core-MCP/pull/27) | **MERGED** to main; host acceptance outstanding |
-| M3.3 running-agent reconciliation | [#29](https://github.com/samjuniors/Orbit-Core-MCP/pull/29) | **MERGED** to main; real cancellation verification outstanding |
-| M3 integrated attempts/denial/recovery | [#32](https://github.com/samjuniors/Orbit-Core-MCP/pull/32) | **MERGED** to main; source version 0.26.0 |
-| Standalone attempt ledger | [#31](https://github.com/samjuniors/Orbit-Core-MCP/pull/31) | **CLOSED** unmerged; merged through #32 only |
-| Exact-preview-origin browser isolation | [#33](https://github.com/samjuniors/Orbit-Core-MCP/pull/33) | **MERGED** to main after reconciling #30 (closed without merge) |
-| Historical roadmap reconciliation | [#24](https://github.com/samjuniors/Orbit-Core-MCP/pull/24) | **MERGED**; documentation only |
+| M3.1 source/preview-bound Playwright QA | [#25](https://github.com/samjuniors/Orbit-Core/pull/25) | MERGED to main; automated CI recorded |
+| Host-first browser/computer-use selection | [#26](https://github.com/samjuniors/Orbit-Core/pull/26) | MERGED to main; provider execution remains host-owned |
+| M3.2 pre-invocation permission denial | [#27](https://github.com/samjuniors/Orbit-Core/pull/27) | **MERGED** to main; host acceptance outstanding |
+| M3.3 running-agent reconciliation | [#29](https://github.com/samjuniors/Orbit-Core/pull/29) | **MERGED** to main; real cancellation verification outstanding |
+| M3 integrated attempts/denial/recovery | [#32](https://github.com/samjuniors/Orbit-Core/pull/32) | **MERGED** to main; source version 0.26.0 |
+| Standalone attempt ledger | [#31](https://github.com/samjuniors/Orbit-Core/pull/31) | **CLOSED** unmerged; merged through #32 only |
+| Exact-preview-origin browser isolation | [#33](https://github.com/samjuniors/Orbit-Core/pull/33) | **MERGED** to main after reconciling #30 (closed without merge) |
+| Historical roadmap reconciliation | [#24](https://github.com/samjuniors/Orbit-Core/pull/24) | **MERGED**; documentation only |
 
-**Completed merge order:** #27 → #29 → #32, then conflict-resolved #33 (superseding #30). #31 was closed without duplicate merge. For the v0.26.0 release go/no-go decision, use the [version-specific release checklist](RELEASE-ACCEPTANCE-v0.26.0.md). Final source CI [5/5 PASS](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/40870213947); this does **not** establish host acceptance.
+**Completed merge order:** #27 → #29 → #32, then conflict-resolved #33 (superseding #30). #31 was closed without duplicate merge. For the v0.26.0 release go/no-go decision, use the [version-specific release checklist](RELEASE-ACCEPTANCE-v0.26.0.md). Final source CI [5/5 PASS](https://github.com/samjuniors/Orbit-Core/actions/runs/40870213947); this does **not** establish host acceptance.
 
 ## A. Deterministic automated tests (repository)
 
@@ -59,7 +59,7 @@ Owner product intent and historical decisions live in the [Orbit Core Notion hub
 **B2. Browser QA and computer-use boundary (NOT RUN live).**
 - [ ] Test one disposable Orbit-managed preview with approved local Chrome/Edge/Chromium + Playwright.
 - [ ] Verify QA rejects a code edit after PASS and a replaced preview generation.
-- [ ] For [#33](https://github.com/samjuniors/Orbit-Core-MCP/pull/33), verify exact authorized preview-port HTTP/WS and blocked different local ports/remote origins; no banned network attempts may certify QA PASS.
+- [ ] For [#33](https://github.com/samjuniors/Orbit-Core/pull/33), verify exact authorized preview-port HTTP/WS and blocked different local ports/remote origins; no banned network attempts may certify QA PASS.
 - [ ] Host browser, computer-use, Browser Use and Vercel agent-browser tools are **supplemental evidence only** until a separately reviewed, source-bound native evidence adapter exists. Confirm real tool/user permission. Never inspect personal Chrome profiles, credentials or unrelated desktop apps without separate explicit consent.
 - [ ] A multi-server app needing a different local origin must request a reviewed scoped policy, not silently broaden the allowlist.
 
@@ -71,7 +71,7 @@ Owner product intent and historical decisions live in the [Orbit Core Notion hub
 
 ## C. Security and release gates
 
-- [ ] Resolve or explicitly retain [Issue #9](https://github.com/samjuniors/Orbit-Core-MCP/issues/9): authentic host permissions, untrusted approval/session/evidence values, provenance/signing, customized installers and rollback.
+- [ ] Resolve or explicitly retain [Issue #9](https://github.com/samjuniors/Orbit-Core/issues/9): authentic host permissions, untrusted approval/session/evidence values, provenance/signing, customized installers and rollback.
 - [ ] Confirm privacy/data boundaries for research pointers, SQLite records and any browser/cloud providers.
 - [ ] Independent code review; compare stacked branch diffs with `main`, inspect CI for final merge candidates and agree on compatibility/rollback.
 - [ ] **Owner approval is required** before each merge, installation, deployment or new release. Publishing prerelease v0.25.1 did not certify M3.

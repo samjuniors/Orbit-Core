@@ -1,6 +1,6 @@
 # Release and installation quickstart
 
-**For users:** Always choose the current published version from [GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases). The version and asset names below use `X.Y.Z` placeholders; do not download an unpublished candidate or assume that `main` is a release. Orbit `0.x` releases are prereleases.
+**For users:** Always choose the current published version from [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases). The version and asset names below use `X.Y.Z` placeholders; do not download an unpublished candidate or assume that `main` is a release. Orbit `0.x` releases are prereleases.
 
 ## First installation
 

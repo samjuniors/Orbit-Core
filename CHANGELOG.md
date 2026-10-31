@@ -7,6 +7,50 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 Future v0.28.0 work is tracked independently. It is not included in
 v0.27.0, and this planning marker does not authorize publication.
 
+## [0.27.1] — Rename compatibility prerelease candidate (2026-10-31)
+
+### Highlights
+
+- **Canonical Orbit Core links:** Update active GitHub repository references from
+  the old `Orbit-Core-MCP` name to `Orbit-Core` in the updater, CLI,
+  release-readiness checks and public documentation, without changing MCP
+  connection names, agent IDs, project databases or prior installed profiles.
+- **Published release discovery:** The Update Manager, release notices and
+  administrator CLI now use the new repository address directly instead of
+  relying on GitHub's redirect from the previous name.
+- **Migration regression guards:** Verify canonical release URLs, legacy MCP
+  identity stability, package consistency and user-data-preserving upgrade
+  behavior using disposable profiles.
+
+### Install and upgrade
+
+- Download the appropriately labeled **v0.27.1** Universal Setup ZIP and
+  its SHA-256 sidecar from the
+  [official Orbit Core Releases](https://github.com/samjuniors/Orbit-Core/releases)
+  **after publication**. Never overwrite any previous version's tag or assets.
+- Python 3.10–3.13; Python 3.12 recommended on Windows. Launch
+  `Orbit Setup.cmd` on Windows with Tkinter or
+  `python3 orbit_setup.py` on macOS/Linux.
+- Review changes and confirm installation/update in the selected host;
+  refreshing its MCP connection is required after upgrading.
+
+### Compatibility
+
+- Preserve existing MCP server identifiers `orbit-core-native` and
+  `orbit-core-mcp`, skill/agent names, local SQLite/WAL records, and
+  `.orbit` checkpoints. The repository URL changes; the user's
+  runtime identity and project data do **not**.
+- Back up customized files and SQLite/WAL before any update. A stock
+  checksum and backup-first preview are not independent publisher signing.
+
+### Known limitations
+
+- This patch is a **prerelease candidate**, not a production certification.
+  Genuine host approval-denial, native-agent cancellation/restart,
+  installed-user rollback, cross-PC resume, macOS GUI QA and publisher
+  signature/provenance remain unverified. Do not claim CI certifies
+  live host behavior.
+
 ## [0.27.0] — Prerelease candidate (2026-10-31)
 
 ### Highlights
@@ -39,7 +83,7 @@ v0.27.0, and this planning marker does not authorize publication.
 ### Install and upgrade
 
 - Download the corresponding v0.27.0 Universal Setup ZIP and SHA-256
-  sidecar from the [official GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)
+  sidecar from the [official GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases)
   **only after the version is published**. The separate Antigravity plugin
   ZIP, combined Antigravity/Codex/Claude Code plugin-suite ZIP, and Claude
   Desktop MCPB are different supported packaging formats.

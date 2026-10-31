@@ -24,7 +24,7 @@ class PublicReleaseQualityTests(unittest.TestCase):
         for path in (self.root / "README.md",
                      self.root / "docs" / "RELEASE-QUICKSTART.md",
                      self.root / "docs" / "RELEASE-PROCESS.md"):
-            path.write_text("See https://github.com/samjuniors/Orbit-Core-MCP/releases\n", encoding="utf-8")
+            path.write_text("See https://github.com/samjuniors/Orbit-Core/releases\n", encoding="utf-8")
         self.bundle = self.root / "ORBIT-Claude-Desktop-v0.27.0.mcpb"
         self.manifest = {
             "version": "0.27.0",

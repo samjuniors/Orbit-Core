@@ -1,4 +1,13 @@
-# Publish this baseline to GitHub
+# GitHub setup — historical bootstrap instructions
+
+> **Current project:** Orbit Core is already a public GitHub repository:
+> [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core).
+> To clone it, use `git clone https://github.com/samjuniors/Orbit-Core.git`.
+> The old instructions below describe the **initial v0.23.0 bootstrap**,
+> not instructions to create another repository. Keep the historical
+> setup record; do not follow its private-repository creation steps.
+
+# Archived v0.23.0 bootstrap instructions (not current setup)
 
 ## First-time remote creation
 

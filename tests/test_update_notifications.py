@@ -18,7 +18,7 @@ import installer
 
 def release(version, prerelease=True, complete=True, draft=False):
     name = "ORBIT-Universal-Setup-v" + version + ".zip"
-    base = "https://github.com/samjuniors/Orbit-Core-MCP/releases/download/v" + version + "/"
+    base = "https://github.com/samjuniors/Orbit-Core/releases/download/v" + version + "/"
     assets = [{"name": name, "browser_download_url": base + name},
               {"name": name + ".sha256",
                "browser_download_url": base + name + ".sha256"}] if complete else [
@@ -79,7 +79,7 @@ class UpdateNotificationsTests(unittest.TestCase):
     def test_older_versions_command_never_downloads_or_downgrades(self):
         self.assertEqual(
             orbit_cli.RELEASE_ARCHIVE_URL,
-            "https://github.com/samjuniors/Orbit-Core-MCP/releases")
+            "https://github.com/samjuniors/Orbit-Core/releases")
         with patch.object(orbit_cli, "download", side_effect=AssertionError("download forbidden")):
             self.assertEqual(orbit_cli.main(["versions"]), 0)
 

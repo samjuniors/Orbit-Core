@@ -81,7 +81,7 @@ def check_release(root: Path = ROOT) -> list[str]:
             errors.append(f"Missing {filename}")
             continue
         body = path.read_text(encoding="utf-8")
-        if "https://github.com/samjuniors/Orbit-Core-MCP/releases" not in body:
+        if "https://github.com/samjuniors/Orbit-Core/releases" not in body:
             errors.append(f"{filename} must link to the canonical release list")
         if re.search(r"(?i)(?:latest|currently)\s+(?:published\s+)?(?:release|package|version)\s+is\s+(?:\*\*)?v\d+\.\d+\.\d+", body):
             errors.append(f"{filename}: hard-coded latest release can go stale")

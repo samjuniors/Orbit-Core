@@ -44,7 +44,7 @@ MCP **tools** are registered through the host's MCP mechanism. Specialist **agen
 
 For a *new* project, the MCP's intake gate requires a proposed interview, user-accepted options (or explicitly delegated defaults), then a build plan. Reassess documentation using `orbit_docs_audit` after new features, APIs, data, security, releases, or architecture growth; this tool only identifies likely gaps and never overwrites owner documents. Approval of `guided`, `assisted`, or `trusted` mode is always explicit. No level waives high-risk host approvals.
 
-**Status:** Core installation options ship in the [published Orbit 0.x prereleases](https://github.com/samjuniors/Orbit-Core-MCP/releases); native host permissions and plugin activation still require real-host checks. These packages are not stable-production certifications.
+**Status:** Core installation options ship in the [published Orbit 0.x prereleases](https://github.com/samjuniors/Orbit-Core/releases); native host permissions and plugin activation still require real-host checks. These packages are not stable-production certifications.
 
 
 ## Fastest verified user path
