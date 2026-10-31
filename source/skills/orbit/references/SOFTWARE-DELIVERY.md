@@ -106,6 +106,39 @@ or storage. If source inspection proves that a backend/data change is necessary,
 revise the blueprint and file scopes with owner consent before proceeding.
 This avoids unnecessary rewrites while preserving functional UI testing.
 
+## M2 observed host workspace permission gate
+
+The real Codex TEMP-only two-specialist acceptance test on 2026-10-31
+reached `DRAFT_VALIDATED`, both `RESERVED`, and
+`HOST_INVOCATIONS_REQUIRED`, but both child objectives were blocked
+because the connected workers reported an effectively read-only
+workspace. Orbit recorded both as `BLOCKED` (revision 4); there were
+**zero created application files** and **no runnable HTTP tests**.
+This is a safe HOLD, not a successful native build or verified UI
+permission-denial experiment.
+
+Before consuming task reservations, the lead host should inspect its
+**effective** workspace permission, not assume a command-line sandbox flag
+guarantees writes. Optionally pass `host_workspace_mode` as
+`"read-only"`, `"workspace-write"` or `"unknown"` to
+`orbit_swarm_preview`, `orbit_swarm_host_preflight`, and
+`orbit_task_handoff`. When reported `"read-only"`, Orbit defers
+writable candidates before reservation and HOLDS any already-reserved
+writable batch or direct handoff. Read-only tasks with `write_paths=[]`
+can still be delegated through the actual native host. A reported
+`"workspace-write"` is **not** attestation of host access or user
+consent; an omitted/`"unknown"` value preserves compatibility, but
+cannot justify claiming write permission.
+
+All resulting packets explicitly say the mode is caller-reported and
+`host_workspace_writes_verified=false`. Never bypass the host sandbox,
+turn on automatic approvals, install external agents or fabricate native
+sessions to satisfy a synthetic test. If an already-running agent
+returns no work, preserve the exact real session and report `BLOCKED`
+only after the host confirms a compatible terminal state. Native
+permission prompts, sandbox enforcement and produced code still require
+independent host observation and source/tests verification.
+
 ## M2 direct host handoff contract
 
 A per-task `orbit_task_handoff` must enforce the same workspace-reservation
