@@ -11,7 +11,7 @@ Orbit connects to the coding environment you already use. It helps turn requirem
 **[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)**
 
 > [!IMPORTANT]
-> **Release status (2026-10-29):** The latest **published** package is **v0.25.1 (prerelease)**. Current development source is preparing **v0.26.0 (unpublished candidate)**, with M3 agent recovery and browser QA safeguards plus opt-in M4 compact resume. Both retain the 40-tool MCP surface. Owner-reported M1/M2 acceptance does **not** independently certify native permissions, desktop/browser acceptance, upgrade/rollback, two-PC transfer or Issue #9 security gates. No v0.26.0 tag or release exists until separately authorized.
+> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core-MCP/releases) for the current published version and verified downloads. Published `0.x` packages are **prereleases**, not production certifications. Check the individual release notes and [acceptance record](docs/RELEASE-ACCEPTANCE-v0.26.0.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
 
 ## What is Orbit?
 
@@ -35,9 +35,9 @@ Orbit does **not** provide its own LLM, silently install AI providers, launch ba
 
 ### Option A — Published package
 
-For the latest published package (**v0.25.1 prerelease**), get the Universal Setup ZIP and its SHA256 sidecar from **[GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.25.1)**. Verify the downloaded checksum, extract the archive and preview installation using `Orbit Setup.cmd` on Windows or `python3 orbit_setup.py` on other systems; approve only the intended host/profile changes.
+From **[GitHub Releases](https://github.com/samjuniors/Orbit-Core-MCP/releases)**, choose the latest reviewed prerelease, download the matching **Universal Setup ZIP** and its `.sha256` file, and verify the checksum. Extract the ZIP, then double-click `Orbit Setup.cmd` on Windows (Python 3.10–3.13 with Tkinter required), or run `python3 orbit_setup.py` on macOS/Linux. Select the intended host and scope, **review the exact file changes**, approve the installation, and refresh the host's MCP connection. If you need a host-native plugin ZIP or Claude Desktop extension, select that separate published artifact instead.
 
-This prerelease includes the unified setup launcher and a 40-tool runtime. The existence of a published package or green CI does not establish live GUI, update/rollback or security acceptance.
+The v0.26.0 prerelease adds 42 MCP tools and the unified setup launcher; later versions may change the inventory. The existence of a published package or green CI does not establish live GUI, update/rollback or security acceptance.
 
 ### Option B — Current development source
 
@@ -50,7 +50,7 @@ cd Orbit-Core-MCP
 
 **Windows — graphical setup:** Double-click **`Orbit Setup.cmd`**. The launcher selects an available CI-tested Python with Tkinter and opens a guided window for scope, coding tools, and file preview. One primary action selects **Install**, **Update**, or **Repair** from the actual file state; current installations show **Orbit is up to date**. Published updates and backup-first uninstall remain separate actions. Verified older agent templates upgrade with backups; edited or unrecognized files require review.
 
-**Windows — PowerShell menu:**
+**Windows — PowerShell menu (run from the extracted folder):**
 
 ```powershell
 py -3.12 orbit_setup.py
@@ -176,7 +176,7 @@ The CI matrix covers Ubuntu with Python **3.10–3.13** and Windows with Python 
 | [Installation and updates](docs/MCP-INSTALLATION-OPTIONS.md) | Host setup, scope and configuration |
 | [Security](SECURITY.md) | Threat boundaries, approval caveats and known gaps |
 | [Roadmap](docs/NEXT-VERSION.md) | M1–M5 implementation and outstanding acceptance gates |
-| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.25.1.md) | Gates for the unpublished source candidate |
+| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.26.0.md) | v0.26.0 published status and remaining host/security gates |
 | [Changelog](CHANGELOG.md) | Recorded source and release changes |
 
 ## Security and project status
