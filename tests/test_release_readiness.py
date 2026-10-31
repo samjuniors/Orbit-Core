@@ -14,17 +14,17 @@ class PublicReleaseQualityTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         (self.root / "docs").mkdir()
-        (self.root / "VERSION").write_text("0.27.0\n")
+        (self.root / "VERSION").write_text("0.27.0\n", encoding="utf-8")
         (self.root / "CHANGELOG.md").write_text(
             "# Changelog\n\n## [Unreleased]\n\n## [0.27.0] — Prerelease\n"
             "### Highlights\n- Useful capability.\n"
             "### Install and upgrade\n- Use published ZIP and checksum.\n"
             "### Compatibility\n- Preserve SQLite backups.\n"
-            "### Known limitations\n- Host UI approval remains unverified.\n")
+            "### Known limitations\n- Host UI approval remains unverified.\n", encoding="utf-8")
         for path in (self.root / "README.md",
                      self.root / "docs" / "RELEASE-QUICKSTART.md",
                      self.root / "docs" / "RELEASE-PROCESS.md"):
-            path.write_text("See https://github.com/samjuniors/Orbit-Core-MCP/releases\n")
+            path.write_text("See https://github.com/samjuniors/Orbit-Core-MCP/releases\n", encoding="utf-8")
         self.bundle = self.root / "ORBIT-Claude-Desktop-v0.27.0.mcpb"
         self.manifest = {
             "version": "0.27.0",
@@ -43,12 +43,12 @@ class PublicReleaseQualityTests(unittest.TestCase):
 
     def test_missing_user_facing_changelog_section_blocks(self):
         p = self.root / "CHANGELOG.md"
-        p.write_text(p.read_text().replace("### Install and upgrade", "### Engineering updates"))
+        p.write_text(p.read_text(encoding="utf-8").replace("### Install and upgrade", "### Engineering updates"), encoding="utf-8")
         self.assertTrue(any("Install and upgrade" in s for s in check_release(self.root)))
 
     def test_stale_public_latest_version_claim_blocks(self):
         p = self.root / "README.md"
-        p.write_text(p.read_text() + "Latest published release is v0.25.1\n")
+        p.write_text(p.read_text(encoding="utf-8") + "Latest published release is v0.25.1\n", encoding="utf-8")
         self.assertTrue(any("hard-coded latest" in s for s in check_release(self.root)))
 
     def test_corrupted_desktop_title_blocks(self):
@@ -58,7 +58,7 @@ class PublicReleaseQualityTests(unittest.TestCase):
 
     def test_prepublishing_claim_in_future_notes_blocks(self):
         p = self.root / "CHANGELOG.md"
-        p.write_text(p.read_text() + "\nNot yet published.\n")
+        p.write_text(p.read_text(encoding="utf-8") + "\nNot yet published.\n", encoding="utf-8")
         self.assertTrue(any("not-published" in s for s in check_release(self.root)))
 
 
