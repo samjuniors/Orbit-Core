@@ -1,5 +1,58 @@
 # v0.27.0 — Orbit-native Agent Swarm: engineering acceptance
 
+## 2026-10-31 — release consolidation after Codex recovery fix merge
+
+**Verified source:** focused [PR #66](https://github.com/samjuniors/Orbit-Core-MCP/pull/66)
+merged into the `release/v0.27.0-candidate` branch at
+`ced0a370040d57d939433b787e6c5ea6e984a460`.
+The [exact merge-commit Windows/Linux CI #41175033914](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41175033914)
+completed **5/5 PASS** on Ubuntu Python 3.10–3.13 and Windows
+Python 3.12. Existing v0.26.0 published tag and assets are unchanged.
+
+**PASS — native task work:** Antigravity two independent specialists
+created verified `alpha.txt` and `beta.txt`; both task records are
+`REVIEW_ACCEPTED` revision 5, with real native transcript IDs in
+the original synthetic fixture. Codex spawned two native agents, with
+`beta` verified accepted, and `alpha` correctly identified as
+an incomplete objective. The Codex recovery fix passed 376 Windows
+tests (19 skips, no failures), 46-tool package smoke, original-alpha
+ledger **copy-only** replay and the merge-commit CI above.
+
+**PASS — bounded internal safety contract only:** A new isolated
+Windows test against this exact merged source exercised Orbit's
+`HOST_PERMISSION_DENIED` release, fresh-approval requirement,
+pre-invocation `USER_CANCELLED`, unknown/wrong native session
+reconciliation HOLD, matching caller-reported terminal cancellation,
+and stale-revision rejection. All assertions passed; no denied/cancelled
+file was created. These are **synthetic, caller-reported tests**, not
+proof that any genuine native host dialog was denied or that a live
+worker was interrupted. A separate real Codex CLI read-only session
+with approvals disabled left its temporary file absent but produced
+**no recorded native command attempt**: host UI denial **NOT VERIFIED**.
+
+**RELEASE GATES STILL OPEN:**
+- Genuine Codex/Antigravity *host* approval prompt denied by user
+  with confirmed no unauthorized write, distinct from chat refusal
+  or a no-write model response — **NOT VERIFIED**.
+- Actual native worker cancellation and process/session restart
+  recovery with exact session IDs and preserved retry/checkpoint
+  history — **NOT RUN** in signed-in hosts.
+- Actual installed-user migration/rollback, independent security
+  and publisher signing/provenance, second-PC recovery, and other
+  supported-host certification beyond the owner-scoped Codex/
+  Antigravity acceptance — **NOT VERIFIED / NOT RUN**.
+- The separately supported Claude Code host was intentionally
+  excluded from this owner-scoped test; **NOT CERTIFIED**.
+
+**Release decision: HOLD / DRAFT PR #63 / NOT PUBLISHED.** Passing
+a caller-supplied permission field, synthetic cancellation, CI or
+successful native work is not a signed host consent attestation.
+Do not automatically un-draft, merge to main or publish while these
+gates remain open. The owner must review specific unverified risk
+exceptions and explicitly approve a *prerelease* (not a production
+certification) if publication is desired before all host tests.
+
+
 ## 2026-10-31 — Antigravity real host acceptance: six PASS, two gates open
 
 **Source tested:** `v0.27.0` candidate at `110de679b16955cc556ecee8aadee0371632326a`,
@@ -96,7 +149,7 @@ and preflight/handoff requested actual host invocation.
   preserved. No direct database edits, deletions or fake host states
   are authorized by this report.
 
-**Candidate fix implemented in this focused PR #66, not yet merged into the main v0.27 candidate:**
+**Candidate fix merged into this v0.27 candidate by PR #66:**
 Allow a native session with observed state `COMPLETED` to report an
 **incomplete objective** as `BLOCKED` only with matching exact session,
 `objective_completed=false`, zero reported changed paths, explicit
@@ -109,7 +162,7 @@ the task's active write scope.
 
 The fix passed nine focused regressions, the full Windows suite (376 tests,
 19 skipped, zero failures), and [exact-head Windows/Linux CI 5/5](https://github.com/samjuniors/Orbit-Core-MCP/actions/runs/41172499805).
-It still requires owner review before merging into this v0.27 candidate. Applying the fix
+The source fix was integrated after owner request and exact-head 5/5 CI; genuine host safety acceptance remains separate. Applying the fix
 to the **original alpha SQLite row** is a separate, explicit,
 human-authorized host-state reconciliation; do not silently manipulate
 the user's test ledger. Genuine denial and host cancel/restart checks
