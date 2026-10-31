@@ -204,6 +204,20 @@ class HostHandoffTests(unittest.TestCase):
         self.assertFalse(out["native_invoked"])
         self.assertEqual(before, self.db.total_changes)
 
+    def test_direct_handoff_rejects_imported_unsupported_specialist_role(self):
+        self.register()
+        self.reserve()
+        self.db.execute(
+            "UPDATE orbit_agent_tasks SET role='injected-foreign-role' "
+            "WHERE task_key='frontend'")
+        self.db.commit()
+        before = self.db.total_changes
+        result = self.handoff()
+        self.assertEqual(result["status"], "HOLD_INVALID_SPECIALIST_ROLE")
+        self.assertIsNone(result["handoff"])
+        self.assertFalse(result["native_invoked"])
+        self.assertEqual(self.db.total_changes, before)
+
     def test_direct_handoff_blocks_broken_capacity_state(self):
         self.register()
         self.reserve()
