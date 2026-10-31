@@ -28,7 +28,12 @@ class VersionPreparationTests(unittest.TestCase):
         self.assertEqual(target.name, "ORBIT-Claude-Desktop-v0.25.0.mcpb")
         self.assertEqual(self.old.read_bytes(), self.previous_bytes)
         with zipfile.ZipFile(target) as bundle:
-            self.assertEqual(json.loads(bundle.read("manifest.json"))["version"], "0.25.0")
+            manifest = json.loads(bundle.read("manifest.json"))
+            self.assertEqual(manifest["version"], "0.25.0")
+            self.assertEqual(manifest["display_name"], "Orbit Core - Memory & Agent Tasks")
+            self.assertIn("host controls", manifest["long_description"].lower().replace("the host controls", "host controls"))
+            self.assertNotIn("switching..", manifest["long_description"])
+            self.assertNotIn("Ã", manifest["display_name"])
             self.assertEqual(bundle.read("server/orbit_mcp.py").decode().splitlines(), ["VERSION = '0.25.0'"])
             self.assertEqual(bundle.read("icon.png"), b"illustrative-image-bytes")
         before = target.read_bytes()
