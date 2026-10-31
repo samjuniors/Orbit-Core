@@ -11,6 +11,42 @@ SECURITY REVIEW, HOST ACCEPTANCE AND RELEASE NOT VERIFIED.
 **External reference:** [Claude Swarm](https://github.com/affaan-m/claude-swarm)
 (MIT, reviewed as ideas only; no copied code or SDK dependency).
 
+## 2026-10-31 — Reconciled v0.27.0 release-candidate evidence
+
+**Source status: DRAFT release candidate, NOT published / NOT production-certified.**
+The original `dev/v0.27.0` 46-tool Swarm work and prior candidate were
+reconciled through a normal Git merge with reviewed [v0.26.0 published
+`main`](https://github.com/samjuniors/Orbit-Core-MCP/releases/tag/v0.26.0)
+and merged release-quality [PR #65](https://github.com/samjuniors/Orbit-Core-MCP/pull/65).
+See [draft release PR #63](https://github.com/samjuniors/Orbit-Core-MCP/pull/63),
+now based on `main`, and integration merge SHA
+`00c2d978a9b52cc2ceafb6d6fd802e369fdd5761`. All v0.26.0
+published tag/assets are preserved; `VERSION=0.27.0`,
+`NEXT_VERSION=0.28.0`. The release guide, structured public
+`CHANGELOG.md` notes, desktop metadata normalization and CI/publication
+readiness validator were retained from PR #65.
+
+On connected Windows Python 3.12.10 in an **isolated TEMP checkout**:
+- **PASS:** 367 unit tests, 19 skips, zero failures; release readiness,
+  strict desktop version/source parity, all three versioned ZIP builds and
+  the extracted ZIP stdio smoke test exposing **46 local MCP tools**.
+- **PASS:** New disposable upgrade rehearsal from the **actual immutable
+  v0.26.0 tag** to the v0.27.0 candidate, retaining customized `AGENTS.md`,
+  `.orbit/STATE.md`, prior database bytes and the old versioned runtime.
+  The regression first caught a missing recognized stock hash for the
+  official v0.26.0 `TASK-LIFECYCLE.md`, which was fixed via a **single
+  exact SHA-256** after confirming the immutable tag content. Existing
+  owner-edited stock still blocks upgrade as designed.
+- **PASS (bounded):** No actual personal host registration, installed Orbit,
+  owner project, SQLite memory or native IDE permission state was modified.
+- **NOT VERIFIED:** The final exact PR-head Windows/Linux CI and authentic
+  native subagent/permission, installed-user rollback, security/provenance
+  and second-computer acceptance must still be checked independently.
+
+This record distinguishes **software automated PASS** from **host/production
+acceptance NOT VERIFIED**. The next release must not be published solely
+because a source branch or packaged MCP smoke test passed.
+
 ## Product contract
 
 Orbit remains a project-scoped coordinator, never a model provider or
