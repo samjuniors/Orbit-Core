@@ -1,5 +1,73 @@
 # v0.27.0 — Orbit-native Agent Swarm: engineering acceptance
 
+## 2026-10-31 — focused Codex + Antigravity follow-up (owner-scoped test round)
+
+The owner narrowed **this acceptance round** to Codex and Antigravity.
+Claude Code is **not in scope for this round**; its existing unverified
+support/permission limits are **not certified or silently waived**.
+
+**Codex native subagent evidence upgraded to PASS (limited):**
+- With Codex CLI `0.154.0`, `multi_agent=true`, a **normal
+  non-ephemeral** read-only Codex session actually called the native
+  `spawn_agent` tool and subsequently `wait_agent` twice, each on a
+  distinct synthetic microtask (uppercase `orbit` and count its
+  characters). The concise `codex exec --json` stream omitted the
+  `spawn_agent` item even though the full session rollout **did contain**
+  the `response_item/function_call` and successful
+  `response_item/function_call_output`. The spawn responses contained
+  independent task names `/root/uppercase_specialist` and
+  `/root/count_orbit`; the wait responses recorded completion.
+- Targeted read-only queries of Codex's `thread_spawn_edges` table
+  showed **one concrete child thread attached to each exact parent
+  synthetic session**. Both child rollout files exist, contain an actual
+  assistant message and a child-result event. This is independent
+  proof of native child execution, not merely a model assertion.
+  The links remained `open` in the session table; terminal cancellation,
+  explicit child shutdown/recovery and integration with Orbit task
+  review are **not certified**.
+- An earlier ephemeral `codex exec` attempt failed
+  `no thread with id`; the normal run avoided that host CLI lifecycle
+  failure. Upstream Codex [JSON event omission #34919](https://github.com/openai/codex/issues/34919)
+  and [ephemeral thread failure #41474](https://github.com/openai/codex/issues/41474)
+  are external diagnostic references only, not Orbit dependencies.
+- Separately, the candidate `orbit_swarm_preview` MCP tool ran inside
+  signed-in Codex and returned `NO_READY_TASKS` for an empty synthetic
+  project, explicitly `agent_spawned=false` and
+  `approval_verified=false`. This does **not** establish integrated
+  Orbit reservation/handoff/native-worker/task-report review or host
+  consent; these gates remain **NOT VERIFIED**.
+
+**Antigravity synthetic acceptance fixture PREPARED, host UI NOT RUN:**
+- On the connected Windows PC, cloned exact candidate
+  `8fb603764590b7786e6c920596d6f4a5dc5ebf1b` into a new temp
+  folder `%TEMP%\\Orbit-v027-Antigravity-*\\source`, and created
+  separate `project`, `evidence`, and workspace-local
+  `.agents/mcp_config.json` with a single
+  `orbit-v027-acceptance` stdio server. Only that temp project is an
+  allowed trusted root, with a dedicated temp SQLite database; **no
+  global Antigravity MCP config or existing project was changed**.
+- Direct JSON-RPC initialize/tools-list of that exact workspace
+  config **PASS**: runtime version `0.27.0`, **46 tools** and
+  `orbit_swarm_preview` present.
+- Inside the fixture, `ANTIGRAVITY-ACCEPTANCE.md` provides a
+  reviewed, scoped end-to-end plan: native host tool discovery,
+  two independent worker tasks, real permission approval and deliberate
+  denial, result evidence, and optional cancel/restart. The agent must
+  record actual observed evidence in
+  `evidence/ANTIGRAVITY-RESULT.md`, which currently says NOT RUN.
+  Antigravity was running on the PC but its interactive permission
+  screen was **not controlled** from the terminal-only connection;
+  an attempted new-window launch did not establish that this fixture
+  was actually opened. A real user-host IDE session remains needed.
+- The tests above never authorize unattended native tool approval or
+  changes outside the disposable project.
+
+**Gate status:** Codex `spawn_agent`+child result **PASS (native smoke)**;
+Codex full Orbit lifecycle and permission-denial/cancel/resume
+**NOT VERIFIED**. Antigravity fixture/MCP protocol **PASS** but real
+IDE native-worker/approval/denial/cancellation **NOT RUN**. No merge,
+publication, or production certification authorized by this evidence.
+
 ## 2026-10-31 — real coding-host CLI acceptance (PARTIAL PASS; RELEASE HOLD)
 
 **Test source:** `release/v0.27.0-candidate` at
