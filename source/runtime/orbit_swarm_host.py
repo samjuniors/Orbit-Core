@@ -29,6 +29,7 @@ def review(conn, root, project, args):
         selected[key] = revision
 
     host = args.get("host")
+    mode = orbit_delegation.workspace_mode(args)
     reported_tools = args.get("available_host_tools", [])
     if host not in orbit_delegation.HOST_NATIVE_TOOLS:
         raise ValueError("Unknown coding host")
@@ -45,6 +46,8 @@ def review(conn, root, project, args):
         "native_invoked": False, "host_permissions_verified": False,
         "host_liveness_verified": False, "source_tests_verified": False,
         "state_written": False, "host_tools_caller_reported": True,
+        "host_workspace_mode_reported": mode,
+        "host_workspace_writes_verified": False,
         "next": ("If all tasks pass, obtain real host permission for EACH one, "
                  "invoke only with its native host tool, then record the real "
                  "returned session through orbit_task_started. Recheck live "
@@ -135,6 +138,20 @@ def review(conn, root, project, args):
                                    "task_keys": [key, other],
                                    "next": "Do not run overlapping tasks simultaneously. Replan or run serially after approval."})
 
+    # A native tool can be present while the host sandbox disallows writes.
+    # Surface the observed constraint before returning ANY batch handoff.
+    # This is a caller-reported hint, not a permission attestation.
+    if mode == "read-only":
+        for key in sorted(scopes):
+            paths, _resolved = scopes[key]
+            if paths:
+                issues.append({
+                    "task_key": key, "status": "HOLD_HOST_WORKSPACE_READ_ONLY",
+                    "next": ("Request legitimate writable host permissions before "
+                             "invoking this specialist, or replan it as read-only. "
+                             "Release an unused reservation only after host confirmation."),
+                })
+
     handoffs = []
     for key in sorted(rows):
         if issues:
@@ -144,6 +161,7 @@ def review(conn, root, project, args):
         packet = orbit_delegation.handoff(
             conn, {"project": project, "task_key": key, "host": host,
                    "available_host_tools": reported_tools,
+                   "host_workspace_mode": mode,
                    "include_research": False}, root)
         if packet["status"] != "HOST_INVOCATION_REQUIRED":
             recovery = ("If host denied or native tool is unavailable, use "
