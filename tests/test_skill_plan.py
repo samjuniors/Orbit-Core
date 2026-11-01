@@ -204,6 +204,43 @@ class SkillPlanPreviewTests(unittest.TestCase):
         self.assertFalse(x["external_catalog_queried"])
         self.assertFalse(x["skill_installed"])
 
+    def test_mismatched_product_platform_fails_before_any_selection(self):
+        self.skill("react-ui", "React web UI")
+        self.skill("flutter-navigation", "Flutter Android app")
+        for profile in (
+            {"product_type": "web-app", "platform": "android",
+             "technologies": ["react"], "operation": "build"},
+            {"product_type": "mobile-app", "platform": "web",
+             "technologies": ["flutter"], "operation": "build"},
+            {"product_type": "api-service", "platform": "ios",
+             "technologies": ["python"], "operation": "test"},
+        ):
+            with self.subTest(profile=profile):
+                with self.assertRaises(ValueError):
+                    self.select("Build a new feature", project_profile=profile)
+
+    def test_context_pins_do_not_cross_project_or_declared_host(self):
+        self.skill("python-api", "Python API testing")
+        profile = {"product_type": "api-service", "platform": "server",
+                   "technologies": ["python"], "operation": "test"}
+        original = self.select("Python API", project_profile=profile, host="codex")
+        changed_host = self.select("Python API", project_profile=profile,
+                                   host="claude-code",
+                                   review_manifest=original["manifest"])
+        self.assertEqual(changed_host["status"], "HOLD_STALE_MANIFEST")
+        different_root = self.root.parent / "second-project"
+        different_root.mkdir()
+        (different_root / ".agents" / "skills" / "python-api").mkdir(parents=True)
+        own_content = self.root / ".agents" / "skills" / "python-api" / "SKILL.md"
+        (different_root / ".agents" / "skills" / "python-api" / "SKILL.md").write_bytes(
+            own_content.read_bytes())
+        other = orbit_capabilities.select(
+            str(different_root), "Python API", home=self.home,
+            project_profile=profile, host="codex",
+            review_manifest=original["manifest"])["skill_plan"]
+        self.assertEqual(other["status"], "HOLD_STALE_MANIFEST")
+        self.assertFalse(other["activation_allowed"])
+
     def test_invalid_review_manifest_and_request_are_rejected(self):
         self.skill("helper", "Python API")
         for names in (["../escape"], ["helper"] * 2, ["helper"] * 6, "helper"):
