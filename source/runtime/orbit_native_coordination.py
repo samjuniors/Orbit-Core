@@ -51,6 +51,41 @@ def _accepted_for_integration(conn, root, project):
     ]
 
 
+def _integration_batches(conn, root, project):
+    """Partition only reviewed accepted tasks into complete bounded batches.
+
+    The downstream integration guard accepts at most twelve tasks per call.
+    These are *suggested review inputs*, not a tested project or a released
+    build; source fingerprint and platform QA must come from the real host.
+    """
+    rows = conn.execute(
+        """SELECT task_key, revision FROM orbit_agent_tasks
+           WHERE project=? AND project_root=? AND status='REVIEW_ACCEPTED'
+           ORDER BY task_key LIMIT ?""",
+        (project, str(root), orbit_swarm.MAX_GRAPH_TASKS + 1),
+    ).fetchall()
+    if len(rows) > orbit_swarm.MAX_GRAPH_TASKS:
+        return []
+    batches = []
+    for start in range(0, len(rows), MAX_COORDINATION_ACTIONS):
+        members = rows[start:start + MAX_COORDINATION_ACTIONS]
+        batches.append({
+            "batch": len(batches) + 1,
+            "tool": "orbit_swarm_integration_review",
+            "tasks": [{"task_key": r["task_key"],
+                       "expected_revision": r["revision"]}
+                      for r in members],
+            "task_count": len(members),
+            "source_fingerprint_requires_real_host": True,
+            "web_build_and_recorded_browser_qa_not_verified": True,
+            "native_platform_qa_requires_separate_host_review": True,
+            "independent_source_diff_and_tests_required": True,
+            "review_invoked": False,
+            "integration_approved": False,
+        })
+    return batches
+
+
 def _recovery_reviews(conn, root, project):
     """Bounded advice for interrupted objectives, never a retry authorization.
 
@@ -333,9 +368,33 @@ def preview(conn, root, project, args):
                 "their dependent tasks. Never silently retry, reuse old consent "
                 "or reopen cancelled work; obtain fresh owner/host decisions.")
         elif counts.get("REVIEW_ACCEPTED", 0) == sum(counts.values()):
-            stage, status, next_step = (
-                "INTEGRATION_GATE", "INTEGRATION_REVIEW_REQUIRED",
-                "Obtain actual Git source fingerprint, independent QA/security and host evidence; then review via orbit_swarm_integration_review. Never merge or release automatically.")
+            batches = _integration_batches(conn, root, project)
+            if sum(batch["task_count"] for batch in batches) != sum(counts.values()):
+                return {
+                    **shared, "status": "HOLD_INTEGRATION_SCOPE_INCOMPLETE",
+                    "stage": "INTEGRATION_GATE",
+                    "integration_review_batches": [],
+                    "reservation_candidates": [],
+                    "next": ("The complete reviewed task inventory could not "
+                             "be safely divided into bounded batches. Reconcile "
+                             "the current project ledger before integration."),
+                }
+            return {
+                **shared, "status": "INTEGRATION_REVIEW_REQUIRED",
+                "stage": "INTEGRATION_GATE",
+                "integration_review_batches": batches,
+                "all_accepted_tasks_included_in_batches": True,
+                "integration_batches_reviewed": False,
+                "reservation_candidates": [],
+                "next": ("Each batch is only a proposed input to the existing "
+                         "read-only integration guard, with fresh task revisions "
+                         "and independently obtained source fingerprint. A web "
+                         "build needs real recorded browser QA; native/mobile/CLI "
+                         "QA requires separate host-platform evidence and may "
+                         "remain HOLD under the browser-specific guard. Review "
+                         "all batches independently before any separate owner "
+                         "merge/release decision."),
+            }
         else:
             stage, status, next_step = (
                 "REVIEW_DEPENDENCIES_OR_REPLAN", "NO_RUNNABLE_TASKS",
