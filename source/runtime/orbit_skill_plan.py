@@ -63,6 +63,29 @@ MOBILE_MARKERS = frozenset({"flutter", "dart", "swift", "swiftui", "kotlin", "an
 GAME_MARKERS = frozenset({"unity", "unreal", "game", "gamedev", "gameplay"})
 ML_MARKERS = frozenset({"pytorch", "tensorflow", "ml", "model", "machine", "inference", "training"})
 NATIVE_MARKERS = frozenset({"rust", "cargo", "tauri", "electron", "dotnet", "native", "desktop", "cpp"})
+# Framework labels are declared by the caller, not discovered or verified.
+# Strong skill-name framework markers can rule out obvious mismatches; generic
+# cross-framework quality/security skills stay eligible for human review.
+FRAMEWORK_MARKERS = {
+    "react-native": (frozenset({"react", "native"}),),
+    "flutter": (frozenset({"flutter"}),),
+    "swiftui": (frozenset({"swiftui"}), frozenset({"swift", "ui"})),
+    "kotlin-compose": (frozenset({"kotlin", "compose"}),),
+    "pytorch": (frozenset({"pytorch"}),),
+    "tensorflow": (frozenset({"tensorflow"}),),
+    "unity": (frozenset({"unity"}),),
+    "unreal": (frozenset({"unreal"}),),
+    "nextjs": (frozenset({"nextjs"}), frozenset({"next", "js"})),
+    "vue": (frozenset({"vue"}),),
+    "angular": (frozenset({"angular"}),),
+    "svelte": (frozenset({"svelte"}),),
+}
+FRAMEWORK_GROUPS = (
+    frozenset({"react-native", "flutter", "swiftui", "kotlin-compose"}),
+    frozenset({"pytorch", "tensorflow"}),
+    frozenset({"unity", "unreal"}),
+    frozenset({"nextjs", "vue", "angular", "svelte"}),
+)
 STOPWORDS = frozenset({"a", "an", "for", "the", "and", "to", "of", "in", "with", "on", "or", "from", "this", "that"})
 
 
@@ -95,10 +118,27 @@ def _tokens(s):
     return set(re.findall(r"[a-z0-9]+", s.lower())) - STOPWORDS
 
 
+def _framework_conflict(parts, profile):
+    declared = set(profile["technologies"])
+    for family in FRAMEWORK_GROUPS:
+        active = family & declared
+        # If multiple frameworks are explicitly declared, keep each candidate
+        # available for review rather than arbitrarily selecting a winner.
+        if len(active) != 1:
+            continue
+        for framework in sorted(family - active):
+            if any(marker <= parts for marker in FRAMEWORK_MARKERS[framework]):
+                return "DIFFERENT_DECLARED_FRAMEWORK_REQUIRES_REVIEW"
+    return None
+
+
 def _incompatible(name, profile):
     """Conservatively block a skill strongly tied to another platform."""
     parts = _tokens(name.replace("-", " "))
     kind = profile["product_type"]
+    conflict = _framework_conflict(parts, profile)
+    if conflict:
+        return conflict
     # React Native uses a different UI/runtime contract than React DOM,
     # despite sharing the word "react" in its skill identifier.
     if "react" in parts and "native" in parts and kind not in {"mobile-app"}:
@@ -154,6 +194,10 @@ def _digest_installed(item, allowed):
         p = Path(item["path"])
         if p.name != "SKILL.md" or p.is_symlink() or p.parent.is_symlink():
             return None
+        # Reject symlinks/junctions anywhere in the discovery path, not only
+        # the final skill folder. They can otherwise escape an allowed root.
+        if p.resolve(strict=True) != p.absolute():
+            return None
         root = p.parent.parent
         if root.is_symlink() or not any(root == base for base in allowed):
             return None
@@ -174,6 +218,24 @@ def _digest_installed(item, allowed):
         return hashlib.sha256(content).hexdigest()
     except (KeyError, ValueError, OSError, RuntimeError, TypeError):
         return None
+
+
+def _provenance_hint(path, allowed):
+    """Directory location is a hint, never proof of publisher or trust."""
+    p = Path(path)
+    for index, base in enumerate(allowed):
+        if p.parent.parent == base:
+            return {
+                "installation_scope": "PROJECT_LOCAL" if index < 2 else "USER_LOCAL",
+                "directory_hint": (
+                    "CLAUDE_SPECIFIC" if ".claude" in base.parts else
+                    "ANTIGRAVITY_SPECIFIC" if ".gemini" in base.parts else
+                    "SHARED_CANDIDATE"
+                ),
+                "origin_verified": False,
+            }
+    return {"installation_scope": "UNVERIFIED", "directory_hint": "UNKNOWN",
+            "origin_verified": False}
 
 
 def _validate_requested(names):
@@ -293,7 +355,10 @@ def preview(project_root, objective, available, *, project_profile=None,
         if requested is None and score == 0:
             continue
         matches.append({"name": name, "sha256": digest, "match_score": score,
-                        "source": "LOCAL_SKILL_UNVERIFIED", "license": "UNKNOWN_REVIEW_REQUIRED",
+                        "source": "LOCAL_SKILL_UNVERIFIED",
+                        "provenance_hint": _provenance_hint(row["path"], allowed),
+                        "license": "UNKNOWN_REVIEW_REQUIRED",
+                        "risk_review": "REQUIRED",
                         "license_claim_unverified": row.get("declared_license_unverified"),
                         "version_claim_unverified": row.get("declared_version_unverified"),
                         "host_compatibility": "DIRECTORY_CANDIDATE_NOT_VERIFIED",
