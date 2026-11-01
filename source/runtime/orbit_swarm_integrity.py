@@ -135,7 +135,7 @@ def review(conn, root, project, args):
                 "source_matches": True,
                 "reason": "No matching build record is available."}
     build = conn.execute(
-        "SELECT revision,stage FROM build_runs "
+        "SELECT revision,stage,evidence_json FROM build_runs "
         "WHERE project=? AND root=? AND build_id=?",
         (project, str(root), build_id)).fetchone()
     if build is None:
@@ -153,10 +153,32 @@ def review(conn, root, project, args):
     try:
         qa = json.loads(row["summary"])
         actions = qa["actions"]
+        evidence = json.loads(build["evidence_json"])
+        qa_revision = qa.get("qa_build_revision")
+        # A stored PASS must belong to this *build generation*. An older
+        # record cannot be reused while still on BROWSER_QA after a failed
+        # advance, feedback or other revision change. Normal successful
+        # advancement from BROWSER_QA increments the build revision, so in
+        # later stages require the recorded BROWSER_QA PASS transition,
+        # rather than insisting on equality to the current revision.
+        qa_transition = (evidence.get("BROWSER_QA")
+                         if isinstance(evidence, dict) else None)
+        qa_revision_valid = (
+            type(qa_revision) is int and qa_revision >= 1
+            and (
+                (build["stage"] == "BROWSER_QA"
+                 and qa_revision == build["revision"])
+                or
+                (build["stage"] in {"NATIVE_QA", "REVIEW", "CHECKPOINT", "DONE"}
+                 and qa_revision < build["revision"]
+                 and isinstance(qa_transition, dict)
+                 and qa_transition.get("outcome") == "PASS"
+                 and qa_transition.get("verification") == "browser-tool")
+            )
+        )
         correct = (isinstance(qa, dict)
                    and qa.get("source_fingerprint") == fingerprint
-                   and isinstance(qa.get("qa_build_revision"), int)
-                   and qa["qa_build_revision"] >= 1
+                   and qa_revision_valid
                    and isinstance(qa.get("preview_id"), str)
                    and bool(qa["preview_id"])
                    and isinstance(qa.get("preview_started_at"), (int, float))
