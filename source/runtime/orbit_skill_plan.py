@@ -397,7 +397,12 @@ def preview(project_root, objective, available, *, project_profile=None,
         name = row.get("name")
         if not isinstance(name, str) or not SKILL_NAME.fullmatch(name) or name == "orbit":
             continue
-        if _host_location_mismatch(row.get("path", ""), host):
+        raw_path = row.get("path")
+        if not isinstance(raw_path, str) or not 1 <= len(raw_path) <= 4096:
+            if requested is not None and name in requested:
+                excluded.append({"name": name, "reason": "INVALID_LOCAL_SKILL_PATH"})
+            continue
+        if _host_location_mismatch(raw_path, host):
             if requested is not None and name in requested:
                 excluded.append({"name": name, "reason": "SKILL_DIRECTORY_FOR_OTHER_HOST"})
             continue
@@ -460,6 +465,13 @@ def preview(project_root, objective, available, *, project_profile=None,
                 "context_sha256": _manifest_identity(project_root, objective, p, host),
                 "skills": pins}
     checked = _revalidate(review_manifest, manifest)
+    # Name/label matches are hints, never semantic coverage of a framework or
+    # evidence that its SDK/host is installed. Keep gaps visible for review.
+    matched_labels = sorted(t for t in p["technologies"] if any(
+        _tokens(t.replace("-", " ")) <= _tokens(x["name"].replace("-", " "))
+        for x in chosen
+    ))
+    unmatched_labels = sorted(set(p["technologies"]) - set(matched_labels))
     denied = permission_state == "DENIED"
     status = ("HOLD_PERMISSION_DENIED" if denied else
               "HOLD_REQUESTED_SKILLS_UNAVAILABLE" if missing else
@@ -475,6 +487,18 @@ def preview(project_root, objective, available, *, project_profile=None,
         "shortlist": chosen, "excluded_requested": excluded[:MAX_SELECTED],
         "missing_requested": missing, "duplicate_skill_ids": sorted(duplicates)[:12],
         "manifest": manifest, "revalidation": checked,
+        "coverage_hint": {"declared_technologies": p["technologies"],
+                          "skill_name_token_matches": matched_labels,
+                          "not_name_matched": unmatched_labels,
+                          "semantic_fit_verified": False,
+                          "host_toolchains_verified": False},
+        "handoff": {"status": "REVIEW_REQUIRED" if chosen else "HOST_NATIVE_FALLBACK",
+                    "host_owned": True,
+                    "requires_full_skill_text_and_license_review": bool(chosen),
+                    "requires_owner_and_host_permission": bool(chosen),
+                    "recheck_tree_and_location_pins_before_any_use": True,
+                    "configuration_modified_by_preview": False,
+                    "rollback_needed_from_preview": False},
         "discovered_count": len(installed), "selected_count": len(chosen),
         "context_budget": {"max_selected": MAX_SELECTED,
                            "descriptions_not_loaded_as_instructions": True,
