@@ -239,6 +239,8 @@ def preview(project_root, objective, available, *, project_profile=None,
         raise ValueError("Unsupported host declaration")
     p = _profile(project_profile)
     requested = _validate_requested(requested_skill_names)
+    if not isinstance(available, dict):
+        raise ValueError("Invalid discovered capability inventory")
     installed = available.get("skills", [])
     if not isinstance(installed, list):
         raise ValueError("Invalid discovered skills inventory")
