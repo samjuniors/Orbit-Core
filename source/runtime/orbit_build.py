@@ -833,6 +833,9 @@ def advance(conn,root,a):
         evidence_map[row['stage']].update(
             source_fingerprint=source_pin,
             qa_build_revision=row['revision'],
+            qa_project=a['project'],
+            qa_build_id=row['build_id'],
+            qa_stage=row['stage'],
             source_identity_kind='BOUNDED_LOCAL_FILES_FINGERPRINT',
             evidence_independently_verified=False,
             host_execution_attested=False,
