@@ -28,6 +28,21 @@ PLATFORMS = frozenset({
     "console", "other",
 })
 HOSTS = frozenset({"unknown", "codex", "claude-code", "antigravity"})
+TARGETS_BY_PRODUCT = {
+    "website": frozenset({"web", "server", "other"}),
+    "web-app": frozenset({"web", "server", "other"}),
+    "mobile-app": frozenset({"android", "ios", "mobile-cross-platform", "other"}),
+    "desktop-app": frozenset({"windows", "linux", "macos", "desktop-cross-platform", "other"}),
+    "os-platform": frozenset({"windows", "linux", "macos", "embedded", "other"}),
+    "api-service": frozenset({"server", "windows", "linux", "macos", "other"}),
+    "cli": frozenset({"server", "windows", "linux", "macos", "other"}),
+    "sdk-library": frozenset({"web", "server", "android", "ios", "windows",
+                               "linux", "macos", "other"}),
+    "plugin-mcp": frozenset({"server", "windows", "linux", "macos", "other"}),
+    "data-automation": frozenset({"server", "windows", "linux", "macos", "other"}),
+    "game": frozenset({"web", "android", "ios", "windows", "linux",
+                        "macos", "console", "other"}),
+}
 OPERATIONS = frozenset({
     "build", "add-feature", "fix", "debug", "redesign", "maintain",
     "resume", "review", "research", "test",
@@ -66,6 +81,8 @@ def _profile(value):
             or not isinstance(operation, str) or product not in PRODUCT_TYPES
             or platform not in PLATFORMS or operation not in OPERATIONS):
         raise ValueError("Unknown project_profile classification")
+    if product in TARGETS_BY_PRODUCT and platform not in TARGETS_BY_PRODUCT[product]:
+        raise ValueError("Declared platform conflicts with product type")
     if not isinstance(technologies, list) or len(technologies) > 8 or any(
         not isinstance(t, str) or t not in TECHNOLOGIES for t in technologies
     ):
