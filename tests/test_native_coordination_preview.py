@@ -213,6 +213,7 @@ class NativeCoordinationPreviewTests(unittest.TestCase):
         self.assertNotIn("private-project", str(out))
         self.assertEqual(out["handoffs"], [])
         self.assertFalse(out["host_reconciliation"]["needs_host_reconciliation"])
+        self.assertEqual(out["active_records_outside_selected_project"], 1)
 
     def test_reported_work_requires_independent_review_before_next_wave(self):
         self.task("api", paths=["src/api/"])
@@ -383,6 +384,33 @@ class NativeCoordinationPreviewTests(unittest.TestCase):
         }, self.root)
         self.assertEqual(fresh["status"], "RESERVED")
         self.assertFalse(fresh["agent_spawned"])
+
+    def test_unknown_host_skill_review_hint_is_valid_and_unverified(self):
+        self.task("frontend", role="frontend", paths=["src/ui/"])
+        out = self.preview(
+            host="vscode", available_host_tools=[], include_skill_review=True,
+        )
+        self.assertEqual(out["status"], "HOLD_NATIVE_TOOL_UNAVAILABLE")
+        self.assertEqual(len(out["optional_skill_reviews"]), 1)
+        skill_hint = out["optional_skill_reviews"][0]
+        self.assertEqual(skill_hint["host"], "unknown")
+        self.assertTrue(skill_hint["host_fit_unverified"])
+        self.assertEqual(skill_hint["tool"], "orbit_capability_select")
+        self.assertFalse(out["skill_installed"])
+
+    def test_recovery_list_is_bounded_and_does_not_forge_retry(self):
+        for index in range(13):
+            name = "failed-" + str(index)
+            self.task(name)
+            self.state(name, "FAILED")
+        before = self.conn.total_changes
+        out = self.preview()
+        self.assertEqual(out["status"], "RECOVERY_REVIEW_REQUIRED")
+        self.assertEqual(len(out["recovery_reviews"]), 12)
+        self.assertTrue(out["recovery_list_truncated"])
+        self.assertFalse(any(item["retry_authorized"]
+                             for item in out["recovery_reviews"]))
+        self.assertEqual(before, self.conn.total_changes)
 
     def test_tool_exposure_is_read_only_without_duplicate_executor(self):
         metadata = next(t for t in orbit_mcp.TOOLS
