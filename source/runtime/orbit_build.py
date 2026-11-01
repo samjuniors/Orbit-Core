@@ -802,10 +802,35 @@ def advance(conn,root,a):
             return {'status':'HOLD','reason':'Browser QA was run in a different preview generation or MCP session; rerun QA'}
         if orbit_preview.status(root,{'preview_id':preview_id}).get('status')!='READY':
             return {'status':'HOLD','reason':'Browser QA preview is not currently READY; rerun or restart QA'}
+    # Native-device and host-CLI verification have no Orbit-owned test runner.
+    # Pin the host-reported evidence to the current bounded SOURCE bytes and
+    # exact build revision at approval time. A recorded command exit code
+    # never independently proves its execution or the real target platform.
+    # Existing web QA keeps its separate Playwright/browser-record gate.
+    pin_host_qa = (outcome == 'PASS' and
+                   (row['stage'] == 'NATIVE_QA' or
+                    (row['stage'] == 'VERIFY' and
+                     'BROWSER_QA' not in flow and 'NATIVE_QA' not in flow)))
+    source_pin = None
+    if pin_host_qa:
+        source_pin = code_fingerprint(root)
+        if source_pin is None:
+            return {'status':'HOLD','reason':(
+                'Cannot bind host-reported QA to a complete bounded source '
+                'snapshot; inspect unsafe or oversized source first.')}
     if a.get('confirm_write') is not True:
-        return {'status':'PREVIEW_ONLY','stage':row['stage'], 'next_stage':flow[flow.index(row['stage'])+1] if outcome=='PASS' else row['stage']}
+        return {'status':'PREVIEW_ONLY','stage':row['stage'], 'next_stage':flow[flow.index(row['stage'])+1] if outcome=='PASS' else row['stage'],
+                'source_pin_required':pin_host_qa,'source_pin_available':source_pin is not None}
     evidence_map[row['stage']]={'outcome':outcome,'evidence':evidence,'updated_at':now(),
                                 'verification':'browser-tool' if row['stage']=='BROWSER_QA' and outcome=='PASS' else 'caller-reported-not-attested'}
+    if pin_host_qa:
+        evidence_map[row['stage']].update(
+            source_fingerprint=source_pin,
+            qa_build_revision=row['revision'],
+            source_identity_kind='BOUNDED_LOCAL_FILES_FINGERPRINT',
+            evidence_independently_verified=False,
+            host_execution_attested=False,
+        )
     new_stage=flow[flow.index(row['stage'])+1] if outcome=='PASS' else row['stage']
     with conn:
         cursor=conn.execute('''UPDATE build_runs SET stage=?,revision=revision+1,evidence_json=?,updated_at=?
