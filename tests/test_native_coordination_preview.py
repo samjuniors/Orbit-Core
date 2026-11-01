@@ -260,6 +260,12 @@ class NativeCoordinationPreviewTests(unittest.TestCase):
                             for b in batches))
         self.assertTrue(all(b["source_fingerprint_requires_real_host"]
                             for b in batches))
+        self.assertTrue(all(b["qa_mode_choices"] == ["web", "native", "host"]
+                            for b in batches))
+        self.assertTrue(all(b["qa_mode_requires_build_flow_review"]
+                            for b in batches))
+        self.assertTrue(all(b["build_id_requires_exact_project_review"]
+                            for b in batches))
         self.assertFalse(result["source_tests_verified"])
         self.assertFalse(result["release_authorized"])
         self.assertEqual(self.conn.total_changes, before)
