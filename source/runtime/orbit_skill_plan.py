@@ -292,6 +292,8 @@ def preview(project_root, objective, available, *, project_profile=None,
             continue
         matches.append({"name": name, "sha256": digest, "match_score": score,
                         "source": "LOCAL_SKILL_UNVERIFIED", "license": "UNKNOWN_REVIEW_REQUIRED",
+                        "license_claim_unverified": row.get("declared_license_unverified"),
+                        "version_claim_unverified": row.get("declared_version_unverified"),
                         "host_compatibility": "DIRECTORY_CANDIDATE_NOT_VERIFIED",
                         "trust_review": "REQUIRED",
                         "reason": "DECLARED_STACK_AND_OBJECTIVE_OVERLAP" if score else "EXPLICITLY_REQUESTED_REVIEW"})
