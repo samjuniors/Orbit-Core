@@ -18,6 +18,7 @@ MAX_SKILL_BYTES = 65536
 MAX_SKILL_TREE_ENTRIES = 64
 MAX_SKILL_TREE_BYTES = 512 * 1024
 MAX_SKILL_TREE_FILE_BYTES = 256 * 1024
+MAX_FINGERPRINT_CANDIDATES = 24
 SKILL_MANIFEST_FORMAT = "orbit-skill-plan-v2"
 MAX_DESCRIPTION_CHARS = 320
 SKILL_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
@@ -410,7 +411,10 @@ def preview(project_root, objective, available, *, project_profile=None,
             duplicates.add(name)
             continue
         records[name] = row
-    matches = []
+    # Rank inexpensive, untrusted names/short descriptions first; limit actual
+    # filesystem fingerprints to a small bounded shortlist. Requested exact
+    # names bypass ranking but are still restricted to five.
+    candidates = []
     for name in sorted(records):
         if name in duplicates:
             excluded.append({"name": name, "reason": "DUPLICATE_IDENTITY_REQUIRES_REVIEW"})
@@ -421,19 +425,24 @@ def preview(project_root, objective, available, *, project_profile=None,
             if requested is not None and name in requested:
                 excluded.append({"name": name, "reason": conflict})
             continue
-        snapshot = _snapshot_installed(row, allowed)
-        if snapshot is None:
-            if requested is not None and name in requested:
-                excluded.append({"name": name, "reason": "UNSAFE_OR_CHANGED_LOCAL_SKILL"})
+        if requested is not None and name not in requested:
             continue
-        # Only untrusted metadata for discovery; never copy its instructions
-        # into goals, model prompts or manifest claims.
         desc = row.get("description", "")
-        raw = (name + " " + (desc[:MAX_DESCRIPTION_CHARS] if isinstance(desc, str) else ""))
+        raw = name + " " + (desc[:MAX_DESCRIPTION_CHARS] if isinstance(desc, str) else "")
         overlap = len(_tokens(raw) & match_words)
         exact = len(_tokens(name.replace("-", " ")) & techwords)
         score = overlap + 3 * exact
         if requested is None and score == 0:
+            continue
+        candidates.append((score, name, row))
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    fingerprints_deferred = max(0, len(candidates) - MAX_FINGERPRINT_CANDIDATES)
+    matches = []
+    for score, name, row in candidates[:MAX_FINGERPRINT_CANDIDATES]:
+        snapshot = _snapshot_installed(row, allowed)
+        if snapshot is None:
+            if requested is not None and name in requested:
+                excluded.append({"name": name, "reason": "UNSAFE_OR_CHANGED_LOCAL_SKILL"})
             continue
         matches.append({"name": name, "sha256": snapshot["sha256"],
                         "tree_sha256": snapshot["tree_sha256"],
@@ -500,11 +509,13 @@ def preview(project_root, objective, available, *, project_profile=None,
                     "configuration_modified_by_preview": False,
                     "rollback_needed_from_preview": False},
         "discovered_count": len(installed), "selected_count": len(chosen),
+        "fingerprint_budget_deferred_count": fingerprints_deferred,
         "context_budget": {"max_selected": MAX_SELECTED,
                            "descriptions_not_loaded_as_instructions": True,
                            "full_skill_text_returned": False},
         "integrity_scope": {"skill_metadata_and_helper_files": True,
                             "max_entries_per_skill": MAX_SKILL_TREE_ENTRIES,
+                            "max_fingerprinted_candidates": MAX_FINGERPRINT_CANDIDATES,
                             "max_bytes_per_skill": MAX_SKILL_TREE_BYTES,
                             "symlinks_and_oversized_trees_held": True,
                             "hashes_are_not_approval": True},
