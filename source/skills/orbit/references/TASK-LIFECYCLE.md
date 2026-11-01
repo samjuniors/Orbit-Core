@@ -62,9 +62,13 @@ batch before accepting integrated work. The browser integration guard rejects
 QA from a stale active build revision; a later stage requires a recorded
 `BROWSER_QA` PASS transition as well as current source identity. Browser
 QA is not a substitute for device/desktop/native target-platform tests.
-A native-only project may have to complete independent host acceptance
-outside the current web-specific integration gate; never fake a browser
-record or silently infer acceptance.
+For native/mobile/desktop work, explicitly select qa_mode=native on a build
+with the NATIVE_QA stage. For CLI, SDK/library and scoped non-browser work,
+select qa_mode=host on a VERIFY-only build. Source and build-revision pins
+are recorded by orbit_build_advance only after a structured reported PASS;
+these are not proof of host execution or independently verified test results.
+Review actual device, SDK and command output before acceptance. Never
+fabricate browser records or silently infer platform QA acceptance.
 
 **Development status:** v0.30 source only, 48-tool development inventory,
 automated and host acceptance NOT RUN at owner direction. Previously
