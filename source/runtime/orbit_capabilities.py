@@ -103,7 +103,7 @@ def _parse_skill(path):
 def _skill_paths(project_root, home):
     folders=[]
     if project_root:
-        root=Path(project_root)
+        root=Path(project_root).resolve()
         folders += [root/'.agents/skills',root/'.claude/skills']
     folders += [home/'.agents/skills',home/'.gemini/config/skills',home/'.claude/skills']
     return folders
@@ -123,10 +123,12 @@ def _configs(project_root, home):
     return items
 
 def discover(project_root, *, home=None):
-    h = Path(home) if home else Path(os.getenv('ORBIT_UNIVERSAL_HOME') or Path.home())
+    h = (Path(home) if home else Path(os.getenv('ORBIT_UNIVERSAL_HOME') or Path.home())).resolve()
     skills=[]; seen=set(); servers=[]; limits=[]
     for folder in _skill_paths(project_root,h):
-        if folder.is_symlink() or not folder.is_dir():continue
+        # A symlinked parent (e.g. .agents -> outside workspace) is just as
+        # unsafe as a symlinked skill directory. Do not read its frontmatter.
+        if folder.resolve() != folder.absolute() or not folder.is_dir():continue
         try: children=sorted(folder.iterdir())[:MAX_ITEMS]
         except OSError:continue
         for child in children:
