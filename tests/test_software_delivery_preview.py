@@ -294,6 +294,62 @@ class SoftwareDeliveryPreviewTests(unittest.TestCase):
             self.preview(product_type="mobile-app", target_platform="server")
         self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
 
+    def test_rejects_contradictory_web_and_mobile_platforms(self):
+        for kind, target in (("web-app", "android"),
+                             ("website", "console"),
+                             ("api-service", "ios"),
+                             ("plugin-mcp", "console"),
+                             ("data-automation", "android")):
+            with self.subTest(product_type=kind, target_platform=target):
+                with self.assertRaises(ValueError):
+                    self.preview(product_type=kind, target_platform=target)
+        web = self.preview(product_type="web-app", target_platform="web")
+        self.assertEqual(web["status"], "BLUEPRINT_READY")
+        api = self.preview(product_type="api-service", target_platform="server")
+        self.assertEqual(api["status"], "BLUEPRINT_READY")
+        api_unspecified = self.preview(product_type="api-service")
+        self.assertEqual(api_unspecified["status"], "BLUEPRINT_READY")
+
+    def test_existing_api_feature_preserves_code_contract_and_version_history(self):
+        x = self.preview(product_type="api-service", maturity="existing",
+                         operation="add-feature", target_platform="server",
+                         objective="Add an optional filter without changing existing API clients",
+                         slice_key="api-v2")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        tasks = {item["task_key"]: item for item in x["proposed_tasks"]}
+        self.assertIn("api-v2-service", tasks)
+        self.assertNotIn("api-v2-interface", tasks)
+        self.assertIn("api-v2-quality", tasks)
+        self.assertIn("api-v2-review", tasks)
+        self.assertIn("api-v2-handoff", tasks)
+        self.assertIn("api-v2-release", tasks)
+        self.assertEqual(tasks["api-v2-quality"]["depends_on"], ["api-v2-integration"])
+        self.assertTrue(all(item["write_paths"] == [] for item in x["proposed_tasks"]))
+        self.assertFalse(x["approval_verified"])
+        self.assertFalse(x["execution_verified"])
+
+    def test_stalled_fix_and_completed_maintenance_use_separate_gates(self):
+        stalled = self.preview(product_type="api-service", operation="debug",
+                               maturity="stalled", target_platform="server",
+                               objective="Investigate reproducible validation failure")
+        self.assertEqual(stalled["status"], "BLUEPRINT_READY")
+        debug_tasks = {item["task_key"]: item for item in stalled["proposed_tasks"]}
+        self.assertEqual(debug_tasks["repair"]["depends_on"], ["reproduce"])
+        self.assertNotIn("release", debug_tasks)
+        self.assertNotIn("service", debug_tasks)
+        completed = self.preview(product_type="cli", operation="maintain",
+                                 maturity="completed", target_platform="linux",
+                                 objective="Update supported runtimes without losing CLI compatibility",
+                                 slice_key="maintenance")
+        self.assertEqual(completed["status"], "BLUEPRINT_READY")
+        maintain_tasks = {item["task_key"]: item for item in completed["proposed_tasks"]}
+        self.assertIn("maintenance-implementation", maintain_tasks)
+        self.assertIn("maintenance-quality", maintain_tasks)
+        self.assertIn("maintenance-release", maintain_tasks)
+        self.assertNotIn("maintenance-interface", maintain_tasks)
+        self.assertFalse(completed["tests_verified"])
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
+
     def test_metadata_exposes_read_only_and_never_executes_host(self):
         m=next(x for x in orbit_mcp.TOOLS if x["name"]=="orbit_software_delivery_preview")
         self.assertTrue(m["annotations"]["readOnlyHint"])
