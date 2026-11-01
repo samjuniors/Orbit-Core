@@ -46,6 +46,19 @@ class UniversalSetupTests(unittest.TestCase):
                 self.assertIn(digest, installer.OLD_STOCK_SHA256)
         self.assertNotIn('0' * 64, installer.OLD_STOCK_SHA256)
 
+    def test_capability_module_supports_isolated_package_import(self):
+        """Repository import must not depend on a prior test modifying sys.path."""
+        cmd = [
+            sys.executable, "-c",
+            "from source.runtime import orbit_capabilities as cap; "
+            "assert callable(cap.select); "
+            "print(cap.__name__)"
+        ]
+        check = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                               text=True, timeout=10)
+        self.assertEqual(check.returncode, 0, check.stderr)
+        self.assertIn("source.runtime.orbit_capabilities", check.stdout)
+
     def test_role_skill_preferences_have_safe_fallback(self):
         from source.runtime import orbit_capabilities as cap
         outcome=cap.select(self.project,'orbit-security: audit app security',[],home=self.home)
