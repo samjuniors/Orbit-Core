@@ -471,6 +471,7 @@ TOOLS += [
     {'name':'orbit_capability_discover','description':'Read-only local skill and MCP config metadata inventory; never downloads, installs or executes anything.','inputSchema':schema({'project_root':string(2000)},['project_root'])},
     {'name':'orbit_capability_select','description':'Read-only adaptive host capability selector with v0.29 project-scoped skill shortlist, SHA-256 manifest and revalidation. No approval, installation, skill execution or host-agent invocation.','inputSchema':schema({
         'project_root':string(2000),'objective':string(1500),
+        'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
         'host_tools':{'type':'array','maxItems':80,'items':{'type':'string'}},
         'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
         'project_profile':schema({
@@ -657,7 +658,7 @@ def execute(conn, name, a):
     if name=='orbit_preview_status': return orbit_preview.status(project_root(a), a)
     if name=='orbit_preview_stop': return orbit_preview.stop(project_root(a), a)
     if name=='orbit_capability_discover': return orbit_capabilities.discover(project_root(a))
-    if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]),permission_state=a.get('permission_state','UNKNOWN'),project_profile=a.get('project_profile'),requested_skill_names=a.get('requested_skill_names'),review_manifest=a.get('review_manifest'))
+    if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]),permission_state=a.get('permission_state','UNKNOWN'),project_profile=a.get('project_profile'),requested_skill_names=a.get('requested_skill_names'),review_manifest=a.get('review_manifest'),host=a.get('host','unknown'))
     if name=='orbit_project_scan': return scan(a)
     if name=='orbit_project_resume':
         if a.get('compact') is True:
