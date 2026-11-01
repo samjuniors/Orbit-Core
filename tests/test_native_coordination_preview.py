@@ -234,7 +234,8 @@ class NativeCoordinationPreviewTests(unittest.TestCase):
         self.assertEqual(out["status"], "INTEGRATION_REVIEW_REQUIRED")
         self.assertFalse(out["source_tests_verified"])
         self.assertFalse(out["release_authorized"])
-        self.assertIn("orbit_swarm_integration_review", out["next"])
+        self.assertEqual(out["integration_review_batches"][0]["tool"],
+                         "orbit_swarm_integration_review")
 
     def test_all_accepted_tasks_are_partitioned_for_integration_review(self):
         # The integration gate permits at most 12 tasks, but the registered
