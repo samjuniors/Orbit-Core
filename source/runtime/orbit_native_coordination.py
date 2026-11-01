@@ -76,6 +76,12 @@ def _integration_batches(conn, root, project):
                        "expected_revision": r["revision"]}
                       for r in members],
             "task_count": len(members),
+            # A build's frozen lifecycle determines the valid mode. The host
+            # must inspect that exact build and explicitly select it; Orbit
+            # never assumes a browser, device or native SDK ran.
+            "qa_mode_choices": ["web", "native", "host"],
+            "qa_mode_requires_build_flow_review": True,
+            "build_id_requires_exact_project_review": True,
             "source_fingerprint_requires_real_host": True,
             "web_build_and_recorded_browser_qa_not_verified": True,
             "native_platform_qa_requires_separate_host_review": True,
