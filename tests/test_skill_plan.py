@@ -285,6 +285,16 @@ class SkillPlanPreviewTests(unittest.TestCase):
             self.select("Python API", review_manifest=broken,
                         requested_skill_names=["helper"])
 
+    def test_skill_planner_rejects_invalid_inventory_without_side_effects(self):
+        for inventory in (None, [], "untrusted", {"skills": "not-a-list"}):
+            with self.subTest(inventory=inventory):
+                with self.assertRaises(ValueError):
+                    orbit_skill_plan.preview(
+                        str(self.root), "Review installed skills", inventory,
+                        home=self.home
+                    )
+        self.assertEqual(self.db.total_changes, 0)
+
     def test_legacy_selector_remains_47_tools_and_schema_rejects_writes(self):
         metadata = next(m for m in orbit_mcp.TOOLS
                         if m["name"] == "orbit_capability_select")
