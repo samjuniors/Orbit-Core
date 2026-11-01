@@ -27,8 +27,12 @@ owner. Supported mobile choices: `android`, `ios`,
 `mobile-cross-platform`; desktop: `windows`, `linux`, `macos`,
 `desktop-cross-platform`; OS-platform: `windows`, `linux`, `macos`,
 `embedded`; game: `web`, `android`, `ios`, `windows`, `linux`,
-`macos`, `console`. Missing required classification returns
+`macos`, `console`. Missing required classification for mobile/desktop/OS/game returns
 `NEEDS_PLATFORM_CLASSIFICATION`, not a falsely ready web scaffold.
+Websites, web apps, APIs, CLI/libraries, plugins and data automations may
+leave the target unspecified when not yet known. Explicit platform values
+must match the product type; a web-only app with an Android target or an
+API-only service with an iOS target is rejected, not silently reclassified.
 An incompatible declared target is rejected rather than silently changed.
 
 Optional `technology` selects only a declaration-based responsibility
