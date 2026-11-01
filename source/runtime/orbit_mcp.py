@@ -26,6 +26,7 @@ import orbit_swarm
 import orbit_swarm_draft
 import orbit_delivery
 import orbit_swarm_host
+import orbit_native_coordination
 import orbit_swarm_integrity
 import orbit_portable
 import orbit_pulse
@@ -453,11 +454,32 @@ TOOLS = [
     {'name':'orbit_gate_evaluate','description':'Evaluate caller-supplied criteria (not independent test verification).','inputSchema':schema({'checks':{'type':'array','minItems':1,'items':{'type':'object'}}},['checks'])},
     # Product Kit-inspired native task ledger; no Git actions, model spawning or implicit approvals.
     {'name':'orbit_task_plan','description':'Preview/register one scoped specialist task. Does NOT launch agents.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'step':string(100),'role':{'type':'string','enum':sorted(orbit_tasks.ROLES)},'goal':string(1500),'reason':string(500),'write_paths':{'type':'array','maxItems':24,'items':{'type':'string'}},'depends_on':{'type':'array','maxItems':8,'items':{'type':'string'}},'confirm_write':{'type':'boolean'}},['project_root','project','task_key','step','role','goal','reason'])},
+    {'name':'orbit_native_coordination_preview',
+     'description':'v0.30 read-only orchestration bridge between proposed specialist DAGs, registered tasks, independent review and reserved host-native handoffs. No tasks, agents, models, installs, approvals or Git changes are performed.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),
+         'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},
+         'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'host_workspace_mode':{'type':'string','enum':list(orbit_delegation.HOST_WORKSPACE_MODES)},
+         'max_parallel':{'type':'integer','minimum':1,'maximum':2},
+         'include_skill_review':{'type':'boolean'},
+         'draft_tasks':{'type':'array','minItems':1,'maxItems':12,'items':schema({
+             'task_key':string(80),'step':string(100),
+             'role':{'type':'string','enum':sorted(orbit_tasks.ROLES)},
+             'goal':string(1500),'reason':string(500),
+             'write_paths':{'type':'array','maxItems':24,'items':{'type':'string'}},
+             'depends_on':{'type':'array','maxItems':8,'items':string(80)}},
+             ['task_key','step','role','goal','reason'])},
+         'reserved_tasks':{'type':'array','minItems':1,'maxItems':2,'items':schema({
+             'task_key':string(80),
+             'expected_revision':{'type':'integer','minimum':1}},
+             ['task_key','expected_revision'])}
+     },['project_root','project'])},
     {'name':'orbit_swarm_host_preflight','description':'Read-only all-or-nothing review for one or two RESERVED specialist tasks before host-native invocation. Checks fresh revisions, conflicts, active sessions and existing per-task handoff gates; observed read-only workspace HOLD; never invokes, grants permission, releases or writes.','inputSchema':schema({'project_root':string(2000),'project':string(80),'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},'host_workspace_mode':{'type':'string','enum':list(orbit_delegation.HOST_WORKSPACE_MODES)},'tasks':{'type':'array','minItems':1,'maxItems':2,'items':{'type':'object','properties':{'task_key':string(80),'expected_revision':{'type':'integer','minimum':1}},'required':['task_key','expected_revision'],'additionalProperties':False}}},['project_root','project','host','tasks'])},
     {'name':'orbit_software_delivery_preview','description':'Read-only adaptive end-to-end product delivery blueprint: choose existing Orbit specialist roles, map vertical-slice dependencies, quality/security/release gates, and validate a bounded draft DAG. Does not create code, select models, register tasks, grant approvals or invoke real host agents.','inputSchema':schema({'project_root':string(2000),'project':string(80),'objective':string(900),'product_type':{'type':'string','enum':sorted(orbit_intake.TYPES)},'operation':{'type':'string','enum':sorted(orbit_delivery.OPERATIONS)},'maturity':{'type':'string','enum':sorted(orbit_delivery.MATURITY)},'constraints':{'type':'string','maxLength':450},'target_platform':{'type':'string','enum':['unspecified']+sorted(orbit_delivery.TARGET_PLATFORMS)},'technology':{'type':'string','enum':sorted(orbit_delivery.TECHNOLOGIES)},'service_scope':{'type':'string','enum':['auto','required','not-required']},'slice_key':string(24),'focus_role':{'type':'string','enum':['frontend','backend','data','devops','security','qa']}},['project_root','project','objective'])},
     {'name':'orbit_swarm_draft_preview','description':'Validate a host/user-proposed bounded specialist task DAG and review waves against the existing task ledger. No task creation, model call, approval, reservation or agent launch.','inputSchema':schema({'project_root':string(2000),'project':string(80),'tasks':{'type':'array','minItems':1,'maxItems':12,'items':{'type':'object','properties':{'task_key':string(80),'step':string(100),'role':{'type':'string','enum':sorted(orbit_tasks.ROLES)},'goal':string(1500),'reason':string(500),'write_paths':{'type':'array','maxItems':24,'items':{'type':'string'}},'depends_on':{'type':'array','maxItems':8,'items':string(80)}},'required':['task_key','step','role','goal','reason'],'additionalProperties':False}}},['project_root','project','tasks'])},
     {'name':'orbit_swarm_preview','description':'Read-only preview of a bounded dependency DAG from existing project task records. Suggests at most two non-conflicting host-native handoffs. A reported read-only workspace defers writable tasks. No registration, reservation, invocation or verified approval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},'host_workspace_mode':{'type':'string','enum':list(orbit_delegation.HOST_WORKSPACE_MODES)},'max_parallel':{'type':'integer','minimum':1,'maximum':2}},['project_root','project'])},
-    {'name':'orbit_swarm_integration_review','description':'Read-only source-fingerprint and recorded-browser-QA freshness gate for 1..12 review-accepted specialist tasks. Never runs tests, attests host approval, merges or publishes.','inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_source_fingerprint':string(64),'build_id':string(40),'tasks':{'type':'array','minItems':1,'maxItems':12,'items':{'type':'object','properties':{'task_key':string(80),'expected_revision':{'type':'integer','minimum':1}},'required':['task_key','expected_revision'],'additionalProperties':False}}},['project_root','project','expected_source_fingerprint','tasks'])},
+    {'name':'orbit_swarm_integration_review','description':'Read-only source-fingerprint and recorded QA evidence gate for 1..12 review-accepted specialists. qa_mode web (default) checks Playwright browser records; native checks structured native/device NATIVE_QA; host checks structured VERIFY for CLI/library/scoped non-browser workflows. Host tests and permissions remain unverified; never runs tests, merges or publishes.','inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_source_fingerprint':string(64),'build_id':string(40),'qa_mode':{'type':'string','enum':['web','native','host']},'tasks':{'type':'array','minItems':1,'maxItems':12,'items':{'type':'object','properties':{'task_key':string(80),'expected_revision':{'type':'integer','minimum':1}},'required':['task_key','expected_revision'],'additionalProperties':False}}},['project_root','project','expected_source_fingerprint','tasks'])},
     {'name':'orbit_task_handoff','description':'Read-only per-task host-native delegation packet. Requires a real reservation, accepted dependencies, and a native host tool explicitly reported as available; never spawns agents or authenticates approval; optionally holds when the host reports a read-only workspace.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},'host_workspace_mode':{'type':'string','enum':list(orbit_delegation.HOST_WORKSPACE_MODES)},'include_research':{'type':'boolean'}},['project_root','project','task_key','host'])},
     {'name':'orbit_task_list','description':'List scoped task registry (read-only).','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':40},'status':string(25)},['project_root','project'])},
     {'name':'orbit_task_reserve','description':'After actual host/user approval, reserve one native subagent slot. NO agent is spawned. Advisory caller approval reference; independent host permission still required.','inputSchema':schema({'project_root':string(2000),'project':string(80),'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},'approval_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','task_key','expected_revision','approval_reference'])},
@@ -516,7 +538,7 @@ TOOLS += [
 ]
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
-    'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_swarm_draft_preview','orbit_software_delivery_preview','orbit_swarm_host_preflight','orbit_swarm_integration_review','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
+    'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_swarm_draft_preview','orbit_software_delivery_preview','orbit_swarm_host_preflight','orbit_native_coordination_preview','orbit_swarm_integration_review','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
     'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
@@ -714,6 +736,9 @@ def execute(conn, name, a):
     if name=='orbit_memory_archive': return memory_archive(conn,a)
     if name=='orbit_project_checkpoint': return checkpoint(conn,a)
     if name=='orbit_gate_evaluate': return gate(a)
+    if name=='orbit_native_coordination_preview':
+        root=project_root(a)
+        return orbit_native_coordination.preview(conn,root,project_key(a),a)
     if name=='orbit_swarm_host_preflight':
         root=project_root(a)
         return orbit_swarm_host.review(conn,root,project_key(a),a)

@@ -31,3 +31,46 @@ Task `m2-frontend`: role `frontend`, `write_paths=["src/ui/"]`, goal implement a
 ## v0.27 bounded Swarm integration check
 
 Before an integration decision on multiple accepted specialists, request a read-only `orbit_swarm_integration_review` with 1–12 exact task keys/current revisions, the expected bounded source fingerprint from a previous inspection and, for web apps with an Orbit-recorded browser QA run, `build_id`. The gate rejects stale code, missing/reworked task reviews, scope violations and stale or failed recorded browser QA. It **does not** execute Git, tests or a browser and never attests user consent or worker sessions. Its strongest outcome is `READY_FOR_INDEPENDENT_REVIEW`; the host integrator must still inspect real Git diffs and run tests before accepting the milestone. Mobile/desktop/native test evidence requires real host acceptance, not fabricated browser records.
+
+
+## v0.30 draft: stage-aware host-native coordination (optional)
+
+For a multi-specialist goal, the read-only
+`orbit_native_coordination_preview` combines existing task-DAG draft review,
+current ledger readiness, independent-reported-task review and all-or-nothing
+native-host reservation preflight. See
+`references/NATIVE-COORDINATION.md` for the three input modes and safe
+host-owned handoff sequence. It is **not** an automatic batch reservation,
+agent invocation, skill loader or session monitor. Every task registration,
+reservation, source change, test execution, review and merge still requires
+its existing independent authorization and evidence gate.
+
+When the native tool is unavailable, report `HOLD_NATIVE_TOOL_UNAVAILABLE`
+and propose only genuine permission-gated serial host work. When any
+`RESERVED`/`RUNNING` record is found after restart, reconcile it with
+the real host before further reservation. Do not reuse old approval tokens,
+invent session references, bypass workspace-read-only restrictions, or
+auto-accept dependencies merely because an agent reports completion.
+
+When every task is review accepted, the v0.30 coordinator returns
+`integration_review_batches` containing the **complete accepted task set**
+in 1–12-task groups (up to the 40-task graph ceiling). These are read-only
+`orbit_swarm_integration_review` *suggestions*, not invocations or a
+passing aggregate gate. Inspect one consistent live source snapshot, each
+task's exact revision and file scope, real QA/security results, and every
+batch before accepting integrated work. The browser integration guard rejects
+QA from a stale active build revision; a later stage requires a recorded
+`BROWSER_QA` PASS transition as well as current source identity. Browser
+QA is not a substitute for device/desktop/native target-platform tests.
+For native/mobile/desktop work, explicitly select qa_mode=native on a build
+with the NATIVE_QA stage. For CLI, SDK/library and scoped non-browser work,
+select qa_mode=host on a VERIFY-only build. Source and build-revision pins
+are recorded by orbit_build_advance only after a structured reported PASS;
+these are not proof of host execution or independently verified test results.
+Review actual device, SDK and command output before acceptance. Never
+fabricate browser records or silently infer platform QA acceptance.
+
+**Development status:** v0.30 source only, 48-tool development inventory,
+automated and host acceptance NOT RUN at owner direction. Previously
+published installations may not expose this tool; continue the existing
+manual lifecycle safely when it is absent.

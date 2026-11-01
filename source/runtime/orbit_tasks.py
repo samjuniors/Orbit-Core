@@ -358,11 +358,16 @@ def reserve(conn,a,root):
         conflict=_revision(a,old)
         if conflict: conn.rollback();return conflict
         if old['status'] not in RETRYABLE: raise ValueError('Only PLANNED, REWORK, FAILED or BLOCKED tasks can reserve')
-        # A BLOCKED task ended without fulfilling its approved objective,
-        # including a normally completed native worker that produced no work.
-        # No earlier approval reference authorizes a new worker attempt.
-        if old['status']=='BLOCKED' and approval==old.get('approval_reference'):
-            raise ValueError('Blocked task requires fresh host/user approval; do not reuse the earlier reference')
+        # A failed, rejected or blocked attempt never authorizes a retry,
+        # even when the host worker exited normally with no delivered work.
+        # A fresh caller reference is an advisory anti-replay guard, NOT proof
+        # that the real host or owner granted permission to spawn another agent.
+        if (old['status'] in {'REWORK','FAILED','BLOCKED'} and
+                old.get('approval_reference') and
+                approval == old['approval_reference']):
+            raise ValueError(
+                'Retry requires fresh host/user approval; do not reuse an '
+                'earlier task reservation approval reference')
         for dep in json.loads(old['depends_on']):
             item=conn.execute('SELECT status FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                               (old['project'],old['project_root'],dep)).fetchone()

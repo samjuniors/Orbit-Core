@@ -43,13 +43,13 @@ class HostHandoffTests(unittest.TestCase):
         self.assertEqual(answer["status"], "PLANNED")
         return answer["task"]
 
-    def reserve(self, key="frontend"):
+    def reserve(self, key="frontend", approval_reference="host-approved-plan-123"):
         task = self.db.execute(
             "SELECT revision FROM orbit_agent_tasks WHERE project=? AND task_key=?",
             ("todo", key)).fetchone()
         return self.call("orbit_task_reserve", task_key=key,
                          expected_revision=task["revision"],
-                         approval_reference="host-approved-plan-123",
+                         approval_reference=approval_reference,
                          confirm_write=True)
 
     def handoff(self, *, host="antigravity", tools=None, key="frontend",
@@ -550,7 +550,7 @@ class HostHandoffTests(unittest.TestCase):
     def test_m3_attempt_budget_counts_retries_of_same_task(self):
         self.register()
         for attempt in (1,2,3):
-            reservation=self.reserve()
+            reservation=self.reserve(approval_reference=f'host-approved-retry-{attempt}-123')
             self.assertEqual(reservation['status'],'RESERVED')
             self.assertEqual(reservation['attempt_number'],attempt)
             self.assertEqual(reservation['attempt_budget']['step_used'],attempt)
@@ -565,7 +565,7 @@ class HostHandoffTests(unittest.TestCase):
                 confirm_write=True)
             self.assertEqual(failed['status'],'FAILED')
         with self.assertRaisesRegex(ValueError,'Per-step agent budget exhausted'):
-            self.reserve()
+            self.reserve(approval_reference='host-approved-fourth-attempt-123')
         records=self.db.execute(
             'SELECT attempt_number,disposition FROM orbit_task_attempts WHERE task_key=? ORDER BY attempt_number',
             ('frontend',)).fetchall()
