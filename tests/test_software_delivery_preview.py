@@ -213,6 +213,71 @@ class SoftwareDeliveryPreviewTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.preview(**params)
 
+    def test_mobile_requires_target_instead_of_assuming_web_or_ios(self):
+        before = self.db.total_changes
+        x = self.preview(product_type="mobile-app")
+        self.assertEqual(x["status"], "NEEDS_PLATFORM_CLASSIFICATION")
+        self.assertIn("android", x["allowed_target_platforms"])
+        self.assertIn("ios", x["allowed_target_platforms"])
+        self.assertFalse(x["agent_spawned"])
+        self.assertFalse(x["state_written"])
+        self.assertEqual(self.db.total_changes, before)
+
+    def test_flutter_mobile_routes_native_lifecycle_without_new_agents(self):
+        x = self.preview(product_type="mobile-app", target_platform="android",
+                         technology="flutter")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        profile = x["platform_assessment"]
+        self.assertEqual(profile["suggested_role_modes"]["frontend"], "native-mobile-ui")
+        self.assertEqual(profile["profile_source"], "CALLER_DECLARED_NOT_INSPECTED")
+        self.assertFalse(profile["host_toolchains_verified"])
+        self.assertFalse(profile["skills_installed"])
+        self.assertIn("emulator or device", " ".join(profile["required_host_checks"]))
+        tasks = {t["task_key"]: t for t in x["proposed_tasks"]}
+        self.assertIn("flutter", tasks["interface"]["goal"])
+        self.assertIn("BLOCKED", tasks["quality"]["goal"])
+        self.assertTrue(all(t["write_paths"] == [] for t in x["proposed_tasks"]))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
+
+    def test_rust_desktop_does_not_claim_browser_qa_or_native_build(self):
+        x = self.preview(product_type="desktop-app", maturity="existing",
+                         target_platform="windows", technology="rust")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        profile = x["platform_assessment"]
+        self.assertEqual(profile["suggested_role_modes"]["qa"], "target-os-integration-qa")
+        self.assertFalse(profile["host_toolchains_verified"])
+        quality = next(t for t in x["proposed_tasks"] if t["task_key"] == "quality")
+        self.assertIn("browser QA alone is insufficient", quality["goal"])
+        with self.assertRaises(ValueError):
+            self.preview(product_type="desktop-app", target_platform="android")
+
+    def test_ml_quality_requires_reproducible_evaluation(self):
+        x = self.preview(product_type="data-automation", technology="pytorch")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        profile = x["platform_assessment"]
+        self.assertEqual(profile["suggested_role_modes"]["qa"], "reproducible-ml-evaluation")
+        qa = next(t for t in x["proposed_tasks"] if t["task_key"] == "quality")
+        self.assertIn("held-out evaluation", qa["goal"])
+        self.assertIn("data-leakage", qa["goal"])
+        self.assertFalse(x["tests_verified"])
+
+    def test_game_requires_platform_and_engine_qa_not_browser_only(self):
+        self.assertEqual(self.preview(product_type="game")["status"],
+                         "NEEDS_PLATFORM_CLASSIFICATION")
+        x = self.preview(product_type="game", target_platform="windows",
+                         technology="unity")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        self.assertIn("gameplay", x["platform_assessment"]["suggested_role_modes"]["qa"])
+        qa = next(t for t in x["proposed_tasks"] if t["task_key"] == "quality")
+        self.assertIn("real engine/build", qa["goal"])
+
+    def test_unknown_technology_rejected_and_no_install_or_side_effects(self):
+        with self.assertRaises(ValueError):
+            self.preview(technology="../install-tools")
+        with self.assertRaises(ValueError):
+            self.preview(product_type="mobile-app", target_platform="server")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
+
     def test_metadata_exposes_read_only_and_never_executes_host(self):
         m=next(x for x in orbit_mcp.TOOLS if x["name"]=="orbit_software_delivery_preview")
         self.assertTrue(m["annotations"]["readOnlyHint"])
