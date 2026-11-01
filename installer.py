@@ -21,9 +21,10 @@ HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
-    # Exact unmodified file SHA-256 digests from the immutable published
-    # v0.27.0 installer, observed in isolated source-tag upgrade CI.
-    # Custom/unknown files still fail closed before any write.
+    # Exact unmodified reference bytes emitted by the immutable v0.27.0
+    # installer, independently observed in the disposable CI tag-upgrade
+    # fixture. No wildcard file names or digest prefixes: any owner edit
+    # remains unrecognized and blocks the entire upgrade before writing.
     'f3fb5178201dd0d7ea73f1897756624eb387d4ce8b767ceebd1630636a6bae4d',  # v0.27.0 DOCS-AND-CONTEXT.md
     'f5c9a5933b95a4b12c54a9ce0dff491c1f7261c451dc75f291fc2049',  # v0.27.0 HANDOFF.md
     'a3a4d91df21f4b6bdc694e7586c6e058be01134b8f84c8c47445cfd49fdfa128',  # v0.27.0 TASK-LIFECYCLE.md
