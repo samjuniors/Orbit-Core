@@ -57,6 +57,7 @@ def _review_host_qa(build, fingerprint, build_id, qa_mode, base):
             and report.get("host_execution_attested") is False
             and isinstance(evidence, str)
             and orbit_build.valid_stage_evidence(stage_name, evidence)
+            and isinstance(saved.get("__orbit_feedback", []), list)
             and not any(isinstance(note, dict) and note.get("status") == "OPEN"
                         for note in saved.get("__orbit_feedback", []))
         )
@@ -224,6 +225,10 @@ def review(conn, root, project, args):
                 "reason": "This exact project has no such build."}
     if qa_mode in {"native", "host"}:
         return _review_host_qa(build, fingerprint, build_id, qa_mode, base)
+    if "BROWSER_QA" not in orbit_build.flow_for(build):
+        return {**base, "status": "HOLD_QA_MODE_MISMATCH",
+                "source_matches": True,
+                "reason": "Browser QA cannot substitute for a native/CLI build's recorded verification. Select the correct QA mode and inspect real host evidence."}
     if not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='browser_results'"
     ).fetchone():
