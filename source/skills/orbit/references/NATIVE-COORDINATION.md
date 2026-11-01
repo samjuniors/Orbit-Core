@@ -43,6 +43,14 @@ does not authorize external CLIs, another model or a fake subagent session.
    authorization. Pending reported tasks return
    `INDEPENDENT_TASK_REVIEW_REQUIRED`; all reviewed tasks return
    `INTEGRATION_REVIEW_REQUIRED`, **not** test PASS or permission to merge.
+   The complete accepted-task inventory is grouped into
+   `integration_review_batches` of at most 12 tasks, matching the separate
+   `orbit_swarm_integration_review` gate limit. Even a 40-task project must
+   review **every batch** against an independently obtained, consistent source
+   fingerprint, actual changed files, executed tests, source ownership and
+   host QA. The coordinator never calls the integration tool itself and
+   `integration_batches_reviewed=false` until independent review occurs;
+   no batch or all-task list grants merge/release authority.
    Failed, blocked, rework or cancelled work returns bounded
    `recovery_reviews` with only task key/revision, state, a safe next-action
    classification and explicit `retry_authorized=false`. If nothing is
@@ -90,8 +98,17 @@ when the task is small, unsafe to parallelize or native tooling is absent.
   gives only a permission-gated manual serial fallback.
 - For an accepted wave, use real source fingerprints, independent platform
   tests, QA/security and `orbit_swarm_integration_review` before integration.
-  That tool reads stored evidence and cannot independently certify Git/host
-  activity. Actual merge/publish remains a separate owner decision.
+  The existing integration gate checks **web browser QA** tied to source and
+  build revision. When the build is still in `BROWSER_QA`, the latest QA record
+  must match its current revision; after a successful transition to a later
+  stage, it must carry an explicit recorded `BROWSER_QA` PASS transition.
+  Source-matching QA from a different active build revision must HOLD.
+  The gate checks local records only and cannot independently certify
+  actual Git/host activity. **Native/mobile/desktop/CLI QA is not browser
+  QA**: it still needs separately inspected target-platform host results,
+  even if all task batches are accepted. The current browser-specific
+  gate may continue to HOLD for those platforms; do not invent a browser
+  run to override it. Actual merge/publish remains a separate owner decision.
 - `include_skill_review=true` only suggests later **read-only**
   `orbit_capability_select` checks for ready task objectives; the actual host
   must inspect the codebase, declare truthful product/platform/technology,
