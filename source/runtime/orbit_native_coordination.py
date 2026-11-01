@@ -7,6 +7,7 @@ grants permissions, writes tasks, merges source or marks tests as passed.
 from __future__ import annotations
 
 import orbit_delegation
+import orbit_skill_plan
 import orbit_swarm
 import orbit_swarm_draft
 import orbit_swarm_host
@@ -261,11 +262,16 @@ def preview(conn, root, project, args):
     recovery = _recovery_reviews(conn, root, project)
     review_skills = []
     if include_skills and scheduled.get("ready_now"):
+        # Coordination understands more IDE labels than the skill selector.
+        # Unsupported/native-generic hosts must not create a misleading
+        # or invalid orbit_capability_select(host=...) recommendation.
+        skill_host = host if host in orbit_skill_plan.HOSTS else "unknown"
         review_skills = [
             {"task_key": row["task_key"],
              "tool": "orbit_capability_select",
              "objective": row["goal"],
-             "host": host,
+             "host": skill_host,
+             "host_fit_unverified": skill_host == "unknown",
              "status": "OPTIONAL_READ_ONLY_REVIEW_NOT_EXECUTED",
              "next": ("Inspect the actual codebase and declare a truthful "
                       "project_profile before searching local skills; never "
