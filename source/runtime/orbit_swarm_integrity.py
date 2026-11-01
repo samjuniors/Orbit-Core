@@ -17,7 +17,7 @@ import orbit_tasks
 QA_MODES = frozenset({"web", "native", "host"})
 
 
-def _review_host_qa(build, fingerprint, build_id, qa_mode, base):
+def _review_host_qa(build, fingerprint, build_id, project, qa_mode, base):
     """Inspect existing source-pinned build evidence; never execute host tests.
 
     Native mode requires the real NATIVE_QA lifecycle stage (mobile/desktop).
@@ -51,6 +51,9 @@ def _review_host_qa(build, fingerprint, build_id, qa_mode, base):
             and report.get("source_identity_kind") ==
                 "BOUNDED_LOCAL_FILES_FINGERPRINT"
             and report.get("source_fingerprint") == fingerprint
+            and report.get("qa_project") == project
+            and report.get("qa_build_id") == build_id
+            and report.get("qa_stage") == stage_name
             and type(qa_revision) is int and qa_revision >= 1
             and qa_revision < build["revision"]
             and report.get("evidence_independently_verified") is False
@@ -224,7 +227,7 @@ def review(conn, root, project, args):
                 "source_matches": True,
                 "reason": "This exact project has no such build."}
     if qa_mode in {"native", "host"}:
-        return _review_host_qa(build, fingerprint, build_id, qa_mode, base)
+        return _review_host_qa(build, fingerprint, build_id, project, qa_mode, base)
     if "BROWSER_QA" not in orbit_build.flow_for(build):
         return {**base, "status": "HOLD_QA_MODE_MISMATCH",
                 "source_matches": True,
