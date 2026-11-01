@@ -1,0 +1,108 @@
+# Orbit v0.30 — host-native coordination preview
+
+**Status:** development source only. The existing host invokes real coding
+agents and controls permissions. Orbit is **not** a model, agent runner,
+automated installer, owner-approval authenticator, Git merge bot or release
+publisher. No source changes, reservations, sessions or test results are created
+by this tool.
+
+## Why this entry point exists
+
+Orbit v0.28 supplies adaptive software-delivery blueprints, v0.27 supplies
+task/DAG/host preflight, and v0.29 supplies a read-only installed-skill review.
+Previously the lead agent had to manually reconstruct which of those existing
+tools to use after a plan or during restart. `orbit_native_coordination_preview`
+is a **bounded, read-only decision bridge** over those exact existing tools.
+It neither bypasses them nor introduces a second task ledger.
+
+Use it only with an already selected and authorized `project_root` and
+project key, the real current Git/source state and caller-reported host
+tool names. Recover the project before planning. A missing native host tool
+does not authorize external CLIs, another model or a fake subagent session.
+
+## Three modes (one tool)
+
+1. **Draft**: Pass `draft_tasks` (1–12 full task records with role,
+   goal, reason, dependencies and explicit safe writable paths). Reuses the
+   existing `orbit_swarm_draft_preview` validator and 2-worker wave scheduler.
+   Returns `DRAFT_REVIEW_REQUIRED` and preview-only `orbit_task_plan` input
+   with `confirm_write=false`, or `HOLD_DRAFT_REVIEW` with no registration
+   suggestions. The owner and actual IDE must inspect real file ownership,
+   requirements and task scopes, then explicitly register one task at a time.
+   Never copy a blueprint's empty scopes into writable engineering work
+   without checking what each worker will actually change.
+2. **Registered task ledger**: Omit both `draft_tasks` and
+   `reserved_tasks`. Reuses `orbit_swarm_preview`, task ledger and
+   independent review history. A safe ready wave returns
+   `RESERVATION_REVIEW_REQUIRED` with up to two exact keys/revisions,
+   role/scope and `confirm_write=false`; no approval reference is created.
+   Actual `orbit_task_reserve` happens separately after genuine owner/host
+   authorization. Pending reported tasks return
+   `INDEPENDENT_TASK_REVIEW_REQUIRED`; all reviewed tasks return
+   `INTEGRATION_REVIEW_REQUIRED`, **not** test PASS or permission to merge.
+   Interrupted running/reserved sessions and root-sharing work from other
+   projects return HOLD without disclosing those other projects' identities.
+3. **Reserved host preflight**: Pass `reserved_tasks` (1–2 exact keys and
+   fresh revisions) alongside the reported `host`,
+   `available_host_tools` and `host_workspace_mode`. Reuses the existing
+   all-or-nothing `orbit_swarm_host_preflight` checks. Only after all selected
+   reservations pass does it return the original host-native handoff packets
+   and `HOST_INVOCATIONS_REQUIRED`. If a task is stale, already running,
+   unreserved, conflicts on a real/path-alias scope, violates read-only
+   permissions or lacks a native tool, **no partial handoffs** are returned.
+   The connected host uses its own real `invoke_subagent`, `spawn_agent`,
+   or `Agent/Task` interface; only after receiving the genuine host session
+   should it separately call `orbit_task_started` with a fresh revision.
+
+The tool accepts `max_parallel=1|2` (default 2) and never permits more
+selected reserved tasks than that width. A host can always choose fewer workers
+when the task is small, unsafe to parallelize or native tooling is absent.
+
+## Responsibilities and failure recovery
+
+- `orbit_task_report` requires the exact observed host session and a valid
+  actual terminal state; `orbit_task_review` requires separately inspected
+  source diff, changed files, actual QA and relevant acceptance evidence.
+  The MCP cannot inspect the private IDE session or attest reported results.
+- A task is not ready merely because a model claims it completed. A
+  `REPORTED_DONE` record needs independent review; dependencies only unlock
+  after `REVIEW_ACCEPTED`. A failed or blocked objective needs rework and
+  new permission, not silently reused historic approval.
+- An interrupted `RESERVED` or `RUNNING` state must be reconciled with
+  the actual IDE; no automatic timeout, worker termination, cancellation,
+  resurrection or fabricated session is allowed. An unavailable native tool
+  gives only a permission-gated manual serial fallback.
+- For an accepted wave, use real source fingerprints, independent platform
+  tests, QA/security and `orbit_swarm_integration_review` before integration.
+  That tool reads stored evidence and cannot independently certify Git/host
+  activity. Actual merge/publish remains a separate owner decision.
+- `include_skill_review=true` only suggests later **read-only**
+  `orbit_capability_select` checks for ready task objectives; the actual host
+  must inspect the codebase, declare truthful product/platform/technology,
+  inspect complete third-party skill text/license and separately authorize any
+  activation. This preview installs/loads no skills.
+
+## Suggested source-only sequence
+
+```text
+orbit_project_resume
+  -> orbit_software_delivery_preview (only for substantial work)
+  -> orbit_native_coordination_preview(draft_tasks=[...])
+  -> owner reviews actual repo, task scopes, and specialist responsibilities
+  -> orbit_task_plan individually (confirmed only after consent)
+  -> orbit_native_coordination_preview() for registered tasks
+  -> orbit_task_reserve individually (confirmed only after consent)
+  -> orbit_native_coordination_preview(reserved_tasks=[...])
+  -> connected host invokes its actual supported native tool
+  -> orbit_task_started (only with real returned session)
+  -> orbit_task_report (only with observed terminal state)
+  -> independent source/diff/test review, then orbit_task_review
+  -> next approved wave, integration gate, separate release authorization
+```
+
+**Quality state:** source and synthetic regression cases are authored on a
+v0.30 draft branch. The owner postponed automated and real-host acceptance;
+the presence of regression tests or tool annotations must not be reported as
+executed PASS. Windows, Linux, real Codex/Antigravity/Claude invocation,
+permission-denial and recovery acceptance remain pending. No v0.30 release
+exists from this development work.
