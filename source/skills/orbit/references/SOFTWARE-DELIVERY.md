@@ -13,11 +13,45 @@ tests, approved intake and relevant historical decisions. For small changes,
 use a focused plan and targeted tests instead of an all-product workflow.
 
 Call `orbit_software_delivery_preview(project_root,project,objective,product_type,
-operation,maturity,constraints)` with truthful user decisions. If
+operation,maturity,constraints,target_platform,technology)` with truthful user decisions. If
 `product_type` is omitted, the tool only reuses an actually approved intake;
 otherwise it returns `NEEDS_PROJECT_CLASSIFICATION`. The result is a
 **read-only proposed delivery plan**, not a validated requirement, agent
 invocation, accepted design, running service or release-ready product.
+
+## Platform-aware specialist responsibilities (ECC v0.28 slice)
+
+For mobile, desktop, OS-platform and game products, explicitly pass the
+`target_platform` after checking the actual existing code or asking the
+owner. Supported mobile choices: `android`, `ios`,
+`mobile-cross-platform`; desktop: `windows`, `linux`, `macos`,
+`desktop-cross-platform`; OS-platform: `windows`, `linux`, `macos`,
+`embedded`; game: `web`, `android`, `ios`, `windows`, `linux`,
+`macos`, `console`. Missing required classification returns
+`NEEDS_PLATFORM_CLASSIFICATION`, not a falsely ready web scaffold.
+An incompatible declared target is rejected rather than silently changed.
+
+Optional `technology` selects only a declaration-based responsibility
+overlay for known frameworks/languages such as `flutter`, `swiftui`,
+`kotlin-compose`, `react-native`, `rust`, `tauri`, `electron`,
+`dotnet`, `pytorch`, `unity` or `unreal`. Leave as `unspecified`
+when not confirmed, or `other` and explain the actual technology in
+the objective/constraints. No framework, SDK, agent or package is installed
+by this read-only classification. The tool returns `platform_assessment`
+with **caller-declared** target/technology, suggested modes over existing
+specialist roles and concrete target-host checks. This does NOT assert
+that a build chain is available or that a native build/test passed.
+
+The original specialist roles remain unchanged. QA must use actual
+target-platform evidence: mobile emulators/devices, desktop OS
+install/build tests, language-native CLI tests, game engine/playback tests
+or independent AI/ML held-out evaluation as appropriate. A platform
+profile is a starting point for a human-reviewed plan; discard irrelevant
+service/UI tasks if the actual codebase does not use those layers. Never
+assume React, a backend server, cloud deployment or browser-only QA for
+every product. If a required device, simulator, SDK or supported host
+tool is missing, report BLOCKED/NOT RUN and preserve the checkpoint;
+never infer PASS from a profile or a source-level test.
 
 ## Read the return values carefully
 
