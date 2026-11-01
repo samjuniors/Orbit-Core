@@ -52,6 +52,20 @@ the real host before further reservation. Do not reuse old approval tokens,
 invent session references, bypass workspace-read-only restrictions, or
 auto-accept dependencies merely because an agent reports completion.
 
+When every task is review accepted, the v0.30 coordinator returns
+`integration_review_batches` containing the **complete accepted task set**
+in 1–12-task groups (up to the 40-task graph ceiling). These are read-only
+`orbit_swarm_integration_review` *suggestions*, not invocations or a
+passing aggregate gate. Inspect one consistent live source snapshot, each
+task's exact revision and file scope, real QA/security results, and every
+batch before accepting integrated work. The browser integration guard rejects
+QA from a stale active build revision; a later stage requires a recorded
+`BROWSER_QA` PASS transition as well as current source identity. Browser
+QA is not a substitute for device/desktop/native target-platform tests.
+A native-only project may have to complete independent host acceptance
+outside the current web-specific integration gate; never fake a browser
+record or silently infer acceptance.
+
 **Development status:** v0.30 source only, 48-tool development inventory,
 automated and host acceptance NOT RUN at owner direction. Previously
 published installations may not expose this tool; continue the existing
