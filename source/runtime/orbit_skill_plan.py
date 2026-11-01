@@ -27,6 +27,7 @@ PLATFORMS = frozenset({
     "windows", "linux", "macos", "desktop-cross-platform", "embedded",
     "console", "other",
 })
+HOSTS = frozenset({"unknown", "codex", "claude-code", "antigravity"})
 OPERATIONS = frozenset({
     "build", "add-feature", "fix", "debug", "redesign", "maintain",
     "resume", "review", "research", "test",
@@ -61,7 +62,9 @@ def _profile(value):
     platform = value.get("platform", "other")
     operation = value.get("operation", "research")
     technologies = value.get("technologies", [])
-    if product not in PRODUCT_TYPES or platform not in PLATFORMS or operation not in OPERATIONS:
+    if (not isinstance(product, str) or not isinstance(platform, str)
+            or not isinstance(operation, str) or product not in PRODUCT_TYPES
+            or platform not in PLATFORMS or operation not in OPERATIONS):
         raise ValueError("Unknown project_profile classification")
     if not isinstance(technologies, list) or len(technologies) > 8 or any(
         not isinstance(t, str) or t not in TECHNOLOGIES for t in technologies
@@ -82,7 +85,9 @@ def _incompatible(name, profile):
     stack = set(profile["technologies"])
     if kind in {"mobile-app"} or profile["platform"] in {"android", "ios", "mobile-cross-platform"}:
         # React Native is mobile, but React DOM / Next.js is not.
-        if (parts & WEB_MARKERS) and not (parts & MOBILE_MARKERS) and "react-native" not in stack:
+        if (parts & WEB_MARKERS) and not (parts & MOBILE_MARKERS) and not (
+            "react" in parts and "native" in parts
+        ):
             return "WEB_ONLY_SKILL_ON_MOBILE"
     if kind in {"cli", "os-platform"} and (parts & WEB_MARKERS) and not parts & NATIVE_MARKERS:
         return "WEB_ONLY_SKILL_ON_SYSTEM_PROJECT"
@@ -103,6 +108,20 @@ def _allowed_bases(project_root, home):
     return [root / ".agents" / "skills", root / ".claude" / "skills",
             h / ".agents" / "skills", h / ".gemini" / "config" / "skills",
             h / ".claude" / "skills"]
+
+
+def _host_location_mismatch(path, host):
+    """A directory is only an installation *hint*, never host attestation."""
+    if host == "unknown":
+        return False
+    p = Path(path)
+    normalized = p.as_posix().lower()
+    if "/.claude/skills/" in normalized:
+        return host != "claude-code"
+    if "/.gemini/config/skills/" in normalized:
+        return host != "antigravity"
+    # .agents/skills is a shared candidate. Actual IDE integration may vary.
+    return False
 
 
 def _digest_installed(item, allowed):
@@ -147,9 +166,9 @@ def _validate_requested(names):
     return names
 
 
-def _manifest_identity(project_root, objective, profile):
+def _manifest_identity(project_root, objective, profile, host):
     payload = {"root": str(Path(project_root).resolve()), "objective": objective.strip(),
-               "profile": profile}
+               "profile": profile, "declared_host": host}
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -186,7 +205,7 @@ def _revalidate(expected, actual):
 
 def preview(project_root, objective, available, *, project_profile=None,
             requested_skill_names=None, review_manifest=None, home=None,
-            permission_state="UNKNOWN"):
+            permission_state="UNKNOWN", host="unknown"):
     """Build a bounded project-scoped shortlist and inspectable pin manifest.
 
     No writes, model calls, network fetches, host config edits or executions.
@@ -196,6 +215,8 @@ def preview(project_root, objective, available, *, project_profile=None,
         raise ValueError("objective must contain 1..1500 characters")
     if permission_state not in ("UNKNOWN", "APPROVED", "DENIED"):
         raise ValueError("Invalid permission_state")
+    if not isinstance(host, str) or host not in HOSTS:
+        raise ValueError("Unsupported host declaration")
     p = _profile(project_profile)
     requested = _validate_requested(requested_skill_names)
     installed = available.get("skills", [])
@@ -209,18 +230,22 @@ def preview(project_root, objective, available, *, project_profile=None,
     match_words = words | techwords
     records = {}
     duplicates = set()
+    excluded = []
     for row in installed[:120]:
         if not isinstance(row, dict):
             continue
         name = row.get("name")
         if not isinstance(name, str) or not SKILL_NAME.fullmatch(name) or name == "orbit":
             continue
+        if _host_location_mismatch(row.get("path", ""), host):
+            if requested is not None and name in requested:
+                excluded.append({"name": name, "reason": "SKILL_DIRECTORY_FOR_OTHER_HOST"})
+            continue
         if name in records:
             duplicates.add(name)
             continue
         records[name] = row
     matches = []
-    excluded = []
     for name in sorted(records):
         if name in duplicates:
             excluded.append({"name": name, "reason": "DUPLICATE_IDENTITY_REQUIRES_REVIEW"})
@@ -247,7 +272,8 @@ def preview(project_root, objective, available, *, project_profile=None,
             continue
         matches.append({"name": name, "sha256": digest, "match_score": score,
                         "source": "LOCAL_SKILL_UNVERIFIED", "license": "UNKNOWN_REVIEW_REQUIRED",
-                        "host_compatibility": "UNVERIFIED", "trust_review": "REQUIRED",
+                        "host_compatibility": "DIRECTORY_CANDIDATE_NOT_VERIFIED",
+                        "trust_review": "REQUIRED",
                         "reason": "DECLARED_STACK_AND_OBJECTIVE_OVERLAP" if score else "EXPLICITLY_REQUESTED_REVIEW"})
     matches.sort(key=lambda x: (-x["match_score"], x["name"]))
     if requested is not None:
@@ -259,7 +285,7 @@ def preview(project_root, objective, available, *, project_profile=None,
     missing = [name for name in (requested or []) if name not in {x["name"] for x in chosen}]
     pins = [{"name": x["name"], "sha256": x["sha256"]} for x in chosen]
     manifest = {"format": "orbit-skill-plan-v1",
-                "context_sha256": _manifest_identity(project_root, objective, p),
+                "context_sha256": _manifest_identity(project_root, objective, p, host),
                 "skills": pins}
     checked = _revalidate(review_manifest, manifest)
     denied = permission_state == "DENIED"
@@ -271,6 +297,8 @@ def preview(project_root, objective, available, *, project_profile=None,
     return {
         "status": status, "mode": "READ_ONLY_SKILL_PLAN",
         "project_profile": p,
+        "declared_host": host,
+        "host_source": "CALLER_DECLARED_NOT_ATTESTED",
         "profile_source": "CALLER_DECLARED_NOT_CODEBASE_VERIFIED",
         "shortlist": chosen, "excluded_requested": excluded[:MAX_SELECTED],
         "missing_requested": missing, "duplicate_skill_ids": sorted(duplicates)[:12],
