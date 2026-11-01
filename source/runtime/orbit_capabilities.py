@@ -385,13 +385,34 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
             if mismatch:
                 pref['project_fit']='NOT_RECOMMENDED_'+mismatch
     recommended['skill_plan_takes_precedence_for_project_fit']=True
-    adaptive_plan=adaptive_workflow(objective,categories,role,host_tools,candidates,permission_state)
+    # Legacy free-text matching is only a discovery hint. When the caller
+    # provided a project/host/manifest constraint, do not surface rejected,
+    # duplicate, missing or other-host skills as reusable candidates.
+    constrained = (project_profile is not None or requested_skill_names is not None
+                   or review_manifest is not None or host != 'unknown')
+    selected_names = {item['name'] for item in skill_plan['shortlist']}
+    reviewed_candidates = ([item for item in candidates
+                            if item['name'] in selected_names]
+                           if constrained else candidates)
+    if permission_state == 'DENIED':
+        recommended_action = 'HOLD_PERMISSION_DENIED'
+    elif skill_plan['status'].startswith('HOLD_'):
+        recommended_action = skill_plan['status']
+    elif constrained:
+        recommended_action = ('REVIEW_PROJECT_SKILL_SHORTLIST'
+                              if skill_plan['shortlist'] else
+                              'USE_EXISTING_HOST_CAPABILITIES')
+    else:
+        recommended_action = ('REUSE_AND_VERIFY_INSTALLED' if candidates else
+                              'BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL'
+                              if research else 'USE_EXISTING_HOST_CAPABILITIES')
+    adaptive_plan=adaptive_workflow(objective,categories,role,host_tools,reviewed_candidates,permission_state)
     browser_plan = browser_workflow(host_tools,available['mcp_servers'],permission_state=permission_state) if ('qa' in categories or role=='orbit-qa') else None
-    return {'objective':objective,'role_skill_preferences':recommended,'skill_plan':skill_plan,'categories':categories,'installed_matches':candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
+    return {'objective':objective,'role_skill_preferences':recommended,'skill_plan':skill_plan,'categories':categories,'installed_matches':reviewed_candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
             'optional_browser_provider':browser_provider,
             'browser_workflow':browser_plan,
             'adaptive_workflow':adaptive_plan,
             'permission_state_reported':permission_state,
             'permission_verified':False,
-        'recommended_action':'HOLD_PERMISSION_DENIED' if permission_state=='DENIED' else ('REUSE_AND_VERIFY_INSTALLED' if candidates else ('BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL' if research else 'USE_EXISTING_HOST_CAPABILITIES')),
+        'recommended_action':recommended_action,
         'policy':['Prefer current built-in host abilities and already installed vetted skills.', 'If a needed capability is missing, the agent may web-search reputable official sources using host tools. Never claim MCP performed the search.', 'Never execute npx/curl/script, install packages, add MCP connections, grant OAuth/scopes, or modify agent rules without reviewing source and obtaining applicable host/user approval.', 'Use the minimal permission and project scope; re-check actual tool availability after approved install; no best-in-class guarantee.']}
