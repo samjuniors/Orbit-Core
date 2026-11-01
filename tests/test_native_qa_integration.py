@@ -323,6 +323,20 @@ class NativeHostQAIntegrationTests(unittest.TestCase):
         self.assertEqual(self.review("native")["status"], "HOLD_QA_MODE_MISMATCH")
         self.assertEqual(before, self.conn.total_changes)
 
+    def test_inconsistent_persisted_stage_holds_without_exception(self):
+        self.build("native", stage="NATIVE_QA", revision=5)
+        self.advance("native")
+        self.conn.execute(
+            "UPDATE build_runs SET stage=? WHERE project=? AND root=? AND build_id=?",
+            ("NOT_A_RECORDED_STAGE", self.project, str(self.root), self.build_id),
+        )
+        self.conn.commit()
+        before = self.conn.total_changes
+        result = self.review("native")
+        self.assertEqual(result["status"], "HOLD_QA_MODE_MISMATCH")
+        self.assertFalse(result["tests_independently_verified"])
+        self.assertEqual(before, self.conn.total_changes)
+
     def test_malformed_feedback_entry_invalidates_host_qa(self):
         self.build("library", stage="VERIFY", revision=5)
         self.advance("host")
