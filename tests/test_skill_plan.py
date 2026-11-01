@@ -83,6 +83,33 @@ class SkillPlanPreviewTests(unittest.TestCase):
         self.assertIn("NOT_RECOMMENDED", react["project_fit"])
         self.assertFalse(result["permission_verified"])
 
+    def test_react_native_does_not_select_web_only_react(self):
+        self.skill("react-native-navigation", "Mobile React Native routing")
+        self.skill("react-best-practices", "React DOM web components")
+        x = self.select("Improve React Native navigation", project_profile={
+            "product_type": "mobile-app", "platform": "android",
+            "technologies": ["react-native"], "operation": "add-feature",
+        })
+        self.assertEqual(x["status"], "SKILL_SHORTLIST_READY")
+        self.assertEqual([a["name"] for a in x["shortlist"]],
+                         ["react-native-navigation"])
+
+    def test_declared_host_filters_other_host_skill_directory(self):
+        self.skill("python-api", "Python API build", folder=".claude/skills")
+        self.skill("api-contracts", "Python API validation", folder=".agents/skills")
+        denied = self.select("Python API", requested_skill_names=["python-api"],
+                             host="codex")
+        self.assertEqual(denied["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(denied["excluded_requested"][0]["reason"],
+                         "SKILL_DIRECTORY_FOR_OTHER_HOST")
+        codex = self.select("Python API", host="codex")
+        self.assertEqual([x["name"] for x in codex["shortlist"]],
+                         ["api-contracts"])
+        claude = self.select("Python API", host="claude-code")
+        self.assertIn("python-api", [x["name"] for x in claude["shortlist"]])
+        self.assertFalse(claude["host_tool_verified"])
+        self.assertEqual(claude["host_source"], "CALLER_DECLARED_NOT_ATTESTED")
+
     def test_rust_cli_and_ml_profile_do_not_require_browser_agents(self):
         self.skill("cargo-testing", "Rust cargo tests for desktop CLI")
         self.skill("react-dom", "React web browser UI")
