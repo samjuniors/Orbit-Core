@@ -194,6 +194,7 @@ class TestIntake(unittest.TestCase):
     database=sqlite3.connect(':memory:');database.row_factory=sqlite3.Row
     self.addCleanup(database.close);orbit_build.setup(database);orbit_intake.setup(database)
     root=self.root/(name);root.mkdir()
+    (root/'app.py').write_text('print("synthetic platform fixture")\n', encoding='utf-8')
     args={'project_root':str(root),'project':name}
     database.execute("""INSERT INTO orbit_project_intake VALUES
     (?, ?, 1, 'APPROVED', ?, '[]', '{}', 'guided', 'user-approved', 'now')""",
