@@ -54,7 +54,7 @@ class SkillPlanPreviewTests(unittest.TestCase):
         })
         self.assertEqual(x["status"], "SKILL_SHORTLIST_READY")
         self.assertEqual([s["name"] for s in x["shortlist"]], ["react-ui"])
-        self.assertEqual(x["manifest"]["format"], "orbit-skill-plan-v1")
+        self.assertEqual(x["manifest"]["format"], "orbit-skill-plan-v2")
         self.assertEqual(len(x["manifest"]["skills"][0]["sha256"]), 64)
         self.assertNotIn(str(self.root), json.dumps(x["manifest"]))
         self.assertTrue(x["needs_license_review"])
@@ -423,6 +423,92 @@ class SkillPlanPreviewTests(unittest.TestCase):
         self.assertEqual(result["discovered_count"], 0)
         self.assertEqual(result["manifest"]["skills"], [])
         self.assertFalse(result["activation_allowed"])
+
+    def test_helper_reference_change_invalidates_tree_pin(self):
+        self.skill("python-api", "Python API validation")
+        helper = self.root / ".agents" / "skills" / "python-api" / "references" / "rules.md"
+        helper.parent.mkdir()
+        helper.write_text("Rule A", encoding="utf-8")
+        options = {"requested_skill_names": ["python-api"]}
+        original = self.select("Python API", **options)
+        self.assertEqual(original["status"], "SKILL_SHORTLIST_READY")
+        self.assertEqual(original["manifest"]["format"], "orbit-skill-plan-v2")
+        self.assertEqual(len(original["manifest"]["skills"][0]["tree_sha256"]), 64)
+        self.assertEqual(len(original["manifest"]["skills"][0]["location_sha256"]), 64)
+        self.assertEqual(original["shortlist"][0]["files_fingerprinted"], 2)
+        expected = original["manifest"]
+        helper.write_text("Rule B", encoding="utf-8")
+        changed = self.select("Python API", review_manifest=expected, **options)
+        self.assertEqual(changed["status"], "HOLD_STALE_MANIFEST")
+        self.assertEqual(changed["revalidation"]["diff"]["changed"], ["python-api"])
+        self.assertEqual(changed["manifest"]["skills"][0]["sha256"],
+                         expected["skills"][0]["sha256"])
+        self.assertNotEqual(changed["manifest"]["skills"][0]["tree_sha256"],
+                            expected["skills"][0]["tree_sha256"])
+        self.assertFalse(changed["activation_allowed"])
+
+    def test_legacy_v1_manifest_requires_fresh_tree_review(self):
+        self.skill("python-api", "Python API validation")
+        x = self.select("Python API", requested_skill_names=["python-api"])
+        old = {"format": "orbit-skill-plan-v1",
+               "context_sha256": x["manifest"]["context_sha256"],
+               "skills": [{"name": "python-api",
+                           "sha256": x["manifest"]["skills"][0]["sha256"]}]}
+        y = self.select("Python API", requested_skill_names=["python-api"],
+                        review_manifest=old)
+        self.assertEqual(y["status"], "HOLD_STALE_MANIFEST")
+        self.assertEqual(y["revalidation"]["status"],
+                         "HOLD_LEGACY_MANIFEST_REVIEW_REQUIRED")
+        self.assertTrue(y["revalidation"]["diff"]["format_changed"])
+        self.assertFalse(y["activation_allowed"])
+
+    def test_identical_skill_bytes_moved_from_project_to_user_holds(self):
+        self.skill("python-api", "Python API validation")
+        old = self.select("Python API", requested_skill_names=["python-api"])
+        source = self.root / ".agents" / "skills" / "python-api"
+        target = self.home / ".agents" / "skills" / "python-api"
+        target.parent.mkdir(parents=True)
+        source.rename(target)
+        moved = self.select("Python API", requested_skill_names=["python-api"],
+                            review_manifest=old["manifest"])
+        self.assertEqual(moved["status"], "HOLD_STALE_MANIFEST")
+        self.assertEqual(moved["revalidation"]["diff"]["changed"], ["python-api"])
+        self.assertEqual(moved["manifest"]["skills"][0]["sha256"],
+                         old["manifest"]["skills"][0]["sha256"])
+        self.assertNotEqual(moved["manifest"]["skills"][0]["location_sha256"],
+                            old["manifest"]["skills"][0]["location_sha256"])
+        self.assertEqual(moved["shortlist"][0]["provenance_hint"]["installation_scope"],
+                         "USER_LOCAL")
+
+    def test_bounded_skill_tree_rejects_symlinked_helper_and_oversized_file(self):
+        self.skill("python-api", "Python API validation")
+        skill_root = self.root / ".agents" / "skills" / "python-api"
+        oversized = skill_root / "helper.dat"
+        oversized.write_bytes(b"x" * (orbit_skill_plan.MAX_SKILL_TREE_FILE_BYTES + 1))
+        blocked = self.select("Python API", requested_skill_names=["python-api"])
+        self.assertEqual(blocked["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(blocked["manifest"]["skills"], [])
+        self.assertFalse(blocked["activation_allowed"])
+        oversized.unlink()
+        reference = self.root.parent / "outside-secret.txt"
+        reference.write_text("private", encoding="utf-8")
+        try:
+            (skill_root / "helper-link.txt").symlink_to(reference)
+        except (OSError, NotImplementedError):
+            self.skipTest("Symlink creation unavailable on this host")
+        linked = self.select("Python API", requested_skill_names=["python-api"])
+        self.assertEqual(linked["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(linked["manifest"]["skills"], [])
+
+    def test_v2_manifest_rejects_malformed_tree_and_location_digests(self):
+        self.skill("python-api", "Python API validation")
+        expected = self.select("Python API", requested_skill_names=["python-api"])["manifest"]
+        for field in ("tree_sha256", "location_sha256"):
+            broken_pin = {**expected["skills"][0], field: "invalid"}
+            broken = {**expected, "skills": [broken_pin]}
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.select("Python API", requested_skill_names=["python-api"],
+                            review_manifest=broken)
 
     def test_legacy_selector_remains_47_tools_and_schema_rejects_writes(self):
         metadata = next(m for m in orbit_mcp.TOOLS
