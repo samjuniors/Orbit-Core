@@ -261,6 +261,22 @@ class SoftwareDeliveryPreviewTests(unittest.TestCase):
         self.assertIn("data-leakage", qa["goal"])
         self.assertFalse(x["tests_verified"])
 
+    def test_native_local_first_does_not_invent_backend_service(self):
+        mobile = self.preview(product_type="mobile-app",
+                              target_platform="android", technology="flutter")
+        self.assertEqual(mobile["status"], "BLUEPRINT_READY")
+        self.assertEqual(mobile["service_scope"], "auto")
+        self.assertNotIn("service", {t["task_key"] for t in mobile["proposed_tasks"]})
+        desktop = self.preview(product_type="desktop-app", target_platform="linux",
+                               technology="rust")
+        self.assertNotIn("service", {t["task_key"] for t in desktop["proposed_tasks"]})
+        cloud_mobile = self.preview(product_type="mobile-app",
+                                    target_platform="android", service_scope="required")
+        self.assertIn("service", {t["task_key"] for t in cloud_mobile["proposed_tasks"]})
+        local_web = self.preview(product_type="web-app", service_scope="not-required")
+        self.assertNotIn("service", {t["task_key"] for t in local_web["proposed_tasks"]})
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
+
     def test_game_requires_platform_and_engine_qa_not_browser_only(self):
         self.assertEqual(self.preview(product_type="game")["status"],
                          "NEEDS_PLATFORM_CLASSIFICATION")
