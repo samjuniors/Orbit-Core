@@ -40,7 +40,15 @@ PLATFORM_TARGETS = {
     "desktop-app": frozenset({"windows", "linux", "macos", "desktop-cross-platform"}),
     "os-platform": frozenset({"windows", "linux", "macos", "embedded"}),
     "game": frozenset({"web", "android", "ios", "windows", "linux", "macos", "console"}),
+    "website": frozenset({"web", "server"}),
+    "web-app": frozenset({"web", "server"}),
+    "api-service": frozenset({"server", "windows", "linux", "macos"}),
+    "cli": frozenset({"windows", "linux", "macos", "server"}),
+    "sdk-library": frozenset({"windows", "linux", "macos", "server", "web", "android", "ios"}),
+    "plugin-mcp": frozenset({"windows", "linux", "macos", "server"}),
+    "data-automation": frozenset({"windows", "linux", "macos", "server"}),
 }
+NATIVE_PLATFORM_TYPES = frozenset({"mobile-app", "desktop-app", "os-platform", "game"})
 TARGET_PLATFORMS = frozenset().union(*PLATFORM_TARGETS.values()) | {"server"}
 TECHNOLOGIES = frozenset({
     "unspecified", "flutter", "swiftui", "kotlin-compose", "react-native",
@@ -55,11 +63,11 @@ def _platform_profile(kind, target, technology):
     if technology not in TECHNOLOGIES:
         raise ValueError("Unsupported technology classification")
     allowed = PLATFORM_TARGETS.get(kind)
-    if allowed and target == "unspecified":
+    if kind in NATIVE_PLATFORM_TYPES and target == "unspecified":
         return {"status": "NEEDS_PLATFORM_CLASSIFICATION",
                 "allowed_target_platforms": sorted(allowed),
                 "next": "Inspect the existing code and ask for the actual target platform; do not assume web, iOS or Android."}
-    if allowed and target not in allowed:
+    if allowed and target not in allowed and target != "unspecified":
         raise ValueError("Target platform is incompatible with product type")
 
     checks = []
