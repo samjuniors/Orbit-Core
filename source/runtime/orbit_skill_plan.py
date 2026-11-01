@@ -485,7 +485,10 @@ def preview(project_root, objective, available, *, project_profile=None,
     status = ("HOLD_PERMISSION_DENIED" if denied else
               "HOLD_REQUESTED_SKILLS_UNAVAILABLE" if missing else
               "SKILL_SHORTLIST_READY" if chosen else "NO_RELEVANT_INSTALLED_SKILLS")
-    if checked["status"].startswith("HOLD_"):
+    # An explicit denied permission remains the primary safety status, even
+    # if a previously reviewed manifest has also become stale. Preserve the
+    # independent revalidation result so both blockers are visible.
+    if checked["status"].startswith("HOLD_") and not denied:
         status = "HOLD_STALE_MANIFEST"
     return {
         "status": status, "mode": "READ_ONLY_SKILL_PLAN",
