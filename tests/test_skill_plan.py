@@ -295,6 +295,102 @@ class SkillPlanPreviewTests(unittest.TestCase):
                     )
         self.assertEqual(self.db.total_changes, 0)
 
+    def test_framework_mismatch_on_same_platform_fails_closed(self):
+        self.skill("flutter-layout", "Build mobile screen layouts")
+        self.skill("kotlin-compose-layout", "Build mobile screen layouts")
+        self.skill("react-native-layout", "Build mobile screen layouts")
+        flutter = self.select("Build mobile screen layouts", project_profile={
+            "product_type": "mobile-app", "platform": "android",
+            "technologies": ["flutter", "dart"], "operation": "build",
+        })
+        self.assertEqual([row["name"] for row in flutter["shortlist"]],
+                         ["flutter-layout"])
+        kotlin = self.select("Build mobile screen layouts", project_profile={
+            "product_type": "mobile-app", "platform": "android",
+            "technologies": ["kotlin-compose"], "operation": "build",
+        })
+        self.assertEqual([row["name"] for row in kotlin["shortlist"]],
+                         ["kotlin-compose-layout"])
+        rejected = self.select("Build mobile screen layouts", project_profile={
+            "product_type": "mobile-app", "platform": "android",
+            "technologies": ["flutter"], "operation": "build",
+        }, requested_skill_names=["kotlin-compose-layout"])
+        self.assertEqual(rejected["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(rejected["excluded_requested"][0]["reason"],
+                         "DIFFERENT_DECLARED_FRAMEWORK_REQUIRES_REVIEW")
+
+    def test_react_and_nextjs_compatibility_without_other_web_frameworks(self):
+        self.skill("react-patterns", "Web UI components")
+        self.skill("nextjs-routing", "Web UI components")
+        self.skill("vue-components", "Web UI components")
+        react = self.select("Build web UI components", project_profile={
+            "product_type": "web-app", "platform": "web",
+            "technologies": ["react"], "operation": "build",
+        })
+        self.assertEqual([x["name"] for x in react["shortlist"]],
+                         ["react-patterns"])
+        nextjs = self.select("Build web UI components", project_profile={
+            "product_type": "web-app", "platform": "web",
+            "technologies": ["nextjs"], "operation": "build",
+        })
+        self.assertEqual({x["name"] for x in nextjs["shortlist"]},
+                         {"react-patterns", "nextjs-routing"})
+
+    def test_ml_and_game_framework_mismatch(self):
+        self.skill("pytorch-evaluation", "Reproducible model evaluation")
+        self.skill("tensorflow-evaluation", "Reproducible model evaluation")
+        ml = self.select("Review model evaluation", project_profile={
+            "product_type": "data-automation", "platform": "server",
+            "technologies": ["pytorch"], "operation": "review",
+        })
+        self.assertEqual([x["name"] for x in ml["shortlist"]],
+                         ["pytorch-evaluation"])
+        self.skill("unity-testing", "Game build validation")
+        self.skill("unreal-testing", "Game build validation")
+        game = self.select("Review game build validation", project_profile={
+            "product_type": "game", "platform": "windows",
+            "technologies": ["unity"], "operation": "review",
+        })
+        self.assertEqual([x["name"] for x in game["shortlist"]],
+                         ["unity-testing"])
+
+    def test_unverified_provenance_shows_scope_not_private_paths(self):
+        self.skill("api-project", "Python API contracts")
+        global_skill = self.home / ".agents" / "skills" / "api-user" / "SKILL.md"
+        global_skill.parent.mkdir(parents=True)
+        global_skill.write_text(
+            "---\\nname: api-user\\ndescription: Python API contracts\\n---\\nRead only\\n",
+            encoding="utf-8"
+        )
+        result = self.select("Python API")
+        rows = {x["name"]: x for x in result["shortlist"]}
+        self.assertEqual(rows["api-project"]["provenance_hint"]["installation_scope"],
+                         "PROJECT_LOCAL")
+        self.assertEqual(rows["api-user"]["provenance_hint"]["installation_scope"],
+                         "USER_LOCAL")
+        self.assertEqual(rows["api-project"]["risk_review"], "REQUIRED")
+        self.assertFalse(rows["api-user"]["provenance_hint"]["origin_verified"])
+        self.assertNotIn(str(self.root), json.dumps(result["manifest"]))
+        self.assertNotIn(str(self.home), json.dumps(result["manifest"]))
+
+    def test_symlinked_skill_parent_not_read_as_installed(self):
+        external = self.root.parent / "external-skills"
+        skill = external / "skills" / "python-api" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text(
+            "---\\nname: python-api\\ndescription: Python API\\n---\\nNot trusted\\n",
+            encoding="utf-8"
+        )
+        try:
+            (self.root / ".agents").symlink_to(external, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("Symlink creation unavailable on this host")
+        result = self.select("Python API", requested_skill_names=["python-api"])
+        self.assertEqual(result["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(result["discovered_count"], 0)
+        self.assertEqual(result["manifest"]["skills"], [])
+        self.assertFalse(result["activation_allowed"])
+
     def test_legacy_selector_remains_47_tools_and_schema_rejects_writes(self):
         metadata = next(m for m in orbit_mcp.TOOLS
                         if m["name"] == "orbit_capability_select")
