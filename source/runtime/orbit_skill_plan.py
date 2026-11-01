@@ -99,7 +99,10 @@ def _incompatible(name, profile):
     """Conservatively block a skill strongly tied to another platform."""
     parts = _tokens(name.replace("-", " "))
     kind = profile["product_type"]
-    stack = set(profile["technologies"])
+    # React Native uses a different UI/runtime contract than React DOM,
+    # despite sharing the word "react" in its skill identifier.
+    if "react" in parts and "native" in parts and kind not in {"mobile-app"}:
+        return "REACT_NATIVE_SKILL_ON_NONMOBILE"
     if kind in {"mobile-app"} or profile["platform"] in {"android", "ios", "mobile-cross-platform"}:
         # React Native is mobile, but React DOM / Next.js is not.
         if (parts & WEB_MARKERS) and not (parts & MOBILE_MARKERS) and not (
