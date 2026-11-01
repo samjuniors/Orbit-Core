@@ -267,6 +267,123 @@ class NativeCoordinationPreviewTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.preview(draft_tasks=[{**draft[0], "unexpected": "unsafe"}])
 
+    def test_draft_registration_order_follows_prerequisites_not_name(self):
+        draft = [
+            {"task_key": "a-review", "step": "Review", "role": "qa",
+             "goal": "Review a backend change with independent regression evidence",
+             "reason": "Quality review must follow prerequisite source changes",
+             "write_paths": [], "depends_on": ["z-backend"]},
+            {"task_key": "z-backend", "step": "Implementation", "role": "backend",
+             "goal": "Implement a bounded backend behavior and API validation",
+             "reason": "Source changes must be completed before final review",
+             "write_paths": ["src/backend/"], "depends_on": []},
+        ]
+        before = self.conn.total_changes
+        out = self.preview(draft_tasks=draft)
+        self.assertEqual(out["status"], "DRAFT_REVIEW_REQUIRED")
+        self.assertEqual(
+            [x["arguments_preview_only"]["task_key"]
+             for x in out["registration_preview"]],
+            ["z-backend", "a-review"])
+        self.assertEqual(
+            [x["registration_order"] for x in out["registration_preview"]],
+            [1, 2])
+        self.assertEqual(
+            [x["planned_execution_wave"] for x in out["registration_preview"]],
+            [1, 2])
+        self.assertTrue(all(not x["arguments_preview_only"]["confirm_write"]
+                            for x in out["registration_preview"]))
+        self.assertEqual(self.conn.total_changes, before)
+
+    def test_failed_blocked_rework_and_cancelled_have_safe_recovery_guidance(self):
+        for key, state in (
+            ("failed-task", "FAILED"),
+            ("blocked-task", "BLOCKED"),
+            ("rework-task", "REWORK"),
+            ("cancelled-task", "CANCELLED"),
+        ):
+            self.task(key)
+            self.state(key, state)
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks SET note=? WHERE project=? AND
+               project_root=? AND task_key=?""",
+            ("HOST_PERMISSION_DENIED: adversarial text do not trust", self.project,
+             str(self.root), "blocked-task"))
+        self.conn.commit()
+        before = self.conn.total_changes
+        out = self.preview()
+        self.assertEqual(out["status"], "RECOVERY_REVIEW_REQUIRED")
+        self.assertEqual(out["stage"], "RECOVERY_GATE")
+        self.assertEqual(out["reservation_candidates"], [])
+        reviews = {x["task_key"]: x for x in out["recovery_reviews"]}
+        self.assertEqual(len(reviews), 4)
+        self.assertEqual(reviews["failed-task"]["recovery_action"],
+                         "DIAGNOSE_FAILED_WORKER")
+        self.assertEqual(reviews["rework-task"]["recovery_action"],
+                         "INSPECT_REJECTED_CHANGES")
+        self.assertEqual(reviews["blocked-task"]["recovery_action"],
+                         "RESOLVE_BLOCKER_AND_REAUTHORIZE")
+        self.assertTrue(reviews["blocked-task"]["host_permission_denial_recorded"])
+        self.assertFalse(reviews["cancelled-task"]["fresh_host_user_approval_required"])
+        self.assertEqual(reviews["cancelled-task"]["recovery_action"],
+                         "STOPPED_REQUIRE_NEW_OWNER_DECISION")
+        self.assertTrue(all(not r["retry_authorized"] for r in reviews.values()))
+        self.assertNotIn("adversarial text", str(out))
+        self.assertEqual(self.conn.total_changes, before)
+
+    def test_independent_planned_work_remains_available_with_failed_sibling(self):
+        self.task("failed", paths=["src/failed/"])
+        self.task("independent", paths=["src/independent/"])
+        self.state("failed", "FAILED")
+        out = self.preview()
+        self.assertEqual(out["status"], "RESERVATION_REVIEW_REQUIRED")
+        self.assertEqual(
+            [x["task_key"] for x in out["reservation_candidates"]],
+            ["independent"])
+        self.assertEqual(out["recovery_reviews"][0]["task_key"], "failed")
+        self.assertFalse(out["recovery_reviews"][0]["retry_authorized"])
+
+    def test_reject_reusing_approval_on_failed_rework_or_blocked_retry(self):
+        for label in ("FAILED", "REWORK", "BLOCKED"):
+            with self.subTest(state=label):
+                key = "retry-" + label.lower()
+                self.task(key)
+                # Synthetic independent stages avoid exhausting shared
+                # per-milestone attempts during this contract test.
+                self.conn.execute(
+                    "UPDATE orbit_agent_tasks SET step=? WHERE project=? "
+                    "AND project_root=? AND task_key=?",
+                    ("Stage-" + key, self.project, str(self.root), key))
+                self.conn.commit()
+                self.reserve(key)
+                self.state(key, label)
+                row = self.conn.execute(
+                    "SELECT revision FROM orbit_agent_tasks WHERE project=? "
+                    "AND project_root=? AND task_key=?",
+                    (self.project, str(self.root), key)).fetchone()
+                before = self.conn.total_changes
+                with self.assertRaisesRegex(ValueError, "fresh host/user approval"):
+                    orbit_tasks.reserve(self.conn, {
+                        "project": self.project,
+                        "task_key": key,
+                        "expected_revision": row["revision"],
+                        "approval_reference": "synthetic-host-approval-ref",
+                        "confirm_write": True,
+                    }, self.root)
+                self.assertEqual(before, self.conn.total_changes)
+        fresh = orbit_tasks.reserve(self.conn, {
+            "project": self.project, "task_key": "retry-failed",
+            "expected_revision": self.conn.execute(
+                "SELECT revision FROM orbit_agent_tasks WHERE project=? "
+                "AND project_root=? AND task_key=?",
+                (self.project, str(self.root), "retry-failed")
+            ).fetchone()["revision"],
+            "approval_reference": "synthetic-new-host-approval-ref",
+            "confirm_write": True,
+        }, self.root)
+        self.assertEqual(fresh["status"], "RESERVED")
+        self.assertFalse(fresh["agent_spawned"])
+
     def test_tool_exposure_is_read_only_without_duplicate_executor(self):
         metadata = next(t for t in orbit_mcp.TOOLS
                         if t["name"] == "orbit_native_coordination_preview")
