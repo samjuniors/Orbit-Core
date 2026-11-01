@@ -50,6 +50,59 @@ def _accepted_for_integration(conn, root, project):
     ]
 
 
+def _recovery_reviews(conn, root, project):
+    """Bounded advice for interrupted objectives, never a retry authorization.
+
+    Do not echo saved notes/approval tokens or an old host session. Those
+    records are caller-reported, may contain untrusted text, and cannot prove
+    a worker ended safely or that a new attempt has permission.
+    """
+    rows = conn.execute(
+        """SELECT task_key, revision, status, note, host_session
+           FROM orbit_agent_tasks
+           WHERE project=? AND project_root=?
+             AND status IN ('REWORK','FAILED','BLOCKED','CANCELLED')
+           ORDER BY task_key LIMIT ?""",
+        (project, str(root), MAX_COORDINATION_ACTIONS),
+    ).fetchall()
+    advice = {
+        "REWORK": ("INSPECT_REJECTED_CHANGES",
+                   "Review the independent rejection, diff and tests; revise the "
+                   "scope before requesting fresh host/user approval."),
+        "FAILED": ("DIAGNOSE_FAILED_WORKER",
+                   "Inspect real host failure, partially changed files and "
+                   "test evidence; repair or replan before a fresh attempt."),
+        "BLOCKED": ("RESOLVE_BLOCKER_AND_REAUTHORIZE",
+                    "Inspect the actual host refusal or unfinished objective. "
+                    "Do not reuse denied consent; request a new real approval "
+                    "only if the owner chooses to retry."),
+        "CANCELLED": ("STOPPED_REQUIRE_NEW_OWNER_DECISION",
+                      "A cancelled task cannot be reserved again as-is. Keep "
+                      "history; start a separately scoped new task only after "
+                      "the owner explicitly chooses to resume the objective."),
+    }
+    result = []
+    for row in rows:
+        code, next_step = advice[row["status"]]
+        result.append({
+            "task_key": row["task_key"],
+            "expected_revision": row["revision"],
+            "recorded_status": row["status"],
+            "recovery_action": code,
+            "host_permission_denial_recorded": (
+                row["status"] == "BLOCKED" and
+                row["note"].startswith("HOST_PERMISSION_DENIED:")
+            ),
+            "historical_session_present": bool(row["host_session"]),
+            "retry_authorized": False,
+            "state_written": False,
+            "independent_diff_and_test_review_required": True,
+            "fresh_host_user_approval_required": row["status"] != "CANCELLED",
+            "next": next_step,
+        })
+    return result
+
+
 def preview(conn, root, project, args):
     """Return the next safe coordination step, never perform that step."""
     host = args.get("host", "generic")
@@ -120,19 +173,40 @@ def preview(conn, root, project, args):
                 "handoffs": [],
                 "next": "Resolve the draft validation hold before registering any tasks.",
             }
+        # The draft validator returns proposed_tasks by task key, not by
+        # dependency order. Use its validated waves to show a deterministic
+        # registration order, so an early task never points at an unregistered
+        # prerequisite if the host follows the preview one task at a time.
+        by_key = {task["task_key"]: task for task in result["proposed_tasks"]}
+        ordered = [(wave["wave"], key)
+                   for wave in result["review_waves"]
+                   for key in wave["task_keys"]]
+        if (len(ordered) != len(by_key) or
+                set(key for _wave, key in ordered) != set(by_key)):
+            return {
+                **base, "status": "HOLD_DRAFT_REVIEW",
+                "stage": "DRAFT_VALIDATION",
+                "draft_status": "HOLD_UNSAFE_REGISTRATION_ORDER",
+                "draft_review": result, "registration_preview": [],
+                "handoffs": [],
+                "next": "Recheck the complete draft DAG before any registration.",
+            }
         registration = [
             {"tool": "orbit_task_plan",
+             "registration_order": index + 1,
+             "planned_execution_wave": wave,
              "arguments_preview_only": {
                  "project_root": str(root), "project": project,
-                 "task_key": task["task_key"], "step": task["step"],
-                 "role": task["role"], "goal": task["goal"],
-                 "reason": task["reason"],
-                 "write_paths": task["write_paths"],
-                 "depends_on": task["depends_on"],
+                 "task_key": key, "step": by_key[key]["step"],
+                 "role": by_key[key]["role"],
+                 "goal": by_key[key]["goal"],
+                 "reason": by_key[key]["reason"],
+                 "write_paths": by_key[key]["write_paths"],
+                 "depends_on": by_key[key]["depends_on"],
                  "confirm_write": False,
              },
              "real_owner_approval_required": True}
-            for task in result["proposed_tasks"]
+            for index, (wave, key) in enumerate(ordered)
         ]
         return {
             **base, "status": "DRAFT_REVIEW_REQUIRED",
@@ -184,6 +258,7 @@ def preview(conn, root, project, args):
     counts = base["task_state_counts"]
     pending_review = _reported_for_review(conn, root, project)
     accepted = _accepted_for_integration(conn, root, project)
+    recovery = _recovery_reviews(conn, root, project)
     review_skills = []
     if include_skills and scheduled.get("ready_now"):
         review_skills = [
@@ -200,6 +275,10 @@ def preview(conn, root, project, args):
     shared = {
         **base, "scheduler": scheduled,
         "pending_independent_reviews": pending_review,
+        "recovery_reviews": recovery,
+        "recovery_list_truncated": sum(
+            counts.get(state, 0) for state in ("REWORK", "FAILED", "BLOCKED", "CANCELLED")
+        ) > MAX_COORDINATION_ACTIONS,
         "review_accepted_tasks": accepted,
         "accepted_task_list_truncated": counts.get("REVIEW_ACCEPTED", 0) > MAX_COORDINATION_ACTIONS,
         "pending_review_list_truncated": counts.get("REPORTED_DONE", 0) > MAX_COORDINATION_ACTIONS,
@@ -207,9 +286,15 @@ def preview(conn, root, project, args):
         "handoffs": [],
     }
     if scheduled["status"].startswith("HOLD_") and scheduled["status"] != "HOLD_NATIVE_TOOL_UNAVAILABLE":
+        host_reconciliation = orbit_tasks.active_reconciliation(conn, root, project)
         return {
             **shared, "status": scheduled["status"], "stage": "HOLD_RECONCILE",
-            "host_reconciliation": orbit_tasks.active_reconciliation(conn, root, project),
+            "host_reconciliation": host_reconciliation,
+            # Aggregate count only; never reveal another project's identity.
+            "active_records_outside_selected_project": max(
+                0, scheduled.get("active_records_same_root", 0) -
+                len(host_reconciliation["active"])
+            ),
             "next": ("Reconcile host liveness, task scope and dependencies using "
                      "the authoritative IDE before new reservations."),
         }
@@ -228,6 +313,12 @@ def preview(conn, root, project, args):
             stage, status, next_step = (
                 "PLAN_FIRST", "NO_REGISTERED_TASKS",
                 "Use the approved delivery blueprint and orbit_swarm_draft_preview before registering scoped tasks.")
+        elif recovery:
+            stage, status, next_step = (
+                "RECOVERY_GATE", "RECOVERY_REVIEW_REQUIRED",
+                "Inspect listed rework/failed/blocked/cancelled objectives and "
+                "their dependent tasks. Never silently retry, reuse old consent "
+                "or reopen cancelled work; obtain fresh owner/host decisions.")
         elif counts.get("REVIEW_ACCEPTED", 0) == sum(counts.values()):
             stage, status, next_step = (
                 "INTEGRATION_GATE", "INTEGRATION_REVIEW_REQUIRED",
@@ -235,7 +326,8 @@ def preview(conn, root, project, args):
         else:
             stage, status, next_step = (
                 "REVIEW_DEPENDENCIES_OR_REPLAN", "NO_RUNNABLE_TASKS",
-                "Resolve unmet dependencies, failed/rework/blocked tasks and required owner approvals; do not silently retry.")
+                "Resolve unmet dependencies or blocked tasks. Inspect actual "
+                "host work and approved scopes before any new task or retry.")
         return {
             **shared, "status": status, "stage": stage,
             "reservation_candidates": [], "next": next_step,
