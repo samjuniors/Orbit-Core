@@ -33,6 +33,10 @@ def _review_host_qa(build, fingerprint, build_id, project, qa_mode, base):
         return {**base, "status": "HOLD_QA_MODE_MISMATCH",
                 "source_matches": True,
                 "reason": "This build flow does not support the requested host QA mode; inspect the actual approved product lifecycle."}
+    if build["stage"] not in flow:
+        return {**base, "status": "HOLD_QA_MODE_MISMATCH",
+                "source_matches": True,
+                "reason": "The recorded build stage is missing from its frozen lifecycle; reconcile the build before QA review."}
     if flow.index(build["stage"]) <= flow.index(stage_name):
         return {**base, "status": "HOLD_HOST_QA_STAGE",
                 "source_matches": True,
