@@ -33,6 +33,107 @@ STAGES = {
 }
 
 
+# The platform matrix describes host checks, not installed toolchains or
+# preapproved skills. It extends existing roles instead of adding 71 agents.
+PLATFORM_TARGETS = {
+    "mobile-app": frozenset({"android", "ios", "mobile-cross-platform"}),
+    "desktop-app": frozenset({"windows", "linux", "macos", "desktop-cross-platform"}),
+    "os-platform": frozenset({"windows", "linux", "macos", "embedded"}),
+    "game": frozenset({"web", "android", "ios", "windows", "linux", "macos", "console"}),
+}
+TARGET_PLATFORMS = frozenset().union(*PLATFORM_TARGETS.values()) | {"server"}
+TECHNOLOGIES = frozenset({
+    "unspecified", "flutter", "swiftui", "kotlin-compose", "react-native",
+    "rust", "tauri", "electron", "dotnet", "pytorch", "unity", "unreal", "other"
+})
+
+
+def _platform_profile(kind, target, technology):
+    """A read-only responsibility overlay, never evidence of a working SDK."""
+    if target != "unspecified" and target not in TARGET_PLATFORMS:
+        raise ValueError("Unsupported target platform")
+    if technology not in TECHNOLOGIES:
+        raise ValueError("Unsupported technology classification")
+    allowed = PLATFORM_TARGETS.get(kind)
+    if allowed and target == "unspecified":
+        return {"status": "NEEDS_PLATFORM_CLASSIFICATION",
+                "allowed_target_platforms": sorted(allowed),
+                "next": "Inspect the existing code and ask for the actual target platform; do not assume web, iOS or Android."}
+    if allowed and target not in allowed:
+        raise ValueError("Target platform is incompatible with product type")
+
+    checks = []
+    roles = {}
+    notes = {}
+    if kind == "mobile-app":
+        checks.extend(["Verify target mobile SDK and native host tools",
+                       "Execute UI, accessibility and lifecycle tests on a real emulator or device",
+                       "Review platform permissions, signing and distribution"])
+        roles = {"frontend": "native-mobile-ui", "qa": "mobile-device-qa",
+                 "devops": "mobile-build-and-distribution"}
+        notes = {
+            "interface": "Use the existing mobile framework and platform-native UI/lifecycle conventions, not assumed React DOM.",
+            "quality": "Require actual mobile build and emulator/device evidence; otherwise report BLOCKED, not PASS.",
+            "release": "Review signing, store rules and install/rollback on the actual target device.",
+            "service": "Check the existing mobile application's service boundary; remove this suggested backend task if no service is required."
+        }
+    elif kind in {"desktop-app", "os-platform"}:
+        checks.extend(["Verify the target OS compiler, SDK, runtime and host permissions",
+                       "Run native integration and packaging tests on the target OS",
+                       "Review filesystem, installation and update/rollback safety"])
+        roles = {"frontend": "native-desktop-ui", "backend": "native-runtime",
+                 "qa": "target-os-integration-qa"}
+        notes = {
+            "interface": "Use the confirmed native desktop toolkit, not a default web UI.",
+            "implementation": "Follow the actual target OS and language ABI/toolchain rather than a browser-oriented scaffold.",
+            "quality": "Verify the real target OS runtime and install/upgrade evidence; browser QA alone is insufficient.",
+            "release": "Confirm OS package signatures, installation permissions and rollback."
+        }
+    elif kind == "game":
+        checks.extend(["Identify the actual game engine and platform SDK",
+                       "Run gameplay/input/performance tests with the target engine",
+                       "Verify asset licensing and distribution"])
+        roles = {"frontend": "engine-native-gameplay", "qa": "gameplay-and-performance-qa"}
+        notes = {
+            "interface": "Use the actual game engine/input loop; do not assume a React web interface.",
+            "quality": "Require real engine/build/gameplay results rather than web-only screenshots.",
+            "release": "Review target-engine packaging, assets and distribution licensing."
+        }
+    elif kind in {"cli", "sdk-library", "plugin-mcp"}:
+        checks.append("Run target-language build, API compatibility and CLI/library tests")
+        roles = {"backend": "language-specific-implementation", "qa": "target-language-regression-qa"}
+        notes = {"quality": "Use native language/unit/compatibility tests rather than a browser-only QA gate."}
+
+    if technology in {"flutter", "swiftui", "kotlin-compose", "react-native"}:
+        checks.append("Check installed framework/compiler, mobile lifecycle and target build tooling")
+        notes["interface"] = ("Use the declared "+technology+" conventions and approved existing code; "
+                              "never install its SDK or switch frameworks without consent.")
+    if technology in {"rust", "tauri", "electron", "dotnet"}:
+        checks.append("Check actual language/runtime build and OS-specific compatibility")
+    if technology == "pytorch":
+        checks.extend(["Check reproducible evaluation, data lineage, model artifacts and data-leakage boundaries",
+                       "Verify inference quality and privacy using executed tests, not model assertions"])
+        roles["qa"] = "reproducible-ml-evaluation"
+        notes["quality"] = "Use independent held-out evaluation, data-leakage checks and reproducible model artifacts."
+    if technology in {"unity", "unreal"}:
+        checks.append("Run actual engine project build and licensed asset validation")
+    if target == "embedded":
+        checks.append("Verify actual device toolchain, hardware/firmware behavior and safe recovery")
+
+    return {
+        "status": "PROFILE_READY",
+        "target_platform": target,
+        "technology": technology,
+        "profile_source": "CALLER_DECLARED_NOT_INSPECTED",
+        "suggested_role_modes": roles,
+        "required_host_checks": list(dict.fromkeys(checks)),
+        "goal_overlays": notes,
+        "host_toolchains_verified": False,
+        "skills_installed": False,
+        "native_agents_invoked": False,
+    }
+
+
 def _task(key, role, title, goal, reason, dependencies=()):
     return {
         "task_key": key, "step": STAGES[key], "role": role,
@@ -190,6 +291,20 @@ def preview(conn, root, project, a):
                 "state_written": False, "agent_spawned": False}
     if kind not in orbit_intake.TYPES:
         raise ValueError("Unknown software product type")
+    platform = a.get("target_platform", "unspecified")
+    technology = a.get("technology", "unspecified")
+    profile_check = _platform_profile(kind, platform, technology)
+    if profile_check["status"] != "PROFILE_READY":
+        return {
+            "status": profile_check["status"],
+            "mode": "READ_ONLY_DELIVERY_BLUEPRINT",
+            "project": project, "project_root": str(root),
+            "product_type": kind,
+            "allowed_target_platforms": profile_check["allowed_target_platforms"],
+            "next": profile_check["next"],
+            "state_written": False, "agent_spawned": False,
+            "tests_verified": False,
+        }
     objective = a["objective"].strip()
     constraints = a.get("constraints", "").strip()
     slice_key = a.get("slice_key", "")
@@ -204,6 +319,12 @@ def preview(conn, root, project, a):
     tasks, contracts = _workflow(kind, operation, maturity, objective, constraints,
                                  limited=operation in {"fix", "debug"},
                                  focus_role=focus_role)
+    # Task goals stay within the existing ledger contract and are not proof
+    # of a working target SDK. Roles are unchanged; host adapters decide tools.
+    for item in tasks:
+        advice = profile_check["goal_overlays"].get(item["task_key"])
+        if advice:
+            item["goal"] += " Platform-specific review: " + advice
     if slice_key:
         # Fresh keys preserve all existing accepted task history.
         keys = {item["task_key"]: slice_key+"-"+item["task_key"] for item in tasks}
@@ -218,6 +339,8 @@ def preview(conn, root, project, a):
         "mode": "READ_ONLY_DELIVERY_BLUEPRINT",
         "project": project, "project_root": str(root),
         "product_type": kind, "operation": operation, "maturity": maturity,
+        "platform_assessment": {k: v for k, v in profile_check.items()
+                                if k != "goal_overlays"},
         "slice_key": slice_key, "focus_role": focus_role,
         "objective": objective, "constraints": constraints,
         "selected_from_approved_intake": bool(not a.get("product_type") and profile),
