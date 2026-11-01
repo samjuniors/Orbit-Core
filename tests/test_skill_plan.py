@@ -354,6 +354,39 @@ class SkillPlanPreviewTests(unittest.TestCase):
         self.assertEqual([x["name"] for x in game["shortlist"]],
                          ["unity-testing"])
 
+    def test_capability_recommendation_respects_platform_and_hold(self):
+        self.skill("react-patterns", "Build web user interface components")
+        self.skill("vue-components", "Build web user interface components")
+        profile = {"product_type": "web-app", "platform": "web",
+                   "technologies": ["react"], "operation": "build"}
+        selected = orbit_capabilities.select(
+            str(self.root), "Build web UI components", home=self.home,
+            project_profile=profile
+        )
+        self.assertEqual(selected["recommended_action"],
+                         "REVIEW_PROJECT_SKILL_SHORTLIST")
+        self.assertEqual([x["name"] for x in selected["installed_matches"]],
+                         ["react-patterns"])
+        self.assertEqual(selected["skill_plan"]["status"], "SKILL_SHORTLIST_READY")
+        denied_by_fit = orbit_capabilities.select(
+            str(self.root), "Build web UI components", home=self.home,
+            project_profile=profile, requested_skill_names=["vue-components"]
+        )
+        self.assertEqual(denied_by_fit["recommended_action"],
+                         "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(denied_by_fit["installed_matches"], [])
+        self.assertEqual(
+            denied_by_fit["adaptive_workflow"]["skill_review"]["candidate"], None
+        )
+        permission_denied = orbit_capabilities.select(
+            str(self.root), "Build web UI components", home=self.home,
+            project_profile=profile, permission_state="DENIED"
+        )
+        self.assertEqual(permission_denied["recommended_action"],
+                         "HOLD_PERMISSION_DENIED")
+        self.assertEqual(permission_denied["installed_matches"], [])
+        self.assertFalse(permission_denied["permission_verified"])
+
     def test_unverified_provenance_shows_scope_not_private_paths(self):
         self.skill("api-project", "Python API contracts")
         global_skill = self.home / ".agents" / "skills" / "api-user" / "SKILL.md"
