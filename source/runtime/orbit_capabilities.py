@@ -394,7 +394,14 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
     constrained = (project_profile is not None or requested_skill_names is not None
                    or review_manifest is not None or host != 'unknown')
     selected_names = {item['name'] for item in skill_plan['shortlist']}
-    reviewed_candidates = ([item for item in candidates
+    # In the v0.29 constrained route, never return raw SKILL.md frontmatter
+    # as a model-visible recommendation. Raw descriptions are untrusted data;
+    # skill-name/score hints and the pinned read-only plan are sufficient.
+    reviewed_candidates = ([{'name': item['name'],
+                             'match_count': item['match_count'],
+                             'status': 'LOCAL_UNVERIFIED_REVIEW_REQUIRED',
+                             'description_returned': False}
+                            for item in candidates
                             if item['name'] in selected_names]
                            if constrained else candidates)
     if constrained and (permission_state == 'DENIED'
