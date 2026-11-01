@@ -27,7 +27,10 @@ does not authorize external CLIs, another model or a fake subagent session.
    existing `orbit_swarm_draft_preview` validator and 2-worker wave scheduler.
    Returns `DRAFT_REVIEW_REQUIRED` and preview-only `orbit_task_plan` input
    with `confirm_write=false`, or `HOLD_DRAFT_REVIEW` with no registration
-   suggestions. The owner and actual IDE must inspect real file ownership,
+   suggestions. Registration suggestions are now ordered according to the
+   draft's validated dependency waves, **not alphabetical task keys**;
+   registration order is a convenience, not permission to execute or accept
+   the later waves. The owner and actual IDE must inspect real file ownership,
    requirements and task scopes, then explicitly register one task at a time.
    Never copy a blueprint's empty scopes into writable engineering work
    without checking what each worker will actually change.
@@ -40,6 +43,14 @@ does not authorize external CLIs, another model or a fake subagent session.
    authorization. Pending reported tasks return
    `INDEPENDENT_TASK_REVIEW_REQUIRED`; all reviewed tasks return
    `INTEGRATION_REVIEW_REQUIRED`, **not** test PASS or permission to merge.
+   Failed, blocked, rework or cancelled work returns bounded
+   `recovery_reviews` with only task key/revision, state, a safe next-action
+   classification and explicit `retry_authorized=false`. If nothing is
+   runnable, the coordinator returns `RECOVERY_REVIEW_REQUIRED`, not a
+   generic or silently retried task. Unrelated approved planned work may
+   remain eligible while failures get reviewed; cancelled work remains
+   cancelled until the owner explicitly scopes a **new** task. Raw past
+   notes, consent references and historical host session IDs are not echoed.
    Interrupted running/reserved sessions and root-sharing work from other
    projects return HOLD without disclosing those other projects' identities.
 3. **Reserved host preflight**: Pass `reserved_tasks` (1–2 exact keys and
@@ -66,8 +77,13 @@ when the task is small, unsafe to parallelize or native tooling is absent.
   The MCP cannot inspect the private IDE session or attest reported results.
 - A task is not ready merely because a model claims it completed. A
   `REPORTED_DONE` record needs independent review; dependencies only unlock
-  after `REVIEW_ACCEPTED`. A failed or blocked objective needs rework and
-  new permission, not silently reused historic approval.
+  after `REVIEW_ACCEPTED`. Failed, reworked and blocked tasks are **not**
+  offered for automatic native invocation. Diagnose host failures, partial
+  source changes and test evidence before a separately authorized attempt.
+  The task ledger rejects replaying the previous approval reference for
+  `FAILED`, `REWORK` and `BLOCKED` reservations; a new caller reference
+  is still **not cryptographic proof** of actual host/user consent. `CANCELLED`
+  remains non-retryable as the same task.
 - An interrupted `RESERVED` or `RUNNING` state must be reconciled with
   the actual IDE; no automatic timeout, worker termination, cancellation,
   resurrection or fabricated session is allowed. An unavailable native tool
@@ -80,7 +96,10 @@ when the task is small, unsafe to parallelize or native tooling is absent.
   `orbit_capability_select` checks for ready task objectives; the actual host
   must inspect the codebase, declare truthful product/platform/technology,
   inspect complete third-party skill text/license and separately authorize any
-  activation. This preview installs/loads no skills.
+  activation. For hosts the skill selector does not recognize (such as
+  generic VS Code), the hint uses `host=unknown` and
+  `host_fit_unverified=true`, not a fabricated compatible IDE provider.
+  This preview installs/loads no skills.
 
 ## Suggested source-only sequence
 
