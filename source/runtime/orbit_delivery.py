@@ -142,7 +142,7 @@ def _task(key, role, title, goal, reason, dependencies=()):
     }
 
 
-def _workflow(product_type, operation, maturity, objective, constraints, *, limited=False, focus_role=None):
+def _workflow(product_type, operation, maturity, objective, constraints, *, limited=False, focus_role=None, service_scope="auto"):
     """Build a bounded DAG of host-native specialist assignments.
 
     Empty write scopes are deliberate: this is *not* a file-editing
@@ -155,7 +155,12 @@ def _workflow(product_type, operation, maturity, objective, constraints, *, limi
     # Preserve existing behavior and defer backend/data changes until code inspection
     # proves they are necessary and the owner extends the reviewed scope.
     redesign = operation == "redesign" and visual
-    service = product_type in SERVICES and not redesign
+    # Native/mobile/game projects must not silently acquire a cloud/backend
+    # service. This is an explicitly reviewable requirement, not a stack guess.
+    service = (service_scope == "required" or
+               (service_scope == "auto" and product_type in SERVICES
+                and product_type not in {"mobile-app", "desktop-app", "game", "os-platform"}))
+    service = service and not redesign and not incident
     data = product_type in DATA and not redesign
 
     tasks = []
@@ -291,6 +296,9 @@ def preview(conn, root, project, a):
                 "state_written": False, "agent_spawned": False}
     if kind not in orbit_intake.TYPES:
         raise ValueError("Unknown software product type")
+    service_scope = a.get("service_scope", "auto")
+    if service_scope not in {"auto", "required", "not-required"}:
+        raise ValueError("Unsupported service scope")
     platform = a.get("target_platform", "unspecified")
     technology = a.get("technology", "unspecified")
     profile_check = _platform_profile(kind, platform, technology)
@@ -318,7 +326,8 @@ def preview(conn, root, project, a):
     # Do not leak untrusted source text as a verified requirement.
     tasks, contracts = _workflow(kind, operation, maturity, objective, constraints,
                                  limited=operation in {"fix", "debug"},
-                                 focus_role=focus_role)
+                                 focus_role=focus_role,
+                                 service_scope=service_scope)
     # Task goals stay within the existing ledger contract and are not proof
     # of a working target SDK. Roles are unchanged; host adapters decide tools.
     for item in tasks:
@@ -342,6 +351,9 @@ def preview(conn, root, project, a):
         "platform_assessment": {k: v for k, v in profile_check.items()
                                 if k != "goal_overlays"},
         "slice_key": slice_key, "focus_role": focus_role,
+        "service_scope": service_scope,
+        "service_scope_source": ("CALLER_DECLARED" if service_scope != "auto"
+                                 else "CONSERVATIVE_DEFAULT_REVIEW_REQUIRED"),
         "objective": objective, "constraints": constraints,
         "selected_from_approved_intake": bool(not a.get("product_type") and profile),
         "proposed_tasks": tasks, "acceptance_contracts": contracts,
