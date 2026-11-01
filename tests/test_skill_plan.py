@@ -94,6 +94,15 @@ class SkillPlanPreviewTests(unittest.TestCase):
         self.assertEqual([a["name"] for a in x["shortlist"]],
                          ["react-native-navigation"])
 
+    def test_react_native_never_suggested_as_react_dom_skill(self):
+        self.skill("react-native-navigation", "React Native mobile navigation")
+        self.skill("react-dom", "React web DOM components")
+        x = self.select("Build React UI", project_profile={
+            "product_type": "web-app", "platform": "web",
+            "technologies": ["react"], "operation": "build",
+        })
+        self.assertEqual([item["name"] for item in x["shortlist"]], ["react-dom"])
+
     def test_declared_host_filters_other_host_skill_directory(self):
         self.skill("python-api", "Python API build", folder=".claude/skills")
         self.skill("api-contracts", "Python API validation", folder=".agents/skills")
