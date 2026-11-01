@@ -561,6 +561,19 @@ class SkillPlanPreviewTests(unittest.TestCase):
                     {**payload, "review_manifest": bad}
                 )
 
+    def test_auto_selection_bounds_fingerprints_but_explicit_request_can_review(self):
+        for i in range(orbit_skill_plan.MAX_FINGERPRINT_CANDIDATES + 1):
+            self.skill(f"python-api-{i:02}", "Python API review")
+        preview = self.select("Python API")
+        self.assertEqual(preview["status"], "SKILL_SHORTLIST_READY")
+        self.assertEqual(preview["fingerprint_budget_deferred_count"], 1)
+        self.assertLessEqual(preview["selected_count"], 5)
+        name = f"python-api-{orbit_skill_plan.MAX_FINGERPRINT_CANDIDATES:02}"
+        exact = self.select("Python API", requested_skill_names=[name])
+        self.assertEqual([x["name"] for x in exact["shortlist"]], [name])
+        self.assertEqual(exact["fingerprint_budget_deferred_count"], 0)
+        self.assertFalse(exact["activation_allowed"])
+
     def test_legacy_selector_remains_47_tools_and_schema_rejects_writes(self):
         metadata = next(m for m in orbit_mcp.TOOLS
                         if m["name"] == "orbit_capability_select")
