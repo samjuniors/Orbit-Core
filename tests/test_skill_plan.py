@@ -359,7 +359,7 @@ class SkillPlanPreviewTests(unittest.TestCase):
         global_skill = self.home / ".agents" / "skills" / "api-user" / "SKILL.md"
         global_skill.parent.mkdir(parents=True)
         global_skill.write_text(
-            "---\\nname: api-user\\ndescription: Python API contracts\\n---\\nRead only\\n",
+            "---\nname: api-user\ndescription: Python API contracts\n---\nRead only\n",
             encoding="utf-8"
         )
         result = self.select("Python API")
@@ -378,7 +378,7 @@ class SkillPlanPreviewTests(unittest.TestCase):
         skill = external / "skills" / "python-api" / "SKILL.md"
         skill.parent.mkdir(parents=True)
         skill.write_text(
-            "---\\nname: python-api\\ndescription: Python API\\n---\\nNot trusted\\n",
+            "---\nname: python-api\ndescription: Python API\n---\nNot trusted\n",
             encoding="utf-8"
         )
         try:
