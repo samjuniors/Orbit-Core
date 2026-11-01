@@ -52,7 +52,7 @@ class SetupManagerTests(unittest.TestCase):
     def test_unified_install_includes_skill_plan_runtime(self):
         """Installed Orbit must ship every imported v0.29 runtime dependency."""
         changes = installer.plan(str(self.project), ["antigravity", "codex"])
-        planned = [c.path for c in changes]
+        planned = [c.target for c in changes]
         runtime = installer.runtime_folder()
         expected_modules = {p.name for p in (ROOT / "source/runtime").glob("*.py")}
         planned_modules = {p.name for p in planned if p.parent == runtime}
