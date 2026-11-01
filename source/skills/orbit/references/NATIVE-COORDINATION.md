@@ -148,10 +148,16 @@ actual frozen build flow, not by guessing that a browser or native SDK ran:
   fabricated NATIVE_QA or browser run.
 
 An explicit `build_id`, exact selected-project task revisions and
-`expected_source_fingerprint` are required for every mode. The
-`integration_review_batches` proposals now label the supported choices
-and require the host to inspect the persisted build flow before selecting
-one. No automatic batch invocation occurs. A web QA record **cannot
+`expected_source_fingerprint` are required for every mode. Native/host
+build-stage evidence is additionally pinned to the exact `qa_project`,
+`qa_build_id` and `qa_stage` so copying a matching source/QA report into
+a different build cannot silently pass integration. Damaged frozen-flow
+metadata, invalid platform types, malformed feedback or unsupported QA modes
+must HOLD or reject cleanly; old unpinned reports need new real host evidence.
+These pins are consistency checks, **not** cryptographic proof of host
+permission or test execution. The `integration_review_batches` proposals
+label the supported choices and require the host to inspect the persisted
+build flow before selecting one. No automatic batch invocation occurs. A web QA record **cannot
 substitute** for native/host verification; a host/native QA record cannot
 substitute for Playwright browser QA in a web flow.
 
