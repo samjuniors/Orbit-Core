@@ -58,8 +58,8 @@ def _review_host_qa(build, fingerprint, build_id, qa_mode, base):
             and isinstance(evidence, str)
             and orbit_build.valid_stage_evidence(stage_name, evidence)
             and isinstance(saved.get("__orbit_feedback", []), list)
-            and not any(isinstance(note, dict) and note.get("status") == "OPEN"
-                        for note in saved.get("__orbit_feedback", []))
+            and all(isinstance(note, dict) and note.get("status") != "OPEN"
+                    for note in saved.get("__orbit_feedback", []))
         )
         if not valid:
             raise ValueError("Host QA source or revision is stale")
@@ -116,7 +116,7 @@ def review(conn, root, project, args):
     if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
         raise ValueError("expected_source_fingerprint must be lowercase SHA-256")
     qa_mode = args.get("qa_mode", "web")
-    if qa_mode not in QA_MODES:
+    if not isinstance(qa_mode,str) or qa_mode not in QA_MODES:
         raise ValueError("qa_mode must be web, native or host")
     base = {
         "project": project, "project_root": str(root),
