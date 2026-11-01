@@ -236,6 +236,48 @@ class NativeCoordinationPreviewTests(unittest.TestCase):
         self.assertFalse(out["release_authorized"])
         self.assertIn("orbit_swarm_integration_review", out["next"])
 
+    def test_all_accepted_tasks_are_partitioned_for_integration_review(self):
+        # The integration gate permits at most 12 tasks, but the registered
+        # project graph can contain up to 40. Never silently ignore the tail.
+        for idx in range(13):
+            key = "accepted-" + str(idx).zfill(2)
+            self.task(key)
+            self.state(key, "REVIEW_ACCEPTED")
+        before = self.conn.total_changes
+        result = self.preview()
+        self.assertEqual(result["status"], "INTEGRATION_REVIEW_REQUIRED")
+        self.assertEqual(result["stage"], "INTEGRATION_GATE")
+        self.assertEqual(result["reservation_candidates"], [])
+        self.assertTrue(result["accepted_task_list_truncated"])
+        self.assertTrue(result["all_accepted_tasks_included_in_batches"])
+        self.assertFalse(result["integration_batches_reviewed"])
+        batches = result["integration_review_batches"]
+        self.assertEqual([batch["task_count"] for batch in batches], [12, 1])
+        all_keys = [t["task_key"] for batch in batches for t in batch["tasks"]]
+        self.assertEqual(len(all_keys), 13)
+        self.assertEqual(len(set(all_keys)), 13)
+        self.assertTrue(all(not b["review_invoked"] and not b["integration_approved"]
+                            for b in batches))
+        self.assertTrue(all(b["source_fingerprint_requires_real_host"]
+                            for b in batches))
+        self.assertFalse(result["source_tests_verified"])
+        self.assertFalse(result["release_authorized"])
+        self.assertEqual(self.conn.total_changes, before)
+
+    def test_maximum_graph_review_is_split_into_at_most_twelve_per_batch(self):
+        for idx in range(40):
+            name = "task-" + str(idx).zfill(2)
+            self.task(name)
+            self.state(name, "REVIEW_ACCEPTED")
+        result = self.preview()
+        batches = result["integration_review_batches"]
+        self.assertEqual([item["task_count"] for item in batches], [12, 12, 12, 4])
+        self.assertEqual(sum(item["task_count"] for item in batches), 40)
+        self.assertTrue(result["all_accepted_tasks_included_in_batches"])
+        self.assertFalse(result["integration_batches_reviewed"])
+        self.assertTrue(all(b["native_platform_qa_requires_separate_host_review"]
+                            for b in batches))
+
     def test_native_tool_missing_suggests_serial_host_work_without_fake_agent(self):
         self.task("api", paths=["src/api/"])
         out = self.preview(available_host_tools=[])
