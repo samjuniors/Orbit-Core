@@ -469,7 +469,7 @@ TOOLS = [
 ]
 TOOLS += [
     {'name':'orbit_capability_discover','description':'Read-only local skill and MCP config metadata inventory; never downloads, installs or executes anything.','inputSchema':schema({'project_root':string(2000)},['project_root'])},
-    {'name':'orbit_capability_select','description':'Read-only adaptive host capability selector with v0.29 project-scoped skill shortlist, SHA-256 manifest and revalidation. No approval, installation, skill execution or host-agent invocation.','inputSchema':schema({
+    {'name':'orbit_capability_select','description':'Read-only adaptive host capability selector with v0.29 project-scoped skill shortlist, bounded tree/location SHA-256 v2 manifest and revalidation. No approval, installation, skill execution or host-agent invocation.','inputSchema':schema({
         'project_root':string(2000),'objective':string(1500),
         'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
         'host_tools':{'type':'array','maxItems':80,'items':{'type':'string'}},
@@ -480,10 +480,13 @@ TOOLS += [
             'technologies':{'type':'array','maxItems':8,'items':{'type':'string','enum':sorted(orbit_skill_plan.TECHNOLOGIES)}},
             'operation':{'type':'string','enum':sorted(orbit_skill_plan.OPERATIONS)}},[]),
         'requested_skill_names':{'type':'array','maxItems':5,'items':string(80)},
-        'review_manifest':schema({'format':{'type':'string','enum':['orbit-skill-plan-v1']},
+        'review_manifest':schema({'format':{'type':'string','enum':['orbit-skill-plan-v1','orbit-skill-plan-v2']},
            'context_sha256':{'type':'string','minLength':64,'maxLength':64},
            'skills':{'type':'array','maxItems':5,'items':schema({
-               'name':string(80),'sha256':{'type':'string','minLength':64,'maxLength':64}},['name','sha256'])}},
+               'name':string(80),
+               'sha256':{'type':'string','minLength':64,'maxLength':64},
+               'tree_sha256':{'type':'string','minLength':64,'maxLength':64},
+               'location_sha256':{'type':'string','minLength':64,'maxLength':64}},['name','sha256'])}},
            ['format','context_sha256','skills'])
     },['project_root','objective'])},
     {'name':'orbit_preview_start','description':'PREVIEW or explicitly run a localhost dev server in this project; executes the supplied project command only with confirm_run. No public tunnel or deployment.','inputSchema':schema({'project_root':string(2000),'preview_id':string(40),'command':{'type':'array','minItems':1,'maxItems':20,'items':{'type':'string'}},'port':{'type':'integer','minimum':1024,'maximum':65535},'health_path':string(100),'confirm_run':{'type':'boolean'}},['project_root','preview_id','command','port'])},
