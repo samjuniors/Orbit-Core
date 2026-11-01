@@ -107,6 +107,53 @@ class SwarmIntegrationReviewTests(unittest.TestCase):
         self.assertTrue(tool["annotations"]["readOnlyHint"])
         self.assertEqual(len(orbit_mcp.TOOLS), 48)
 
+    def test_active_browser_qa_rejects_old_future_and_boolean_build_revisions(self):
+        self.build()
+        for recorded_rev in (3, 5, True):
+            with self.subTest(qa_build_revision=recorded_rev):
+                self.qa(qa_build_revision=recorded_rev)
+                result = self.review(build_id="web-app")
+                self.assertEqual(result["status"], "HOLD_STALE_OR_INVALID_QA")
+                self.assertFalse(result["tests_independently_verified"])
+        self.qa(qa_build_revision=4)
+        self.assertEqual(self.review(build_id="web-app")["status"],
+                         "READY_FOR_INDEPENDENT_REVIEW")
+        # A post-record change to the build itself invalidates the old
+        # QA record even when the source files have not changed.
+        self.db.execute(
+            "UPDATE build_runs SET revision=revision+1 "
+            "WHERE project=? AND root=? AND build_id=?",
+            (self.project, str(self.root), "web-app"))
+        self.db.commit()
+        self.assertEqual(self.review(build_id="web-app")["status"],
+                         "HOLD_STALE_OR_INVALID_QA")
+
+    def test_advanced_browser_qa_requires_recorded_pass_transition(self):
+        self.build()
+        self.qa()
+        self.db.execute(
+            "UPDATE build_runs SET stage='REVIEW',revision=5 "
+            "WHERE project=? AND root=? AND build_id=?",
+            (self.project, str(self.root), "web-app"))
+        self.db.commit()
+        # A stage label alone does not prove the browser QA step passed.
+        self.assertEqual(self.review(build_id="web-app")["status"],
+                         "HOLD_STALE_OR_INVALID_QA")
+        self.db.execute(
+            "UPDATE build_runs SET evidence_json=? "
+            "WHERE project=? AND root=? AND build_id=?",
+            (json.dumps({"BROWSER_QA": {
+                "outcome": "PASS", "verification": "browser-tool",
+                "evidence": "Synthetic fixture only"}}),
+             self.project, str(self.root), "web-app"))
+        self.db.commit()
+        result = self.review(build_id="web-app")
+        self.assertEqual(result["status"], "READY_FOR_INDEPENDENT_REVIEW")
+        self.assertFalse(result["tests_independently_verified"])
+        self.assertFalse(result["git_diff_verified"])
+        self.assertFalse(result["approval_verified"])
+        self.assertFalse(result["merge_performed"])
+
     def test_file_change_invalidates_previous_qa(self):
         self.build()
         self.qa()
