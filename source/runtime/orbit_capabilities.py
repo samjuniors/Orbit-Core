@@ -317,7 +317,8 @@ def adaptive_workflow(objective, categories, role, host_tools, candidates, permi
 
 
 def select(project_root, objective, host_tools=None, *, home=None, permission_state='UNKNOWN',
-           project_profile=None, requested_skill_names=None, review_manifest=None):
+           project_profile=None, requested_skill_names=None, review_manifest=None,
+           host='unknown'):
     if not isinstance(objective,str) or not objective.strip() or len(objective)>1500: raise ValueError('objective must contain 1..1500 characters')
     if not isinstance(host_tools,list) or len(host_tools)>80 or any(not isinstance(x,str) or len(x)>100 for x in host_tools):raise ValueError('host_tools must be a short list of names')
     if permission_state not in ('UNKNOWN','APPROVED','DENIED'):
@@ -361,7 +362,7 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
     skill_plan=orbit_skill_plan.preview(
         project_root,objective,available,home=home,
         project_profile=project_profile,requested_skill_names=requested_skill_names,
-        review_manifest=review_manifest,permission_state=permission_state)
+        review_manifest=review_manifest,permission_state=permission_state,host=host)
     # Legacy role hints are optional; do not present React/web preferences as
     # suitable for a declared native Flutter, desktop or game product.
     if project_profile is not None:
