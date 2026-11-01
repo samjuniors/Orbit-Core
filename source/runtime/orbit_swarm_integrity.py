@@ -13,6 +13,88 @@ import orbit_build
 import orbit_tasks
 
 
+
+QA_MODES = frozenset({"web", "native", "host"})
+
+
+def _review_host_qa(build, fingerprint, build_id, qa_mode, base):
+    """Inspect existing source-pinned build evidence; never execute host tests.
+
+    Native mode requires the real NATIVE_QA lifecycle stage (mobile/desktop).
+    Host mode uses the existing structured VERIFY stage of CLI/libraries,
+    scoped fixes and other products without a browser/native QA stage.
+    """
+    stage_name = "NATIVE_QA" if qa_mode == "native" else "VERIFY"
+    flow = orbit_build.flow_for(build)
+    if (stage_name not in flow
+            or (qa_mode == "native" and "BROWSER_QA" in flow)
+            or (qa_mode == "host"
+                and ("NATIVE_QA" in flow or "BROWSER_QA" in flow))):
+        return {**base, "status": "HOLD_QA_MODE_MISMATCH",
+                "source_matches": True,
+                "reason": "This build flow does not support the requested host QA mode; inspect the actual approved product lifecycle."}
+    if flow.index(build["stage"]) <= flow.index(stage_name):
+        return {**base, "status": "HOLD_HOST_QA_STAGE",
+                "source_matches": True,
+                "recorded_build_stage": build["stage"],
+                "reason": "Host QA must be reported and advanced in the same build before integration review."}
+    try:
+        saved = json.loads(build["evidence_json"])
+        report = saved[stage_name] if isinstance(saved, dict) else None
+        if not isinstance(report, dict):
+            raise ValueError("Missing structured host QA report")
+        qa_revision = report.get("qa_build_revision")
+        evidence = report.get("evidence")
+        valid = (
+            report.get("outcome") == "PASS"
+            and report.get("verification") == "caller-reported-not-attested"
+            and report.get("source_identity_kind") ==
+                "BOUNDED_LOCAL_FILES_FINGERPRINT"
+            and report.get("source_fingerprint") == fingerprint
+            and type(qa_revision) is int and qa_revision >= 1
+            and qa_revision < build["revision"]
+            and report.get("evidence_independently_verified") is False
+            and report.get("host_execution_attested") is False
+            and isinstance(evidence, str)
+            and orbit_build.valid_stage_evidence(stage_name, evidence)
+            and not any(isinstance(note, dict) and note.get("status") == "OPEN"
+                        for note in saved.get("__orbit_feedback", []))
+        )
+        if not valid:
+            raise ValueError("Host QA source or revision is stale")
+        details = json.loads(evidence)
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return {**base, "status": "HOLD_STALE_OR_INVALID_QA",
+                "source_matches": True,
+                "reason": ("Missing, malformed, unpinned or stale host-reported "
+                           "QA. Re-run checks in the real host and record "
+                           "evidence against the current source and build revision.")}
+    result = {
+        **base, "status": "READY_FOR_INDEPENDENT_REVIEW",
+        "source_matches": True,
+        "qa_mode": qa_mode,
+        "recorded_qa_stage": stage_name,
+        "recorded_qa_build_id": build_id,
+        "recorded_build_stage": build["stage"],
+        "recorded_host_qa_source_matches": True,
+        "recorded_host_qa_reported_commands": len(details["commands"]),
+        "host_qa_reporter_unverified": True,
+        "actual_platform_execution_verified": False,
+        "host_test_results_independently_verified": False,
+        "merge_performed": False,
+        "reason": ("The selected project's host-reported QA record is "
+                   "structurally complete and bound to the current source and "
+                   "build revision. Independently inspect actual OS/device/SDK "
+                   "sessions, commands, exit codes, code diffs, permissions "
+                   "and QA output before any acceptance."),
+    }
+    if qa_mode == "native":
+        result["recorded_platforms_unverified"] = details["platforms"]
+        result["recorded_interaction_count"] = len(details["interactions"])
+        result["recorded_accessibility_count"] = len(details["accessibility"])
+    return result
+
+
 def review(conn, root, project, args):
     choices = args["tasks"]
     if not isinstance(choices, list) or not 1 <= len(choices) <= 12:
@@ -32,19 +114,23 @@ def review(conn, root, project, args):
     expected = args["expected_source_fingerprint"]
     if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
         raise ValueError("expected_source_fingerprint must be lowercase SHA-256")
+    qa_mode = args.get("qa_mode", "web")
+    if qa_mode not in QA_MODES:
+        raise ValueError("qa_mode must be web, native or host")
     base = {
         "project": project, "project_root": str(root),
         "task_count": len(selected), "task_keys": sorted(selected),
         "mode": "READ_ONLY_INTEGRATION_REVIEW",
+        "qa_mode": qa_mode,
         "state_written": False, "agent_spawned": False,
         "git_diff_verified": False, "tests_independently_verified": False,
         "host_permission_verified": False, "approval_verified": False,
         "source_identity_kind": "BOUNDED_LOCAL_FILES_FINGERPRINT",
         "source_identity_is_git_commit": False,
         "qa_record_host_reported": True,
-        "next": ("Independently inspect actual Git changes, tests, host agent "
-                 "sessions and user approval. Do not merge or accept based only "
-                 "on local ledger states or a stored browser record."),
+        "next": ("Independently inspect actual Git changes, platform-specific QA "
+                 "and tests, host sessions and user approval. Do not merge or "
+                 "accept based only on local ledger or QA records."),
     }
     # Even a perfect stored QA record must not certify a workspace in which
     # another native worker may still be editing. Never expose the other
@@ -120,14 +206,8 @@ def review(conn, root, project, args):
     if build_id is None:
         return {**base, "status": "HOLD_INDEPENDENT_QA",
                 "source_matches": True,
-                "reason": "Provide an existing web build with recorded source-bound browser QA; native/mobile QA still requires separate host-verified evidence."}
+                "reason": "Provide an existing project build with source-bound QA for the explicitly selected web/native/host mode."}
     orbit_build.validate_key(build_id)
-    if not conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='browser_results'"
-    ).fetchone():
-        return {**base, "status": "HOLD_INDEPENDENT_QA",
-                "source_matches": True,
-                "reason": "No local QA record table exists for this project."}
     if not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='build_runs'"
     ).fetchone():
@@ -142,6 +222,14 @@ def review(conn, root, project, args):
         return {**base, "status": "HOLD_INDEPENDENT_QA",
                 "source_matches": True,
                 "reason": "This exact project has no such build."}
+    if qa_mode in {"native", "host"}:
+        return _review_host_qa(build, fingerprint, build_id, qa_mode, base)
+    if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='browser_results'"
+    ).fetchone():
+        return {**base, "status": "HOLD_INDEPENDENT_QA",
+                "source_matches": True,
+                "reason": "No local QA record table exists for this project."}
     row = conn.execute(
         "SELECT status,summary FROM browser_results "
         "WHERE project=? AND root=? AND build_id=? ORDER BY id DESC LIMIT 1",
@@ -152,6 +240,8 @@ def review(conn, root, project, args):
                 "reason": "Latest recorded browser run is missing or not passing."}
     try:
         qa = json.loads(row["summary"])
+        if not isinstance(qa, dict):
+            raise ValueError("Malformed browser QA report")
         actions = qa["actions"]
         evidence = json.loads(build["evidence_json"])
         qa_revision = qa.get("qa_build_revision")
@@ -188,7 +278,7 @@ def review(conn, root, project, args):
                            for action in actions)
                    and not qa.get("errors") and not qa.get("failures")
                    and not qa.get("blocked_remote_hosts"))
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError, AttributeError):
         correct = False
     if not correct:
         return {**base, "status": "HOLD_STALE_OR_INVALID_QA",
