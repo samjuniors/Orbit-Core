@@ -213,6 +213,143 @@ class SoftwareDeliveryPreviewTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.preview(**params)
 
+    def test_mobile_requires_target_instead_of_assuming_web_or_ios(self):
+        before = self.db.total_changes
+        x = self.preview(product_type="mobile-app")
+        self.assertEqual(x["status"], "NEEDS_PLATFORM_CLASSIFICATION")
+        self.assertIn("android", x["allowed_target_platforms"])
+        self.assertIn("ios", x["allowed_target_platforms"])
+        self.assertFalse(x["agent_spawned"])
+        self.assertFalse(x["state_written"])
+        self.assertEqual(self.db.total_changes, before)
+
+    def test_flutter_mobile_routes_native_lifecycle_without_new_agents(self):
+        x = self.preview(product_type="mobile-app", target_platform="android",
+                         technology="flutter")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        profile = x["platform_assessment"]
+        self.assertEqual(profile["suggested_role_modes"]["frontend"], "native-mobile-ui")
+        self.assertEqual(profile["profile_source"], "CALLER_DECLARED_NOT_INSPECTED")
+        self.assertFalse(profile["host_toolchains_verified"])
+        self.assertFalse(profile["skills_installed"])
+        self.assertIn("emulator or device", " ".join(profile["required_host_checks"]))
+        tasks = {t["task_key"]: t for t in x["proposed_tasks"]}
+        self.assertIn("flutter", tasks["interface"]["goal"])
+        self.assertIn("BLOCKED", tasks["quality"]["goal"])
+        self.assertTrue(all(t["write_paths"] == [] for t in x["proposed_tasks"]))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
+
+    def test_rust_desktop_does_not_claim_browser_qa_or_native_build(self):
+        x = self.preview(product_type="desktop-app", maturity="existing",
+                         target_platform="windows", technology="rust")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        profile = x["platform_assessment"]
+        self.assertEqual(profile["suggested_role_modes"]["qa"], "target-os-integration-qa")
+        self.assertFalse(profile["host_toolchains_verified"])
+        quality = next(t for t in x["proposed_tasks"] if t["task_key"] == "quality")
+        self.assertIn("browser QA alone is insufficient", quality["goal"])
+        with self.assertRaises(ValueError):
+            self.preview(product_type="desktop-app", target_platform="android")
+
+    def test_ml_quality_requires_reproducible_evaluation(self):
+        x = self.preview(product_type="data-automation", technology="pytorch")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        profile = x["platform_assessment"]
+        self.assertEqual(profile["suggested_role_modes"]["qa"], "reproducible-ml-evaluation")
+        qa = next(t for t in x["proposed_tasks"] if t["task_key"] == "quality")
+        self.assertIn("held-out evaluation", qa["goal"])
+        self.assertIn("data-leakage", qa["goal"])
+        self.assertFalse(x["tests_verified"])
+
+    def test_native_local_first_does_not_invent_backend_service(self):
+        mobile = self.preview(product_type="mobile-app",
+                              target_platform="android", technology="flutter")
+        self.assertEqual(mobile["status"], "BLUEPRINT_READY")
+        self.assertEqual(mobile["service_scope"], "auto")
+        self.assertNotIn("service", {t["task_key"] for t in mobile["proposed_tasks"]})
+        desktop = self.preview(product_type="desktop-app", target_platform="linux",
+                               technology="rust")
+        self.assertNotIn("service", {t["task_key"] for t in desktop["proposed_tasks"]})
+        cloud_mobile = self.preview(product_type="mobile-app",
+                                    target_platform="android", service_scope="required")
+        self.assertIn("service", {t["task_key"] for t in cloud_mobile["proposed_tasks"]})
+        local_web = self.preview(product_type="web-app", service_scope="not-required")
+        self.assertNotIn("service", {t["task_key"] for t in local_web["proposed_tasks"]})
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
+
+    def test_game_requires_platform_and_engine_qa_not_browser_only(self):
+        self.assertEqual(self.preview(product_type="game")["status"],
+                         "NEEDS_PLATFORM_CLASSIFICATION")
+        x = self.preview(product_type="game", target_platform="windows",
+                         technology="unity")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        self.assertIn("gameplay", x["platform_assessment"]["suggested_role_modes"]["qa"])
+        qa = next(t for t in x["proposed_tasks"] if t["task_key"] == "quality")
+        self.assertIn("real engine/build", qa["goal"])
+
+    def test_unknown_technology_rejected_and_no_install_or_side_effects(self):
+        with self.assertRaises(ValueError):
+            self.preview(technology="../install-tools")
+        with self.assertRaises(ValueError):
+            self.preview(product_type="mobile-app", target_platform="server")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
+
+    def test_rejects_contradictory_web_and_mobile_platforms(self):
+        for kind, target in (("web-app", "android"),
+                             ("website", "console"),
+                             ("api-service", "ios"),
+                             ("plugin-mcp", "console"),
+                             ("data-automation", "android")):
+            with self.subTest(product_type=kind, target_platform=target):
+                with self.assertRaises(ValueError):
+                    self.preview(product_type=kind, target_platform=target)
+        web = self.preview(product_type="web-app", target_platform="web")
+        self.assertEqual(web["status"], "BLUEPRINT_READY")
+        api = self.preview(product_type="api-service", target_platform="server")
+        self.assertEqual(api["status"], "BLUEPRINT_READY")
+        api_unspecified = self.preview(product_type="api-service")
+        self.assertEqual(api_unspecified["status"], "BLUEPRINT_READY")
+
+    def test_existing_api_feature_preserves_code_contract_and_version_history(self):
+        x = self.preview(product_type="api-service", maturity="existing",
+                         operation="add-feature", target_platform="server",
+                         objective="Add an optional filter without changing existing API clients",
+                         slice_key="api-v2")
+        self.assertEqual(x["status"], "BLUEPRINT_READY")
+        tasks = {item["task_key"]: item for item in x["proposed_tasks"]}
+        self.assertIn("api-v2-service", tasks)
+        self.assertNotIn("api-v2-interface", tasks)
+        self.assertIn("api-v2-quality", tasks)
+        self.assertIn("api-v2-review", tasks)
+        self.assertIn("api-v2-handoff", tasks)
+        self.assertIn("api-v2-release", tasks)
+        self.assertEqual(tasks["api-v2-quality"]["depends_on"], ["api-v2-integration"])
+        self.assertTrue(all(item["write_paths"] == [] for item in x["proposed_tasks"]))
+        self.assertFalse(x["approval_verified"])
+        self.assertFalse(x["execution_verified"])
+
+    def test_stalled_fix_and_completed_maintenance_use_separate_gates(self):
+        stalled = self.preview(product_type="api-service", operation="debug",
+                               maturity="stalled", target_platform="server",
+                               objective="Investigate reproducible validation failure")
+        self.assertEqual(stalled["status"], "BLUEPRINT_READY")
+        debug_tasks = {item["task_key"]: item for item in stalled["proposed_tasks"]}
+        self.assertEqual(debug_tasks["repair"]["depends_on"], ["reproduce"])
+        self.assertNotIn("release", debug_tasks)
+        self.assertNotIn("service", debug_tasks)
+        completed = self.preview(product_type="cli", operation="maintain",
+                                 maturity="completed", target_platform="linux",
+                                 objective="Update supported runtimes without losing CLI compatibility",
+                                 slice_key="maintenance")
+        self.assertEqual(completed["status"], "BLUEPRINT_READY")
+        maintain_tasks = {item["task_key"]: item for item in completed["proposed_tasks"]}
+        self.assertIn("maintenance-implementation", maintain_tasks)
+        self.assertIn("maintenance-quality", maintain_tasks)
+        self.assertIn("maintenance-release", maintain_tasks)
+        self.assertNotIn("maintenance-interface", maintain_tasks)
+        self.assertFalse(completed["tests_verified"])
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
+
     def test_metadata_exposes_read_only_and_never_executes_host(self):
         m=next(x for x in orbit_mcp.TOOLS if x["name"]=="orbit_software_delivery_preview")
         self.assertTrue(m["annotations"]["readOnlyHint"])
