@@ -53,7 +53,11 @@ class SetupManagerTests(unittest.TestCase):
         """Installed Orbit must ship every imported v0.29 runtime dependency."""
         changes = installer.plan(str(self.project), ["antigravity", "codex"])
         planned = [c.path for c in changes]
-        target = installer.runtime_folder() / "orbit_skill_plan.py"
+        runtime = installer.runtime_folder()
+        expected_modules = {p.name for p in (ROOT / "source/runtime").glob("*.py")}
+        planned_modules = {p.name for p in planned if p.parent == runtime}
+        self.assertEqual(planned_modules, expected_modules)
+        target = runtime / "orbit_skill_plan.py"
         self.assertIn(target, planned)
         # Install only inside the disposable home configured in setUp.
         installer.install(changes)
