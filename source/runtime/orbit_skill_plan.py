@@ -10,10 +10,15 @@ import hashlib
 import json
 import os
 import re
+import stat
 from pathlib import Path
 
 MAX_SELECTED = 5
 MAX_SKILL_BYTES = 65536
+MAX_SKILL_TREE_ENTRIES = 64
+MAX_SKILL_TREE_BYTES = 512 * 1024
+MAX_SKILL_TREE_FILE_BYTES = 256 * 1024
+SKILL_MANIFEST_FORMAT = "orbit-skill-plan-v2"
 MAX_DESCRIPTION_CHARS = 320
 SKILL_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 HEX_DIGEST = re.compile(r"[a-f0-9]{64}\Z")
@@ -186,18 +191,17 @@ def _host_location_mismatch(path, host):
     return False
 
 
-def _digest_installed(item, allowed):
-    """Return file identity only for a regular, bounded, unchanged skill file.
+def _snapshot_installed(item, allowed):
+    """Bounded, read-only fingerprint of the skill's files and location.
 
-    The filesystem and skill metadata are not trusted; host must independently
-    inspect the text and the actual permission/sandbox before loading it.
+    SKILL.md is the discovery document, but helper/reference files can affect
+    later skill behavior. Refuse oversized trees, reparse races and symlinks.
+    These are integrity identities only, NOT trust or activation permission.
     """
     try:
         p = Path(item["path"])
         if p.name != "SKILL.md" or p.is_symlink() or p.parent.is_symlink():
             return None
-        # Reject symlinks/junctions anywhere in the discovery path, not only
-        # the final skill folder. They can otherwise escape an allowed root.
         if p.resolve(strict=True) != p.absolute():
             return None
         root = p.parent.parent
@@ -205,20 +209,68 @@ def _digest_installed(item, allowed):
             return None
         if not p.is_file() or not p.parent.is_dir():
             return None
-        before = p.stat()
-        if before.st_size > MAX_SKILL_BYTES or before.st_size < 1:
+
+        entries = []
+        files = 0
+        total_bytes = 0
+        skill_digest = None
+        # Depth and entry budgets prevent traversing an arbitrary skill tree.
+        stack = [(p.parent, 0)]
+        while stack:
+            folder, depth = stack.pop()
+            if depth > 6 or folder.is_symlink() or folder.resolve(strict=True) != folder.absolute():
+                return None
+            # Never materialize an unbounded directory listing.
+            children = []
+            for child in folder.iterdir():
+                children.append(child)
+                if len(children) > MAX_SKILL_TREE_ENTRIES:
+                    return None
+            for child in sorted(children, key=lambda x: x.name):
+                rel = child.relative_to(p.parent).as_posix()
+                if (child.is_symlink() or child.resolve(strict=True) != child.absolute()
+                        or len(entries) >= MAX_SKILL_TREE_ENTRIES):
+                    return None
+                if child.is_dir():
+                    entries.append(["dir", rel])
+                    stack.append((child, depth + 1))
+                    continue
+                if not child.is_file():
+                    return None
+                before = child.stat()
+                if not stat.S_ISREG(before.st_mode):
+                    return None
+                cap = MAX_SKILL_BYTES if child == p else MAX_SKILL_TREE_FILE_BYTES
+                if before.st_size < 0 or before.st_size > cap:
+                    return None
+                total_bytes += before.st_size
+                files += 1
+                if total_bytes > MAX_SKILL_TREE_BYTES:
+                    return None
+                content = child.read_bytes()
+                after = child.stat()
+                if ((before.st_ino, before.st_mtime_ns, before.st_size) !=
+                        (after.st_ino, after.st_mtime_ns, after.st_size)
+                        or len(content) != before.st_size):
+                    return None
+                digest = hashlib.sha256(content).hexdigest()
+                entries.append(["file", rel, digest])
+                if child == p:
+                    if not content:
+                        return None
+                    skill_digest = digest
+        if not skill_digest:
             return None
-        # File race isn't an authorization mechanism. Recheck inode+size+mtime
-        # and verify the pin again just before any future host activation.
-        content = p.read_bytes()
-        after = p.stat()
-        if (before.st_ino, before.st_mtime_ns, before.st_size) != (
-            after.st_ino, after.st_mtime_ns, after.st_size
-        ) or len(content) != before.st_size:
-            return None
-        # Preserve only safe name, hash, and unverified provenance.
-        return hashlib.sha256(content).hexdigest()
-    except (KeyError, ValueError, OSError, RuntimeError, TypeError):
+        tree_blob = json.dumps(sorted(entries, key=lambda row: (row[1], row[0])),
+                               separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        return {
+            "sha256": skill_digest,
+            "tree_sha256": hashlib.sha256(tree_blob).hexdigest(),
+            "location_sha256": hashlib.sha256(str(p.absolute()).encode("utf-8")).hexdigest(),
+            "file_count": files,
+            "tree_bytes": total_bytes,
+        }
+    except (KeyError, ValueError, OSError, RuntimeError, TypeError, UnicodeError):
         return None
 
 
@@ -258,33 +310,55 @@ def _manifest_identity(project_root, objective, profile, host):
 
 
 def _revalidate(expected, actual):
+    """Compare immutable review snapshots; never interpret them as approvals."""
     if expected is None:
-        return {"status": "NOT_REQUESTED", "host_activation_verified": False}
+        return {"status": "NOT_REQUESTED", "host_activation_verified": False,
+                "diff": None}
     if not isinstance(expected, dict) or set(expected) != {
         "format", "context_sha256", "skills"
-    } or expected.get("format") != "orbit-skill-plan-v1":
-        raise ValueError("review_manifest must be an Orbit v1 read-only skill manifest")
+    } or expected.get("format") not in ("orbit-skill-plan-v1", SKILL_MANIFEST_FORMAT):
+        raise ValueError("review_manifest must be a bounded Orbit read-only skill manifest")
+    old_format = expected["format"]
     digest = expected.get("context_sha256")
     refs = expected.get("skills")
     if not isinstance(digest, str) or not HEX_DIGEST.fullmatch(digest):
         raise ValueError("Invalid review_manifest context digest")
     if not isinstance(refs, list) or len(refs) > MAX_SELECTED:
         raise ValueError("Invalid review_manifest skill list")
+    required = ({"name", "sha256"} if old_format == "orbit-skill-plan-v1" else
+                {"name", "sha256", "tree_sha256", "location_sha256"})
     for ref in refs:
-        if not isinstance(ref, dict) or set(ref) != {"name", "sha256"} or not (
+        if not isinstance(ref, dict) or set(ref) != required or not (
             isinstance(ref["name"], str) and SKILL_NAME.fullmatch(ref["name"])
-            and isinstance(ref["sha256"], str) and HEX_DIGEST.fullmatch(ref["sha256"])
+            and all(isinstance(ref[k], str) and HEX_DIGEST.fullmatch(ref[k])
+                    for k in required - {"name"})
         ):
             raise ValueError("Invalid review_manifest skill identity")
     if len({r["name"] for r in refs}) != len(refs):
         raise ValueError("Duplicate skill identity in review_manifest")
+    before = {r["name"]: r for r in refs}
+    after = {r["name"]: r for r in actual["skills"]}
+    diff = {
+        "context_changed": digest != actual["context_sha256"],
+        "format_changed": old_format != actual["format"],
+        "added": sorted(after.keys() - before.keys()),
+        "removed": sorted(before.keys() - after.keys()),
+        "changed": sorted(k for k in before.keys() & after.keys()
+                          if before[k] != after[k]),
+        "selection_order_changed": [r["name"] for r in refs] !=
+                                   [r["name"] for r in actual["skills"]],
+    }
+    if old_format != SKILL_MANIFEST_FORMAT:
+        return {"status": "HOLD_LEGACY_MANIFEST_REVIEW_REQUIRED",
+                "host_activation_verified": False, "diff": diff,
+                "next": "Existing v1 pins omit skill helper files and local source; generate and review a fresh v2 plan."}
     if expected != actual:
         return {"status": "HOLD_CHANGED_OR_MISSING_SKILLS",
-                "host_activation_verified": False,
-                "next": "Inspect changed context, source and skill digests; obtain fresh permission and review."}
+                "host_activation_verified": False, "diff": diff,
+                "next": "Review changed context, selection and bounded skill-tree pins; request fresh permission."}
     return {"status": "PINS_MATCH_CURRENT_PREVIEW_ONLY",
-            "host_activation_verified": False,
-            "next": "Hashes match a read-only snapshot, not authorization, trust or live host activation."}
+            "host_activation_verified": False, "diff": diff,
+            "next": "Matching content/location hashes are not source trust, authorization or host activation."}
 
 
 def preview(project_root, objective, available, *, project_profile=None,
@@ -342,8 +416,8 @@ def preview(project_root, objective, available, *, project_profile=None,
             if requested is not None and name in requested:
                 excluded.append({"name": name, "reason": conflict})
             continue
-        digest = _digest_installed(row, allowed)
-        if digest is None:
+        snapshot = _snapshot_installed(row, allowed)
+        if snapshot is None:
             if requested is not None and name in requested:
                 excluded.append({"name": name, "reason": "UNSAFE_OR_CHANGED_LOCAL_SKILL"})
             continue
@@ -356,7 +430,12 @@ def preview(project_root, objective, available, *, project_profile=None,
         score = overlap + 3 * exact
         if requested is None and score == 0:
             continue
-        matches.append({"name": name, "sha256": digest, "match_score": score,
+        matches.append({"name": name, "sha256": snapshot["sha256"],
+                        "tree_sha256": snapshot["tree_sha256"],
+                        "location_sha256": snapshot["location_sha256"],
+                        "files_fingerprinted": snapshot["file_count"],
+                        "skill_bytes_fingerprinted": snapshot["tree_bytes"],
+                        "match_score": score,
                         "source": "LOCAL_SKILL_UNVERIFIED",
                         "provenance_hint": _provenance_hint(row["path"], allowed),
                         "license": "UNKNOWN_REVIEW_REQUIRED",
@@ -374,8 +453,10 @@ def preview(project_root, objective, available, *, project_profile=None,
     else:
         chosen = matches[:MAX_SELECTED]
     missing = [name for name in (requested or []) if name not in {x["name"] for x in chosen}]
-    pins = [{"name": x["name"], "sha256": x["sha256"]} for x in chosen]
-    manifest = {"format": "orbit-skill-plan-v1",
+    pins = [{"name": x["name"], "sha256": x["sha256"],
+             "tree_sha256": x["tree_sha256"],
+             "location_sha256": x["location_sha256"]} for x in chosen]
+    manifest = {"format": SKILL_MANIFEST_FORMAT,
                 "context_sha256": _manifest_identity(project_root, objective, p, host),
                 "skills": pins}
     checked = _revalidate(review_manifest, manifest)
@@ -383,7 +464,7 @@ def preview(project_root, objective, available, *, project_profile=None,
     status = ("HOLD_PERMISSION_DENIED" if denied else
               "HOLD_REQUESTED_SKILLS_UNAVAILABLE" if missing else
               "SKILL_SHORTLIST_READY" if chosen else "NO_RELEVANT_INSTALLED_SKILLS")
-    if checked["status"] == "HOLD_CHANGED_OR_MISSING_SKILLS":
+    if checked["status"].startswith("HOLD_"):
         status = "HOLD_STALE_MANIFEST"
     return {
         "status": status, "mode": "READ_ONLY_SKILL_PLAN",
@@ -398,6 +479,11 @@ def preview(project_root, objective, available, *, project_profile=None,
         "context_budget": {"max_selected": MAX_SELECTED,
                            "descriptions_not_loaded_as_instructions": True,
                            "full_skill_text_returned": False},
+        "integrity_scope": {"skill_metadata_and_helper_files": True,
+                            "max_entries_per_skill": MAX_SKILL_TREE_ENTRIES,
+                            "max_bytes_per_skill": MAX_SKILL_TREE_BYTES,
+                            "symlinks_and_oversized_trees_held": True,
+                            "hashes_are_not_approval": True},
         "fallback": "Use built-in host tools and the existing Orbit specialist/task workflow.",
         "needs_license_review": bool(chosen), "needs_owner_approval": bool(chosen),
         "host_tool_verified": False, "permission_verified": False,
