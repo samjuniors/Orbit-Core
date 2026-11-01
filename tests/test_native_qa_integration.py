@@ -221,6 +221,9 @@ class NativeHostQAIntegrationTests(unittest.TestCase):
             ("qa_build_revision", 99),
             ("source_identity_kind", "GIT_SHA_VERIFIED"),
             ("host_execution_attested", True),
+            ("qa_project", "unrelated-project"),
+            ("qa_build_id", "different-build"),
+            ("qa_stage", "NATIVE_QA"),
         ):
             with self.subTest(field=field, bad=bad):
                 edited = json.loads(json.dumps(saved))
@@ -238,6 +241,38 @@ class NativeHostQAIntegrationTests(unittest.TestCase):
             (json.dumps(saved), self.project, str(self.root), self.build_id))
         self.conn.commit()
         self.assertEqual(self.review("host")["status"], "HOLD_STALE_OR_INVALID_QA")
+
+    def test_identical_source_cannot_reuse_another_builds_host_qa(self):
+        self.build("library", stage="VERIFY", revision=5)
+        first = self.advance("host")
+        self.assertEqual(first["status"], "ADVANCED")
+        self.assertEqual(self.review("host")["status"],
+                         "READY_FOR_INDEPENDENT_REVIEW")
+        self.assertEqual(first["run"]["evidence"]["VERIFY"]["qa_build_id"],
+                         self.build_id)
+        self.assertEqual(first["run"]["evidence"]["VERIFY"]["qa_project"],
+                         self.project)
+        self.assertEqual(first["run"]["evidence"]["VERIFY"]["qa_stage"],
+                         "VERIFY")
+        # A second build in the same project has identical source bytes and
+        # stage revision, but copied QA evidence must not validate for it.
+        self.conn.execute(
+            "INSERT INTO build_runs (project,root,build_id,stage,revision,"
+            "objective,evidence_json,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+            (self.project, str(self.root), "other-build", "REVIEW", 6,
+             "A separate objective must receive its own host test run",
+             json.dumps(first["run"]["evidence"]), "2026-11-01"),
+        )
+        self.conn.commit()
+        before = self.conn.total_changes
+        self.assertEqual(
+            self.review("host", build_id="other-build")["status"],
+            "HOLD_STALE_OR_INVALID_QA",
+        )
+        self.assertEqual(self.conn.total_changes, before)
+        # The original build's reviewed evidence stays intact.
+        self.assertEqual(self.review("host")["status"],
+                         "READY_FOR_INDEPENDENT_REVIEW")
 
     def test_malformed_native_platform_values_hold_without_exception_or_write(self):
         self.build("native", stage="NATIVE_QA", revision=5)
