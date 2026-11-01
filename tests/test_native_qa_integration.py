@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "source" / "runtime"))
 import orbit_build
 import orbit_decisions
 import orbit_mcp
+import orbit_swarm_integrity
 import orbit_tasks
 
 
@@ -237,6 +238,76 @@ class NativeHostQAIntegrationTests(unittest.TestCase):
             (json.dumps(saved), self.project, str(self.root), self.build_id))
         self.conn.commit()
         self.assertEqual(self.review("host")["status"], "HOLD_STALE_OR_INVALID_QA")
+
+    def test_malformed_native_platform_values_hold_without_exception_or_write(self):
+        self.build("native", stage="NATIVE_QA", revision=5)
+        for malformed in ([{}], [["android"]], [None], [True]):
+            with self.subTest(platforms=malformed):
+                data = json.loads(self.evidence("native"))
+                data["platforms"] = malformed
+                before = self.conn.total_changes
+                result = self.advance("native", evidence=json.dumps(data))
+                self.assertEqual(result["status"], "HOLD")
+                self.assertEqual(self.conn.total_changes, before)
+                self.assertEqual(
+                    orbit_build.get(self.conn, self.root, {
+                        "project": self.project, "build_id": self.build_id,
+                    })["stage"], "NATIVE_QA",
+                )
+
+    def test_invalid_qa_mode_types_reject_at_direct_review_boundary(self):
+        self.build("native", stage="NATIVE_QA", revision=5)
+        self.advance("native")
+        base = {
+            "tasks": [{"task_key": "implementation", "expected_revision": 2}],
+            "expected_source_fingerprint": self.fingerprint,
+            "build_id": self.build_id,
+        }
+        for malformed in ([], {}, None, 4, True):
+            with self.subTest(qa_mode=malformed):
+                with self.assertRaisesRegex(ValueError, "qa_mode"):
+                    orbit_swarm_integrity.review(
+                        self.conn, self.root, self.project,
+                        {**base, "qa_mode": malformed},
+                    )
+
+    def test_corrupted_legacy_flow_fails_closed_in_native_qa_review(self):
+        self.build("native", stage="NATIVE_QA", revision=5)
+        self.advance("native")
+        self.conn.execute(
+            "UPDATE build_runs SET evidence_json=? WHERE project=? AND root=? "
+            "AND build_id=?",
+            (json.dumps([]), self.project, str(self.root), self.build_id),
+        )
+        self.conn.commit()
+        build = orbit_build.get(self.conn, self.root, {
+            "project": self.project, "build_id": self.build_id,
+        })
+        self.assertEqual(orbit_build.flow_for(build), orbit_build.STAGES)
+        before = self.conn.total_changes
+        self.assertEqual(self.review("native")["status"], "HOLD_QA_MODE_MISMATCH")
+        self.assertEqual(before, self.conn.total_changes)
+
+    def test_malformed_feedback_entry_invalidates_host_qa(self):
+        self.build("library", stage="VERIFY", revision=5)
+        self.advance("host")
+        row = self.conn.execute(
+            "SELECT evidence_json FROM build_runs WHERE project=? AND root=? "
+            "AND build_id=?",
+            (self.project, str(self.root), self.build_id),
+        ).fetchone()
+        saved = json.loads(row["evidence_json"])
+        saved["__orbit_feedback"] = ["OPEN"]
+        self.conn.execute(
+            "UPDATE build_runs SET evidence_json=? WHERE project=? AND root=? "
+            "AND build_id=?",
+            (json.dumps(saved), self.project, str(self.root), self.build_id),
+        )
+        self.conn.commit()
+        before = self.conn.total_changes
+        self.assertEqual(self.review("host")["status"],
+                         "HOLD_STALE_OR_INVALID_QA")
+        self.assertEqual(before, self.conn.total_changes)
 
     def test_all_modes_block_active_other_project_worker_without_disclosure(self):
         self.build("native", stage="NATIVE_QA", revision=5)
