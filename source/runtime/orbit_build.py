@@ -20,10 +20,14 @@ FLOWS=orbit_decisions.FLOWS
 def flow_for(row):
     if row is None:return STAGES
     try:
-        value=json.loads(row['evidence_json']).get('__orbit_flow')
+        saved=json.loads(row['evidence_json'])
+        value=saved.get('__orbit_flow') if isinstance(saved,dict) else None
     except (KeyError,TypeError,ValueError):
         return STAGES
-    if isinstance(value,list) and tuple(value) in ALL_FLOWS and row['stage'] in value:
+    # Legacy/invalid local records must never turn a malformed flow
+    # into an uncaught exception or a fabricated native QA stage.
+    if (isinstance(value,list) and tuple(value) in ALL_FLOWS
+            and row['stage'] in value):
         return tuple(value)
     return STAGES
 
@@ -686,7 +690,9 @@ def valid_stage_evidence(stage, evidence):
             return False
         platforms=report['platforms']
         if not isinstance(platforms,list) or not 1<=len(platforms)<=3 or any(
-            x not in {'android','ios','macos','windows','linux'} for x in platforms):return False
+            not isinstance(x,str) or
+            x not in {'android','ios','macos','windows','linux'}
+            for x in platforms):return False
         commands=report['commands']
         if not isinstance(commands,list) or not 1<=len(commands)<=8 or any(
             not isinstance(c,dict) or set(c)!={'command','exit_code'}
