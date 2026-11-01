@@ -75,6 +75,7 @@ FRAMEWORK_MARKERS = {
     "tensorflow": (frozenset({"tensorflow"}),),
     "unity": (frozenset({"unity"}),),
     "unreal": (frozenset({"unreal"}),),
+    "react": (frozenset({"react"}),),
     "nextjs": (frozenset({"nextjs"}), frozenset({"next", "js"})),
     "vue": (frozenset({"vue"}),),
     "angular": (frozenset({"angular"}),),
@@ -84,7 +85,7 @@ FRAMEWORK_GROUPS = (
     frozenset({"react-native", "flutter", "swiftui", "kotlin-compose"}),
     frozenset({"pytorch", "tensorflow"}),
     frozenset({"unity", "unreal"}),
-    frozenset({"nextjs", "vue", "angular", "svelte"}),
+    frozenset({"react", "nextjs", "vue", "angular", "svelte"}),
 )
 STOPWORDS = frozenset({"a", "an", "for", "the", "and", "to", "of", "in", "with", "on", "or", "from", "this", "that"})
 
@@ -122,11 +123,12 @@ def _framework_conflict(parts, profile):
     declared = set(profile["technologies"])
     for family in FRAMEWORK_GROUPS:
         active = family & declared
-        # If multiple frameworks are explicitly declared, keep each candidate
-        # available for review rather than arbitrarily selecting a winner.
-        if len(active) != 1:
+        if not active:
             continue
-        for framework in sorted(family - active):
+        # Next.js is built on React, so React skills are relevant to Next.js.
+        # Other explicitly declared frameworks are respected as-is.
+        compatible = active | ({"react"} if "nextjs" in active else set())
+        for framework in sorted(family - compatible):
             if any(marker <= parts for marker in FRAMEWORK_MARKERS[framework]):
                 return "DIFFERENT_DECLARED_FRAMEWORK_REQUIRES_REVIEW"
     return None
