@@ -26,11 +26,11 @@ The result's `skill_plan` provides:
 - `shortlist`: installed skill name, SHA-256 of `SKILL.md`, bounded recursive helper/reference-tree SHA-256, hashed local source location, match score, PROJECT_LOCAL/USER_LOCAL **unverified** directory hint and author-claimed **unverified** license/version; never treat local presence or hash as proof of publisher, license or runtime suitability
 - `manifest`: `orbit-skill-plan-v2` snapshot with context digest and exact name/`sha256`/`tree_sha256`/`location_sha256` per selection; v1 manifests remain readable only to report `HOLD_LEGACY_MANIFEST_REVIEW_REQUIRED` and require fresh review (not auto-upgraded or approved)
 - `revalidation`: inspect exact previous `review_manifest` and identify changed project context, added/removed/changed skill identities, selection order and format changes; stale or v1 input returns `HOLD_STALE_MANIFEST` for new approval
-- `integrity_scope`: bounded traversal (at most 64 files/directories and 512 KiB per skill, 256 KiB per helper file), no symlink or junction traversal; oversized/unsafe trees are ineligible rather than partially fingerprinted
+- `integrity_scope`: bounded traversal (at most 64 files/directories and 512 KiB per skill, 256 KiB per helper file) and at most 24 automatic tree fingerprints; exact requested names (max five) bypass automatic ranking but not safety caps; deferred count is visible. No symlink or junction traversal; oversized/unsafe trees are ineligible rather than partially fingerprinted
 - `coverage_hint`: declared framework labels matched *by skill-name tokens* and unmatched labels; neither exact token match nor author description proves semantic fit or installed toolchains
 - `handoff`: human review and host-owned, permission-gated activation checklist, not a command or installer; no installation, project writes, host config changes or rollback needed from a preview
 - `duplicate_skill_ids` and `missing_requested`: refuse silently choosing among same-named project/user skills; conflicting, absent or unsafe requested skills HOLD
-- `context_budget`: at most five candidates, no skill-body instructions returned or context flooded; empty lists use host-native fallback
+- `context_budget`: at most five selected candidates, no skill-body instructions returned or context flooded; project-constrained installed-candidate results omit raw untrusted frontmatter; empty lists use host-native fallback
 
 A sample read-only call (user/host must replace these example classifications with actual verified project context):
 
