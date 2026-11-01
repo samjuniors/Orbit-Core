@@ -510,6 +510,57 @@ class SkillPlanPreviewTests(unittest.TestCase):
                 self.select("Python API", requested_skill_names=["python-api"],
                             review_manifest=broken)
 
+    def test_coverage_hints_only_match_skill_names_not_sdk_availability(self):
+        self.skill("python-api", "Python API review")
+        result = self.select("Review Python FastAPI service", project_profile={
+            "product_type": "api-service", "platform": "server",
+            "technologies": ["python", "fastapi"], "operation": "review",
+        })
+        self.assertEqual(result["coverage_hint"]["skill_name_token_matches"],
+                         ["python"])
+        self.assertEqual(result["coverage_hint"]["not_name_matched"], ["fastapi"])
+        self.assertFalse(result["coverage_hint"]["semantic_fit_verified"])
+        self.assertFalse(result["coverage_hint"]["host_toolchains_verified"])
+        self.assertTrue(result["handoff"]["host_owned"])
+        self.assertFalse(result["handoff"]["configuration_modified_by_preview"])
+        self.assertFalse(result["handoff"]["rollback_needed_from_preview"])
+
+    def test_malformed_skill_path_is_excluded_without_crash(self):
+        invalid = {"skills": [
+            {"name": "python-api", "path": None, "description": "Python API"}
+        ]}
+        preview = orbit_skill_plan.preview(
+            str(self.root), "Python API", invalid, home=self.home,
+            requested_skill_names=["python-api"]
+        )
+        self.assertEqual(preview["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(preview["excluded_requested"][0]["reason"],
+                         "INVALID_LOCAL_SKILL_PATH")
+        self.assertEqual(preview["manifest"]["skills"], [])
+
+    def test_mcp_schema_accepts_v2_pins_and_legacy_v1_for_explicit_review(self):
+        self.skill("python-api", "Python API review")
+        current = self.select("Python API", requested_skill_names=["python-api"])["manifest"]
+        payload = {"project_root": str(self.root), "objective": "Python API",
+                   "requested_skill_names": ["python-api"],
+                   "review_manifest": current}
+        orbit_mcp.validate("orbit_capability_select", payload)
+        legacy = {"format": "orbit-skill-plan-v1",
+                  "context_sha256": current["context_sha256"],
+                  "skills": [{"name": "python-api",
+                              "sha256": current["skills"][0]["sha256"]}]}
+        orbit_mcp.validate("orbit_capability_select",
+                           {**payload, "review_manifest": legacy})
+        for bad in ({**current, "skills": [{
+                        **current["skills"][0], "unexpected": "not-allowed"}]},
+                    {**current, "skills": [{**current["skills"][0],
+                                             "tree_sha256": "bad"}]}):
+            with self.subTest(manifest=bad), self.assertRaises(ValueError):
+                orbit_mcp.validate(
+                    "orbit_capability_select",
+                    {**payload, "review_manifest": bad}
+                )
+
     def test_legacy_selector_remains_47_tools_and_schema_rejects_writes(self):
         metadata = next(m for m in orbit_mcp.TOOLS
                         if m["name"] == "orbit_capability_select")
