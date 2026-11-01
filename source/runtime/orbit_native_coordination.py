@@ -293,13 +293,20 @@ def preview(conn, root, project, args):
     }
     if scheduled["status"].startswith("HOLD_") and scheduled["status"] != "HOLD_NATIVE_TOOL_UNAVAILABLE":
         host_reconciliation = orbit_tasks.active_reconciliation(conn, root, project)
+        own_active_count = conn.execute(
+            """SELECT COUNT(*) FROM orbit_agent_tasks
+               WHERE project=? AND project_root=?
+               AND status IN ('RESERVED','RUNNING')""",
+            (project, str(root)),
+        ).fetchone()[0]
         return {
             **shared, "status": scheduled["status"], "stage": "HOLD_RECONCILE",
             "host_reconciliation": host_reconciliation,
-            # Aggregate count only; never reveal another project's identity.
+            # Count from an exact project+root query, not the bounded session
+            # list; do not disclose another project's keys or filenames.
             "active_records_outside_selected_project": max(
                 0, scheduled.get("active_records_same_root", 0) -
-                len(host_reconciliation["active"])
+                own_active_count
             ),
             "next": ("Reconcile host liveness, task scope and dependencies using "
                      "the authoritative IDE before new reservations."),
