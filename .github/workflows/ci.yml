@@ -4,7 +4,9 @@ on:
     branches: [main, 'dev/**', 'feat/**', 'fix/**', 'docs/**', 'release/**']
     tags: ['v*']
   pull_request:
-    branches: [main, 'dev/**']
+    # Development branches already run the same matrix on push. Only main
+    # PRs need an additional base-target trigger; avoid duplicated CI work.
+    branches: [main]
 permissions:
   contents: read
 jobs:
