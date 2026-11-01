@@ -333,6 +333,9 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
            project_profile=None, requested_skill_names=None, review_manifest=None,
            host='unknown'):
     if not isinstance(objective,str) or not objective.strip() or len(objective)>1500: raise ValueError('objective must contain 1..1500 characters')
+    # Omitted tools mean "not reported", not proof that a host has no tools.
+    if host_tools is None:
+        host_tools = []
     if not isinstance(host_tools,list) or len(host_tools)>80 or any(not isinstance(x,str) or len(x)>100 for x in host_tools):raise ValueError('host_tools must be a short list of names')
     if permission_state not in ('UNKNOWN','APPROVED','DENIED'):
         raise ValueError('permission_state must be UNKNOWN, APPROVED or DENIED')
@@ -394,6 +397,9 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
     reviewed_candidates = ([item for item in candidates
                             if item['name'] in selected_names]
                            if constrained else candidates)
+    if constrained and (permission_state == 'DENIED'
+                        or skill_plan['status'].startswith('HOLD_')):
+        reviewed_candidates = []
     if permission_state == 'DENIED':
         recommended_action = 'HOLD_PERMISSION_DENIED'
     elif skill_plan['status'].startswith('HOLD_'):
