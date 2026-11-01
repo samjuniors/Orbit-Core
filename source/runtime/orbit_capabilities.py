@@ -6,7 +6,13 @@ import re
 import shutil
 import importlib.util
 from pathlib import Path
-import orbit_skill_plan
+# Both supported entry points must work: the packaged stdio script executes
+# this module as a top-level import, while repository callers can import it
+# as source.runtime.orbit_capabilities.
+if __package__:
+    from . import orbit_skill_plan
+else:
+    import orbit_skill_plan
 
 TRIGGERS = {
     'frontend': {'frontend','ui','ux','interface','design','responsive','component','layout','accessibility','visual','polish'},
