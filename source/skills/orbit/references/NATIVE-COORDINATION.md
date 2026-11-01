@@ -105,10 +105,10 @@ when the task is small, unsafe to parallelize or native tooling is absent.
   Source-matching QA from a different active build revision must HOLD.
   The gate checks local records only and cannot independently certify
   actual Git/host activity. **Native/mobile/desktop/CLI QA is not browser
-  QA**: it still needs separately inspected target-platform host results,
-  even if all task batches are accepted. The current browser-specific
-  gate may continue to HOLD for those platforms; do not invent a browser
-  run to override it. Actual merge/publish remains a separate owner decision.
+  QA**: select explicit `qa_mode=native` or `qa_mode=host` for the
+  matching frozen build flow, with source-pinned host-reported QA evidence;
+  independent target-platform test review remains mandatory. Actual
+  merge/publish remains a separate owner decision.
 - `include_skill_review=true` only suggests later **read-only**
   `orbit_capability_select` checks for ready task objectives; the actual host
   must inspect the codebase, declare truthful product/platform/technology,
@@ -117,6 +117,60 @@ when the task is small, unsafe to parallelize or native tooling is absent.
   generic VS Code), the hint uses `host=unknown` and
   `host_fit_unverified=true`, not a fabricated compatible IDE provider.
   This preview installs/loads no skills.
+
+## Native-platform and CLI QA integration — source-pinned host evidence
+
+Select the existing `orbit_swarm_integration_review` **`qa_mode`** for the
+actual frozen build flow, not by guessing that a browser or native SDK ran:
+
+- `web` (default, backwards compatible): the selected build must include
+  `BROWSER_QA` and the latest Orbit-recorded Playwright browser result must
+  match current source and build revision/recorded passing transition.
+- `native`: for a build whose frozen flow includes `NATIVE_QA` (normally
+  mobile/desktop). The actual IDE runs approved platform-specific commands,
+  real device/emulator interaction and accessibility checks. The host records
+  a structured `orbit_build_advance` `NATIVE_QA` PASS containing **1–3
+  platforms** drawn from Android/iOS/macOS/Windows/Linux, **1–8 actual command
+  strings with reported zero exit codes**, and bounded interaction and
+  accessibility observations. The build ledger pins the **current bounded
+  source fingerprint** and **exact pre-advance build revision**, and records
+  `host_execution_attested=false`. Only after the build advances beyond
+  `NATIVE_QA` may the integration gate return
+  `READY_FOR_INDEPENDENT_REVIEW`. Legacy unpinned QA, changed source,
+  invalid reports or unavailable SDKs remain HOLD.
+- `host`: for CLI, SDK/library, API, OS-platform and other **non-browser**
+  builds whose frozen flow contains `VERIFY` but neither `BROWSER_QA`
+  nor `NATIVE_QA`. Record structured `VERIFY` PASS with real host-observed
+  command/exit-code, edge-case and security notes. The same source/revision pin
+  is saved by `orbit_build_advance`; `orbit_swarm_integration_review`
+  checks it only after the build advances beyond VERIFY. A scoped native fix
+  that uses the shorter VERIFY lifecycle belongs to this mode, not a
+  fabricated NATIVE_QA or browser run.
+
+An explicit `build_id`, exact selected-project task revisions and
+`expected_source_fingerprint` are required for every mode. The
+`integration_review_batches` proposals now label the supported choices
+and require the host to inspect the persisted build flow before selecting
+one. No automatic batch invocation occurs. A web QA record **cannot
+substitute** for native/host verification; a host/native QA record cannot
+substitute for Playwright browser QA in a web flow.
+
+The structured platform and command fields are **caller-reported evidence**:
+Orbit cannot independently tell whether a terminal command executed, whether
+an emulator/device was used, or whether the output was reviewed. Even if the
+bounded source and build revision match, the strongest status is
+`READY_FOR_INDEPENDENT_REVIEW`, with `tests_independently_verified=false`,
+`actual_platform_execution_verified=false` and `merge_performed=false`.
+The host reviewer still inspects real command output, source diff, target
+OS/SDK/device version, permission prompts, regressions, credentials/security
+and user acceptance. The source snapshot is **not** a Git-commit signature
+or a complete install/runtime attestation.
+
+The current built-in NATIVE_QA evidence validator has a known bounded
+five-platform list. Embedded targets, console/game-engine runs, or an
+unsupported host/SDK must be explicitly documented as BLOCKED/NOT RUN until
+an appropriate platform-specific acceptance path is independently reviewed.
+Do not silently relabel them Android/web merely to make a gate succeed.
 
 ## Suggested source-only sequence
 
