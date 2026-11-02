@@ -285,6 +285,57 @@ class NativeCoordinationPreviewTests(unittest.TestCase):
         self.assertTrue(all(b["native_platform_qa_requires_separate_host_review"]
                             for b in batches))
 
+    def test_real_codex_namespaced_collaboration_tools_are_bounded_and_usable(self):
+        # Observed on a signed-in Codex CLI host (2026-11-02): its native
+        # tool names include the collaboration. namespace. No tool is invoked
+        # by Orbit itself; this is still a caller-reported preview.
+        reported = [
+            "collaboration.spawn_agent", "collaboration.wait_agent",
+            "collaboration.send_message", "collaboration.followup_task",
+            "collaboration.interrupt_agent", "collaboration.list_agents",
+        ]
+        before = self.conn.total_changes
+        empty = self.preview(available_host_tools=reported)
+        self.assertEqual(empty["status"], "NO_REGISTERED_TASKS")
+        self.assertFalse(empty["agent_invoked"])
+        self.assertEqual(before, self.conn.total_changes)
+
+        self.task("backend", paths=["backend/"])
+        candidate = self.preview(available_host_tools=reported)
+        self.assertEqual(candidate["status"], "RESERVATION_REVIEW_REQUIRED")
+        self.assertEqual(candidate["reservation_candidates"][0]["task_key"],
+                         "backend")
+        rev = self.reserve("backend")
+        before = self.conn.total_changes
+        handoff = self.preview(
+            available_host_tools=reported,
+            reserved_tasks=[{"task_key": "backend", "expected_revision": rev}],
+        )
+        self.assertEqual(handoff["status"], "HOST_INVOCATIONS_REQUIRED")
+        self.assertEqual(len(handoff["handoffs"]), 1)
+        self.assertEqual(handoff["handoffs"][0]["native_tool"],
+                         "collaboration.spawn_agent")
+        self.assertFalse(handoff["host_permissions_verified"])
+        self.assertFalse(handoff["agent_invoked"])
+        self.assertEqual(self.conn.total_changes, before)
+
+    def test_namespaced_tool_alias_validation_never_allows_arbitrary_hosts(self):
+        with self.assertRaises(ValueError):
+            self.preview(available_host_tools=[
+                "collaboration.spawn_agent", "spawn_agent",
+            ])
+        with self.assertRaises(ValueError):
+            self.preview(available_host_tools=["collaboration.unknown_agent"])
+        with self.assertRaises(ValueError):
+            self.preview(host="antigravity",
+                         available_host_tools=["collaboration.spawn_agent"])
+        with self.assertRaises(ValueError):
+            self.preview(available_host_tools=["../spawn_agent"])
+        with self.assertRaises(ValueError):
+            self.preview(available_host_tools=[
+                "collaboration.spawn_agent", "collaboration.spawn_agent",
+            ])
+
     def test_native_tool_missing_suggests_serial_host_work_without_fake_agent(self):
         self.task("api", paths=["src/api/"])
         out = self.preview(available_host_tools=[])
