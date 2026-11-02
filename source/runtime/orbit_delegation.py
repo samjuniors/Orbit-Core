@@ -14,7 +14,9 @@ import orbit_tasks
 
 HOST_NATIVE_TOOLS = {
     "antigravity": ("invoke_subagent",),
-    "codex": ("spawn_agent",),
+    # Codex exposes the real native worker as collaboration.spawn_agent in
+    # current connected CLI sessions; retain short legacy spellings as hints.
+    "codex": ("collaboration.spawn_agent", "spawn_agent"),
     "claude-code": ("Agent", "Task"),
     "vscode": (),
     "claude-desktop": (),
@@ -28,7 +30,35 @@ NO_SIDE_EFFECTS = (
     "model-provider switches without separate real host/user approval."
 )
 ALLOWED_TOOL_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+# Exact observed Codex native names, not an arbitrary namespace wildcard.
+# Other hosts keep the original bounded, unqualified tool-name validation.
+CODEX_NAMESPACED_TOOLS = frozenset({
+    "collaboration.spawn_agent", "collaboration.wait_agent",
+    "collaboration.send_message", "collaboration.followup_task",
+    "collaboration.interrupt_agent", "collaboration.list_agents",
+})
 HOST_WORKSPACE_MODES = ("unknown", "read-only", "workspace-write")
+
+
+def validate_reported_tools(host, tools):
+    """Validate caller-reported tool *names*, never authenticate availability.
+
+    Only the observed Codex collaboration namespace is accepted with dots.
+    A short and namespaced spelling of the same worker must not be treated
+    as two distinct capabilities or separate approval/worker slots.
+    """
+    namespaced = CODEX_NAMESPACED_TOOLS if host == "codex" else frozenset()
+    if (not isinstance(tools, list) or len(tools) > 32
+            or any(not isinstance(t, str)
+                   or not (ALLOWED_TOOL_PATTERN.fullmatch(t) or t in namespaced)
+                   for t in tools)):
+        raise ValueError("Host tools must be 0..32 bounded supported tool names")
+    if len(set(tools)) != len(tools) or (
+            host == "codex"
+            and "spawn_agent" in tools
+            and "collaboration.spawn_agent" in tools):
+        raise ValueError("Duplicate reported host tool names")
+    return tools
 
 
 def workspace_mode(args):
@@ -45,12 +75,7 @@ def handoff(conn, args, root):
     tools = args.get("available_host_tools", [])
     if host not in HOST_NATIVE_TOOLS:
         raise ValueError("Unsupported host label")
-    if not isinstance(tools, list) or len(tools) > 32 or any(
-            not isinstance(t, str) or not ALLOWED_TOOL_PATTERN.fullmatch(t)
-            for t in tools):
-        raise ValueError("Host tools must be 0..32 bounded tool names")
-    if len(set(tools)) != len(tools):
-        raise ValueError("Duplicate reported host tool names")
+    validate_reported_tools(host, tools)
     # _row scopes on both verified project directory and project slug.
     task = orbit_tasks.public(orbit_tasks._row(conn, args, root))
     deps = []
