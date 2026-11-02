@@ -102,6 +102,8 @@ class HostHandoffTests(unittest.TestCase):
         self.reserve()
         for host, tools, expected in (
             ("codex", ["spawn_agent"], "spawn_agent"),
+            ("codex", ["collaboration.spawn_agent",
+                       "collaboration.wait_agent"], "collaboration.spawn_agent"),
             ("claude-code", ["Agent"], "Agent"),
             ("claude-code", ["Task"], "Task")):
             with self.subTest(host=host, tools=tools):
