@@ -69,9 +69,18 @@ does not authorize external CLIs, another model or a fake subagent session.
    and `HOST_INVOCATIONS_REQUIRED`. If a task is stale, already running,
    unreserved, conflicts on a real/path-alias scope, violates read-only
    permissions or lacks a native tool, **no partial handoffs** are returned.
-   The connected host uses its own real `invoke_subagent`, `spawn_agent`,
-   or `Agent/Task` interface; only after receiving the genuine host session
-   should it separately call `orbit_task_started` with a fresh revision.
+   The connected host uses its own real `invoke_subagent`,
+   `collaboration.spawn_agent` (actual Codex CLI native name, with legacy
+   `spawn_agent` accepted), or `Agent/Task` interface. Codex may also
+   expose `collaboration.wait_agent`, `collaboration.send_message`,
+   `collaboration.followup_task`, `collaboration.interrupt_agent`, and
+   `collaboration.list_agents`. Only these explicitly recognized Codex
+   namespaced tool names are accepted; unknown names, duplicate aliases,
+   untrusted tool claims and other hosts' dotted tools remain rejected.
+   These names are still **caller-reported**, not automatic permission or
+   tool-availability attestation. Only after receiving the genuine host
+   session should the lead separately call `orbit_task_started` with a
+   fresh revision.
 
 The tool accepts `max_parallel=1|2` (default 2) and never permits more
 selected reserved tasks than that width. A host can always choose fewer workers
@@ -196,9 +205,15 @@ orbit_project_resume
   -> next approved wave, integration gate, separate release authorization
 ```
 
-**Quality state:** source and synthetic regression cases are authored on a
-v0.30 draft branch. The owner postponed automated and real-host acceptance;
-the presence of regression tests or tool annotations must not be reported as
-executed PASS. Windows, Linux, real Codex/Antigravity/Claude invocation,
-permission-denial and recovery acceptance remain pending. No v0.30 release
-exists from this development work.
+**Quality state (2026-11-02):** Prior source head
+`d816d834aa3e35dec81de020713a4e9f6e4ff625` passed 498 regression
+tests across Windows/Linux GitHub CI and on an actual Windows PC. The PC
+also passed disposable stdio MCP, package and synthetic restart HOLD checks.
+A signed-in Codex CLI then exposed **real** `collaboration.spawn_agent`
+tools; the first live Orbit preview rejected that namespaced name, motivating
+this compatibility fix. Regression coverage for the fix must be executed on
+the new exact head before it can be called PASS. Real native agent invocation,
+permissions, session reconciliation and independent diff/QA review remain
+**NOT VERIFIED** until an actual IDE worker returns evidence. No v0.30
+release exists; do not confuse a test fixture or a tool preview with an
+approved published package.
