@@ -59,21 +59,32 @@ not included in v0.28.0. This marker does not approve any future release.
 - This is a **0.x prerelease**, not certification that Orbit autonomously
   builds an entire software product. The connected host must actually invoke
   native workers with its own permissions; host capabilities differ.
-- Real Antigravity TODO-app acceptance reports 10/10 backend HTTP tests,
-  9/9 Chrome/Playwright interactions, two independently reviewed native
-  specialist tasks and a recovered checkpoint. The local Orbit
-  `orbit_swarm_integration_review` still returned `HOLD_INDEPENDENT_QA`
-  because that fixture had no matching source-linked `build_runs` and
-  `browser_results` records; owner-reported external QA is not equivalent.
-- The disposable TODO-app acceptance fixture advertises permissive wildcard
-  CORS headers on its localhost API; cross-origin denial and refreshed
-  security/browser QA require review. This observation is a fixture
-  acceptance concern, **not** a claim of a discovered vulnerability in
-  Orbit's own preview API.
-- Genuine GUI host denial, live-worker interrupted recovery, second-host
-  end-to-end delivery, installed-user migration/rollback and independent
-  publisher provenance are not fully verified. Do not imply production
-  readiness or automatic skills installation.
+- The original first-PC Antigravity TODO fixture reported 10/10 backend
+  and 9/9 external Chrome interactions, but its Orbit integration gate
+  correctly held for missing source-linked browser QA. That historical
+  observation remains recorded and was not rewritten.
+- A separate **second-PC Antigravity** fixture (Windows) reports genuine
+  backend/frontend native worker sessions and independent reviews;
+  independently rerun Python tests passed **37/37**, including trusted and
+  untrusted Origin security cases. The actual v0.28 `orbit_browser_qa`
+  launched installed Edge through isolated Playwright 1.64.1, recorded
+  **9/9 mobile browser interactions PASS** with zero browser errors or
+  blocked remote origins, and matched the frozen source fingerprint.
+  `orbit_swarm_integration_review` now returns
+  `READY_FOR_INDEPENDENT_REVIEW`; the build recovered at `REVIEW`
+  revision 7 after a fresh MCP process. This is local evidence readiness,
+  **not** cryptographic host consent or independent release certification.
+- The first disposable TODO app emitted wildcard CORS headers. The second
+  fixture separately implemented a strict loopback-origin API and 37 passing
+  regression checks, including rejected external/null Origin. These are
+  fixture findings, not claims of a vulnerability or automatic remediation
+  inside Orbit's MCP runtime.
+- Real host permission-dialog denial, an equivalent complete **Codex**
+  delivery scenario, production installed-user migration/rollback, and
+  independent publisher signing/provenance remain unverified. Version 0.x
+  is a prerelease and still requires independent release review and owner
+  publication approval; do not imply production readiness or automatic
+  skills installation.
 
 ## [0.27.1] — Rename compatibility prerelease candidate (2026-10-31)
 
