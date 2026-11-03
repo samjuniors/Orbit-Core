@@ -1,6 +1,6 @@
 # Orbit Core v0.29.0 — Development and acceptance evidence
 
-**Status: DEVELOPMENT CANDIDATE — SOURCE/Windows QA VERIFIED; REAL-HOST ACCEPTANCE PENDING.**
+**Status: DEVELOPMENT CANDIDATE — source/CI QA verified; interactive Antigravity reported PASS, native Codex BLOCKED. Not released.**
 **Date:** 2026-11-03. **Project:** Orbit Core (not Helm, Aro or the separate ORBIT planner).
 
 GitHub is engineering authority; [Orbit Core Notion hub](https://app.notion.com/p/4074f681d48881a7a407c3bdc2054409) records the approved product intent. A development branch, version string or passing CI is not a public release.
@@ -35,6 +35,33 @@ All skill directory names, descriptions, version and license metadata are **untr
 | Real Antigravity/Codex skill execution/consent | **NOT VERIFIED** | Needs authorized isolated host profiles and explicit real-host evidence; read-only source tests do not attest it |
 | Symlink-specific runtime protection on Windows | **SKIPPED in local environment** | Review Linux CI and host filesystem permissions; do not claim Windows symlink acceptance |
 | Release merge/tag/public assets | **NOT RUN** | Separate owner decision after source/host QA; do not publish now |
+
+## 2026-11-03 — Interactive Antigravity acceptance (owner-supplied report)
+
+**Source:** Owner-provided report headed *Orbit Core v0.29 — Real-Host Acceptance Report*, for Antigravity interactive Windows host `DESKTOP-AND1FUJ`, isolated workspace `%TEMP%\\Orbit-v029-HostQA-20261103` and project-local `orbit_v029_qa`. **Scope:** read-only declared project/host skill-selection tests; the reporting host was Antigravity for all seven cases, even when input `host="codex"` was supplied. These are **host-reported actual tool responses**, not fresh independent capture of the interactive GUI session.
+
+| Antigravity interactive test | Evidence and result |
+| --- | --- |
+| Project-local connection | **HOST-REPORTED PASS**: 47 tool descriptors, `orbit_update_status` installed candidate `0.29.0`, published `0.28.0`; no global `orbit-core-native` invoked |
+| React web / Flutter Android / Codex-declared Rust CLI | **HOST-REPORTED PASS**: exact `SKILL_SHORTLIST_READY` for synthetic `react-ui`, `flutter-navigation`, `cargo-testing`; excludes web-only React from Flutter |
+| Pin revalidation | **HOST-REPORTED PASS**: `PINS_MATCH_CURRENT_PREVIEW_ONLY`, no activation verified |
+| Permission denied | **HOST-REPORTED PASS**: `HOLD_PERMISSION_DENIED`, `activation_allowed=false`, adaptive/browser workflow HOLD |
+| Missing explicitly requested skill | **HOST-REPORTED PASS**: `HOLD_REQUESTED_SKILLS_UNAVAILABLE`; no catalog fetch or third-party execution |
+| Host-context drift | **HOST-REPORTED PASS**: `HOLD_STALE_MANIFEST`, `context_changed=true` |
+| Fixture integrity/permissions | Host report states no skills executed, no project edits, no global server invocation; Windows symlink testing **NOT RUN**; host restart **NOT VERIFIED** |
+
+**Independent corroboration on connected Windows PC:** Compared actual SHA-256 bytes of all three synthetic `SKILL.md` files against the report, **3/3 MATCH**:
+- `react-ui`: `d4522b2a98102644dac3f5f6502714e86bb1b2dd3439d666cc223d2dababba5f`
+- `flutter-navigation`: `73de2c6c9894b8e828635b5f4d6246f1c63f2dab942da4744044944a9bcfaef0`
+- `cargo-testing`: `ecbff0d1a0328e60c1517b40e84b6df8541661caf505d7770e85717a4c206bc1`
+
+The candidate runtime is still `VERSION=0.29.0` and the development checkout head remained `d361e54eece4f98e69a68b3ea7de9e2184715b7d` at that inspection. File-hash agreement supports the reported fixture identity, **not** attestation that each interactive GUI invocation was captured independently.
+
+### Separate actual Codex CLI attempt — BLOCKED (not a skill-plan failure)
+
+Codex CLI `0.166.0` accepted an **ephemeral configuration override** for `orbit_v029_qa`; `codex mcp get orbit_v029_qa` reported enabled stdio pointing to the isolated v0.29 candidate. A real `codex exec` attempt then used `--ignore-user-config --ignore-rules --ephemeral --sandbox read-only` in the disposable workspace. It produced a thread-start/turn-start JSONL record and exited **1** after **HTTP 403**; there was **no Codex MCP tool result**. `codex login status` independently reported "Logged in using ChatGPT", which does not establish valid server authorization or explain the 403. Do not label the Codex selector PASS or attribute this definitively to an Orbit defect. No permission bypass, global config change, skill installation or source modification was performed.
+
+**Remaining real-host gates:** native Codex read-only `orbit_v029_qa` selection/revalidation and any required restart-recovery evidence in a genuinely authorized interactive session; independent source/security review and owner-controlled merge/release decision. Keep existing [integration PR #77](https://github.com/samjuniors/Orbit-Core/pull/77) unmerged until separately approved. The previous published v0.28 tag and packages remain immutable.
 
 ## Acceptance and release blockers
 
