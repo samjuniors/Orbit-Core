@@ -103,6 +103,38 @@ class SkillPlanPreviewTests(unittest.TestCase):
         })
         self.assertEqual([item["name"] for item in x["shortlist"]], ["react-dom"])
 
+    def test_untrusted_skill_cannot_spoof_another_directory_name(self):
+        # The SKILL.md name is a claimed ID, not a license or trusted source.
+        # Refuse mismatched frontmatter instead of returning a pinned shortlist
+        # under a different installation identity.
+        path = self.skill("unrelated-directory", "Synthetic security review")
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                "name: unrelated-directory", "name: trusted-security"
+            ),
+            encoding="utf-8",
+        )
+        found = orbit_capabilities.discover(str(self.root), home=self.home)
+        self.assertNotIn("trusted-security", [s["name"] for s in found["skills"]])
+        result = self.select(
+            "Security review", host="codex",
+            requested_skill_names=["trusted-security"],
+        )
+        self.assertEqual(result["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(result["shortlist"], [])
+        self.assertEqual(result["missing_requested"], ["trusted-security"])
+        self.assertFalse(result["activation_allowed"])
+
+    def test_oversized_skill_name_is_not_discovered(self):
+        # Agent Skills frontmatter names are at most 64 characters.
+        oversized = "a" * 65
+        self.skill(oversized, "Synthetic skill with an invalid name length")
+        found = orbit_capabilities.discover(str(self.root), home=self.home)
+        self.assertNotIn(oversized, [s["name"] for s in found["skills"]])
+        result = self.select("test", host="codex", requested_skill_names=[oversized])
+        self.assertEqual(result["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(result["shortlist"], [])
+
     def test_declared_host_filters_other_host_skill_directory(self):
         self.skill("python-api", "Python API build", folder=".claude/skills")
         self.skill("api-contracts", "Python API validation", folder=".agents/skills")

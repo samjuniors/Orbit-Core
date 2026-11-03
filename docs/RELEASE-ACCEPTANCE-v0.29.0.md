@@ -95,6 +95,16 @@ The test result fields were parsed **from actual `item.completed` `mcp_tool_call
 
 **Remaining independent gates:** stronger running-server version attestation via native MCP initialization metadata (not equivalent to the reported installed version), any actual host-level permission-denial prompt, host restart recovery, Windows symlink privilege-dependent cases, independent security review of untrusted `SKILL.md` parsing/tree hashing, and release/rollback acceptance. The five read-only selector checks above **are complete**; do not repeat them or request reauthorization without a new reason. **v0.29 remains a reviewed development candidate, not merged or published.**
 
+### Focused skill-identity security review and regression (2026-11-03)
+
+**Independently reproduced issue, fixed in the development source:** A disposable local `.agents/skills/unrelated-folder/SKILL.md` whose frontmatter claimed `name: trusted-security` was previously treated as the installed `trusted-security` capability, producing `SKILL_SHORTLIST_READY`. This was an **identity-spoofing / misleading provenance risk**, not code execution or a demonstrated privilege escalation. It conflicts with the [Agent Skills format specification](https://agentskills.io/specification), which requires a skill name of at most 64 lowercase/hyphenated characters and a name matching its parent directory.
+
+**Focused fix:** `source/runtime/orbit_capabilities.py::_parse_skill` now fails closed when the frontmatter `name` differs from its containing skill directory or is longer than 64 characters. Existing prohibited characters/hyphen pattern and symlink safeguards are retained. `tests/test_skill_plan.py` adds synthetic regressions for spoofed directory identities and oversized names, asserting that both are excluded instead of pinned or selected.
+
+**Actual local verification:** Targeted skill-planning suite **38 tests run, 3 skipped, 0 failures**; complete Windows Python 3.12 unittest suite **460 tests run, 26 skipped, 0 failures**, exit 0. A separate isolated direct MCP stdio test after the patch reported **47 tools**, and React-web Antigravity-declared and Rust-CLI Codex-declared synthetic selections both remained `SKILL_SHORTLIST_READY` with `orbit-skill-plan-v2`. This test was **standalone MCP**, not a repeat of actual native IDE acceptance. No global IDE configuration, skill installation or user data was modified.
+
+**Remaining uncertainty:** The focused change closes the reproduced mismatch, **not all parser TOCTOU/symlink/reparse, third-party publisher trust, Windows privileged filesystem, real host permission or release risks**. Windows symlink-specific tests remain skipped under local privilege limits. Exact-head Linux and Windows CI, package source parity and any release decision must be reconfirmed after this source commit. The earlier host acceptance remains historical evidence on the pre-fix source, not a fresh native-host execution of the patched commit.
+
 ## Acceptance and release blockers
 
 1. **Completed on exact pre-documentation head:** CI #41617998877 5/5 PASS including v0.28 immutable upgrade and strict bundle parity. Recheck exact CI on any subsequent documentation or source head before merge.

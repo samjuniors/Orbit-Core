@@ -91,7 +91,11 @@ def _parse_skill(path):
         m=re.search(r'^'+k+r':\s*(.+?)\s*$', match.group(1), re.M)
         return m.group(1).strip().strip('"\'') if m else ''
     name,description=field('name'),field('description')
-    if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',name):return None
+    # A frontmatter alias cannot impersonate another installed skill.
+    # Agent Skills requires a bounded name matching its containing directory.
+    if (not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', name)
+            or len(name) > 64 or name != path.parent.name):
+        return None
     # Untrusted author claims are displayed only as bounded review metadata,
     # never proof of license, publisher authorization or semver compatibility.
     claimed_license=field('license')
