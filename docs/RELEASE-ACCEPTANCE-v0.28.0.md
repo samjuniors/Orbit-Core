@@ -1,6 +1,6 @@
 # Orbit Core v0.28.0 — Engineering and real-host prerelease acceptance
 
-**Status: RELEASE HOLD — source-linked browser QA cleared on 2026-11-03; independent release review still required.**
+**Status: PUBLISHED PRERELEASE — 2026-11-03.** The historical release-candidate HOLD observations below were accurate before publication; the final approved release evidence and limits are recorded at the end of this document. **Publication is not production certification.**
 This record is the version-specific technical acceptance report required by
 [RELEASE-PROCESS.md](RELEASE-PROCESS.md). Research/product decisions and
 release sequencing are tracked in the existing
@@ -14,8 +14,7 @@ GitHub is authoritative for implementation, CI, tags and publication.
 - Published starting point: [v0.27.1 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.27.1).
 - Reviewed development: [draft PR #68](https://github.com/samjuniors/Orbit-Core/pull/68),
   exact head `f9c4423effe2314b6548cf2b48dc12eeca39dbb0`.
-- Release review branch: `release/v0.28.0-candidate`; changes on this
-  branch are not automatically merged, tagged or published.
+- Release review branch: `release/v0.28.0-candidate` was approved and merged as [PR #75](https://github.com/samjuniors/Orbit-Core/pull/75). GitHub's [v0.28.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.28.0) is published from the immutable tag; it was never a separate automatic installation.
 - Implemented user-visible feature: read-only
   `orbit_software_delivery_preview`; 47-tool candidate runtime. Reuses
   native specialists/task ledger; does not autonomously execute a model.
@@ -133,9 +132,9 @@ exact-head CI before release; no passing head is inferred in advance.
 | Checkpoint and task readback | PASS | Cold MCP resume at REVIEW rev 7; both reviewed tasks rev 5 and checkpoint updated under revision guard |
 | Real hostile host permission denial | NOT VERIFIED | Antigravity did not offer denial prompt in prior test |
 | Source/package version and release CI | PASS at verified source head; newest docs pending | 420 tests, candidate builds/smoke, v0.27.1 upgrade, 5/5 exact-head CI at `85523f6`; rerun CI after documentation updates |
-| Owner merge/publication and public assets | NOT RUN | No main merge/tag/release until required checks |
+| Owner merge/publication and public assets | **PUBLISHED, public checksums VERIFIED** | Main merge `07067f10`, release workflow #41581180695 PASS, public 8 assets; 4/4 package checksum pairs independently PASS |
 
-## Required next actions
+## Historical prepublication required next actions (completed for v0.28 prerelease)
 
 The source-linked browser-QA and second-PC fixture security subgates
 in [Issue #74](https://github.com/samjuniors/Orbit-Core/issues/74)
@@ -148,4 +147,22 @@ revisions, an explicit owner release decision, a reviewed merge to
 After publication, download and verify all assets/checksums. Do not
 replace the older acceptance or published release evidence.
 
-**No permission to publish v0.29 or v0.30 ahead of this acceptance.**
+**v0.29 and v0.30 remain separate unreleased development tracks; v0.28 publication does not automatically authorize those releases.**
+
+## Final publication verification — 2026-11-03
+
+- **Owner publication approval:** explicitly requested `v0.28.0` release after documented Antigravity second-PC acceptance and source-linked browser QA. This permits a truthful **0.x prerelease** with known limitations; it does not certify production hosts or authorise publishing the next versions.
+- **Reviewed merge:** [PR #75](https://github.com/samjuniors/Orbit-Core/pull/75) merged into `main`, commit `07067f10cb5a345be0959f1a2f9a2410eb3b0f48`; `VERSION=0.28.0` and `NEXT_VERSION=0.29.0`.
+- **Exact tested merge:** [main CI #41580966442](https://github.com/samjuniors/Orbit-Core/actions/runs/41580966442) **PASS, 5/5 jobs**, Ubuntu Python 3.10–3.13 and Windows Python 3.12, including previous official upgrade checks. Independent Windows 3.12 release-bundle parity/ZIP build/extracted 47-tool MCP smoke also PASS from the merge commit.
+- **Immutable tag:** annotated `v0.28.0` object `b5a43a3e179d50889ca9cb3e2996d408e6335eb2` peels to that exact merge commit; no prior tag was moved or replaced.
+- **Official workflow:** [Publish versioned release #41581180695](https://github.com/samjuniors/Orbit-Core/actions/runs/41581180695) **PASS**, including independent build checks, source parity and automatic changelog release notes.
+- **Public artifact verification:** [v0.28.0 GitHub prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.28.0) published **2026-11-03 04:59:10 UTC**, `draft=false`, `prerelease=true`. Eight public assets (four packages and four SHA-256 sidecars) downloaded to a fresh authorized disposable Windows TEMP folder; **all four public package/sidecar SHA-256 comparisons PASS**.
+
+| Public package | SHA-256 independently verified |
+| --- | --- |
+| `ORBIT-Universal-Setup-v0.28.0.zip` | `37f5d98337355c52409eac774d757d93098898f3ffb305278871541487bf05e8` |
+| `Orbit-Antigravity-Plugin-v0.28.0.zip` | `3437f68edc470ba71998a0c9c227fb9eba5791215e067f6c850aeb7104974e45` |
+| `Orbit-Core-Plugin-Suite-v0.28.0.zip` | `9855bc933b8a6e083d3aa6419852d05ee836994707b5e8bafa5ff55491fbcc1d` |
+| `ORBIT-Claude-Desktop-v0.28.0.mcpb` | `bdb6ace7aa8d86f5758f8249c46af801f78e0df1250bb647990a1fe87e7bf59a` |
+
+**Remaining limitations:** the new read-only software-delivery preview does not independently execute coding models or grant host permissions. Real permission-denial behavior, full Codex software delivery, installed-user migration/rollback and independent publisher signing/security certification are not fully verified. Public checksum integrity does **not** prove publisher identity. No real installed user Orbit or project data was modified by the publication verification. The previous tagged release v0.27.1 and other historical assets remain intact.
