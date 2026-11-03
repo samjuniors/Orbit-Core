@@ -1,41 +1,12 @@
-# Orbit Core — current release and development queue (2026-11-02)
+# Orbit Core — current published release and development queue (2026-11-03)
 
-**Published source of truth:** [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases).
-The latest independently verified published prerelease is
-[v0.27.1](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.27.1),
-released on 2026-11-02; the prior v0.27.0 tag and assets are immutable.
-Do not infer publication from an open branch, source `VERSION`, or passing CI.
+**Latest verified published prerelease:** [v0.28.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.28.0), published **2026-11-03**, from reviewed merge commit `07067f10cb5a345be0959f1a2f9a2410eb3b0f48`. Its immutable annotated tag, successful [official publication workflow #41581180695](https://github.com/samjuniors/Orbit-Core/actions/runs/41581180695), eight public release assets and all four package/sidecar SHA-256 pairs were independently verified. [Main CI #41580966442](https://github.com/samjuniors/Orbit-Core/actions/runs/41580966442) passed all five Linux/Windows jobs. Prior [v0.27.1](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.27.1) and earlier releases remain unchanged.
 
-**v0.28 prerelease candidate:** `release/v0.28.0-candidate` is derived
-from the reviewed `dev/v0.28.0-delivery-blueprint` lane
-([draft PR #68](https://github.com/samjuniors/Orbit-Core/pull/68)).
-The development source adds one read-only `orbit_software_delivery_preview`
-MCP tool (47 tools total). Actual native delivery stays in the connected
-host with consent and review; Orbit is not an independent code executor.
+**v0.28 delivered:** The read-only `orbit_software_delivery_preview` adds adaptive, project-aware specialist planning to the existing local-first Orbit runtime (**47 MCP tools**). The connected coding host—not Orbit itself—still invokes approved native subagents. Real second-PC Antigravity TODO acceptance included native backend/frontend task reviews, 37/37 backend security/HTTP tests, 9/9 source-bound Playwright Edge browser actions, strict local origin controls, and reliable MCP restart/checkpoint recovery. The integration guard returned `READY_FOR_INDEPENDENT_REVIEW` before owner-authorized prerelease publication. See [final engineering acceptance](RELEASE-ACCEPTANCE-v0.28.0.md) and [completed Issue #74](https://github.com/samjuniors/Orbit-Core/issues/74).
 
-**Release gate:** The original first-PC Antigravity TODO acceptance
-reported native backend/frontend work and Chrome interactions but held
-on missing source-linked browser QA and an overly broad sample CORS
-policy. A **separate second-PC** Antigravity fixture addressed the sample
-origin-policy regression (37/37 backend tests) and generated a genuine,
-source-bound **9/9 Edge/Playwright PASS** record through the actual
-`orbit_browser_qa` MCP tool. Both tasks remain `REVIEW_ACCEPTED`
-revision 5; the build is at `REVIEW` revision 7. The same-source
-`orbit_swarm_integration_review` returns
-`READY_FOR_INDEPENDENT_REVIEW`, **not** authority to merge or publish.
-See [Issue #74](https://github.com/samjuniors/Orbit-Core/issues/74)
-and [the version-specific acceptance record](RELEASE-ACCEPTANCE-v0.28.0.md).
-Independent release-source review, exact newest-head CI, and an explicit
-owner publication decision remain required. This is **not a
-tagged/published v0.28**.
+**Published versus production-ready:** v0.28 is a **0.x prerelease**, not production certification. Real host permission-denial checks, complete Codex end-to-end delivery, installed-user migration/rollback and publisher signing remain limited or unverified, as documented in public release notes. Official release checksums prove file integrity rather than publisher identity. Always consult [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases) for the current publication authority.
 
-**Next versions:** v0.29 project-aware skill discovery
-([draft PR #70](https://github.com/samjuniors/Orbit-Core/pull/70)),
-then v0.30 native coordination
-([draft PR #71](https://github.com/samjuniors/Orbit-Core/pull/71))
-and [Issue #72 corrective PR #73](https://github.com/samjuniors/Orbit-Core/pull/73).
-These remain development lanes behind v0.28; do not merge or publish
-out of order. Testing is limited to Antigravity and Codex this cycle.
+**Next release queue (not yet approved/published):** v0.29 installed-skill discovery research/development on [draft PR #70](https://github.com/samjuniors/Orbit-Core/pull/70), then v0.30 native coordination [draft PR #71](https://github.com/samjuniors/Orbit-Core/pull/71) and the corrective [draft PR #73](https://github.com/samjuniors/Orbit-Core/pull/73) for [Issue #72](https://github.com/samjuniors/Orbit-Core/issues/72). Their inherited version metadata, source upgrades, independent tests and release authorization must be reconciled **separately and in order**. Real-host testing this cycle prioritizes Antigravity and Codex; do not claim Claude Code host acceptance without execution evidence.
 
 Older historical progress snapshots below are retained and superseded
 by this current summary where they contradict a verified release/branch.
