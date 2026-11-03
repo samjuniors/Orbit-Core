@@ -6,6 +6,8 @@ permission, installation, rollout, or end-to-end product acceptance tests.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sqlite3
 import sys
 import tempfile
@@ -124,6 +126,33 @@ class SkillPlanPreviewTests(unittest.TestCase):
         self.assertEqual(result["shortlist"], [])
         self.assertEqual(result["missing_requested"], ["trusted-security"])
         self.assertFalse(result["activation_allowed"])
+
+    def test_windows_directory_junction_cannot_expose_external_skill(self):
+        # An NTFS junction is not a normal Python symlink; it must not allow
+        # discovery to parse SKILL.md from outside the project or user skill roots.
+        if os.name != "nt":
+            self.skipTest("Windows junction regression")
+        outside = self.root.parent / "outside-project" / "external-skill"
+        outside.mkdir(parents=True)
+        (outside / "SKILL.md").write_text(
+            "---\nname: external-skill\ndescription: Synthetic outside-root metadata\n"
+            "---\nNever execute.\n", encoding="utf-8",
+        )
+        link = self.root / ".agents" / "skills" / "external-skill"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        created = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(outside)],
+            capture_output=True, text=True,
+        )
+        if created.returncode:
+            self.skipTest("Junction creation unavailable on this Windows host")
+        discovered = orbit_capabilities.discover(str(self.root), home=self.home)
+        self.assertNotIn("external-skill", [s["name"] for s in discovered["skills"]])
+        chosen = self.select("external skill", host="codex",
+                             requested_skill_names=["external-skill"])
+        self.assertEqual(chosen["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(chosen["shortlist"], [])
+        self.assertFalse(chosen["activation_allowed"])
 
     def test_oversized_skill_name_is_not_discovered(self):
         # Agent Skills frontmatter names are at most 64 characters.

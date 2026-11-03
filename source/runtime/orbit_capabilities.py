@@ -82,7 +82,10 @@ def skill_policy(role,available):
 MAX_ITEMS = 120
 
 def _parse_skill(path):
-    if path.is_symlink() or not path.is_file() or path.stat().st_size > 65536:
+    # Windows directory junctions are not always reported by is_symlink().
+    # Refuse redirected paths BEFORE reading any untrusted frontmatter.
+    if (path.is_symlink() or path.resolve() != path.absolute()
+            or not path.is_file() or path.stat().st_size > 65536):
         return None
     body=path.read_text(encoding='utf-8')[:12000]
     match=re.match(r'\A---\s*\n(.*?)\n---\s*\n', body, re.S)
@@ -142,7 +145,8 @@ def discover(project_root, *, home=None):
         try: children=sorted(folder.iterdir())[:MAX_ITEMS]
         except OSError:continue
         for child in children:
-            if child.is_symlink() or not child.is_dir():continue
+            # Skip symlinks and junctions at the discovery boundary.
+            if child.is_symlink() or child.resolve() != child.absolute() or not child.is_dir():continue
             item=child/'SKILL.md'
             try: val=_parse_skill(item)
             except (OSError,UnicodeError):continue
