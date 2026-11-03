@@ -13,14 +13,21 @@ The development source adds one read-only `orbit_software_delivery_preview`
 MCP tool (47 tools total). Actual native delivery stays in the connected
 host with consent and review; Orbit is not an independent code executor.
 
-**Release gate:** Real Antigravity TODO-app acceptance has owner-reported
-native backend/frontend work and real Chrome QA. A subsequent independent
-SQLite audit confirmed two `REVIEW_ACCEPTED` tasks but no source-linked
-Orbit build/browser-QA records. The integration gate remains
-`HOLD_INDEPENDENT_QA`. The sample TODO backend's wildcard CORS response
-headers also require security remediation/refreshing of accepted QA.
-Track [Issue #74](https://github.com/samjuniors/Orbit-Core/issues/74).
-This is a release-review candidate, **not a tagged/published v0.28**.
+**Release gate:** The original first-PC Antigravity TODO acceptance
+reported native backend/frontend work and Chrome interactions but held
+on missing source-linked browser QA and an overly broad sample CORS
+policy. A **separate second-PC** Antigravity fixture addressed the sample
+origin-policy regression (37/37 backend tests) and generated a genuine,
+source-bound **9/9 Edge/Playwright PASS** record through the actual
+`orbit_browser_qa` MCP tool. Both tasks remain `REVIEW_ACCEPTED`
+revision 5; the build is at `REVIEW` revision 7. The same-source
+`orbit_swarm_integration_review` returns
+`READY_FOR_INDEPENDENT_REVIEW`, **not** authority to merge or publish.
+See [Issue #74](https://github.com/samjuniors/Orbit-Core/issues/74)
+and [the version-specific acceptance record](RELEASE-ACCEPTANCE-v0.28.0.md).
+Independent release-source review, exact newest-head CI, and an explicit
+owner publication decision remain required. This is **not a
+tagged/published v0.28**.
 
 **Next versions:** v0.29 project-aware skill discovery
 ([draft PR #70](https://github.com/samjuniors/Orbit-Core/pull/70)),
