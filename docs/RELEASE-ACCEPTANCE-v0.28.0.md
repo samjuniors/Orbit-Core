@@ -1,6 +1,6 @@
 # Orbit Core v0.28.0 — Engineering and real-host prerelease acceptance
 
-**Status: RELEASE HOLD — reviewed candidate only (2026-11-02).**
+**Status: RELEASE HOLD — source-linked browser QA cleared on 2026-11-03; independent release review still required.**
 This record is the version-specific technical acceptance report required by
 [RELEASE-PROCESS.md](RELEASE-PROCESS.md). Research/product decisions and
 release sequencing are tracked in the existing
@@ -56,14 +56,67 @@ was queried via `mode=ro` with `PRAGMA query_only=ON`.
 See [Issue #74](https://github.com/samjuniors/Orbit-Core/issues/74)
 for the exact non-destructive remediation and acceptance steps.
 
+## 2026-11-03 — Second-PC source-linked browser QA (verified)
+
+**Separate real-host fixture:** On Windows `DESKTOP-AND1FUJ`, the
+project-local v0.28 MCP `orbit_v028_secondpc` used a new isolated
+`Orbit-v028-HostQA-20261103/todo-lab` project and SQLite. Antigravity
+reported native backend and frontend sessions, each with separately
+recorded read-only reviewers and `REVIEW_ACCEPTED` task revisions 5.
+This **does not retroactively change the first-PC HOLD record above**.
+
+**Independent execution and verification on second PC:**
+- Python 3.12 backend `backend/test_app.py`: **37/37 PASS**, including
+  trusted/untrusted Origin, path and other security negative regressions;
+  `node --check frontend/app.js`: exit 0.
+- Owner approved installation of `playwright==1.64.1` only inside the
+  disposable workspace's Python 3.12 `.venv`; the project-local
+  `.agents/mcp_config.json` was backed up before repointing its interpreter.
+  No browser downloads, global Python/IDE changes or source edits.
+- The **actual** v0.28 MCP JSON-RPC `orbit_preview_start` tool started
+  a 127.0.0.1:8085 TODO server; `orbit_browser_qa` launched installed
+  Edge, executed **9/9 approved mobile browser actions PASS** (input error,
+  add and render, active filtering) with no console errors, failed steps
+  or blocked remote-origin requests, and captured a private screenshot.
+- Source fingerprint:
+  `d6e8736e91f39ac2914dccb756d094118fe474f0a318f9952b6d667f12da060d`.
+  Independent `mode=ro` SQLite verification confirmed exactly one
+  source-linked `browser_results` PASS row on build QA revision 6,
+  nine passing actions, the real screenshot file, and both unchanged
+  `REVIEW_ACCEPTED` task rows.
+- `orbit_swarm_integration_review` returned
+  **`READY_FOR_INDEPENDENT_REVIEW`**, with source and stored QA matching.
+  `orbit_build_advance` moved the build into **REVIEW revision 7**.
+  Clean preview stop and fresh MCP restart recovered this state without
+  lost tasks or running-worker reconciliation.
+- The managed checkpoint was revision-guarded and updated to
+  `INDEPENDENT_RELEASE_REVIEW_PENDING`, checkpoint SHA-256
+  `e0f68d83f75e154496b2b66194e47592355c229431fa52a29d9d786168f2e1fe`.
+  SQLite was backed up in the disposable fixture before QA.
+- The sample origin-policy issue from the first PC was addressed in the
+  **new second-PC fixture**, with test coverage; it was not merged into
+  Orbit's own MCP source or used to rewrite historical evidence.
+
+See [Issue #74](https://github.com/samjuniors/Orbit-Core/issues/74)
+for the detailed real-tool evidence. The source-bound QA gate is cleared,
+but `READY_FOR_INDEPENDENT_REVIEW` is **not** an owner release approval
+or proof that security and host permissions were independently certified.
+
 ## Preliminary code and CI
 
-The v0.28 development branch's [exact-head CI run #41286619941](https://github.com/samjuniors/Orbit-Core/actions/runs/41286619941)
-reported PASS. Candidate packaging, strict runtime-bundle parity,
-disposable fresh install, v0.27.1-to-v0.28.0 upgrade and new **release
-branch exact-head Windows/Linux CI** are separate gates to execute before
-publication. Prior CI is not evidence that later documentation/release
-candidate commits were tested.
+The reviewed v0.28 development head [CI #41286619941](https://github.com/samjuniors/Orbit-Core/actions/runs/41286619941)
+PASS remains historical. On the connected **second Windows PC**, the
+v0.28 release candidate passed **420 Python tests (23 skipped)**, release
+readiness, strict source/desktop bundle parity, deterministic three-package
+ZIP builds and the extracted 47-tool MCP stdio smoke. The actual
+**v0.27.1 → v0.28.0** disposable upgrade initially exposed a missing
+previous-version allowlist entry; that was corrected, and the full
+upgrade rehearsal passed while preserving custom guidance, prior runtime,
+checkpoint and database bytes. Exact then-current source head
+`85523f67be20b408b553cf3862ceb81a26b0825d` passed
+[five-job Windows/Linux CI #41573407348](https://github.com/samjuniors/Orbit-Core/actions/runs/41573407348).
+Documentation updates after that exact commit must receive their own
+exact-head CI before release; no passing head is inferred in advance.
 
 ## Release gate ledger
 
@@ -71,27 +124,28 @@ candidate commits were tested.
 | --- | --- | --- |
 | Read-only adaptive delivery blueprint | PASS | `BLUEPRINT_READY`, `DRAFT_VALIDATED`, zero write scopes |
 | Native Antigravity backend/frontend workers | OWNER-REPORTED PASS | Real session IDs and saved ledger; host consent independently unverified |
-| Backend regression | PASS | Independent Windows 3.12 run, 10/10 |
+| Backend regression | PASS | Original PC 10/10 and separate second PC 37/37 including origin negatives |
 | JavaScript syntax | PASS | Independent Node syntax check |
-| External Chrome functional browser test | OWNER-REPORTED PASS | 9/9 in host report; independent rerun/record pending |
-| Source-pinned Orbit integration/browser QA | HOLD | Missing project-scoped `build_runs` / `browser_results` |
-| Acceptance fixture cross-origin security review | HOLD | Wildcard CORS; fix/negative tests required |
+| External Chrome functional browser test | OWNER-REPORTED PASS | Separate CDP browser acceptance reported on both PCs; source-linked Edge result below is independently verified |
+| Source-pinned Orbit integration/browser QA | PASS — readiness only | Actual second-PC Playwright Edge 9/9, source-bound SQLite PASS row; `READY_FOR_INDEPENDENT_REVIEW` |
+| Acceptance fixture cross-origin security review | PASS on new fixture | Strict loopback-origin policy and 37 HTTP regressions; old first-PC issue remains historical |
 | Maturity/operations preview | PASS | New, existing API and stalled debug read-only previews |
-| Checkpoint and task readback | PASS for local fixture | Confirmed persisted task status and hash |
+| Checkpoint and task readback | PASS | Cold MCP resume at REVIEW rev 7; both reviewed tasks rev 5 and checkpoint updated under revision guard |
 | Real hostile host permission denial | NOT VERIFIED | Antigravity did not offer denial prompt in prior test |
-| Source/package version and release CI | NOT RUN on this candidate | Prepare candidate bundle, audit notes, verify exact commit |
+| Source/package version and release CI | PASS at verified source head; newest docs pending | 420 tests, candidate builds/smoke, v0.27.1 upgrade, 5/5 exact-head CI at `85523f6`; rerun CI after documentation updates |
 | Owner merge/publication and public assets | NOT RUN | No main merge/tag/release until required checks |
 
 ## Required next actions
 
-Complete [Issue #74](https://github.com/samjuniors/Orbit-Core/issues/74)
-inside a new reviewed disposable fixture revision, using real host tools
-and unmodified historical evidence. Record source-linked browser QA via
-the supported Orbit build/QA workflow; do not insert hand-crafted SQLite
-PASS rows. Then run strict package parity and current Linux/Windows
-CI, inspect exact release diff, merge only after the required review
-and owner authorization, and publish via the standard immutable tag
-workflow. Verify all published assets and matching checksums after
-actual publication.
+The source-linked browser-QA and second-PC fixture security subgates
+in [Issue #74](https://github.com/samjuniors/Orbit-Core/issues/74)
+are now completed with real evidence. **Next:** independently inspect
+the actual release candidate diff, documented test/security boundaries,
+Codex-versus-Antigravity coverage and outstanding release limitations.
+Require latest exact-head Linux/Windows CI after these documentation
+revisions, an explicit owner release decision, a reviewed merge to
+`main`, new main CI, and the normal immutable version tag workflow.
+After publication, download and verify all assets/checksums. Do not
+replace the older acceptance or published release evidence.
 
 **No permission to publish v0.29 or v0.30 ahead of this acceptance.**
