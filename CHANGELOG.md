@@ -8,7 +8,7 @@ The next development lane investigates native host coordination and honest
 permission/reconciliation evidence. It is outside v0.29.0 and does not
 authorize any v0.30 release.
 
-## [0.29.0] — Project-aware installed-skill review prerelease candidate (2026-11-03)
+## [0.29.0] — Project-aware installed-skill review release candidate (2026-11-03)
 
 ### Highlights
 
@@ -53,7 +53,10 @@ authorize any v0.30 release.
 
 ### Known limitations
 
-- This remains a **0.x prerelease candidate**, not evidence that a discovered
+- This is a **0.x release candidate**; the GitHub distribution channel
+  (stable/prerelease) is set only by an explicit owner-approved release.
+  A stable GitHub label does not promise SemVer 1.0 API compatibility.
+  Discovery is not evidence that a discovered
   skill is trustworthy, compatible with a host or licensed for reuse.
   A SHA-256 pin proves byte identity, not publisher authenticity or safety.
 - Host-specific loading, real skill activation, denial and rollback still

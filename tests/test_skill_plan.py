@@ -127,6 +127,36 @@ class SkillPlanPreviewTests(unittest.TestCase):
         self.assertEqual(result["missing_requested"], ["trusted-security"])
         self.assertFalse(result["activation_allowed"])
 
+    def test_windows_config_junction_does_not_expose_external_mcp_metadata(self):
+        # An NTFS junction at .agents or .codex must not make Orbit inspect
+        # JSON/TOML configuration metadata beyond the project boundary.
+        if os.name != "nt":
+            self.skipTest("Windows junction regression")
+        cases = (
+            (".agents", "mcp_config.json",
+             '{"mcpServers":{"out-of-root-json":{"command":"never"}}}',
+             "out-of-root-json"),
+            (".codex", "config.toml",
+             '[mcp_servers.out-of-root-toml]\ncommand="never"\n',
+             "out-of-root-toml"),
+        )
+        for directory, filename, contents, forbidden in cases:
+            with self.subTest(directory=directory):
+                outside = self.root.parent / ("external-" + directory.lstrip("."))
+                outside.mkdir(parents=True)
+                (outside / filename).write_text(contents, encoding="utf-8")
+                junction = self.root / directory
+                result = subprocess.run(
+                    ["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), str(outside)],
+                    capture_output=True, text=True,
+                )
+                if result.returncode:
+                    self.skipTest("Junction creation unavailable on this host")
+                discovered = orbit_capabilities.discover(str(self.root), home=self.home)
+                self.assertNotIn(
+                    forbidden, [x["name"] for x in discovered["mcp_servers"]]
+                )
+
     def test_windows_directory_junction_cannot_expose_external_skill(self):
         # An NTFS junction is not a normal Python symlink; it must not allow
         # discovery to parse SKILL.md from outside the project or user skill roots.

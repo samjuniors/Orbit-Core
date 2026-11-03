@@ -1,9 +1,41 @@
 # Orbit Core v0.29.0 — Development and acceptance evidence
 
-**Status: DEVELOPMENT CANDIDATE — source and CI prior head verified, patched-source Windows tests and MCP restart PASS. Native Codex and Antigravity interactive acceptance on the latest patch NOT VERIFIED. Not released.**
+**Status: v0.29 STABLE DISTRIBUTION CANDIDATE — source/local Windows and real read-only Antigravity/Codex CLI acceptance PASS after security hardening; new exact-head CI/release assets and owner-controlled GUI/permission/rollback gates still required. Not merged or published.**
 **Date:** 2026-11-03. **Project:** Orbit Core (not Helm, Aro or the separate ORBIT planner).
 
 GitHub is engineering authority; [Orbit Core Notion hub](https://app.notion.com/p/4074f681d48881a7a407c3bdc2054409) records the approved product intent. A development branch, version string or passing CI is not a public release.
+
+## Stable GitHub release readiness handoff (2026-11-03)
+
+The owner asked to **finish development and prepare a stable version for publication**, **not** to silently publish, overwrite an existing user installation, merge to `main`, or alter immutable prior releases. This is Orbit Core v0.29.0 only. Prior dated sections below retain earlier failures, skipped gates and prepatch reports as historical evidence; **this section describes the newest source/host results**, not a replacement for that audit trail.
+
+| Gate | Current evidence / disposition |
+| --- | --- |
+| Feature implementation | **IMPLEMENTED:** bounded read-only local installed-skill shortlist and SHA-pinned `orbit-skill-plan-v2`; 47 MCP tools unchanged, no auto-execution/installation |
+| Security source hardening | **FIXED + TESTED:** SKILL.md name must match directory and be <=64 chars; NTFS symlink/junction skill discovery blocked before metadata reads; project-local JSON and Codex TOML configuration junction traversal rejected before read |
+| Windows source tests | **PASS** on latest modified candidate worktree: Python 3.12, **464 tests run, 26 skipped, zero failures**, exit 0; targeted skill + release controls **43 tests run, 3 skipped, zero failures** |
+| Direct MCP identity / clean restart | **PASS** on the patched worktree: two independent stdio processes each negotiate `serverInfo.version=0.29.0`, 47 tools, pinned synthetic cargo skill, identical manifest, no activation/state writes; **not actual GUI app restart** |
+| Real native Codex CLI read-only matrix | **PASS** on the patched worktree in the isolated `orbit_v029_qa` test workspace: five real `mcp_tool_call` completed events from JSONL (version `UP_TO_DATE/0.29.0`, `SKILL_SHORTLIST_READY`, `PINS_MATCH_CURRENT_PREVIEW_ONLY`, caller-declared `HOLD_PERMISSION_DENIED`, and `HOLD_STALE_MANIFEST` with `context_changed=true`). `activation_allowed=false`, `state_written=false`, no unrelated completed tool invocations. Codex stderr still reports a nonfatal `HTTP 403` transport-worker diagnostic of **unconfirmed origin**. |
+| Real Antigravity CLI read-only matrix | **PASS for observed completed native calls:** project-local `orbit_v029_qa` using a **session-only** allowlist for precisely `orbit_update_status` and `orbit_capability_select`. Version, React shortlist, pin-match and policy-denial calls returned. The host's first five-step run timed out before drift, then a separate drift session initially sent invalid stringified arguments, recovered with the required structured objects, and returned `HOLD_STALE_MANIFEST`, `HOLD_CHANGED_OR_MISSING_SKILLS`, `context_changed=true`. This is **not an independently approved GUI permission prompt**. |
+| Actual skill activation / publisher/license trust | **NOT RUN / NOT VERIFIED** by design: v0.29 only recommends; do not activate untrusted third-party skills without separate review and owner approval |
+| Public prior v0.28 -> v0.29 upgrade | Previous exact-patch rehearsal **PASS** in a disposable fixture, preserving customized `AGENTS.md`, `.orbit/STATE.md`, SQLite database bytes and old runtime; **final-source repeat required after current changes** |
+| Exact-head GitHub CI and public package parity | Previous source head `059b43d`: CI **5/5 PASS**, fresh Universal/Antigravity/Suite packages and 47-tool ZIP smoke PASS. **New source/release-workflow changes must get their own exact-head CI and clean artifacts before GO.** |
+| Real user-profile installer/GUI restart/rollback | **NOT VERIFIED**. No user's current Antigravity or Codex installation was overwritten; global Orbit MCP still registers historical `v0.25.1`. Manual acceptance in a disposable **interactive IDE install and rollback** is a distinct gate. |
+
+### Explicit stable-release workflow control
+
+The GitHub release workflow in this development candidate now offers `workflow_dispatch` input `release_type` with `prerelease` as the safe default and `stable` as a **manual, opt-in choice from `main` only**. A tag-push workflow still defaults to prerelease. Both paths share the version-normalized concurrency group, prevent tag retargeting and do not replace an existing GitHub release. The changed YAML parsed successfully using an already-installed local YAML parser, and release-workflow contract tests passed.
+
+**Terminology:** A GitHub **stable** distribution flag does not change SemVer's `0.y.z` caveat that the public API can still evolve. Do not imply that a recommended skill or a passing CI job certifies production fitness.
+
+### Publication sequence (not authorized in this task)
+
+1. Close any remaining host/permission/installer/rollback gate by actual evidence **or explicitly mark a nonblocking documented limitation for owner review**. Obtain exact updated branch CI, package checksums, and version/asset parity.
+2. Review the stacked PR ancestry: [PR #77](https://github.com/samjuniors/Orbit-Core/pull/77) currently targets `dev/v0.29.0-skill-discovery`; original feature [PR #70](https://github.com/samjuniors/Orbit-Core/pull/70) remains a separate draft on an old base. Reconcile without duplicating functionality; do not silently merge either.
+3. Only after explicit owner approval and verified merge to `main`, invoke **Publish versioned release** via `workflow_dispatch` on `main` with `version=0.29.0` and `release_type=stable`. Never generate or push `v0.29.0` tag ahead of that approval.
+4. Verify `v0.29.0` immutable tag points to the reviewed `main` commit, GitHub Release `prerelease=false`, all public package assets + SHA-256 checksums, extracted disposable MCP startup and install/upgrade instructions. Preserve `v0.28.0` release and rollback compatibility.
+
+**Final release decision at this stage:** **HOLD PUBLICATION**, while the development candidate is being made ready for owner review. No hidden release, merge, install or permission change is implied by these checks.
 
 ## Product and supported scope
 

@@ -156,7 +156,10 @@ def discover(project_root, *, home=None):
             if len(skills)>=MAX_ITEMS:break
         if len(skills)>=MAX_ITEMS:break
     for cfg in _configs(project_root,h):
-        if cfg.is_symlink() or not cfg.is_file() or cfg.stat().st_size > 256000: continue
+        # A project-local config's parent can be an NTFS junction. Reject it
+        # before any JSON read, even though discovering MCPs never runs them.
+        if (cfg.is_symlink() or cfg.resolve() != cfg.absolute()
+                or not cfg.is_file() or cfg.stat().st_size > 256000): continue
         try:
             data=json.loads(cfg.read_text(encoding='utf-8'))
             # Claude/Cursor/Antigravity use "mcpServers"; VS Code uses "servers".
@@ -172,7 +175,9 @@ def discover(project_root, *, home=None):
     try:
         import tomllib
         for cfg in configs:
-            if cfg.is_symlink() or not cfg.is_file() or cfg.stat().st_size>256000:continue
+            # Also refuse redirected Codex config roots before reading TOML.
+            if (cfg.is_symlink() or cfg.resolve() != cfg.absolute()
+                    or not cfg.is_file() or cfg.stat().st_size>256000):continue
             try:
                 data=tomllib.loads(cfg.read_text(encoding='utf-8'))
                 for name in list(data.get('mcp_servers',{}))[:MAX_ITEMS]:
