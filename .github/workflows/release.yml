@@ -148,7 +148,26 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "GitHub Release $ORBIT_RELEASE_TAG already exists; leaving it unchanged"
+            # Never mark an incompatible existing publication as a successful
+            # stable release. A prerelease cannot be silently promoted.
+            existing_draft="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+            existing_prerelease="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq '.isPrerelease')"
+            expected_prerelease=true
+            if [[ "$ORBIT_RELEASE_TYPE" == 'stable' ]]; then expected_prerelease=false; fi
+            if [[ "$existing_draft" != 'false' || "$existing_prerelease" != "$expected_prerelease" ]]; then
+              echo "Existing release $ORBIT_RELEASE_TAG has incompatible draft/channel state; refusing success" >&2
+              exit 1
+            fi
+            # Reusing a same-channel release is idempotent only when the
+            # complete eight-asset inventory is still present.
+            existing_assets="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+            for asset in               "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip"               "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256"               "Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip"               "Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256"               "Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip"               "Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256"               "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb"               "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256"; do
+              if ! grep -Fxq -- "$asset" <<< "$existing_assets"; then
+                echo "Existing release $ORBIT_RELEASE_TAG is missing expected asset $asset" >&2
+                exit 1
+              fi
+            done
+            echo "Existing release $ORBIT_RELEASE_TAG matches channel and eight assets; leaving unchanged"
             exit 0
           fi
           flags=()

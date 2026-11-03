@@ -39,6 +39,17 @@ class ReleaseAssetManifestTests(unittest.TestCase):
         self.assertIn('gh release view "$ORBIT_RELEASE_TAG"', workflow)
         self.assertIn("Existing tag", workflow)
 
+    def test_existing_release_must_match_channel_and_assets_before_success(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("--json isDraft --jq '.isDraft'", workflow)
+        self.assertIn("--json isPrerelease --jq '.isPrerelease'", workflow)
+        self.assertIn("expected_prerelease=true", workflow)
+        self.assertIn("if [[ \"$ORBIT_RELEASE_TYPE\" == 'stable' ]]; then expected_prerelease=false; fi", workflow)
+        self.assertIn("incompatible draft/channel state; refusing success", workflow)
+        self.assertIn("--json assets --jq '.assets[].name'", workflow)
+        self.assertIn("missing expected asset $asset", workflow)
+        self.assertIn("grep -Fxq -- \"$asset\"", workflow)
+
     def test_manual_dispatch_and_tag_push_share_release_concurrency_group(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("format('v{0}', github.event.inputs.version)", workflow)
