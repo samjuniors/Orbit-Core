@@ -1,6 +1,6 @@
 # Orbit Core v0.29.0 — Development and acceptance evidence
 
-**Status: DEVELOPMENT CANDIDATE — source/CI QA verified; interactive Antigravity and one native Codex selector call host-reported PASS. Further Codex gates remain unverified. Not released.**
+**Status: DEVELOPMENT CANDIDATE — source/CI QA verified; interactive Antigravity reported PASS; native Codex five-call read-only acceptance independently log-verified PASS. Remaining host/security/release gates listed below. Not released.**
 **Date:** 2026-11-03. **Project:** Orbit Core (not Helm, Aro or the separate ORBIT planner).
 
 GitHub is engineering authority; [Orbit Core Notion hub](https://app.notion.com/p/4074f681d48881a7a407c3bdc2054409) records the approved product intent. A development branch, version string or passing CI is not a public release.
@@ -73,11 +73,33 @@ The preceding Codex CLI HTTP 403 attempt remains a separate **historical BLOCKED
 
 **Next owner-approval gate:** Explicitly authorize continuing *read-only, project-local* native Codex validation (running server-version check, pin revalidation, denial and drift) with no skill activation or settings changes, then independently review the combined security evidence before deciding on any development-branch merge or release. Current published prerelease remains `v0.28.0`.
 
+### Native Codex real-host continuation — owner-approved, independently inspected (2026-11-03)
+
+**Authorization:** On 2026-11-03 the owner explicitly approved the previously deferred **read-only Codex version, pin, denial and host-context drift tests**. Scope was the existing disposable v0.29 test workspace, **only** project-local `orbit_v029_qa`, with no global settings/permissions changes, skill activation, third-party execution, agent spawning, merge or publication. The later approved test supersedes the earlier single-tool STOP, not the historical fact of that first test.
+
+**Actual real Codex tool execution:** Windows `DESKTOP-AND1FUJ`, `codex-cli 0.166.0`. Launched a genuine `codex exec` session in the isolated workspace with `--ignore-user-config --ignore-rules --ephemeral --sandbox read-only` plus **ephemeral MCP configuration overrides** for `orbit_v029_qa` pointing to the v0.29 source checkout; no persistent/global tool changes or blanket permission bypass. The session produced a saved JSONL event log at `%TEMP%\\Orbit-v029-HostQA-20261103\\codex_v029_remaining_acceptance_20261103.jsonl` and returned **exit code 0**, with **one completed turn**.
+
+An independent subsequent log parser verified **exactly five completed real MCP tool invocations**, all to `orbit_v029_qa`; zero MCP call errors, **zero other tool starts**, and only `orbit_update_status` and `orbit_capability_select` among the invoked MCP tools:
+
+| Actual native Codex gate | Result | Source-returned fields |
+| --- | --- | --- |
+| 1. Version-status tool | **PASS for reported installed version** | `orbit_update_status.status=UP_TO_DATE`, `installed_version=0.29.0`; **no independent running `serverInfo.version` attestation** in this response |
+| 2. Rust CLI project-aware shortlist | **PASS** | `skill_plan.status=SKILL_SHORTLIST_READY`, only synthetic `cargo-testing`, `manifest.format=orbit-skill-plan-v2`; `activation_allowed=false`, `state_written=false` |
+| 3. Exact manifest pin replay | **PASS** | `skill_plan.revalidation.status=PINS_MATCH_CURRENT_PREVIEW_ONLY`, `context_changed=false`, no host activation |
+| 4. Caller-declared permission denial | **PASS for Orbit policy** | `skill_plan.status=HOLD_PERMISSION_DENIED` despite matching prior pins, `activation_allowed=false`, `state_written=false`. **This is not a native IDE permission prompt/denial test**. |
+| 5. Host-context drift without modifying source | **PASS** | Prior Codex manifest replayed with caller-declared `host=antigravity`: `skill_plan.status=HOLD_STALE_MANIFEST`, `revalidation.status=HOLD_CHANGED_OR_MISSING_SKILLS`, `diff.context_changed=true`; no state write |
+
+The test result fields were parsed **from actual `item.completed` `mcp_tool_call` events**, not inferred from Codex's final natural-language summary. All three synthetic `SKILL.md` SHA-256 digests still match the previously recorded fixture baselines. The global Antigravity Orbit registration still points to old `v0.25.1`; it was **not invoked**. A generated v0.29 desktop candidate bundle was already untracked in the disposable source checkout before these tests; no tracked development source edits occurred. Test logs were written inside the disposable QA workspace only.
+
+**Important diagnostic distinction:** Codex's stderr contains a **nonfatal HTTP 403** emitted by a transport worker during this otherwise successful session. Its cause and any unrelated connection are **not established**. All five requested `orbit_v029_qa` MCP calls nevertheless returned successful, parsed tool responses and the native session exited 0. Do not claim the earlier HTTP 403 was fixed or that the entire Codex environment is error-free.
+
+**Remaining independent gates:** stronger running-server version attestation via native MCP initialization metadata (not equivalent to the reported installed version), any actual host-level permission-denial prompt, host restart recovery, Windows symlink privilege-dependent cases, independent security review of untrusted `SKILL.md` parsing/tree hashing, and release/rollback acceptance. The five read-only selector checks above **are complete**; do not repeat them or request reauthorization without a new reason. **v0.29 remains a reviewed development candidate, not merged or published.**
+
 ## Acceptance and release blockers
 
-1. Run and inspect **exact integration-head GitHub CI**, including package parity and v0.28 immutable upgrade on Linux/Windows.
+1. **Completed on exact pre-documentation head:** CI #41617998877 5/5 PASS including v0.28 immutable upgrade and strict bundle parity. Recheck exact CI on any subsequent documentation or source head before merge.
 2. Independently review untrusted skill parsing, bounded tree hashing, host-specific locations, symlinks, project-scope isolation, stale v1/v2 manifest behavior, explicit permission-denial HOLD and all unverified license/provenance metadata.
-3. Exercise *read-only selection and revalidation through the actual project-local MCP* on Antigravity and Codex in disposable projects. Report real host detection, permission denial, invalid/missing/changed skills and fallback; do not install third-party code or silently enable skills.
+3. **Completed:** Antigravity interactive selector matrix (owner-reported) and native Codex five-call read-only selector/manifest/policy-denial/context-drift matrix (independent JSONL event verification), each using the isolated project-local MCP. **Still not verified:** real IDE permission-prompt denial, stronger running-server version attestation, genuine host restart recovery and platform-specific symlinks.
 4. Review owner-specified version cutline, updated draft PR #70, v0.30 stack compatibility, installer upgrade/backups and truthful public documentation before a release candidate is promoted. Require explicit owner merge/publication approval. No Claude Code acceptance required in this cycle.
 
 **Evidence semantics:** PASS means actually executed; documented source tests and local MCP smoke are not live IDE/agent acceptance, and a SHA-256 fingerprint is not a trust or security certificate.
