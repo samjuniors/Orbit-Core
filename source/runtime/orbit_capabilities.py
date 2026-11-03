@@ -124,7 +124,10 @@ def _skill_paths(project_root, home):
 def _configs(project_root, home):
     items=[]
     if project_root:
-        p=Path(project_root)
+        # A caller may reach its declared project root through a legitimate
+        # Windows junction/alias. Canonicalize the root once, then reject
+        # *descendant* redirects before reading any configuration.
+        p=Path(project_root).resolve()
         items += [p/'.agents/mcp_config.json',p/'.mcp.json',p/'.vscode/mcp.json',p/'.cursor/mcp.json']
     items += [home/'.gemini/config/mcp_config.json',home/'.claude.json',home/'.cursor/mcp.json',
               home/'AppData/Roaming/Claude/claude_desktop_config.json',

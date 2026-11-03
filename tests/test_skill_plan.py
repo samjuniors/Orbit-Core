@@ -127,6 +127,27 @@ class SkillPlanPreviewTests(unittest.TestCase):
         self.assertEqual(result["missing_requested"], ["trusted-security"])
         self.assertFalse(result["activation_allowed"])
 
+    def test_windows_project_root_alias_does_not_hide_valid_local_config(self):
+        # A junction at the *declared root* is permitted; a junction below it
+        # remains forbidden by the config-child boundary.
+        if os.name != "nt":
+            self.skipTest("Windows directory-alias regression")
+        actual = self.root / "actual-project"
+        actual.mkdir()
+        (actual / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"safe-local-config": {"command": "never"}}}),
+            encoding="utf-8",
+        )
+        alias = self.root / "alias-project"
+        created = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(alias), str(actual)],
+            capture_output=True, text=True,
+        )
+        if created.returncode:
+            self.skipTest("Junction creation unavailable on this Windows host")
+        discovered = orbit_capabilities.discover(str(alias), home=self.home)
+        self.assertIn("safe-local-config", [m["name"] for m in discovered["mcp_servers"]])
+
     def test_windows_config_junction_does_not_expose_external_mcp_metadata(self):
         # An NTFS junction at .agents or .codex must not make Orbit inspect
         # JSON/TOML configuration metadata beyond the project boundary.

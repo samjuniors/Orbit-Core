@@ -149,6 +149,16 @@ The test result fields were parsed **from actual `item.completed` `mcp_tool_call
 
 **Boundaries and residual audit gaps:** The read-only skill plan returns no trusted skills, installation or host activation; file hashes prove identity only, not publisher authenticity or licensing. This focused review did **not** prove full TOCTOU/race immunity or test Windows symlink privileges, and does not establish end-to-end IDE restart recovery or permission prompt handling. Exact-head GitHub CI and package parity must still pass on this new source commit before owner approval of a development-branch merge or release. Public latest release stays v0.28.0.
 
+### Stable release readiness — Windows canonical-root CI compatibility (2026-11-03)
+
+The integration branch previously advanced to commit `a26b986741b1a9a42c6d88a046790c6f4f490e68` with additional project config metadata boundary checks and an explicit stable/public release workflow policy. Its [Windows CI job](https://github.com/samjuniors/Orbit-Core/actions/runs/41627295020) **FAILED**, while all four Ubuntu jobs passed. The actual Windows log identified `test_universal.UniversalSetupTests.test_optional_agent_browser_provider_is_discovered_without_install`: expected `CONFIGURED_UNVERIFIED` but got `NOT_CONFIGURED`.
+
+**Root cause reproduced:** Canonical-path checks in config discovery compared `Path.resolve()` to `Path.absolute()` for each config file, even when the *declared project root itself* was a legitimate Windows NTFS directory alias/junction. In a disposable Windows probe, an allowed `.mcp.json` in an aliased root was silently dropped. **Scoped fix:** `_configs` now canonicalizes `Path(project_root).resolve()` once, then checks for redirects *under that canonical root* before reading each JSON/TOML configuration. This allows a caller-supplied legitimate root alias while preserving denial of junctions inside `.agents` and `.codex`.
+
+A new Windows regression creates a synthetic project-root junction to a valid `.mcp.json` and asserts its configured provider is discovered; the earlier security regressions still check out-of-root config junctions remain undiscovered. On the connected PC the three relevant tests **PASS**, and the full Windows Python 3.12 suite **465 tests run, 26 skipped, zero failures (exit 0)**. **This local PASS does not close the CI failure until new exact-head cross-platform GitHub CI succeeds.**
+
+**Release policy:** Current `.github/workflows/release.yml` requires an explicit `release_type=stable` choice on a manual `workflow_dispatch` from `main`; tag pushes remain prerelease by default. The workflow change is source-reviewed, not executed to publish v0.29.0. Stability is a distribution label and does not imply SemVer 1.0 backwards-compatibility or production certification; the owner must separately approve main merge and public release. The default global Orbit installation was not altered.
+
 ## Acceptance and release blockers
 
 1. **Completed on exact pre-documentation head:** CI #41617998877 5/5 PASS including v0.28 immutable upgrade and strict bundle parity. Recheck exact CI on any subsequent documentation or source head before merge.
