@@ -1,6 +1,6 @@
 # Orbit Core v0.29.0 — Development and acceptance evidence
 
-**Status: DEVELOPMENT CANDIDATE — source/CI QA verified; interactive Antigravity reported PASS, native Codex BLOCKED. Not released.**
+**Status: DEVELOPMENT CANDIDATE — source/CI QA verified; interactive Antigravity and one native Codex selector call host-reported PASS. Further Codex gates remain unverified. Not released.**
 **Date:** 2026-11-03. **Project:** Orbit Core (not Helm, Aro or the separate ORBIT planner).
 
 GitHub is engineering authority; [Orbit Core Notion hub](https://app.notion.com/p/4074f681d48881a7a407c3bdc2054409) records the approved product intent. A development branch, version string or passing CI is not a public release.
@@ -61,7 +61,17 @@ The candidate runtime is still `VERSION=0.29.0` and the development checkout hea
 
 Codex CLI `0.166.0` accepted an **ephemeral configuration override** for `orbit_v029_qa`; `codex mcp get orbit_v029_qa` reported enabled stdio pointing to the isolated v0.29 candidate. A real `codex exec` attempt then used `--ignore-user-config --ignore-rules --ephemeral --sandbox read-only` in the disposable workspace. It produced a thread-start/turn-start JSONL record and exited **1** after **HTTP 403**; there was **no Codex MCP tool result**. `codex login status` independently reported "Logged in using ChatGPT", which does not establish valid server authorization or explain the 403. Do not label the Codex selector PASS or attribute this definitively to an Orbit defect. No permission bypass, global config change, skill installation or source modification was performed.
 
-**Remaining real-host gates:** native Codex read-only `orbit_v029_qa` selection/revalidation and any required restart-recovery evidence in a genuinely authorized interactive session; independent source/security review and owner-controlled merge/release decision. Keep existing [integration PR #77](https://github.com/samjuniors/Orbit-Core/pull/77) unmerged until separately approved. The previous published v0.28 tag and packages remain immutable.
+**Remaining real-host gates:** running-version attestation, further native Codex pin/denial/drift revalidation and any required restart-recovery evidence in an explicitly authorized interactive session; independent source/security review and owner-controlled merge/release decision. Keep existing [integration PR #77](https://github.com/samjuniors/Orbit-Core/pull/77) unmerged until separately approved. The previous published v0.28 tag and packages remain immutable.
+
+### Codex interactive single-tool acceptance — owner report (2026-11-03)
+
+The owner separately reported a **successful actual native Codex tool invocation** using `orbit_v029_qa`. The result was `SKILL_SHORTLIST_READY` for the synthetic `cargo-testing` skill, with `orbit-skill-plan-v2` manifest; the MCP exposed 47 tools and reported `activation_allowed=false`, `state_written=false`. The owner observed **no permission prompt and no HTTP 403** on this successful attempt, and reports no skill installation, agent spawning, third-party code execution, project file modification or global settings changes.
+
+**Evidence status:** **HOST-REPORTED PASS — one read-only selector call.** The response did **not include a version identifier**, so the exact *running server* version remains **NOT VERIFIED** by that call; earlier fixture configuration/source inspection pointing at `0.29.0` is contextual evidence, not a substitute for a real running-version tool response. The owner stopped after this single call in accordance with the acceptance checklist; native Codex **pin revalidation, denied-permission HOLD, stale manifest and host restart recovery remain NOT RUN/NOT VERIFIED**. There is no independently retained native Codex transcript in this project acceptance record.
+
+The preceding Codex CLI HTTP 403 attempt remains a separate **historical BLOCKED** observation, not an active failure of this later reported Codex single-tool invocation. Neither event proves the root cause of the earlier HTTP 403.
+
+**Next owner-approval gate:** Explicitly authorize continuing *read-only, project-local* native Codex validation (running server-version check, pin revalidation, denial and drift) with no skill activation or settings changes, then independently review the combined security evidence before deciding on any development-branch merge or release. Current published prerelease remains `v0.28.0`.
 
 ## Acceptance and release blockers
 
