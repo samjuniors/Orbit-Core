@@ -32,7 +32,7 @@ import orbit_pulse
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = '0.28.0'
+VERSION = '0.29.0'
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_STATE_BYTES = 24000
 SUPPORTED_PROTOCOLS = ('2025-11-25', '2025-06-18', '2025-03-26')

@@ -58,14 +58,19 @@ class RepoRenameCompatibilityTests(unittest.TestCase):
 
     def test_legacy_mcp_server_and_extension_identifiers_are_preserved(self):
         self.assertEqual(installer.SERVER,"orbit-core-native")
-        self.assertEqual(orbit_mcp.VERSION,"0.28.0")
+        self.assertEqual(orbit_mcp.VERSION,(ROOT/"VERSION").read_text(encoding="utf-8").strip())
         self.assertIn("orbit-core-mcp",(ROOT/"scripts/build_antigravity_plugin.py").read_text(encoding="utf-8"))
         self.assertIn("orbit-core-mcp",(ROOT/"scripts/build_plugin_suite.py").read_text(encoding="utf-8"))
 
     def test_version_matches_without_rewriting_future_roadmap(self):
-        self.assertEqual((ROOT/"VERSION").read_text(encoding="utf-8").strip(),"0.28.0")
-        self.assertEqual(installer.VERSION,"0.28.0")
-        self.assertEqual((ROOT/"NEXT_VERSION").read_text(encoding="utf-8").strip(),"0.29.0")
+        version=(ROOT/"VERSION").read_text(encoding="utf-8").strip()
+        next_version=(ROOT/"NEXT_VERSION").read_text(encoding="utf-8").strip()
+        self.assertEqual(version,installer.VERSION)
+        self.assertEqual(version,orbit_mcp.VERSION)
+        self.assertRegex(version,r"^[0-9]+\.[0-9]+\.[0-9]+$")
+        self.assertRegex(next_version,r"^[0-9]+\.[0-9]+\.[0-9]+$")
+        self.assertGreater(tuple(map(int,next_version.split("."))),
+                           tuple(map(int,version.split("."))))
 
 if __name__=="__main__":
     unittest.main()
