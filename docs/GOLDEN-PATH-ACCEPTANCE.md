@@ -25,6 +25,26 @@
 
 **Product decision needed before full P0 PASS:** Do **not** silently whitelist host-reported browser screenshots as a Playwright PASS or insert forged `browser_results`. Either obtain owner approval to use the already-tested Playwright route in a disposable interpreter (currently prohibited) **or** separately design and security-review a host-native browser evidence adapter. Any adapter must require independently validated interaction results, origin/network constraints, source fingerprint, build revision, approved preview generation, non-empty interactions, error reporting and scoped host permission; weaker evidence stays explicitly `HOST_REPORTED_NOT_ATTESTED`. No adapter is implemented or approved in this acceptance report. Final build REVIEW, CHECKPOINT and actual MCP restart recovery remain pending.
 
+## Experimental installed-browser QA proof — separate branch (2026-11-04)
+
+The isolated-cdp engine on feat/v029-isolated-browser-qa successfully ran
+six real installed-Chrome login/browser actions on a disposable copy of Field
+Notes after adding a local favicon *only to the copy* (the original app's
+favicon 404 otherwise produces a real console-error FAIL). The engine captured
+a screenshot and source fingerprint, blocked example.com in a deliberate
+external-request probe, refused to advance the synthetic build after source
+was changed, and advanced only that separate proof build from BROWSER_QA
+revision 7 to REVIEW revision 8 after restoring source and retaining the
+same managed preview.
+
+The original owner's P0 app is STILL BROWSER_QA revision 7, checkpoint
+BLOCKED_BROWSER_DEPENDENCY. The adapter has NOT been installed for that app,
+its prior P0 source/tasks/checkpoint were not modified, its actual latest-source
+browser QA was NOT RUN, and formal downstream REVIEW/CHECKPOINT and MCP
+restart acceptance remain NOT VERIFIED. The experimental direct-CDP engine
+is high-privilege and needs security review and exact-head CI. See
+docs/BROWSER-QA-ISOLATED-CDP.md for scope and explicit limitations.
+
 ## What the golden path was meant to prove
 
 Build a minimal but nontrivial local-only **Field Notes** web app using actual host-native specialists: secure local synthetic-account/password session authentication, CSRF protection, SQLite migrations and per-user notes CRUD, HTML/CSS/JS frontend, `/healthz`, a read-only public GitHub Zen API integration with timeout and mocked offline fallback. Zero installed third-party dependencies and no production credentials.

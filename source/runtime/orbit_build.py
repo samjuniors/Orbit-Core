@@ -827,7 +827,8 @@ def save_browser(conn,root,a,result):
         raise ValueError('QA source/preview changed or snapshot unavailable; rerun browser QA')
     summary={k:v for k,v in result.items() if k in {
         'url','viewport','title','actions','errors','failures','screenshot',
-        'blocked_remote_hosts','source_fingerprint','preview_id','preview_started_at'}}
+        'blocked_remote_hosts','source_fingerprint','preview_id','preview_started_at',
+        'engine','verified_by'}}
     summary['qa_build_revision']=row['revision']
     with conn:
         conn.execute('INSERT INTO browser_results (project,root,build_id,status,summary,created_at) VALUES (?,?,?,?,?,?)',

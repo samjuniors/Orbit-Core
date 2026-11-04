@@ -155,6 +155,9 @@ def verify_request(root, a, preview):
 
 
 def run(root, a, preview):
+    engine = a.get('engine', 'playwright')
+    if engine not in {'playwright', 'isolated-cdp'}:
+        raise ValueError('Browser QA engine must be playwright or isolated-cdp')
     launch_options, browser_label = browser_launch(a.get('browser', 'auto'))
     session, actions = verify_request(root,a,preview)
     if session is None:
@@ -162,7 +165,10 @@ def run(root, a, preview):
     url = f"http://127.0.0.1:{session['port']}/"
     if a.get('confirm_run') is not True:
         return {'status':'PREVIEW_ONLY','url':url,'viewport':a.get('viewport','desktop'),
-                'actions':actions,'browser':browser_label,'notice':'Browser automation may read visible app data and change local app state. Host approval required.'}
+                'actions':actions,'browser':browser_label,'engine':engine,
+                'notice':'Browser automation may read visible app data and change local app state. Host approval required.'}
+    if engine == 'isolated-cdp' and not actions:
+        return {'status':'INTERACTIONS_REQUIRED', 'notice':'At least one real UI assertion is required for isolated browser QA'}
     if actions and a.get('confirm_interactions') is not True:
         return {'status':'INTERACTIONS_NEED_APPROVAL','url':url,'actions_count':len(actions)}
     # Snapshot exact local source before browser work, not an LLM-supplied hash.
@@ -171,6 +177,10 @@ def run(root, a, preview):
     if source_before is None:
         return {'status':'SOURCE_SNAPSHOT_UNAVAILABLE',
                 'notice':'Code/source snapshot is unsafe, empty or exceeds bounded limits; review scope before trusting browser QA.'}
+    if engine == 'isolated-cdp':
+        import orbit_browser_cdp
+        return orbit_browser_cdp.run(root, a, session, actions, source_before,
+                                     browser_label, artifact_folder)
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:

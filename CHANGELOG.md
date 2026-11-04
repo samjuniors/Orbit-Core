@@ -54,6 +54,21 @@ authorize any v0.30 release.
   source/preview-bound Orbit browser result. Formal build REVIEW, CHECKPOINT,
   and MCP restart acceptance remain unverified; no stable publication PASS.
 
+### Experimental installed-browser QA alternative (2026-11-04)
+
+- Opt-in isolated-cdp engine added to the existing orbit_browser_qa tool;
+  47 tools unchanged, default Playwright preserved. Installed Windows
+  Chrome/Edge runs in a new temporary profile with no Python dependencies.
+- Exact-preview interception, blocked transports/popups, private screenshots,
+  console/JS errors and source/preview/revision guards stay fail-closed.
+  Six actual Field Notes login actions passed on a disposable copy; an
+  external request was blocked, and altered source could not advance a build.
+- Direct CDP is an unsupported, high-privilege Chrome interface. This
+  experimental branch requires independent security review and CI before
+  adoption. The original P0 Field Notes checkpoint remains BLOCKED; this
+  proof is not stable release acceptance.
+  See docs/BROWSER-QA-ISOLATED-CDP.md.
+
 ### Install and upgrade
 
 - After owner-approved publication, obtain the matching v0.29.0 Universal
