@@ -26,13 +26,14 @@ Required Orbit lifecycle: **intake → approved plan → implement → VERIFY �
 | IMPLEMENT | No source files created in the disposable project. No backend/frontend worker executed. | **NOT RUN / BLOCKED** |
 | VERIFY | No app-specific tests, HTTP checks, security scan, or migration/CI verification ran. | **NOT RUN** |
 | PREVIEW / BROWSER_QA | No application process, preview session, or browser QA ran. | **NOT RUN** |
-| REVIEW / CHECKPOINT / DONE | No task completion/review acceptance or Orbit checkpoint recorded. | **NOT RUN** |
+| REVIEW / DONE | No task completion, independent review acceptance, or application DONE state recorded. | **NOT RUN** |
+| CHECKPOINT (blocked outcome) | Later real Codex calls: first preview PREVIEW_ONLY, confirmed write STALE_REVISION for omitted initial revision; corrected expected_revision=MISSING returned SAVED. orbit_project_resume recovered identical checkpoint revision and gate BLOCKED_HOST_POLICY. | **PASS for recording BLOCKED, not app PASS** |
 
 **Important permission distinction:** The MCP preflight HOLD follows the **caller-reported** `host_workspace_mode="read-only"`. This is not independent proof of the host OS/IDE's effective sandbox mode. Codex separately reported a policy block while attempting to read an Orbit skill during its first planning run. Neither condition authorizes circumventing host policy with an alternate server, Desktop Commander, direct scripts, a different host or blanket approval. No backend specialist was called. The host's claim that a native specialist tool was available is also **not proof of an actual invocation**.
 
 ## Measured real Codex MCP call frequency
 
-Counted from completed `mcp_tool_call` events in four native Codex JSONL session logs; **23 total invocations**, all to `orbit_p0_test`. Of these, **21 returned completed tool events and 2 were rejected during argument validation**. No other native tool invocation was observed in these four logs.
+Counted from completed `mcp_tool_call` events in **seven native Codex JSONL session logs: 28 total invocations**, all to `orbit_p0_test`. Of these, **26 returned completed tool events and 2 were rejected during argument validation**. The completed events include a preview and a stale-revision response; completion does not mean gate PASS. No native backend/frontend worker invocation was observed.
 
 | Orbit tool | Calls | Evidence |
 | --- | ---: | --- |
@@ -47,9 +48,11 @@ Counted from completed `mcp_tool_call` events in four native Codex JSONL session
 | `orbit_task_list` | 1 | Backend `PLANNED`, revision 1 |
 | `orbit_task_handoff` | 1 | `HOLD_RESERVE_TASK_FIRST` |
 | `orbit_swarm_host_preflight` | 1 | `HOLD_HOST_PREFLIGHT` |
-| **Total** | **23** | **21 completed + 2 argument failures** |
+| `orbit_project_checkpoint` | 3 | `PREVIEW_ONLY`, `STALE_REVISION`, corrected `SAVED` |
+| `orbit_project_resume` | 2 | Read-only resume; final readback confirms saved blocked checkpoint |
+| **Total** | **28** | **26 completed tool events + 2 argument failures; 0 worker invocations** |
 
-This partial dataset covers **intake and planning only**, **not** the entire golden path. It does **not** support a decision to merge, remove or deprecate any of Orbit's 47 tools. No call counts for later stages were observed. Host-reported free-form summaries were checked against native JSONL event records and the disposable SQLite state.
+This partial dataset covers **intake, planning, preflight and a blocked checkpoint only**, **not** the entire golden path. It does **not** support a decision to merge, remove or deprecate any of Orbit's 47 tools. No call counts for later stages were observed. Host-reported free-form summaries were checked against native JSONL event records and the disposable SQLite state.
 
 ## Failures, manual actions and reproduction
 
@@ -59,10 +62,12 @@ This partial dataset covers **intake and planning only**, **not** the entire gol
 4. **Unreserved backend task.** `orbit_task_handoff` returned `HOLD_RESERVE_TASK_FIRST` because the backend was `PLANNED`, not reserved. **Reproduce:** hand off a planned task without a successful `orbit_task_reserve`. **No workaround attempted.**
 5. **Native-host write permission/liveness gap.** Preflight returned `HOLD_HOST_PREFLIGHT` when Codex supplied workspace mode `read-only`. No independent host permission or actual native worker session was observed. **Reproduce:** in the disposable fixture, call `orbit_swarm_host_preflight` with host `codex`, the planned backend revision and caller-declared read-only workspace mode. **Recovery NOT VERIFIED.** Requires the owner to open the disposable workspace in a genuinely authorized **workspace-write** host session, review the exact project-local MCP and native worker permissions, then rerun preflight with *observed*, not guessed, host capabilities. A denial must remain a denial; do not retry it via another server or tool.
 6. **Native skill read blocked.** The first Codex planning session reported a denied terminal read of an Orbit skill; it did not retry that operation through another route. **No bypass or manual override was performed.**
+7. **Corrected native host attempt blocked.** A later Codex session explicitly launched with CLI `--sandbox workspace-write` nevertheless reported that its *effective host instructions* were read-only and that a native workspace inspection was blocked by policy. That session made **zero MCP calls and zero successful native worker invocations**. The earlier preflight's caller-reported `read-only` value is not independent proof of this separate host-policy denial. No further alternate-tool attempt occurred.
+8. **Checkpoint optimistic revision.** The first confirmed checkpoint omitted `expected_revision`, so Orbit returned `STALE_REVISION` with actual revision `MISSING`. A new authorized Codex call supplied the exact expected revision literal `MISSING` and received `SAVED`. Read-only resume returned checkpoint revision `3037b6c856b0874c3dd081c54a8ff9408af3ee3a8385505abf80fd821fd4c7b1`, gate `BLOCKED_HOST_POLICY`, last result `BLOCKED`. This is an operational blocked checkpoint, not completion of the golden path.
 
 ## Evidence and continuity
 
-The Windows fixture stores its four raw session traces (including any stderr transport diagnostics) in:
+The Windows fixture stores its seven raw native Codex session traces (including any stderr transport diagnostics) in:
 
 `%TEMP%\Orbit-P0-GoldenPath-20261104\logs\`
 
@@ -70,16 +75,19 @@ The Windows fixture stores its four raw session traces (including any stderr tra
 - `codex-phaseA-intake-plan.jsonl`
 - `codex-phaseA2-valid-intake.jsonl`
 - `codex-phaseB-backend-native.jsonl`
+- `codex-phaseB2-backend-workspace.jsonl` (0 MCP calls; host-reported policy denial)
+- `codex-p0-blocked-checkpoint.jsonl`
+- `codex-p0-checkpoint-corrected.jsonl`
 
-The isolation database is `%TEMP%\Orbit-P0-GoldenPath-20261104\orbit-data\orbit-p0.sqlite3`. A separate inspection saw **one intake record and one build record**; the project source directory had **zero files**. Event logs are not committed to Git (they may contain session metadata). Historical counts and status claims here are not evidence of any unrecorded terminal, native agent, app or browser activity.
+The isolation database is `%TEMP%\Orbit-P0-GoldenPath-20261104\orbit-data\orbit-p0.sqlite3`. A separate inspection saw the intake/build/task records; **no backend/frontend/tests application source** was present. After the corrected checkpoint call, the only new top-level project entry was `.orbit/` containing `STATE.md`. That checkpoint is scoped operational state; no app implementation files were created. Event logs are not committed to Git (they may contain session metadata). Historical counts and status claims here are not evidence of any unrecorded terminal, native agent, app or browser activity.
 
 ### Resume instructions / next authorized gate
 
-Only after a real native coding host makes **scoped workspace-write and agent permissions available**: open the disposable fixture (not a user project), connect **only `orbit_p0_test`**, verify real permission and available native tools, retrieve fresh task revisions, reserve the backend task with caller-supplied owner approval reference and confirm it through MCP, invoke an actual backend specialist if available, record its returned session and app files, run independent backend tests, then proceed to frontend, integration, browser QA, security/review and an Orbit checkpoint. Keep each file change under the approved task scopes and preserve raw results.
+Only after a real native coding host makes **scoped workspace-write and agent permissions available**: open the disposable fixture (not a user project), connect **only `orbit_p0_test`**, verify real permission and available native tools, retrieve fresh task revisions, reserve the backend task with caller-supplied owner approval reference and confirm it through MCP, invoke an actual backend specialist if available, record its returned session and app files, run independent backend tests, then proceed to frontend, integration, browser QA, security/review and **update the already-saved BLOCKED checkpoint** only after actual new evidence. Keep each file change under the approved task scopes and preserve raw results.
 
 **Owner actions required before the next implementation gate:** interactive host consent for only the disposable workspace's write operations and relevant native specialist call, plus permission to use the existing isolated P0 MCP; no global Orbit upgrade or new dependencies. If a real host denies, stop and mark BLOCKED. **Do not claim golden-path PASS or stable-release acceptance until all remaining gates are actually executed.**
 
-**P2 tool-consolidation note:** These 23 planning-stage calls are useful **partial frequency evidence**, but a complete call-frequency proposal needs a finished golden path and actual subsequent tool uses. No MCP tool was removed or added.
+**P2 tool-consolidation note:** These 28 intake/planning/preflight/checkpoint calls are useful **partial frequency evidence**, but a complete call-frequency proposal needs a finished golden path and actual subsequent tool uses. No MCP tool was removed or added.
 
 ## Separate Antigravity read-only continuity probe — NOT VERIFIED
 
