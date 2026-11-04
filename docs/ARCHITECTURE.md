@@ -29,6 +29,7 @@ Coding host: Antigravity / Codex / Claude Code / supported VS Code
 | `orbit_build.py` | Stage-specific gates and SQLite checkpoints, read-only recover/continue | Evidence claims are host-supplied except stored managed-browser result; results lack code-revision attestation |
 | `orbit_preview.py` | Explicit approved localhost process commands and health checks | Process handles are session-local; no durable OS job supervisor |
 | `orbit_browser.py` | Optional installed Playwright using loopback Edge/Chrome/Chromium | Requires installed Playwright and browser; remote requests blocked at browser layer, not OS sandbox |
+| `orbit_browser_cdp.py` | Opt-in isolated installed Chrome/Edge UI QA (Windows experimental) | Temporary profile; exact-origin interception; high-privilege direct CDP, not OS sandbox or IDE-native tool |
 | `orbit_skill_plan.py` | Bounded read-only project/host-aware installed skill shortlist and v2 review manifest | Skill content and license claims remain untrusted; no execution or host approval attested |
 | `orbit_delegation.py` | Portable host-native specialist handoff packets | Non-executing: never spawns agents or authenticates approval |
 | `orbit_delivery.py` | Read-only adaptive end-to-end software delivery blueprint (`orbit_software_delivery_preview`) | Generates reviewable intent, never code, approvals or host sessions; the host supplies specialists, permissions and test evidence |

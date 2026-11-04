@@ -58,13 +58,20 @@ class SetupManagerTests(unittest.TestCase):
         planned_modules = {p.name for p in planned if p.parent == runtime}
         self.assertEqual(planned_modules, expected_modules)
         target = runtime / "orbit_skill_plan.py"
+        native_qa = runtime / "orbit_browser_cdp.py"
         self.assertIn(target, planned)
+        self.assertIn(native_qa, planned)
         # Install only inside the disposable home configured in setUp.
         installer.install(changes)
         self.assertTrue(target.is_file())
         self.assertEqual(
             target.read_bytes(),
             (ROOT / "source/runtime/orbit_skill_plan.py").read_bytes()
+        )
+        self.assertTrue(native_qa.is_file())
+        self.assertEqual(
+            native_qa.read_bytes(),
+            (ROOT / "source/runtime/orbit_browser_cdp.py").read_bytes()
         )
 
     def test_uninstall_preserves_memory_owner_docs_and_unrelated_mcp(self):
