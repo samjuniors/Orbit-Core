@@ -37,7 +37,7 @@ Orbit does **not** provide its own LLM, silently install AI providers, launch ba
 
 From **[GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases)**, choose the latest reviewed prerelease, download the matching **Universal Setup ZIP** and its `.sha256` file, and verify the checksum. Extract the ZIP, then double-click `Orbit Setup.cmd` on Windows (Python 3.10–3.13 with Tkinter required), or run `python3 orbit_setup.py` on macOS/Linux. Select the intended host and scope, **review the exact file changes**, approve the installation, and refresh the host's MCP connection. If you need a host-native plugin ZIP or Claude Desktop extension, select that separate published artifact instead.
 
-The published v0.27.0 prerelease contains 46 MCP tools and the unified setup launcher; check the release page for later versions and known limitations. The existence of a published package or green CI does not establish live GUI, update/rollback or security acceptance.
+Published prerelease packages include the unified setup launcher; each release's notes state its MCP tool inventory and known limitations, so check the release page for the version you intend to install. The existence of a published package or green CI does not establish live GUI, update/rollback or security acceptance.
 
 ### Option B — Current development source
 

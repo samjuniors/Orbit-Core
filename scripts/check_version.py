@@ -1,5 +1,5 @@
 from pathlib import Path
-import ast, re, sys
+import re, sys
 root=Path(__file__).resolve().parents[1]
 version=(root/'VERSION').read_text().strip()
 if not re.fullmatch(r'\d+\.\d+\.\d+', version):sys.exit('Invalid SemVer')

@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import json
 import re
-import sqlite3
 import unicodedata
 from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 ROLES = {'frontend','backend','architect','data','devops','qa','security','ux',
          'research','reviewer','writer','integrator'}

@@ -28,6 +28,19 @@ authorize any v0.30 release.
   License/version fields are labeled as unverified claims. No AAS code or
   catalog was copied, and Orbit still uses the host's models/subagents.
 
+### Documentation and maintenance
+
+- README no longer hard-codes a published version or MCP tool count; it points
+  to the release page, consistent with the release-readiness rule against
+  stale latest-version claims.
+- `docs/ARCHITECTURE.md` now reflects the v0.29.0 development candidate (47 tools) instead of the
+  v0.24.1 candidate (33 tools) and lists eleven runtime modules that were
+  missing from its module table.
+
+- Remove eleven unused imports flagged by pyflakes across runtime, installer,
+  setup-model and script files. Intended to be behavior-neutral; regression results are
+  recorded separately.
+
 ### Install and upgrade
 
 - After owner-approved publication, obtain the matching v0.29.0 Universal

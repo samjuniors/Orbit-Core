@@ -6,7 +6,6 @@ Host configuration and local Orbit SQLite are never touched during detection.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import installer
 import orbit_setup

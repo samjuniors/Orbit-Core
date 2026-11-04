@@ -1,6 +1,6 @@
 # Orbit Core architecture and implementation status
 
-This document describes the **v0.24.1 integration candidate**, not a claim of end-to-end production acceptance.
+This document describes the **v0.29.0 development candidate** architecture, not a claim of end-to-end production acceptance. Version-specific evidence lives in the `RELEASE-ACCEPTANCE-*.md` records.
 
 ```text
 Coding host: Antigravity / Codex / Claude Code / supported VS Code
@@ -8,7 +8,7 @@ Coding host: Antigravity / Codex / Claude Code / supported VS Code
   - Host-native specialist agents (when actually available) execute scoped work
   - Host permissions govern terminal commands, installs, secrets and Git
        |
-  stdio MCP: orbit_mcp.py (33 tools; JSON-RPC 2.0)
+  stdio MCP: orbit_mcp.py (47 tools in v0.29.0 candidate; JSON-RPC 2.0)
        |-- SQLite project intake (custom answers, branching decisions, autonomy)
        |-- Project checkpoint (.orbit/STATE.md) + concise recovery state
        |-- SQLite task reservations, ownership, reports and review records
@@ -29,6 +29,17 @@ Coding host: Antigravity / Codex / Claude Code / supported VS Code
 | `orbit_build.py` | Stage-specific gates and SQLite checkpoints, read-only recover/continue | Evidence claims are host-supplied except stored managed-browser result; results lack code-revision attestation |
 | `orbit_preview.py` | Explicit approved localhost process commands and health checks | Process handles are session-local; no durable OS job supervisor |
 | `orbit_browser.py` | Optional installed Playwright using loopback Edge/Chrome/Chromium | Requires installed Playwright and browser; remote requests blocked at browser layer, not OS sandbox |
+| `orbit_skill_plan.py` | Bounded read-only project/host-aware installed skill shortlist and v2 review manifest | Skill content and license claims remain untrusted; no execution or host approval attested |
+| `orbit_delegation.py` | Portable host-native specialist handoff packets | Non-executing: never spawns agents or authenticates approval |
+| `orbit_delivery.py` | Read-only adaptive end-to-end software delivery blueprint (`orbit_software_delivery_preview`) | Generates reviewable intent, never code, approvals or host sessions; the host supplies specialists, permissions and test evidence |
+| `orbit_swarm.py` | Bounded dependency-DAG preview over the existing project task ledger | Read-only: no registration, reservation, invocation or verified approval |
+| `orbit_swarm_draft.py` | Preview of a user/host-proposed task DAG before any ledger writes | Preview only: no model calls, subprocesses, reservations or agent execution |
+| `orbit_swarm_host.py` | Fail-closed pre-invocation review for up to two host-native subagents | Planning, not execution: never launches, resumes, cancels, releases or approves a host agent |
+| `orbit_swarm_integrity.py` | Read-only integration readiness over actual source bytes and local QA records | Pre-review guard, not a test runner; host-reported task and browser metadata stay untrusted until independently inspected |
+| `orbit_evidence.py` | Bounded external research pointers | Not a crawler or skill runner; external annotations are untrusted display data |
+| `orbit_pulse.py` | Read-only, project-scoped one-glance task pulse | Counts represent local task records; they do not attest real host execution |
+| `orbit_portable.py` | Explicit, bounded project transfer between PCs | Bundles are untrusted data, never permissions |
+| `orbit_updates.py` | Opt-in, read-only GitHub release notices | Advisory only: never downloads executables or invokes an installer |
 
 `source/agents` and `source/skills` contain host-specific instructions: their existence does not prove execution. The installer merges compatible host configs while preserving other registrations and owner docs. SQLite lives in local user data storage, **outside Git**. `.orbit/PROJECT.md` is only a small accepted-brief/index; canonical owner ADRs/specs remain where they exist.
 
