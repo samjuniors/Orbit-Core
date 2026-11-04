@@ -7,7 +7,7 @@ Thanks for helping improve Orbit Core, a local-first AI workspace orchestrator.
 - Review the [README](README.md), [security guidance](SECURITY.md), and [release process](docs/RELEASE-PROCESS.md).
 - Check [existing issues](https://github.com/samjuniors/Orbit-Core/issues) and open a focused proposal before beginning substantial work.
 - Keep Orbit Core separate from other projects. Do not introduce external code, models, cloud dependencies, or third-party agents without an explicit rationale, security review and license compatibility check.
-- **License status:** This repository does not currently contain an explicit open-source license. Public availability does not grant general reuse, redistribution, or relicensing rights. A license is an owner decision; open an issue to discuss it rather than assuming one.
+- **License:** Orbit Core is available under the [MIT License](LICENSE). Contributions are submitted for inclusion under MIT; verify that you have the necessary rights and preserve the licenses of any third-party code.
 
 ## Contributions
 
