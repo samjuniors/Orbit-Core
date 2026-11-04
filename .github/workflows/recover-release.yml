@@ -145,6 +145,18 @@ jobs:
             echo 'Draft contains an unexpected asset inventory; review manually' >&2
             exit 1
           fi
+          # Existing draft assets must also match the exact tagged build.
+          # GitHub exposes a sha256 digest for uploaded release assets.
+          asset_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$ORBIT_RELEASE_TAG")"
+          for file in "${assets[@]}"; do
+            name="${file##*/}"
+            digest="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest // empty' <<< "$asset_json")"
+            expected="sha256:$(sha256sum "$file" | cut -d ' ' -f1)"
+            if [[ "$digest" != "$expected" ]]; then
+              echo "Digest mismatch or missing GitHub digest for $name; release remains draft" >&2
+              exit 1
+            fi
+          done
       - name: Publish verified draft in approved channel
         env:
           GH_TOKEN: ${{ github.token }}
