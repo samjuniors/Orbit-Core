@@ -80,3 +80,11 @@ Only after a real native coding host makes **scoped workspace-write and agent pe
 **Owner actions required before the next implementation gate:** interactive host consent for only the disposable workspace's write operations and relevant native specialist call, plus permission to use the existing isolated P0 MCP; no global Orbit upgrade or new dependencies. If a real host denies, stop and mark BLOCKED. **Do not claim golden-path PASS or stable-release acceptance until all remaining gates are actually executed.**
 
 **P2 tool-consolidation note:** These 23 planning-stage calls are useful **partial frequency evidence**, but a complete call-frequency proposal needs a finished golden path and actual subsequent tool uses. No MCP tool was removed or added.
+
+## Separate Antigravity read-only continuity probe — NOT VERIFIED
+
+After the four Codex sessions above, an **independent, read-only Antigravity CLI** attempt was launched on the same disposable workspace. The request asked for `orbit_project_resume` and `orbit_task_list` from `orbit_p0_test` only, in plan/sandbox mode, with no write, agent spawn, global Orbit or permission bypass.
+
+The Antigravity headless session produced **no tool response and no stdout/stderr diagnostics** while monitored. Its own test process was then terminated; it did not return a usable result. No MCP call, native specialist activity, or application file change can be attributed to this attempt. **Status: NOT VERIFIED**, not PASS, FAIL or a proven permission denial. The host's unrelated preexisting Antigravity background process was not terminated.
+
+The empty disposable capture files are `logs/antigravity-readonly-continuity.json` and `logs/antigravity-readonly-continuity.stderr.log`; they add **zero** to the 23 verified Codex MCP call count above. Any further Antigravity real-host testing should use an owner-authorized interactive workspace and report the actual MCP response, not inferred tool availability.
