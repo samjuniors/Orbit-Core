@@ -13,6 +13,22 @@ Orbit connects to the coding environment you already use. It helps turn requirem
 > [!IMPORTANT]
 > **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. Published `0.x` packages are **prereleases**, not production certifications. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
 
+## Why Orbit Core?
+
+AI coding agents can implement work quickly, but long-running projects still need approved decisions, recoverable context and evidence before a task is considered complete.
+
+| The problem | What Orbit Core does |
+| --- | --- |
+| Plans and progress get lost between sessions | Maintains project-scoped task records and checkpoints in local SQLite and supports resume |
+| "Done" may be reported without verification | Records stage-specific evidence and preserves unverified or failed checks as blockers |
+| Large requests need specialists | Coordinates bounded handoffs to native subagents supplied and authorized by the coding host |
+| Installers can accidentally overwrite user work | Provides preview-first changes, explicit approval and backup-aware setup |
+
+### Who it is for
+
+- **New to AI-assisted development:** follow [Quick start](#quick-start), use a reviewed release ZIP and confirm the proposed installation changes.
+- **Power users and contributors:** follow the source setup, study the [architecture](docs/ARCHITECTURE.md), and review the [acceptance records](docs/GOLDEN-PATH-ACCEPTANCE.md) before relying on a host-specific capability.
+
 ## What is Orbit?
 
 Orbit is an **MCP (Model Context Protocol) tool server and host-adapted workflow** for organizing software work across a project's lifetime: new applications, existing codebases, incremental features, debugging, redesign and maintenance.
@@ -189,8 +205,12 @@ Open items—including publisher authenticity, real-host acceptance and independ
 
 ## Community and contributing
 
-For contribution workflow and project compatibility expectations, read [CONTRIBUTING.md](CONTRIBUTING.md). No open-source license has been selected; public visibility is not an unrestricted license to reuse the code.
+For contribution workflow and project compatibility expectations, read [CONTRIBUTING.md](CONTRIBUTING.md). Orbit Core is open source under the [MIT License](LICENSE); preserve the copyright and permission notice when redistributing.
 
 Bugs, feature proposals and implementation discussions belong in [GitHub Issues](https://github.com/samjuniors/Orbit-Core/issues). For proposed changes, open an issue first, keep the patch scoped, include tests and explain how behavior was verified. Consult [the release process](docs/RELEASE-PROCESS.md) before changing release or packaging files.
 
-**License:** This repository currently has **no general open-source license grant**. Public visibility does not itself authorize redistribution or use under an assumed open-source license. Contact the repository owner about permissions before reuse or redistribution.
+**License:** [MIT](LICENSE). MIT permits use, modification and distribution subject to preserving the license notice. Third-party content and dependencies retain their own licenses.
+
+## License
+
+Orbit Core is available under the [MIT License](LICENSE). Third-party packages and references retain their own licenses.
