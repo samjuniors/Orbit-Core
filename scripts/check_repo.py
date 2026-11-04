@@ -57,13 +57,13 @@ def read(path):
 
 
 def strip_fences(text):
-    return re.sub(r"(?ms)^(\`\`\`|~~~).*?^\1[^\n]*$", "", text)
+    return re.sub(r"(?ms)^(```|~~~).*?^\1[^\n]*$", "", text)
 
 
 def clean(s):
     s = re.sub(r"<[^>]+>", "", s)
     s = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)
-    return re.sub(r"\s+", " ", re.sub(r"[*_\`]", "", s)).strip()
+    return re.sub(r"\s+", " ", re.sub(r"[*_`]", "", s)).strip()
 
 
 def headings(text):
@@ -87,7 +87,7 @@ def headings(text):
 
 def first_paragraph(text):
     """First prose line after the title, skipping badges, images, HTML, nav and quotes."""
-    skip = ("[![", "![", "<", "[**", "|", ">", "#", "---", "===", "\`\`\`")
+    skip = ("[![", "![", "<", "[**", "|", ">", "#", "---", "===", "```")
     lines = strip_fences(text).splitlines()
     start = 0
     for i, line in enumerate(lines[:60]):
