@@ -1,0 +1,20 @@
+{
+  "description": "Local-first MCP orchestrator for AI coding agents: approved plans, specialist handoffs, SQLite memory, evidence-gated verification and resume.",
+  "topics": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "ai-agents",
+    "coding-agents",
+    "ai-coding",
+    "agentic-coding",
+    "developer-tools",
+    "local-first",
+    "claude-code",
+    "codex",
+    "antigravity",
+    "orchestration",
+    "sqlite",
+    "python"
+  ]
+}
