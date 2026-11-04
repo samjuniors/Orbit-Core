@@ -9,7 +9,6 @@ from __future__ import annotations
 import re
 import orbit_intake
 import orbit_swarm_draft
-import orbit_tasks
 
 OPERATIONS = frozenset({
     "build", "add-feature", "fix", "debug", "redesign", "maintain", "resume"

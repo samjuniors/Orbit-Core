@@ -2,10 +2,94 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — next planned v0.29.0
+## [Unreleased] — next planned v0.30.0
 
-The next development lane adds project-aware installed-skill discovery; it is
-not included in v0.28.0. This marker does not approve any future release.
+The next development lane investigates native host coordination and honest
+permission/reconciliation evidence. It is outside v0.29.0 and does not
+authorize any v0.30 release.
+
+## [0.29.0] — Project-aware installed-skill review release candidate (2026-11-03)
+
+### Highlights
+
+- **Recommend installed skills for the actual project:** The existing read-only
+  `orbit_capability_select` now uses declared product, platform, framework,
+  operation and IDE host signals to shortlist at most five relevant local
+  `SKILL.md` capabilities. Web/mobile/CLI/ML/game conflicts and ambiguous
+  same-name skills are conservatively screened; users may request particular
+  installed skills explicitly within the same safety limits.
+- **Recheck what will be reviewed:** A bounded `orbit-skill-plan-v2` manifest
+  pins the local skill entry, tree and source hashes alongside project, host
+  and objective identity. Revalidation flags changed, missing, reordered or
+  unsuitable selections. Legacy v1 pins require fresh manual review.
+- **No hidden agent execution:** Missing local skills fall back to existing
+  host-native capabilities; denied permissions remain denied. Results never
+  auto-install, enable, authorize, import, run or trust third-party code.
+  License/version fields are labeled as unverified claims. No AAS code or
+  catalog was copied, and Orbit still uses the host's models/subagents.
+
+### Documentation and maintenance
+
+- README no longer hard-codes a published version or MCP tool count; it points
+  to the release page, consistent with the release-readiness rule against
+  stale latest-version claims.
+- `docs/ARCHITECTURE.md` now reflects the v0.29.0 development candidate (47 tools) instead of the
+  v0.24.1 candidate (33 tools) and lists eleven runtime modules that were
+  missing from its module table.
+
+- Remove eleven unused imports flagged by pyflakes across runtime, installer,
+  setup-model and script files. Intended to be behavior-neutral; regression results are
+  recorded separately.
+
+### P0 full-stack golden-path acceptance (2026-11-04)
+
+- The [real-host golden-path acceptance ledger](docs/GOLDEN-PATH-ACCEPTANCE.md)
+  preserves the first 28-call Codex intake/planning run and its host-policy
+  blocker. In the subsequent authorized fixture continuation, actual backend,
+  frontend, QA and security specialist work was host-reported and local app
+  sources now exist; 12 Python tests were independently rerun PASS and a
+  loopback preview reached READY. Formal Orbit `BROWSER_QA` remains **BLOCKED**:
+  the optional Python Playwright dependency is absent and installation was
+  prohibited. Supplemental CUA browser checks do not replace the current
+  source/preview-bound Orbit browser result. Formal build REVIEW, CHECKPOINT,
+  and MCP restart acceptance remain unverified; no stable publication PASS.
+
+### Install and upgrade
+
+- After owner-approved publication, obtain the matching v0.29.0 Universal
+  Setup ZIP and its SHA-256 checksum from
+  [Orbit Core Releases](https://github.com/samjuniors/Orbit-Core/releases).
+  Verify the asset and review the setup preview before explicitly consenting.
+- Python 3.10–3.13 is supported (Windows Python 3.12 recommended).
+  Use `Orbit Setup.cmd` on Windows or `python3 orbit_setup.py` on
+  macOS/Linux; refresh only the selected Antigravity/Codex MCP integration.
+- Local `SKILL.md` metadata is treated as untrusted. This release has no
+  skill catalog importer and does not alter third-party skill installations.
+
+### Compatibility
+
+- Extends the v0.28.0 **47-tool** runtime without adding a duplicate
+  selection tool or changing the existing MCP identities. Existing
+  `.orbit` checkpoints, project SQLite, user-customized guides and host
+  configuration must be preserved. Unknown customized files require
+  explicit manual review; previous published release/tag remains intact.
+- The skill manifest is advisory and read-only, not a durable approval grant.
+  A changed skill directory or project/host context invalidates the prior
+  review and requires an independent permission and provenance decision.
+
+### Known limitations
+
+- This is a **0.x release candidate**; the GitHub distribution channel
+  (stable/prerelease) is set only by an explicit owner-approved release.
+  A stable GitHub label does not promise SemVer 1.0 API compatibility.
+  Discovery is not evidence that a discovered
+  skill is trustworthy, compatible with a host or licensed for reuse.
+  A SHA-256 pin proves byte identity, not publisher authenticity or safety.
+- Host-specific loading, real skill activation, denial and rollback still
+  require independent Antigravity/Codex acceptance. No automatic third-party
+  installation, updates, execution or skill-content injection is provided.
+- Full security validation, user migration/rollback, Windows GUI behavior
+  and production suitability require separate verification.
 
 ## [0.28.0] — Adaptive software delivery blueprint prerelease candidate (2026-11-02)
 

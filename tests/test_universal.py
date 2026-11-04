@@ -46,6 +46,19 @@ class UniversalSetupTests(unittest.TestCase):
                 self.assertIn(digest, installer.OLD_STOCK_SHA256)
         self.assertNotIn('0' * 64, installer.OLD_STOCK_SHA256)
 
+    def test_capability_module_supports_isolated_package_import(self):
+        """Repository import must not depend on a prior test modifying sys.path."""
+        cmd = [
+            sys.executable, "-c",
+            "from source.runtime import orbit_capabilities as cap; "
+            "assert callable(cap.select); "
+            "print(cap.__name__)"
+        ]
+        check = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                               text=True, timeout=10)
+        self.assertEqual(check.returncode, 0, check.stderr)
+        self.assertIn("source.runtime.orbit_capabilities", check.stdout)
+
     def test_role_skill_preferences_have_safe_fallback(self):
         from source.runtime import orbit_capabilities as cap
         outcome=cap.select(self.project,'orbit-security: audit app security',[],home=self.home)
@@ -75,7 +88,10 @@ class UniversalSetupTests(unittest.TestCase):
         self.assertTrue((self.project/'.agents/agents/orbit.md').exists())
         self.assertTrue((self.project/'.claude/agents/orbit-frontend.md').exists())
         self.assertTrue((self.project/'.codex/config.toml').exists())
-        self.assertTrue((self.home/'0.28.0/orbit_delivery.py').is_file())
+        self.assertTrue((self.home/installer.VERSION/'orbit_delivery.py').is_file())
+        # The v0.29 selector runtime must be present in the installed
+        # standalone package, not only available in the source checkout.
+        self.assertTrue((self.home/installer.VERSION/'orbit_skill_plan.py').is_file())
         self.assertEqual(set(c.action for c in installer.plan(self.project,scope='project')),{'SKIP'})
 
     def test_existing_customization_refused(self):

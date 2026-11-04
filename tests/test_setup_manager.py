@@ -49,6 +49,24 @@ class SetupManagerTests(unittest.TestCase):
         self.assertEqual(orbit_setup.run_action(
             "update", "project", str(self.project), ["antigravity","codex"], True), 0)
 
+    def test_unified_install_includes_skill_plan_runtime(self):
+        """Installed Orbit must ship every imported v0.29 runtime dependency."""
+        changes = installer.plan(str(self.project), ["antigravity", "codex"])
+        planned = [c.target for c in changes]
+        runtime = installer.runtime_folder()
+        expected_modules = {p.name for p in (ROOT / "source/runtime").glob("*.py")}
+        planned_modules = {p.name for p in planned if p.parent == runtime}
+        self.assertEqual(planned_modules, expected_modules)
+        target = runtime / "orbit_skill_plan.py"
+        self.assertIn(target, planned)
+        # Install only inside the disposable home configured in setUp.
+        installer.install(changes)
+        self.assertTrue(target.is_file())
+        self.assertEqual(
+            target.read_bytes(),
+            (ROOT / "source/runtime/orbit_skill_plan.py").read_bytes()
+        )
+
     def test_uninstall_preserves_memory_owner_docs_and_unrelated_mcp(self):
         config = self.project / ".agents/mcp_config.json"
         config.parent.mkdir(parents=True)

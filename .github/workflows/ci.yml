@@ -1,10 +1,12 @@
 name: CI
 on:
   push:
-    branches: [main, 'dev/v0.27.0', 'feat/**', 'fix/**', 'docs/**', 'release/**']
+    branches: [main, 'dev/**', 'feat/**', 'fix/**', 'docs/**', 'release/**']
     tags: ['v*']
   pull_request:
-    branches: [main, 'dev/v0.27.0']
+    # Development branches already run the same matrix on push. Only main
+    # PRs need an additional base-target trigger; avoid duplicated CI work.
+    branches: [main]
 permissions:
   contents: read
 jobs:
@@ -91,6 +93,15 @@ jobs:
       - name: Rehearse published v0.27.1 to candidate upgrade preserving custom files and SQLite
         if: matrix.python-version == '3.12'
         run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.27.1
+      - name: Check out immutable v0.28.0 for latest published previous-version upgrade
+        if: matrix.python-version == '3.12'
+        uses: actions/checkout@v4
+        with:
+          ref: v0.28.0
+          path: previous-0.28.0
+      - name: Rehearse v0.28.0 to v0.29.0 upgrade preserving customized user data
+        if: matrix.python-version == '3.12'
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.28.0
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle
