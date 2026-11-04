@@ -41,6 +41,15 @@ authorize any v0.30 release.
   setup-model and script files. Intended to be behavior-neutral; regression results are
   recorded separately.
 
+### P0 full-stack golden-path acceptance (2026-11-04)
+
+- The [real-host golden-path acceptance ledger](docs/GOLDEN-PATH-ACCEPTANCE.md)
+  records **28 actual project-local Codex MCP call events** across intake,
+  approved plan, task handoff/preflight, and the saved blocked checkpoint.
+  **Native implementation was BLOCKED by host policy**; no app source,
+  backend/frontend specialist invocation, app tests, preview, browser QA,
+  or full-stack production-acceptance PASS is claimed.
+
 ### Install and upgrade
 
 - After owner-approved publication, obtain the matching v0.29.0 Universal
