@@ -44,11 +44,15 @@ authorize any v0.30 release.
 ### P0 full-stack golden-path acceptance (2026-11-04)
 
 - The [real-host golden-path acceptance ledger](docs/GOLDEN-PATH-ACCEPTANCE.md)
-  records **28 actual project-local Codex MCP call events** across intake,
-  approved plan, task handoff/preflight, and the saved blocked checkpoint.
-  **Native implementation was BLOCKED by host policy**; no app source,
-  backend/frontend specialist invocation, app tests, preview, browser QA,
-  or full-stack production-acceptance PASS is claimed.
+  preserves the first 28-call Codex intake/planning run and its host-policy
+  blocker. In the subsequent authorized fixture continuation, actual backend,
+  frontend, QA and security specialist work was host-reported and local app
+  sources now exist; 12 Python tests were independently rerun PASS and a
+  loopback preview reached READY. Formal Orbit `BROWSER_QA` remains **BLOCKED**:
+  the optional Python Playwright dependency is absent and installation was
+  prohibited. Supplemental CUA browser checks do not replace the current
+  source/preview-bound Orbit browser result. Formal build REVIEW, CHECKPOINT,
+  and MCP restart acceptance remain unverified; no stable publication PASS.
 
 ### Install and upgrade
 
