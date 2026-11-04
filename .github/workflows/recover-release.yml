@@ -1,0 +1,176 @@
+name: Recover interrupted versioned release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing draft version to recover (for example 0.29.0)'
+        required: true
+        type: string
+      channel:
+        description: 'Requested channel for the existing draft'
+        required: true
+        type: choice
+        default: stable
+        options:
+          - stable
+          - prerelease
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-v${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Verify pinned tag and finish draft
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main and immutable tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate exact existing tag and select its source
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          REQUESTED_CHANNEL: ${{ inputs.channel }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Invalid version' >&2
+            exit 1
+          fi
+          tag="v${REQUESTED_VERSION}"
+          git fetch --no-tags origin main
+          git fetch origin "refs/tags/$tag:refs/tags/$tag"
+          tagged_commit="$(git rev-parse "refs/tags/$tag^{commit}")"
+          if ! git merge-base --is-ancestor "$tagged_commit" origin/main; then
+            echo 'Release tag is not an ancestor of main' >&2
+            exit 1
+          fi
+          # Do not change, replace or retarget the existing release tag.
+          git checkout --detach "$tagged_commit"
+          if [[ "$(cat VERSION)" != "$REQUESTED_VERSION" ]]; then
+            echo 'VERSION at existing tag does not match the requested version' >&2
+            exit 1
+          fi
+          echo "ORBIT_RELEASE_VERSION=$REQUESTED_VERSION" >> "$GITHUB_ENV"
+          echo "ORBIT_RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "ORBIT_TAGGED_COMMIT=$tagged_commit" >> "$GITHUB_ENV"
+      - name: Confirm an interrupted draft exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_CHANNEL: ${{ inputs.channel }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Recovery must not create an unrelated release or modify a
+          # published release. Only an existing draft is eligible.
+          state="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+          if [[ "$state" != 'true' ]]; then
+            echo 'No draft to recover. Published releases are immutable.' >&2
+            exit 1
+          fi
+          gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq '.tagName' | grep -Fx "$ORBIT_RELEASE_TAG"
+      - name: Rebuild and test the exact tagged source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/prepare_release_candidate.py
+          python scripts/check_release_readiness.py
+          python -m compileall -q source installer.py scripts tests
+          python -m unittest discover -s tests -q
+          python scripts/check_version.py --strict-bundle
+          python scripts/build_release.py --verify
+          (cd dist && sha256sum --check "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256")
+          (cd dist && sha256sum --check "Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256")
+          (cd dist && sha256sum --check "Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256")
+          sha256sum "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb" > "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256"
+      - name: Complete missing draft assets without overwriting
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(
+            "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip"
+            "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256"
+            "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip"
+            "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256"
+            "dist/Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip"
+            "dist/Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256"
+            "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb"
+            "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256"
+          )
+          for file in "${assets[@]}"; do
+            name="${file##*/}"
+            remote="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+            if grep -Fxq -- "$name" <<< "$remote"; then
+              echo "Existing asset preserved: $name"
+              continue
+            fi
+            # Retry GitHub 5xx errors, but do not clobber an uploaded asset.
+            uploaded=false
+            for attempt in 1 2 3; do
+              if gh release upload "$ORBIT_RELEASE_TAG" "$file" --repo "$GITHUB_REPOSITORY"; then
+                uploaded=true
+                break
+              fi
+              remote="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+              if grep -Fxq -- "$name" <<< "$remote"; then
+                uploaded=true
+                break
+              fi
+              sleep "$((attempt * 5))"
+            done
+            if [[ "$uploaded" != true ]]; then
+              echo "Could not upload $name; leaving release as draft" >&2
+              exit 1
+            fi
+          done
+          remote="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for file in "${assets[@]}"; do
+            name="${file##*/}"
+            grep -Fxq -- "$name" <<< "$remote" || { echo "Missing asset $name" >&2; exit 1; }
+          done
+          if [[ "$(wc -l <<< "$remote")" -ne 8 ]]; then
+            echo 'Draft contains an unexpected asset inventory; review manually' >&2
+            exit 1
+          fi
+          # Existing draft assets must also match the exact tagged build.
+          # GitHub exposes a sha256 digest for uploaded release assets.
+          asset_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$ORBIT_RELEASE_TAG")"
+          for file in "${assets[@]}"; do
+            name="${file##*/}"
+            digest="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest // empty' <<< "$asset_json")"
+            expected="sha256:$(sha256sum "$file" | cut -d ' ' -f1)"
+            if [[ "$digest" != "$expected" ]]; then
+              echo "Digest mismatch or missing GitHub digest for $name; release remains draft" >&2
+              exit 1
+            fi
+          done
+      - name: Publish verified draft in approved channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_CHANNEL: ${{ inputs.channel }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$REQUESTED_CHANNEL" == stable ]]; then
+            gh release edit "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
+          else
+            gh release edit "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=true
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$ORBIT_RELEASE_TAG" --jq '{tag: .tag_name, draft: .draft, prerelease: .prerelease, assets: (.assets | length)}'
+          test "$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" = false
+          expected=true
+          if [[ "$REQUESTED_CHANNEL" == stable ]]; then expected=false; fi
+          test "$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq '.isPrerelease')" = "$expected"
