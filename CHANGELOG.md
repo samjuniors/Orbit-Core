@@ -2,16 +2,41 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] - v0.31 development, not published
+## [Unreleased] - future development
 
-### Development highlights
+Proposed future changes require separate owner review.
 
-- **Release-aware installation and update:** A single published-version CLI with an optional PowerShell launcher supports reviewed multi-host setup, update and scoped uninstall. Verify official release assets and checksums, preview first, preserve owner customizations and ask before applying changes.
-- **Orbit as preferred coordinator:** Owner-selected Orbit project lifecycle coordination can use an optional read-only inventory of competing or duplicate MCP/skill registrations, without disabling other plugins or overriding host permissions.
-- **Implicit product-quality assessment:** Infer proportional requirements for security, privacy, accessibility, correctness, compatibility, performance, recovery and maintainability from the actual product and change scope without requiring user keywords.
-- **Bounded intelligence and learning:** Review repeated accepted tasks, keep human-approved project-scoped procedural memory and draft versioned original SKILL.md candidates under .orbit. No automatic installation, third-party code execution, model-weight training or global cross-project promotion.
-- **Adaptive specialist team:** Resource-first, minimally sized read-only role selection with Project Manager, Creative Director, Software Engineer, QA and the existing expanded security specialist. Real delegation requires the connected host's native tools, permissions and independently inspected evidence.
-- **Development only:** New source code, host profiles and previews require reviewed integration, exact-head Windows/Linux CI, real signed-in Antigravity/Codex acceptance and separate owner approval before any v0.31 release. Previous tags and downloads are unchanged.
+## [0.31.0] - Release-candidate notes (2026-11-05)
+
+### Highlights
+
+- **Understand what's needed without magic words.** Propose proportionate security, functional QA, privacy, accessibility, compatibility, performance and recovery checks for the actual product type and affected code. The review never claims to have verified a risk without evidence.
+- **Select the right team and tools.** Resource-first specialist recommendations for Project Manager, Creative Director, Software Engineer and the existing cybersecurity, QA and research roles. Orbit stays the lead coordinator; available host-native agents, tools and permission settings govern work.
+- **Learn safely from verified work.** Reuse the project-scoped reviewed-practice ledger to prepare original, versioned skill candidates after repeated accepted work. Skill drafts are not automatically trusted, activated, installed or copied across projects.
+- **Prefer Orbit without disabling other plugins.** Read-only coordination priority and possible MCP/skill name conflict diagnostics are best-effort; the host and owner control tool selection.
+- **Simplify multi-host installation.** A release-aware CLI and PowerShell launcher support published-version install, update and scoped uninstall for selected local IDE/CLI hosts, with backup-first safety and previews.
+
+### Install and upgrade
+
+- Install only from a reviewed published [Orbit Core GitHub Release](https://github.com/samjuniors/Orbit-Core/releases); verify matching ZIP SHA-256 from the same release and review the publisher. A source branch or CI test ZIP does not authorize installation.
+- Python 3.10–3.13 is the source CI matrix; Windows Python 3.12 and Ubuntu are automated test hosts. Select supported Antigravity, Codex, Claude Code or VS Code integrations. Claude Desktop uses its separate .mcpb extension.
+- Preview machine/project scope, exact host settings and local files before any explicit apply; customized files and SQLite/checkpoints must be preserved. Restart the selected IDE and independently verify its connected tool/version inventory after an approved update.
+- New CLI commands and PowerShell wrapper remain host-dependent; do not auto-install external tools/models, bypass sandbox permissions or silently enable native workers.
+
+### Compatibility
+
+- The local MCP tool inventory remains **48**: the reviewed-practice tool adds a draft_skill action rather than creating a second memory engine. Existing SQLite schema/project records, task keys, checkpoints and releases remain preserved.
+- Universal, Antigravity and Plugin Suite packages include the learning and specialist modules, extended role metadata, the unified CLI, priority diagnostics and PowerShell launcher. Older recognized stock files are upgraded with backups; unknown owner edits require manual review.
+- Existing practice drafts remain local .orbit candidates; they are not host-installed skills or independent proof of tests. Roles must use actual connected host capabilities and real acceptance.
+- The next planned development metadata is **NEXT_VERSION=0.32.0**, not authorization to ship additional changes.
+
+### Known limitations
+
+- Actual Antigravity/Codex worker invocation, host permission prompts, GUI upgrade/restart, real device/browser QA and user-installed rollback require separate signed-in acceptance. Automated CI and a configured MCP do not prove these interactions.
+- This candidate does **not** add a standalone language model, unrestricted model/agent executor, autonomous background task scheduler, model-weight training, automatically trusted third-party skills or global/cross-project skill promotion.
+- Skills generated from practice records are instruction-only, versioned draft proposals; project review data is caller-reported and must be independently checked before any host-side activation or reuse.
+- Cybersecurity and quality reviews are proportional risk assessments, not a guarantee that a product has zero vulnerabilities. Scanners, external targets, dependency installs, releases and deployment require applicable host/owner permissions.
+- Pre-release acceptance and source security review are separate from a stable GitHub release label. Unverified real-host integration and previous desktop install/rollback gates remain visible until accepted.
 
 ## [0.30.0] - Stable-channel release (2026-11-05)
 
