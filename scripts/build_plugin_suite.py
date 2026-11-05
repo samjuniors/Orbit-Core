@@ -24,7 +24,7 @@ def entries(root=ROOT):
     # legacy safe host setup backend; users do not need a second installer ZIP.
     launcher = (
         "Orbit Setup.cmd", "orbit_setup.py", "orbit_setup_ui_model.py",
-        "orbit_compact_gui.py", "installer.py", "install_orbit_gui.pyw",
+        "orbit_compact_gui.py", "installer.py", "orbit_priority.py", "install_orbit_gui.pyw",
         "orbit_cli.py", "orbit_update_gui.py", "VERSION", "NEXT_VERSION",
         "CHANGELOG.md", "README.md",
     )

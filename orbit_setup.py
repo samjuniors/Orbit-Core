@@ -685,6 +685,15 @@ def run_action(action, scope, project, hosts, apply=False, *, erase_memory=False
     if action == "update":
         print("UPDATE uses the local checked-out source; review/pull Git separately. Not a published release updater.")
     changes = installer.plan(project, hosts, scope)
+    if action == "install":
+        from orbit_priority import audit
+        report = audit(home=installer.user_home(), project=project if scope == "project" else None,
+                       hosts=hosts)
+        if report["conflicts"]:
+            print("ORBIT PRIORITY REVIEW: Possible existing overlapping plugin/skill names:")
+            for entry in report["conflicts"][:10]:
+                print("REVIEW", entry["host"], entry["kind"], entry["name"])
+            print("Other plugins remain enabled. Host/tool precedence cannot be forced.")
     for change in changes:
         print(f"{change.action:8} {change.target}")
     if not apply:
@@ -696,7 +705,7 @@ def run_action(action, scope, project, hosts, apply=False, *, erase_memory=False
 
 
 def menu():
-    print("\nORBIT SETUP — Install / Update / Uninstall")
+    print("\nORBIT SETUP â€” Install / Update / Uninstall")
     print("1) Install from checked-out source\n2) Update installed files from source")
     print("3) Uninstall Orbit from selected hosts (preserve memory)\n4) Clear Orbit for fresh install\n5) Exit")
     choice = input("Choose 1-5: ").strip()
@@ -745,7 +754,12 @@ def main(argv=None):
             return 0
         if args.action == "status":
             from orbit_cli import doctor
-            return doctor(args.project)
+            from orbit_priority import audit
+            status = doctor(args.project)
+            print("ORBIT COORDINATOR OVERLAP AUDIT (read-only):")
+            print(json.dumps(audit(home=installer.user_home(), project=args.project,
+                                   hosts=args.hosts or HOSTS), indent=2))
+            return status
         if args.action == "recover":
             if not args.backup or args.erase_memory or args.confirm_clean or args.hosts:
                 raise installer.SetupError("Recovery requires --backup and no clean/host arguments")

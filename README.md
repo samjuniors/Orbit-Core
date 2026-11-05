@@ -136,6 +136,20 @@ Pass `--hosts` and the required scope/project options, then `--apply` only after
 
 See [installation options](docs/MCP-INSTALLATION-OPTIONS.md), [update behavior](docs/UPDATE-EXPERIENCE.md) and [release quick start](docs/RELEASE-QUICKSTART.md).
 
+## Orbit with other plugins
+
+**Orbit-first for software-project coordination; specialist plugins remain available.**
+When you select Orbit as the lead, it manages project plans, task handoffs,
+evidence and checkpoints. It does **not** disable GitHub, browser, QA,
+other MCPs or installed specialist agents. The host/user still chooses which
+skills and tools activate; no cross-IDE mechanism can guarantee Orbit runs first.
+
+For the proposed next version, `python3 orbit_priority.py` provides a read-only,
+name-only warning of overlapping Orbit registrations, similar MCP names and
+duplicate skill scopes. Nothing is removed, run or reconfigured. For full limits,
+host differences and acceptance criteria, read
+[coordinator preference and overlap detection](docs/COORDINATOR-PRIORITY.md).
+
 ## Supported host integrations
 
 | Host | Integration | Native agent execution |
