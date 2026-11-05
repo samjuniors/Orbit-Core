@@ -33,8 +33,8 @@ def enabled():
 
 
 def channel():
-    value = os.environ.get("ORBIT_UPDATE_CHANNEL", "candidate")
-    return value if value in {"candidate", "stable"} else "candidate"
+    value = os.environ.get("ORBIT_UPDATE_CHANNEL", "stable")
+    return value if value in {"candidate", "stable"} else "stable"
 
 
 def cache_path():

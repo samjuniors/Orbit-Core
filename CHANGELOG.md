@@ -2,9 +2,16 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] ` future development
+## [Unreleased] - v0.31 development, not published
 
-No further feature scope is included in the v0.30.0 candidate.
+### Development highlights
+
+- **Release-aware installation and update:** A single published-version CLI with an optional PowerShell launcher supports reviewed multi-host setup, update and scoped uninstall. Verify official release assets and checksums, preview first, preserve owner customizations and ask before applying changes.
+- **Orbit as preferred coordinator:** Owner-selected Orbit project lifecycle coordination can use an optional read-only inventory of competing or duplicate MCP/skill registrations, without disabling other plugins or overriding host permissions.
+- **Implicit product-quality assessment:** Infer proportional requirements for security, privacy, accessibility, correctness, compatibility, performance, recovery and maintainability from the actual product and change scope without requiring user keywords.
+- **Bounded intelligence and learning:** Review repeated accepted tasks, keep human-approved project-scoped procedural memory and draft versioned original SKILL.md candidates under .orbit. No automatic installation, third-party code execution, model-weight training or global cross-project promotion.
+- **Adaptive specialist team:** Resource-first, minimally sized read-only role selection with Project Manager, Creative Director, Software Engineer, QA and the existing expanded security specialist. Real delegation requires the connected host's native tools, permissions and independently inspected evidence.
+- **Development only:** New source code, host profiles and previews require reviewed integration, exact-head Windows/Linux CI, real signed-in Antigravity/Codex acceptance and separate owner approval before any v0.31 release. Previous tags and downloads are unchanged.
 
 ## [0.30.0] - Stable-channel release (2026-11-05)
 

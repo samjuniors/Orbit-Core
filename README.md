@@ -11,7 +11,7 @@ Orbit connects to the coding environment you already use. It helps turn requirem
 **[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core/releases)**
 
 > [!IMPORTANT]
-> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. Published `0.x` packages are **prereleases**, not production certifications. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
+> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. The latest published `v0.29.0` and `v0.30.0` packages use the **stable GitHub release channel**, but a stable-channel label is **not** a production certification. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
 
 ## Why Orbit Core?
 
@@ -43,53 +43,67 @@ Orbit does **not** provide its own LLM, silently install AI providers, launch ba
 
 ## Quick start
 
-### Requirements
+### One Universal Setup for your coding hosts
 
-- **Python 3.10–3.13** for the currently CI-tested source; Python **3.12 recommended** for Windows setup. Windows double-click setup needs Tkinter.
-- A supported coding host and an existing, trusted project folder.
-- No `pip install` or administrator privilege is required for the core local MCP server.
+**Recommended for most users:** Download the latest **published** `ORBIT-Universal-Setup-vX.Y.Z.zip` and its `.sha256` file from **[GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases)**. Verify the ZIP checksum, extract it and open **`Orbit Setup.cmd`** (Windows) or **`python3 orbit_setup.py`** (macOS/Linux). Select one or more supported hosts, choose **This computer** or **One project**, review the exact file changes, then approve. Restart your IDE and verify that the Orbit MCP actually connects.
 
-### Option A — Published package
+This one package can configure **Antigravity, Codex, Claude Code and VS Code** together. It does not install those coding applications or their models. **Claude Desktop** uses its separately published `.mcpb` extension and is not silently installed by the Universal Setup.
 
-From **[GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases)**, choose the latest reviewed prerelease, download the matching **Universal Setup ZIP** and its `.sha256` file, and verify the checksum. Extract the ZIP, then double-click `Orbit Setup.cmd` on Windows (Python 3.10–3.13 with Tkinter required), or run `python3 orbit_setup.py` on macOS/Linux. Select the intended host and scope, **review the exact file changes**, approve the installation, and refresh the host's MCP connection. If you need a host-native plugin ZIP or Claude Desktop extension, select that separate published artifact instead.
+**Requirements:** Python 3.10?3.13 (Windows: 3.12 recommended); no administrator permissions or `pip install` required for Orbit's core local MCP server. The Windows graphical setup additionally needs Tkinter. Installation applies to your **current OS account**, not all computer accounts.
 
-Published prerelease packages include the unified setup launcher; each release's notes state its MCP tool inventory and known limitations, so check the release page for the version you intend to install. The existence of a published package or green CI does not establish live GUI, update/rollback or security acceptance.
+### Windows PowerShell or CLI ? works with published v0.30.0
 
-### Option B — Current development source
-
-For testing the latest merged features, clone `main` or update your existing clean checkout:
-
-```sh
-git clone https://github.com/samjuniors/Orbit-Core.git
-cd Orbit-Core
-```
-
-**Windows — graphical setup:** Double-click **`Orbit Setup.cmd`**. The launcher selects an available CI-tested Python with Tkinter and opens a guided window for scope, coding tools, and file preview. One primary action selects **Install**, **Update**, or **Repair** from the actual file state; current installations show **Orbit is up to date**. Published updates and backup-first uninstall remain separate actions. Verified older agent templates upgrade with backups; edited or unrecognized files require review.
-
-**Windows — PowerShell menu (run from the extracted folder):**
+From the extracted Universal Setup folder, preview first, then explicitly apply:
 
 ```powershell
-py -3.12 orbit_setup.py
+py -3.12 orbit_setup.py install --scope machine --hosts antigravity codex
+py -3.12 orbit_setup.py install --scope machine --hosts antigravity codex --apply
 ```
 
-**macOS/Linux — terminal menu:**
+Select only the hosts you use. Choose `--scope project --project "C:\full\path\to\project"` for a single project. These commands use the **version of the downloaded and verified ZIP**, not the latest `main` source. They do not modify saved SQLite memory or unrelated MCP entries.
 
-```sh
-python3 orbit_setup.py
+After one successful installation, the persistent launcher can check and install newer **published stable** releases without repeatedly downloading ZIPs manually:
+
+```powershell
+& "$HOME\.orbit-universal\bin\orbit.cmd" doctor
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --check
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --apply
 ```
 
-Choose your host(s) and either **one project** (existing absolute directory) or **this computer** (current OS user, not every user account). Review the proposed file changes before confirming. Restart or refresh the host's MCP connection after applying changes.
+If PowerShell's local-script policy blocks the future `Orbit.ps1`, use `py -3.12 orbit_cli.py` with the same arguments from the verified ZIP; do not weaken global execution policy.
 
-For noninteractive setup, preview first and then explicitly apply:
+The `--check` action reads metadata only; without `--apply`, an update downloads and validates its ZIP but **does not execute downloaded code**. `--apply` is an explicit authorization to execute the verified release installer and change selected host files. Backups protect recognized originals; unknown customizations require review. Restart the IDE afterward.
 
-```sh
-python3 orbit_setup.py install --scope machine --hosts codex
-python3 orbit_setup.py install --scope machine --hosts codex --apply
+For **v0.30.0 scoped uninstall**, return to its extracted, checksum-verified ZIP:
+
+```powershell
+py -3.12 orbit_setup.py uninstall --scope machine --hosts antigravity codex
+py -3.12 orbit_setup.py uninstall --scope machine --hosts antigravity codex --apply
 ```
 
-You can substitute `antigravity`, `claude-code` or `vscode` as needed, or use `--scope project --project /absolute/path/to/project` for a single workspace.
+Uninstall removes selected Orbit host integrations, retaining shared runtime, project files, SQLite memory, checkpoints and unrelated MCP services. It is **not** the destructive `clean` command.
 
-**Confirm connectivity:** Open the selected project in your IDE and ask Orbit to call `orbit_project_scan`. Check that `orbit-core-native` is actually connected and that the reported version and tool list match the installation. A configuration file alone is **not** proof of a live MCP connection.
+### Upcoming release-aware single CLI (development; not in v0.30.0)
+
+The next version is being developed to make **install, update, and uninstall** work through one permanent `orbit` launcher. It defaults to published **stable** releases; `--version X.Y.Z` pins an exact published release, and `--channel candidate` is an explicit prerelease opt-in. It will also ship **`Orbit.ps1`** inside the Universal ZIP for PowerShell. These commands **are not shipped in the immutable v0.30.0 release**:
+
+```powershell
+# From the verified newer Universal ZIP:
+.\Orbit.ps1 install --hosts antigravity codex
+.\Orbit.ps1 install --hosts antigravity codex --apply
+
+# After installing the newer version, from any PowerShell directory:
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --check
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --version X.Y.Z --hosts antigravity codex
+& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --version X.Y.Z --hosts codex
+```
+
+Each action remains **preview-first** and requires `--apply` to change files. A pinned version must exist on the selected published channel; no floating `main` source, hidden downgrades, automatic model installation or silent project-data erasure.
+
+For contributors testing unreleased source, clone `main` separately. `orbit_setup.py update` in a source checkout means **reapply local checkout files**, **not** fetch a GitHub Release. Details: [Release quick start](docs/RELEASE-QUICKSTART.md) and [update experience](docs/UPDATE-EXPERIENCE.md).
+
+**Confirm live connectivity:** In your IDE, ask Orbit to call `orbit_project_scan` and report its running version and tool inventory. A config file alone is not proof that the MCP process reconnected.
 
 ## Everyday usage
 
@@ -104,37 +118,30 @@ Orbit, plan a new Android app; ask only the important questions.
 
 Orbit's workflow is **situational**. New products can start with adaptive intake and plan approval. Existing projects use a baseline; small fixes should not trigger a fresh-project interview. Web projects can use preview and browser QA gates; native apps and libraries use their relevant validation flow.
 
-## Install, update and uninstall
+## Managing a current installation
 
-**Fresh installation after conflicts:** close all coding hosts, reopen `Orbit Setup.cmd`, and select **Clear Orbit / Fresh install…**. The dialog lists exact DELETE/EDIT paths and requires typing `REMOVE ORBIT`. It clears Orbit registrations in **all global hosts**, customized Orbit agents/skills, and the shared runtime/updater. Selecting a project also clears that project's integrations. Reinstall afterward; other projects using the shared runtime will need the runtime installed again.
+For the latest available **published** version, use the [Release quick start](docs/RELEASE-QUICKSTART.md) rather than cloning `main`. One Universal Setup manages multiple selected local hosts while protecting other MCP registrations and owner-written project files.
 
-The separate, unchecked **delete saved memory** option includes research/tasks for **all projects**, SQLite sidecars, and the selected project's `.orbit` checkpoints/notes. Unrelated MCPs, shared host configuration files, product source and owner `AGENTS.md`/`CLAUDE.md` remain. Original files are copied to `.orbit-uninstall-backups` before deletion; those recovery copies are deliberately retained. Other project folders and custom `ORBIT_LOCAL_DB` files are not automatically searched/deleted. Invalid shared configuration blocks reset rather than risking unrelated settings.
+- **Install:** preview one or more host integrations; apply only after reviewing changes.
+- **Update:** choose a verified **published release** in the Update Manager or the persistent `orbit.cmd update --channel stable` command. Source checkout updates are a separate maintainer path.
+- **Uninstall:** run the installed version's verified `orbit_setup.py uninstall` from its official Universal ZIP; after the release-aware CLI ships, use `orbit uninstall`. This removes **selected integrations only**, not memory or shared runtimes.
+- **Clean/reset:** an intentionally separate, destructive and typed-confirmation action. The `clean` command may affect multiple hosts and optionally saved memory. Read its preview and recovery rules in [installation options](docs/MCP-INSTALLATION-OPTIONS.md) before using it.
 
-Terminal equivalent (preview first):
+For significant changes keep a separate backup of SQLite database/WAL/SHM, host settings and customized files. The installer preserves recoverable backups. An older release is not an automatic compatible data rollback. Refresh your IDE after installation and verify the live tool connection.
 
-```powershell
-py -3.12 orbit_setup.py clean --scope machine
-py -3.12 orbit_setup.py clean --scope machine --apply --confirm-clean "REMOVE ORBIT"
-```
+## Orbit with other plugins
 
-Add `--erase-memory` only to intentionally erase saved project memory. Use `--scope project --project "C:\path\to\project"` to include one project's local integration and optional notes.
+**Orbit-first for software-project coordination; specialist plugins remain available.**
+When you select Orbit as the lead, it manages project plans, task handoffs,
+evidence and checkpoints. It does **not** disable GitHub, browser, QA,
+other MCPs or installed specialist agents. The host/user still chooses which
+skills and tools activate; no cross-IDE mechanism can guarantee Orbit runs first.
 
-The unified setup manager operates on **the selected host integrations**. Its actions are preview-first; terminal changes require `--apply`.
-
-| Action | Terminal command | Behavior |
-| --- | --- | --- |
-| Install | `python3 orbit_setup.py install` | Preview/apply bundled host files and MCP registration |
-| Update from source | `python3 orbit_setup.py update` | Reapply **the current local checkout** after reviewing new source |
-| Uninstall | `python3 orbit_setup.py uninstall` | Remove recognized Orbit host files and registrations, with backups |
-| Diagnose | `python3 orbit_setup.py status` | Read-only local runtime and host-configuration report |
-
-Pass `--hosts` and the required scope/project options, then `--apply` only after verifying the preview. For source updates, run `git pull --ff-only` separately **after checking your working tree**; Orbit does not automatically pull Git commits.
-
-**Published updates** are a separate path in the setup window. The existing Update Manager works with verified, published release assets and requires confirmation. Neither update path silently overwrites unrecognized customized files.
-
-**Uninstall is intentionally conservative:** It preserves project directories, Git checkouts, shared Orbit runtime/updater, local SQLite memory, unrelated MCP entries, owner-authored guidance, and customized files. Verified target files receive backups under `~/.orbit-uninstall-backups/`. It is **not** a cross-project data-wipe command.
-
-See [installation options](docs/MCP-INSTALLATION-OPTIONS.md), [update behavior](docs/UPDATE-EXPERIENCE.md) and [release quick start](docs/RELEASE-QUICKSTART.md).
+For the proposed next version, `python3 orbit_priority.py` provides a read-only,
+name-only warning of overlapping Orbit registrations, similar MCP names and
+duplicate skill scopes. Nothing is removed, run or reconfigured. For full limits,
+host differences and acceptance criteria, read
+[coordinator preference and overlap detection](docs/COORDINATOR-PRIORITY.md).
 
 ## Supported host integrations
 
@@ -194,7 +201,7 @@ The CI matrix covers Ubuntu with Python **3.10–3.13** and Windows with Python 
 | [Security](SECURITY.md) | Threat boundaries, approval caveats and known gaps |
 | [Roadmap](docs/NEXT-VERSION.md) | M1–M5 implementation and outstanding acceptance gates |
 | [Release and QA checklist](docs/RELEASE-PROCESS.md) | Repeatable checks and automatic publication workflow for every version |
-| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.26.0.md) | v0.26.0 published status and remaining host/security gates |
+| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.30.0.md) | v0.30.0 release evidence and remaining independent host gates |
 | [Changelog](CHANGELOG.md) | Recorded source and release changes |
 
 ## Security and project status
@@ -208,8 +215,6 @@ Open items—including publisher authenticity, real-host acceptance and independ
 For contribution workflow and project compatibility expectations, read [CONTRIBUTING.md](CONTRIBUTING.md). Orbit Core is open source under the [MIT License](LICENSE); preserve the copyright and permission notice when redistributing.
 
 Bugs, feature proposals and implementation discussions belong in [GitHub Issues](https://github.com/samjuniors/Orbit-Core/issues). For proposed changes, open an issue first, keep the patch scoped, include tests and explain how behavior was verified. Consult [the release process](docs/RELEASE-PROCESS.md) before changing release or packaging files.
-
-**License:** [MIT](LICENSE). MIT permits use, modification and distribution subject to preserving the license notice. Third-party content and dependencies retain their own licenses.
 
 ## License
 

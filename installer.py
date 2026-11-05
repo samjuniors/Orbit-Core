@@ -20,6 +20,14 @@ HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Published v0.26.0-v0.30.0 immutable release updater/GUI stock bytes.
+    # Include official ZIP LF and exact Windows CRLF forms. Only full SHA256
+    # matches permit backup-first replacement; any owner edit still blocks.
+    '1e704136cf1cc7a7635c70a47f031b8920de585335e5037440ab6c436b4b5319',  # v0.26.0 orbit_cli.py CRLF (also exact prior tag forms)
+    'e0cc8d6962fe8c6d8b06900d237bd51437aa0af5a6254ef6e22343d4dd289e99',  # v0.30.0 orbit_update_gui.py LF (also exact prior tag forms)
+    'c9c9ac90e2eb60e7cd91b975786deb9a06270deca5f28186c412a37f77775f0b',  # v0.30.0 orbit_update_gui.py CRLF (also exact prior tag forms)
+    'bde59e3bbe62976c1d1d6904459ffe3798946678311b1399eba2bb189448d524',  # v0.30.0 orbit_cli.py LF (also exact prior tag forms)
+    'de6e74a86bb3d7cd5909aa9143a11b3b57680e48360f7400d1deef60bdd6d075',  # v0.30.0 stock Claude orbit-lead.md
     # Byte-identical Antigravity agent definitions from the immutable
     # published v0.25.1 tag, verified against the actual Windows install.
     # Accept these stock hashes only for backup-first upgrades; unknown
@@ -258,11 +266,13 @@ def agent_claude(content: str) -> str:
 
 ORBIT_SKILL = '''---
 name: orbit
-description: Coordinate a software project through Orbit: inspect project, plan milestones, use authorized specialist subagents, report evidence, and save bounded SQLite project state via Orbit MCP. Use for new apps, debugging, review, handoffs and resume.
+description: Prefer Orbit Core for software project lifecycle coordination: plan, implement, debug, review, resume, delegate specialists and checkpoint. Other MCP tools remain available for approved specialized tasks. Use for new apps, debugging, review, handoffs and resume.
 ---
 # ORBIT — universal host adapter
 
 You are the lead project orchestrator, using this host's current model and native tools. The Orbit MCP is a task/memory service; it does NOT spawn models or execute app code. Respect the host's permissions, sandbox and user approvals.
+
+**Orbit-first project coordination:** For a software project lifecycle request, start with Orbit's connected project context, planning, task ledger and checkpoint tools when available. Other installed agents, MCP servers and skills are *specialist capabilities*, not automatic replacements for the owner's selected coordinator. Use them when a task needs them and permission is granted. The user's explicit choice of another agent or tool wins; never suppress, uninstall or override other plugins, change the host's model, claim global tool priority, or bypass host policies. If Orbit is disconnected, report this and continue with native host tools rather than pretending Orbit recorded work.
 
 For new platform, stack and UI decisions offer recommended answer **or Custom / type own words**, then record exact user wording with orbit_intake_answer and ask only necessary conditional followups. Use orbit_decision_route to compare existing platform components, audited prebuilt libraries or custom design for the actual product type and accepted stack. Use orbit_model_route with real host-reported model names before significant delegated roles when supported; this MCP does not change models, install skills, spend quota or verify entitlements. New type-specific workflows skip irrelevant browser-only checks for native apps, SDKs and OS platforms. Load references/DECISION-ROUTING.md only on a relevant decision.
 
@@ -301,19 +311,19 @@ For a Todo Lab test, develop the app through milestones and explicitly report na
 
 ORBIT_LEAD_CLAUDE = '''---
 name: orbit-lead
-description: Lead software project orchestrator. Inspect code and docs, coordinate scoped specialist agents, verify tests and checkpoints. Use for project planning, development and resumptions.
+description: Preferred lead for software-project lifecycle orchestration. Coordinate planning, debugging, features, specialist handoffs, validation and checkpoints when the user chooses Orbit.
 ---
 You are Orbit, the main orchestrator. Follow `.claude/skills/orbit/SKILL.md`. Do not create competing project documentation or spawn external agent CLIs. Use host-native subagents only where available and authorized, and the local Orbit MCP for SQLite memory and task ledger. Never claim a tool ran without its result.
 '''
 
 AGENTS_GUIDE = '''# ORBIT project guidance
 
-This project uses the repository skill `.agents/skills/orbit/SKILL.md`. When asked to work as Orbit, invoke `$orbit` or read that skill, then use connected `orbit-core-native` MCP tools for checkpoints, task ledger and memory. The model and native subagent executor belong to the active host (Codex, Antigravity or Claude Code), not MCP. Do not invoke a separate AI CLI; use approved native delegation. Verify outputs; do not invent test runs or saved state. Never stage/commit/merge/deploy without authorization.
+This project prefers Orbit as the coordinator for software development, debugging, feature work and resume when the owner chooses Orbit. Use `.agents/skills/orbit/SKILL.md` when available, then connected `orbit-core-native` MCP tools for checkpoints, task ledger and memory. Existing task-specific plugins remain available as specialists, and explicit owner/host tool choices take precedence. The model and native subagent executor belong to the active host (Codex, Antigravity or Claude Code), not MCP. Do not invoke a separate AI CLI; use approved native delegation. Verify outputs; do not invent test runs or saved state. Never stage/commit/merge/deploy without authorization.
 '''
 
 CLAUDE_GUIDE = '''# ORBIT project guidance
 
-For Orbit workflows load `.claude/skills/orbit/SKILL.md`. Choose `orbit-lead` as lead when appropriate; delegate frontend/backend/QA work using Claude Code's native agents when supported. Use the connected `orbit-core-native` MCP tools for local persistent memory and ledger. Do not invoke external model CLIs or modify unrelated projects. Validate evidence before accepting work.
+For owner-selected Orbit software-project workflows, prefer `.claude/skills/orbit/SKILL.md` and use `orbit-lead` as the coordinator when supported. Keep other plugins/agents available for specialized work; follow explicit owner tool choices and host permissions. Delegate frontend/backend/QA work using Claude Code's native agents when supported. Use the connected `orbit-core-native` MCP tools for local persistent memory and ledger. Do not invoke external model CLIs or modify unrelated projects. Validate evidence before accepting work.
 '''
 
 
@@ -450,6 +460,7 @@ def plan(project: str|Path|None=None, hosts=HOSTS, scope='project') -> list[Chan
                            'Orbit guided workflow reference '+ref.name)
     # Stable installer-independent update launcher. Does not alter PATH automatically.
     same_or_create(changes,home/'.orbit-universal/orbit_cli.py',(PACKAGE/'orbit_cli.py').read_bytes(),None,'Orbit command-line updater and host detection')
+    same_or_create(changes,home/'.orbit-universal/orbit_priority.py',(PACKAGE/'orbit_priority.py').read_bytes(),None,'Read-only Orbit host coordination conflict report')
     same_or_create(changes,home/'.orbit-universal/orbit_update_gui.py',(PACKAGE/'orbit_update_gui.py').read_bytes(),None,'Optional local update manager (no auto-install)')
     if os.name=='nt':
         launcher=home/'.orbit-universal/bin/orbit.cmd'
