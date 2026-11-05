@@ -32,13 +32,13 @@ def _reviewed_text(value):
     return value
 
 
-def _candidate_location(root, practice_key, role):
+def _candidate_location(root, practice_key, role, revision):
     if not _KEY.fullmatch(practice_key):
         raise ValueError("Not an Orbit reviewed practice identifier")
     if not _SAFE_ROLE.fullmatch(role):
         raise ValueError("Unsupported role for draft candidate")
     root = Path(root)
-    dirname = "orbit-" + role + "-" + practice_key[-16:]
+    dirname = "orbit-" + role + "-" + practice_key[-16:] + "-r" + str(revision)
     base = root / ".orbit"
     collection = base / "skill-candidates"
     folder = collection / dirname
@@ -82,7 +82,7 @@ def draft(conn, root, project, args, groups):
         return {"status": "HOLD_NONINDEPENDENT_TASKS", "state_written": False}
     text = _reviewed_text(row["practice_text"])
     role = live["role"]
-    base, collection, folder, path = _candidate_location(root, key, role)
+    base, collection, folder, path = _candidate_location(root, key, role, expected)
     name = folder.name
     # The proposed procedure is data from owner/reviewer reports; do not
     # elevate it into host-level operating instructions without another review.
