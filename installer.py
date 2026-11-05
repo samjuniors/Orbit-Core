@@ -20,6 +20,28 @@ HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Byte-identical Antigravity agent definitions from the immutable
+    # published v0.25.1 tag, verified against the actual Windows install.
+    # Accept these stock hashes only for backup-first upgrades; unknown
+    # user edits remain blocked without any wildcard or prefix matching.
+    'eecf1296589f28bbe760f604d8a13fdb63edb53175825232698e768627e60883',  # v0.25.1 orbit-architect.md
+    'f89ada629e70e5faef0e4b4c3be2d2fb9b08293f924a3930137c8997f92d6e5a',  # v0.25.1 orbit-backend.md
+    'c8e228b918063e16d0234086a0a784bf9e5d8f776cb494fcf824796cefd82f36',  # v0.25.1 orbit-data.md
+    '1f053826ef91a896af356a019ebf3a37e6cd0e41a73ac6c01f45504f5b43f241',  # v0.25.1 orbit-devops.md
+    '86483bedaeeafe01ad00f504c3717b986a9c20635108db12575ac41f145774e9',  # v0.25.1 orbit-frontend.md
+    '2c2708932582b658b9a81aa39f3aee600e3e359a359395648ab474b3fb20d8b9',  # v0.25.1 orbit-integrator.md
+    '5e281544c7bcd1a6ae5aa2d606e4be380fe63df8a77fb7bd9385827d8d9f70a5',  # v0.25.1 orbit-qa.md
+    'cca00c050ede41d92b6ac9ce15c4db749d57b8081a92025414621b46bca530be',  # v0.25.1 orbit-research.md
+    '6d1ffd5da18d6a896d4a4bd9afcb7397d639b370544e369faa63e639b353661d',  # v0.25.1 orbit-reviewer.md
+    '67c46598dd13a0c4a522365fd9729bc2558778ecba75865f29b9fcd7366630eb',  # v0.25.1 orbit-security.md
+    'aeb948fbef1da6c9beb64a8d9328c444b9f8212505c238ca1b16cc7e2aea086f',  # v0.25.1 orbit-ux.md
+    '937ba9abd1e042640d5694748a2222edbc8436443ac79288f5d2030f2a83f8a4',  # v0.25.1 orbit-writer.md
+    '93850f3fc0a5bb5067cd00a68da5c7bfaa6b8dd3b1078d30046ab1b62643349e',  # v0.25.1 orbit.md
+    # Exact byte-for-byte v0.25.1 Windows CLI after the repository rename
+    # Orbit-Core-MCP -> Orbit-Core and CRLF normalization. Proven against
+    # immutable v0.25.1 tag (2026-11-05). This exception retains backup-first
+    # upgrade behavior; it is not wildcard approval for customized files.
+    'a0c7748caa60b49c5af99ace391011798a3c64c7d7b851d8aaa1bf63516d984c',  # renamed v0.25.1 orbit_cli.py, CRLF
     # Exact unmodified reference bytes emitted by the immutable v0.27.0
     # installer, independently observed in the disposable CI tag-upgrade
     # fixture. No wildcard file names or digest prefixes: any owner edit
@@ -359,14 +381,27 @@ def merge_json(changes: list[Change], dest: Path, entry: dict, root: Path, desc:
 
 
 def stock_codex_body(body,python_cmd,runtime):
-    """Accept only an exact existing stock TOML definition; reject custom fields."""
-    matched=re.fullmatch(r'(?ms)\s*command\s*=\s*("(?:\\\\.|[^"\\\\])*")\s*\nargs\s*=\s*\[\s*("(?:\\\\.|[^"\\\\])*")\s*\]\s*',body)
-    if not matched:return False
-    try:
-        return (json.loads(matched.group(1))==python_cmd and
-                stock_runtime_path(json.loads(matched.group(2)),str(runtime)))
-    except ValueError:
-        return False
+    """Recognize only two-field stock Codex TOML, including v0.25.1 literals.
+
+    The old Windows installation used single-quoted TOML literal strings;
+    newer source uses JSON-compatible double-quoted strings. Both forms must
+    refer to the exact Python executable and existing versioned Orbit runtime.
+    Unknown env, timeout, or extra fields remain refused.
+    """
+    json_quoted=r'"(?:\\.|[^"\\])*"'
+    matched=re.fullmatch(
+        r'(?ms)\s*command\s*=\s*('+json_quoted+
+        r')\s*\nargs\s*=\s*\[\s*('+json_quoted+r')\s*\]\s*',body)
+    if matched:
+        try:
+            return (json.loads(matched.group(1))==python_cmd and
+                    stock_runtime_path(json.loads(matched.group(2)),str(runtime)))
+        except ValueError:
+            return False
+    literal=re.fullmatch(
+        r"(?ms)\s*command\s*=\s*'([^'\r\n]*)'\s*\nargs\s*=\s*\[\s*'([^'\r\n]*)'\s*\]\s*",body)
+    return (literal is not None and literal.group(1)==python_cmd and
+            stock_runtime_path(literal.group(2),str(runtime)))
 
 
 def merge_toml(changes: list[Change], dest: Path, python_cmd: str, runtime: Path, root: Path):
