@@ -4,6 +4,15 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] — next planned v0.30.0
 
+### Repository standard (2026-11-04)
+
+- Added a problem/solution README section and new-user/contributor paths.
+- Adopted MIT open-source licensing and updated contribution guidance.
+- Added bug/feature issue forms and reviewable repository metadata.
+- Added the reusable `scripts/check_repo.py` checker for repository consistency.
+- Sponsors onboarding and the funding button remain separate pending verified account eligibility.
+
+
 The next development lane investigates native host coordination and honest
 permission/reconciliation evidence. It is outside v0.29.0 and does not
 authorize any v0.30 release.

@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible Orbit Core bug (no secrets or private data)
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Security vulnerabilities must be reported privately. Remove secrets and project-private data from reports."
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: What happened? Include the impact.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide an isolated, reproducible example.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Orbit Core version
+      description: As reported by the actual connected MCP runtime.
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: IDE/agent host and version
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Python version
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs and verification evidence
+      description: Redact tokens, usernames, paths, project content and credentials.
+      render: shell
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I have removed secrets and personal/project-private information.
+          required: true
