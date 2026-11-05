@@ -4,7 +4,27 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] ` future development
 
-No further feature scope is included in the v0.30.0 candidate.
+
+### Development - release-aware multi-host CLI and PowerShell setup (not yet published)
+
+- Add a single CLI for **install, update and scoped uninstall** across selected
+  Antigravity, Codex, Claude Code and VS Code host profiles. A new `Orbit.ps1`
+  wrapper inside future Universal Setup ZIPs supports Windows PowerShell.
+- Choose a **published stable-channel release by default**, pin an exact
+  published version with `--version X.Y.Z`, or explicitly opt into a
+  prerelease channel. Never use floating development source for release installs.
+- Verify the official Universal ZIP SHA-256 and bounded archive layout before
+  allowing explicit `--apply` to execute the matching released installer.
+  Preview mode never imports or executes downloaded installer code.
+- Provide a version-specific released uninstall path that preserves shared
+  runtime, SQLite/checkpoints and unrelated host configs. Recognized changes
+  retain backups; unknown owner edits are flagged rather than overwritten.
+- Update CLI/GUI and MCP release-notice defaults to the now-published stable
+  channel; document the difference between current v0.30.0 commands and
+  upcoming functionality. This is **development source only**, not a new tag.
+
+
+The previously published v0.30.0 source/tag is immutable; this new scope is development only until a separate reviewed release.
 
 ## [0.30.0] - Stable-channel release (2026-11-05)
 

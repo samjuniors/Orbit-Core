@@ -33,8 +33,11 @@ class RenamedCliUpgradeTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.dest = Path(temporary.name) / "orbit_cli.py"
-        self.current = (Path(__file__).resolve().parents[1] / "orbit_cli.py").read_bytes()
-        self.old = self.current.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+        root = Path(__file__).resolve().parents[1]
+        self.current = (root / "orbit_cli.py").read_bytes()
+        # Frozen, hash-checked v0.25.1 Windows CLI migration bytes.
+        # Never derive a historical fingerprint from an actively edited CLI.
+        self.old = (root / "tests/fixtures/v0251-renamed-orbit-cli-crlf.py").read_bytes()
 
     def test_exact_renamed_v0251_windows_cli_is_recognized(self):
         self.assertIn(b"samjuniors/Orbit-Core", self.current)

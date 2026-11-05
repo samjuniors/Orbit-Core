@@ -20,6 +20,13 @@ HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Published v0.26.0-v0.30.0 immutable release updater/GUI stock bytes.
+    # Include official ZIP LF and exact Windows CRLF forms. Only full SHA256
+    # matches permit backup-first replacement; any owner edit still blocks.
+    '1e704136cf1cc7a7635c70a47f031b8920de585335e5037440ab6c436b4b5319',  # v0.26.0 orbit_cli.py CRLF (also exact prior tag forms)
+    'e0cc8d6962fe8c6d8b06900d237bd51437aa0af5a6254ef6e22343d4dd289e99',  # v0.30.0 orbit_update_gui.py LF (also exact prior tag forms)
+    'c9c9ac90e2eb60e7cd91b975786deb9a06270deca5f28186c412a37f77775f0b',  # v0.30.0 orbit_update_gui.py CRLF (also exact prior tag forms)
+    'bde59e3bbe62976c1d1d6904459ffe3798946678311b1399eba2bb189448d524',  # v0.30.0 orbit_cli.py LF (also exact prior tag forms)
     # Byte-identical Antigravity agent definitions from the immutable
     # published v0.25.1 tag, verified against the actual Windows install.
     # Accept these stock hashes only for backup-first upgrades; unknown
