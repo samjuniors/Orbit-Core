@@ -1,7 +1,42 @@
 # Orbit Core v0.30.0 ` Release-candidate acceptance record
 
-**Status:** CONDITIONAL SOURCE RELEASE CANDIDATE / REAL-HOST QA HOLD / NOT PUBLISHED.
+**Status:** OWNER-APPROVED RELEASE CANDIDATE / FINAL-HEAD CI PENDING / INDEPENDENT GUI ACCEPTANCE NOT VERIFIED / NOT PUBLISHED.
 **Date:** 2026-11-05. **Project:** Orbit Core (not Helm, Aro or ORBIT planner).
+
+## 2026-11-05 - Latest owner-approved release reconciliation
+
+The owner explicitly reported PASS and authorized merging, publishing both
+v0.29.0 and v0.30.0, and installing Orbit on the connected Windows PC.
+This owner-reported acceptance is distinct from independently verified IDE
+permission prompts, native host execution, restart, and rollback.
+
+- v0.29.0 was published stable from immutable tag `8f0e3ea` with eight
+  checked distribution assets, preserving all prior published releases.
+- Native coordination PR #71 merged into `main`. Release workflow PR #87
+  merged into `main` after 5/5 Ubuntu/Windows GitHub CI:
+  https://github.com/samjuniors/Orbit-Core/actions/runs/41984147062
+- Installer safety PR #86 merged into this candidate. Windows Python 3.12
+  full suite ran 524 tests, 26 skipped, zero failures, and exact-head
+  GitHub CI passed 5/5:
+  https://github.com/samjuniors/Orbit-Core/actions/runs/41982615363
+  It adds versioned clean/reset progress, rollback, explicit recovery and
+  SQLite liveness preflight. The old v1 backup remains manual-review only.
+- Current candidate incorporates the latest `main` via an isolated merge,
+  without code conflicts. Run its exact-source CI, package verification,
+  tag provenance and release checks before v0.30.0 publication.
+- On connected Windows PC before installation, machine-wide Antigravity
+  and Codex Orbit registrations are absent, and the old v0.25.1 runtime
+  is incomplete. Preserve all 203 historical backup files, live SQLite,
+  WAL, SHM, host settings and other MCP registrations. Review installer
+  changes and take independent backup-first snapshots before applying.
+- Actual interactive Antigravity GUI and Codex native session/permission
+  acceptance on the exact final release commit remain NOT INDEPENDENTLY
+  VERIFIED; installation and restart evidence must be recorded separately.
+
+Older HOLD entries below are historical and superseded only for owner
+authorization, not as evidence of independently completed host tests.
+
+
 
 This is a version-specific evidence record, not another publication policy.
 Follow [RELEASE-PROCESS.md](RELEASE-PROCESS.md) and the

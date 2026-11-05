@@ -6,7 +6,7 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 No further feature scope is included in the v0.30.0 candidate.
 
-## [0.30.0] ` Prerelease candidate (2026-11-05)
+## [0.30.0] - Stable-channel release (2026-11-05)
 
 ### Highlights
 
@@ -29,6 +29,13 @@ No further feature scope is included in the v0.30.0 candidate.
   renamed/CRLF Windows CLI variant permit backup-first upgrades. The installer
   also recognizes the original two-field Codex MCP TOML literal-string form.
   Arbitrary file edits and custom Orbit MCP fields remain protected.
+
+- **Make clean reset recoverable.** A versioned `orbit-uninstall-v2` manifest
+  journals backups, actions, progress and completion. Active SQLite transactions
+  block destructive cleanup before host edits. Failed removal triggers
+  conflict-safe rollback, and explicit `orbit_setup.py recover --backup <path>`
+  restores verified interrupted operations. Historical v1 backups remain
+  preserved for manual review. Normal installation does not erase memory.
 
 ### Install and upgrade
 
@@ -62,16 +69,16 @@ No further feature scope is included in the v0.30.0 candidate.
 
 ### Known limitations
 
-- Interactive Antigravity/Codex native-worker invocation, permission-denial
-  prompts, cancellation/restart recovery, Windows GUI update and rollback
-  still require exact-candidate **real-host acceptance**. Automated source
-  tests and caller-reported host observations are not permission attestation.
+- GUI-native Antigravity/Codex worker invocation, user permission prompts,
+  restart and rollback are not independently attested on the exact final commit.
+  The owner reported acceptance and approved publication. Automated source
+  tests do not independently prove live IDE behavior; check after installation.
 - MCP does not directly authenticate the IDE's permission prompt, host
   session liveness or model-run provenance. Owner review of worker outputs,
   diffs and actual tests is still required before integration.
-- The prior v0.29.0 source was merged to `main`, but public v0.29.0
-  publication is separately pending; resolve version sequencing and
-  distribution-channel choice before authorizing any public v0.30.0 release.
+- v0.29.0 stable was published on 2026-11-05 with eight exact-tag verified
+  distribution assets. Prior releases remain immutable; any v0.30.0 install
+  requires separately reviewed backup-first host configuration changes.
 - Some filesystem symlink/junction and GUI behaviors depend on the host OS
   and permissions; skipped platform-specific tests are not PASS results.
 
