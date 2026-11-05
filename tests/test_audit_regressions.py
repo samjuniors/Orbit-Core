@@ -311,8 +311,8 @@ class TaskLedgerTests(Harness):
     def step(self, name, key, rev, **extra):
         return self.call(name, {**self.a, 'task_key': key, 'expected_revision': rev, 'confirm_write': True, **extra})
 
-    def reserve(self, key, rev):
-        return self.step('orbit_task_reserve', key, rev, approval_reference='user-approved-12345')
+    def reserve(self, key, rev, approval_reference='user-approved-12345'):
+        return self.step('orbit_task_reserve', key, rev, approval_reference=approval_reference)
 
     def test_failed_or_rework_task_can_be_retried_and_unblocks_dependents(self):  # AUD-13
         self.plan('a'); self.plan('b', deps=['a'])
@@ -320,12 +320,13 @@ class TaskLedgerTests(Harness):
         self.step('orbit_task_started', 'a', 2, host_session='session-12345')
         self.step('orbit_task_report', 'a', 3, outcome='FAILED', evidence='tests failed on first attempt',
                   observed_host_session='session-12345', host_state='FAILED')
-        retry = self.reserve('a', 4)
+        # Failed work requires a fresh real-host permission reference.
+        retry = self.reserve('a', 4, approval_reference='user-approved-retry-45678')
         self.assertEqual(retry.get('status'), 'RESERVED', retry)
 
     def test_planned_task_can_be_cancelled(self):  # AUD-13
         self.plan('c')
-        out = self.step('orbit_task_release', 'c', 1, reason='no longer needed for this plan')
+        out = self.step('orbit_task_release', 'c', 1, reason='no longer needed for this plan',host_invocation_outcome='NOT_ATTEMPTED')
         self.assertEqual(out.get('status'), 'CANCELLED', out)
 
     def test_released_reservations_do_not_exhaust_step_budget(self):  # AUD-14
@@ -333,7 +334,7 @@ class TaskLedgerTests(Harness):
             self.plan(key, step='build')
         for key in ('t1', 't2', 't3'):
             self.reserve(key, 1)
-            self.step('orbit_task_release', key, 2, reason='host invocation failed, releasing')
+            self.step('orbit_task_release', key, 2, reason='host invocation failed, releasing',host_invocation_outcome='NOT_ATTEMPTED')
         self.assertEqual(self.reserve('t4', 1).get('status'), 'RESERVED')
 
     def test_dependency_cycles_are_rejected(self):  # AUD-15

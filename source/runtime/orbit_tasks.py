@@ -21,6 +21,19 @@ RETRYABLE = ('PLANNED','REWORK','FAILED','BLOCKED')
 # than implying the user permanently cancelled an approved work item.
 RELEASE_REASONS = {'USER_CANCELLED','HOST_PERMISSION_DENIED','HOST_TOOL_UNAVAILABLE',
                    'HOST_INVOCATION_FAILED','OTHER'}
+# Caller-reported facts cannot authenticate native host permission.
+# Fail closed on unknown invocation status or a returned native session.
+HOST_INVOCATION_OUTCOMES = {
+    'NOT_ATTEMPTED', 'DENIED_BEFORE_SESSION', 'UNAVAILABLE_BEFORE_SESSION',
+    'FAILED_BEFORE_SESSION', 'SESSION_RETURNED', 'UNKNOWN',
+}
+RELEASE_OBSERVATIONS = {
+    'USER_CANCELLED': 'NOT_ATTEMPTED',
+    'OTHER': 'NOT_ATTEMPTED',
+    'HOST_PERMISSION_DENIED': 'DENIED_BEFORE_SESSION',
+    'HOST_TOOL_UNAVAILABLE': 'UNAVAILABLE_BEFORE_SESSION',
+    'HOST_INVOCATION_FAILED': 'FAILED_BEFORE_SESSION',
+}
 # Agent/host control files are persistence vectors for prompt injection; humans edit them directly.
 PROTECTED_SEGMENTS = {'.git','.orbit','.agents','.env','id_rsa','id_ed25519','credentials.json',
                       '.claude','.codex','.gemini','.cursor','.vscode','.mcp.json',
@@ -357,11 +370,16 @@ def reserve(conn,a,root):
         conflict=_revision(a,old)
         if conflict: conn.rollback();return conflict
         if old['status'] not in RETRYABLE: raise ValueError('Only PLANNED, REWORK, FAILED or BLOCKED tasks can reserve')
-        # A BLOCKED task ended without fulfilling its approved objective,
-        # including a normally completed native worker that produced no work.
-        # No earlier approval reference authorizes a new worker attempt.
-        if old['status']=='BLOCKED' and approval==old.get('approval_reference'):
-            raise ValueError('Blocked task requires fresh host/user approval; do not reuse the earlier reference')
+        # A failed, rejected or blocked attempt never authorizes a retry,
+        # even when the host worker exited normally with no delivered work.
+        # A fresh caller reference is an advisory anti-replay guard, NOT proof
+        # that the real host or owner granted permission to spawn another agent.
+        if (old['status'] in {'REWORK','FAILED','BLOCKED'} and
+                old.get('approval_reference') and
+                approval == old['approval_reference']):
+            raise ValueError(
+                'Retry requires fresh host/user approval; do not reuse an '
+                'earlier task reservation approval reference')
         for dep in json.loads(old['depends_on']):
             item=conn.execute('SELECT status FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                               (old['project'],old['project_root'],dep)).fetchone()
@@ -430,10 +448,16 @@ def release(conn,a,root):
     if code not in RELEASE_REASONS:
         raise ValueError('Unknown host release reason_code')
     why=text(a,'reason',500,10)
+    observed=a.get('host_invocation_outcome','UNKNOWN')
+    if observed not in HOST_INVOCATION_OUTCOMES:
+        raise ValueError('Unknown host_invocation_outcome')
+    expected=RELEASE_OBSERVATIONS[code]
     target=('BLOCKED' if code in {'HOST_PERMISSION_DENIED','HOST_TOOL_UNAVAILABLE',
                                   'HOST_INVOCATION_FAILED'} else 'CANCELLED')
     if a.get('confirm_write') is not True:
         return {'status':'PREVIEW_ONLY','proposed_status':target,'reason_code':code,
+                'host_invocation_outcome_reported':observed,
+                'release_eligible_after_host_review':observed==expected,
                 'agent_stopped_by_mcp':False,'host_permission_verified':False}
     with conn:
         old=_row(conn,a,root)
@@ -443,10 +467,27 @@ def release(conn,a,root):
             raise ValueError('Only unstarted PLANNED or RESERVED tasks can release; running tasks must be stopped in the host')
         if old['host_session']:
             raise ValueError('A task with a host session cannot be released as unstarted; reconcile with the host first')
-        out=_update(conn,old,target,note=code+': '+why)
+        if observed!=expected:
+            return {
+                'status':'HOLD_HOST_RECONCILIATION',
+                'reason':('Unstarted release needs an explicit matching host '
+                          'invocation outcome. A returned native session must '
+                          'be started/reported, not claimed denied or unused. '
+                          'No prompt is not evidence of permission denial.'),
+                'required_host_invocation_outcome':expected,
+                'host_invocation_outcome_reported':observed,
+                'task_revision':old['revision'],
+                'agent_stopped_by_mcp':False,
+                'host_permission_verified':False,
+                'state_written':False,
+            }
+        out=_update(conn,old,target,
+                    note=code+': '+why+'; HOST_INVOCATION_OUTCOME_REPORTED:'+observed)
         if old['status']=='RESERVED':
             _mark_latest_attempt(conn,old,'RELEASED_UNUSED')
     return {'status':target,'task':public(out),'reason_code':code,
+            'host_invocation_outcome_reported':observed,
+            'host_invocation_observation_verified':False,
             'agent_stopped_by_mcp':False,'host_permission_verified':False,
             'next':('Request new host/user approval before any retry; otherwise stop safely or work serially within existing permissions.'
                     if target=='BLOCKED' else 'No host agent was started or stopped by Orbit.')}

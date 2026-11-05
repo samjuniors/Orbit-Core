@@ -59,11 +59,7 @@ def preview(conn, root, project, a):
     if host not in orbit_delegation.HOST_NATIVE_TOOLS:
         raise ValueError("Unsupported native-agent host")
     tools = a.get("available_host_tools", [])
-    if (not isinstance(tools, list) or len(tools) > 32 or
-            any(not isinstance(t, str) or
-                not orbit_delegation.ALLOWED_TOOL_PATTERN.fullmatch(t)
-                for t in tools) or len(set(tools)) != len(tools)):
-        raise ValueError("Invalid or duplicate reported host tool names")
+    orbit_delegation.validate_reported_tools(host, tools)
     mode = orbit_delegation.workspace_mode(a)
     width = a.get("max_parallel", orbit_tasks.MAX_CONCURRENT)
     if type(width) is not int or not 1 <= width <= orbit_tasks.MAX_CONCURRENT:

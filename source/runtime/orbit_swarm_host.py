@@ -33,11 +33,7 @@ def review(conn, root, project, args):
     reported_tools = args.get("available_host_tools", [])
     if host not in orbit_delegation.HOST_NATIVE_TOOLS:
         raise ValueError("Unknown coding host")
-    if (not isinstance(reported_tools, list) or len(reported_tools) > 32 or
-            any(not isinstance(t, str) or
-                    not orbit_delegation.ALLOWED_TOOL_PATTERN.fullmatch(t)
-                    for t in reported_tools) or len(set(reported_tools)) != len(reported_tools)):
-        raise ValueError("Invalid or duplicated host tool names")
+    orbit_delegation.validate_reported_tools(host, reported_tools)
 
     base = {
         "project": project, "project_root": str(root),

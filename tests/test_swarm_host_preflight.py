@@ -84,7 +84,7 @@ class HostPreflightTests(unittest.TestCase):
         tool = next(x for x in orbit_mcp.TOOLS
                     if x["name"] == "orbit_swarm_host_preflight")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 47)
+        self.assertEqual(len(orbit_mcp.TOOLS), 48)
 
     def test_two_disjoint_reserved_tasks_have_two_complete_packets(self):
         self.create("api", paths=["backend/"])
@@ -152,7 +152,7 @@ class HostPreflightTests(unittest.TestCase):
         rev = self.reserve("api")
         denied = orbit_tasks.release(self.db, {
             "project": self.project, "task_key": "api", "expected_revision": rev,
-            "reason_code": "HOST_PERMISSION_DENIED", "reason": "Host refused permission",
+            "reason_code": "HOST_PERMISSION_DENIED", "host_invocation_outcome": "DENIED_BEFORE_SESSION", "reason": "Host refused permission",
             "confirm_write": True,
         }, self.root)
         self.assertEqual(denied["status"], "BLOCKED")

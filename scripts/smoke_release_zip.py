@@ -96,8 +96,8 @@ def smoke(root=ROOT):
             raise RuntimeError("Invalid packaged MCP JSON-RPC results")
         tools = {tool["name"] for tool in replies[1]["result"]["tools"]}
         expected = {"orbit_project_resume", "orbit_project_action", "orbit_memory_recall",
-                    "orbit_project_checkpoint", "orbit_build_begin", "orbit_swarm_preview", "orbit_swarm_draft_preview", "orbit_swarm_host_preflight", "orbit_swarm_integration_review", "orbit_software_delivery_preview"}
-        if not expected.issubset(tools) or len(tools) != 47:
+                    "orbit_project_checkpoint", "orbit_build_begin", "orbit_swarm_preview", "orbit_swarm_draft_preview", "orbit_swarm_host_preflight", "orbit_swarm_integration_review", "orbit_native_coordination_preview", "orbit_software_delivery_preview"}
+        if not expected.issubset(tools) or len(tools) != 48:
             raise RuntimeError("Packaged MCP tool inventory mismatch")
         if replies[2]["result"].get("isError"):
             raise RuntimeError("Packaged resume returned tool error")
