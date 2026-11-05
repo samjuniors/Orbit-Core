@@ -156,8 +156,8 @@ class UniversalSetupTests(unittest.TestCase):
             self.assertTrue(Path(entry['args'][0]).is_file())
             self.assertTrue(Path(entry['command']).is_file())
             self.assertTrue((installer.runtime_folder()/'orbit_preview.py').is_file())
-        self.assertEqual(len(list((self.project/'.claude/agents').glob('orbit-*.md'))),13)
-        self.assertEqual(len(list((self.project/'.agents/agents').glob('*.md'))),13)
+        self.assertEqual(len(list((self.project/'.claude/agents').glob('orbit-*.md'))),16)
+        self.assertEqual(len(list((self.project/'.agents/agents').glob('*.md'))),16)
 
     def test_mcp_process_and_shared_db(self):
         ch=installer.plan(self.project,['codex'],scope='project');installer.install(ch)
