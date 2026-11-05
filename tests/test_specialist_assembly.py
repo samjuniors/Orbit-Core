@@ -54,8 +54,9 @@ class SpecialistAssemblyTests(unittest.TestCase):
             skills=[{"name": "orbit-security"}],
             selected=[{"name": "orbit-security", "sha256": "a" * 64}])
         sec = next(r for r in result["candidate_roles"] if r["role"] == "cybersecurity")
-        self.assertTrue(sec["installed_role_profile_name_seen"])
-        self.assertIsNone(sec["profile_candidate"])
+        self.assertFalse(sec["installed_role_profile_name_seen"])
+        self.assertTrue(sec["skill_name_hint_seen"])
+        self.assertIsNotNone(sec["profile_candidate"])
         self.assertFalse(sec["profile_installed"])
         self.assertFalse(result["license_and_provenance_checked"])
 
