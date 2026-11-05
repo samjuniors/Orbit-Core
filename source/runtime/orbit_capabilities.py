@@ -11,8 +11,10 @@ from pathlib import Path
 # as source.runtime.orbit_capabilities.
 if __package__:
     from . import orbit_skill_plan
+    from . import orbit_specialists
 else:
     import orbit_skill_plan
+    import orbit_specialists
 
 TRIGGERS = {
     'frontend': {'frontend','ui','ux','interface','design','responsive','component','layout','accessibility','visual','polish'},
@@ -35,6 +37,9 @@ ROLE_SKILLS = {
     'orbit-backend': ('modern-python','mcp-builder'),
     'orbit-data': ('modern-python','property-based-testing'),
     'orbit-security': ('static-analysis','insecure-defaults','supply-chain-risk-auditor'),
+    'orbit-project-manager': ('trailmark','writing-guidelines'),
+    'orbit-creative-director': ('frontend-design','web-design-guidelines','impeccable'),
+    'orbit-software-engineer': ('property-based-testing','code-improver'),
     'orbit-qa': ('webapp-testing','property-based-testing','agent-browser'),
     'orbit-devops': ('open-sourcing','supply-chain-risk-auditor'),
     'orbit-ux': ('frontend-design','web-design-guidelines','impeccable'),
@@ -441,11 +446,14 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
                               'BROWSE_OFFICIAL_SOURCES_AND_REQUEST_APPROVAL'
                               if research else 'USE_EXISTING_HOST_CAPABILITIES')
     adaptive_plan=adaptive_workflow(objective,categories,role,host_tools,reviewed_candidates,permission_state)
+    specialist_plan=orbit_specialists.plan(skill_plan['project_profile'],objective,available,
+                                           skill_plan,host_tools,permission_state)
     browser_plan = browser_workflow(host_tools,available['mcp_servers'],permission_state=permission_state) if ('qa' in categories or role=='orbit-qa') else None
     return {'objective':objective,'role_skill_preferences':recommended,'skill_plan':skill_plan,'categories':categories,'installed_matches':reviewed_candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
             'optional_browser_provider':browser_provider,
             'browser_workflow':browser_plan,
             'adaptive_workflow':adaptive_plan,
+            'specialist_assembly':specialist_plan,
             'permission_state_reported':permission_state,
             'permission_verified':False,
         'recommended_action':recommended_action,
