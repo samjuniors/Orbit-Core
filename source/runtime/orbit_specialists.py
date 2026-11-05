@@ -92,8 +92,9 @@ def plan(project_profile, objective, available, skill_plan, host_tools, permissi
     operation = project_profile["operation"]
     chosen = _roles(kind, operation)
     selected = skill_plan.get("shortlist", [])
-    installed = {x.get("name") for x in available.get("skills", [])
-                 if isinstance(x, dict) and isinstance(x.get("name"), str)}
+    # Installed SKILL.md metadata is not evidence of an installed agent profile.
+    skill_name_hints = {x.get("name") for x in available.get("skills", [])
+                        if isinstance(x, dict) and isinstance(x.get("name"), str)}
     verified_native = False  # Native host execution cannot be attested by MCP.
     hints = sorted(set(host_tools) & HOST_NATIVE)
     denied = permission_state == "DENIED"
@@ -106,16 +107,16 @@ def plan(project_profile, objective, available, skill_plan, host_tools, permissi
         jobs.append({
             "role": role, "purpose": ROLES[role]["mission"],
             "acceptance": ROLES[role]["evidence"],
-            "installed_role_profile_name_seen": name in installed,
+            "skill_name_hint_seen": name in skill_name_hints,
+            "installed_role_profile_name_seen": False,
             "bundled_role_profile_source": "source/agents/" + name + ".md",
             "bundled_role_profile_host_installed": False,
             "existing_skill_shortlist_hints": matches[:3],
             "native_host_tool_hints": hints[:3],
             "native_agent_verified": verified_native,
             "recommendation": ("HOLD_PERMISSION_DENIED" if denied else
-                               "REVIEW_EXISTING_HOST_PROFILE" if name in installed else
                                "REVIEW_BUNDLED_OR_HOST_PROFILE_BEFORE_CREATING_DUPLICATE"),
-            "profile_candidate": None if name in installed or denied else _role_profile(role),
+            "profile_candidate": None if denied else _role_profile(role),
             "profile_written": False,
             "profile_installed": False,
             "agent_spawned": False,
