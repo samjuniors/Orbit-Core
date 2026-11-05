@@ -35,7 +35,7 @@ GitHub proves code, CI and releases; real hosts prove actual IDE behavior.
 | Exact candidate GitHub CI | PASS on initial SHA | Candidate commit de221db: 5/5 Ubuntu/Windows jobs PASS, [run #41975838472](https://github.com/samjuniors/Orbit-Core/actions/runs/41975838472); reverify after amendment |
 | Genuine Codex native host-invocation acceptance | BLOCKED | Codex 0.166.0 recognized isolated test MCP, but model usage limit prevented any MCP call or returned native session |
 | Genuine Antigravity GUI host acceptance | NOT VERIFIED | Project-local config starts version 0.30.0 / 48 tools directly; real GUI invocation and permission prompt unobserved |
-| Real installed-user GUI update/restart/rollback | PREVIEW ONLY PASS, APPLY NOT RUN | Actual machine candidate update preview: 24 CREATE, 11 UPGRADE, 1 APPEND, 1 MERGE, 22 SKIP; installed v0.25.1 preserved |
+| Real installed-user GUI update/restart/rollback | BLOCKED - LIVE REGISTRATION DRIFT | Candidate global preview PASS, but later both global Orbit MCP entries and prior v0.25.1 runtime entrypoint were absent; root cause unverified; do not restore automatically |
 | Main merge, immutable tag, public release | NOT RUN | Separate owner approval and v0.29 release-sequence resolution |
 
 ## Safety and rollback rules
@@ -104,8 +104,9 @@ any further source changes.
 - Antigravity interactive native `invoke_subagent` and
   GUI permission/restart remain NOT VERIFIED. The direct
   synthetic MCP launch does not replace these checks.
-- The real machine-wide v0.25.1 Orbit runtime and global
-  Antigravity/Codex configurations remain unchanged.
+- At test setup, the real machine-wide v0.25.1 runtime and global
+  Antigravity/Codex registration files were present. A later independent
+  read found the Orbit registrations missing; see drift note below.
 
 ### Remaining host acceptance procedure
 
@@ -125,3 +126,30 @@ Repeat Codex only after its usage limit is resolved.
 Source, CI, ZIP parity and isolated upgrade checks passed, but real
 Codex/Antigravity host acceptance, GUI update/restart/rollback,
 and the separate v0.29 public-release sequencing remain open.
+
+## 2026-11-05 - Post-fixture global registration drift (BLOCKED)
+
+The actual Windows device had both Antigravity and Codex global
+`orbit-core-native` registrations pointing at the shared
+`~/.orbit-universal/0.25.1/orbit_mcp.py` at the start of this session.
+A later read-only inspection found:
+- Antigravity's global `.gemini/config/mcp_config.json` contains only
+  an unrelated service, with no `orbit-core-native` entry.
+- Codex's global `.codex/config.toml` similarly has no Orbit entry;
+  unrelated MCP settings remain present.
+- The previous `0.25.1/orbit_mcp.py` executable is missing, even though
+  the `0.25.1` parent folder remains. The old config backup files
+  still exist. The detected global config modification timestamps
+  are 2026-11-05 at approximately 11:13-11:14 local Windows time.
+- The disposable v0.30 installer apply log contains **50** CREATE
+  actions, all within `%TEMP%/Orbit-v030-HostAcceptance-20261105`,
+  and **zero** paths outside that fixture. The synthetic test
+  used isolated setup-home and runtime-home environment paths.
+
+The **origin of the changes to global registration/runtime files is
+NOT ESTABLISHED**. Do not claim this was caused by the synthetic
+installer, a concurrent user action, or a specific external process
+without separate evidence. Do not restore or recreate a host registration
+until the owner reviews the current config and chooses the intended
+machine-wide state. Live acceptance/upgrade is BLOCKED; source CI and
+disposable-host evidence remain valid but do not substitute for it.
