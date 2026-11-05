@@ -59,10 +59,12 @@ def _owned_entry(value, home, typed=None):
 
 
 def _read_file(path):
-    if not path.exists() and not path.is_symlink():
+    if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+        raise installer.SetupError("Refusing symlink Orbit target: " + str(path))
+    if not path.exists():
         return None
-    if path.is_symlink() or any(parent.is_symlink() for parent in path.parents) or not path.is_file():
-        raise installer.SetupError("Refusing symlink or non-file Orbit target: " + str(path))
+    if not path.is_file():
+        raise installer.SetupError("Refusing non-file Orbit target: " + str(path))
     return path.read_bytes()
 
 
@@ -342,49 +344,270 @@ def plan_clean_reset(project=None, *, erase_memory=False):
     return sorted((c for c in planned.values() if c.path.resolve() not in protected_db),
                   key=lambda c: str(c.path)), notes
 
-def apply_uninstall(changes):
-    """Backup all originals before mutation; reject changed/symlink targets."""
+_UNINSTALL_MANIFEST = "orbit-uninstall-v2"
+
+
+def _write_uninstall_manifest(backup, record):
+    """Atomically checkpoint a backup's state before/after each mutation."""
+    path = backup / "manifest.json"
+    import uuid
+    temp = backup / ("manifest.json.tmp-" + uuid.uuid4().hex)
+    with temp.open("x", encoding="utf-8") as stream:
+        json.dump(record, stream, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    try:
+        temp.replace(path)
+    finally:
+        if temp.exists():
+            temp.unlink()
+
+
+def _preflight_sqlite_removal(changes):
+    """Reject a busy SQLite database before touching any host registration.
+
+    This is a best-effort liveness check, not a substitute for rollback: a host
+    can reopen the database after preflight.
+    """
+    import sqlite3
+    for change in changes:
+        if change.replacement is not None or not change.path.name.endswith(".sqlite3"):
+            continue
+        if not change.original.startswith(b"SQLite format 3\x00"):
+            continue
+        connection = None
+        try:
+            connection = sqlite3.connect(change.path.as_uri() + "?mode=rw", uri=True, timeout=0)
+            connection.execute("BEGIN EXCLUSIVE")
+            connection.rollback()
+        except sqlite3.Error as exc:
+            raise installer.SetupError("Close Orbit/SQLite processes before clean reset: " + str(change.path)) from exc
+        finally:
+            if connection is not None:
+                connection.close()
+
+
+def _restore_uninstall_targets(changes):
+    """Restore only unmodified post-uninstall state; never overwrite owner drift.
+
+    Preflight every target before the first restoration. This also makes an
+    explicit recovery attempt safe to repeat.
+    """
+    pending = []
+    staged_temps = []
+    for change in changes:
+        if change.replacement is not None:
+            temp = change.path.with_name(change.path.name + ".orbit-uninstall-tmp")
+            data = _read_file(temp)
+            if data is not None:
+                if data != change.replacement:
+                    raise installer.SetupError("Recovery conflict (temporary config): " + str(temp))
+                staged_temps.append(temp)
+        current = _read_file(change.path)
+        if current == change.original:
+            continue
+        if change.replacement is None:
+            if current is not None:
+                raise installer.SetupError("Recovery conflict (modified target): " + str(change.path))
+        elif current != change.replacement:
+            raise installer.SetupError("Recovery conflict (modified config): " + str(change.path))
+        pending.append(change)
+    for change in reversed(pending):
+        current = _read_file(change.path)
+        if change.replacement is None:
+            if current is not None:
+                raise installer.SetupError("Recovery target changed during restore: " + str(change.path))
+            change.path.parent.mkdir(parents=True, exist_ok=True)
+            if any(parent.is_symlink() for parent in change.path.parents):
+                raise installer.SetupError("Recovery parent became a link: " + str(change.path))
+            with change.path.open("xb") as handle:
+                handle.write(change.original)
+                handle.flush()
+                os.fsync(handle.fileno())
+        else:
+            if current != change.replacement:
+                raise installer.SetupError("Recovery config changed during restore: " + str(change.path))
+            temp = change.path.with_name(change.path.name + ".orbit-restore-tmp")
+            with temp.open("xb") as handle:
+                handle.write(change.original)
+                handle.flush()
+                os.fsync(handle.fileno())
+            temp.replace(change.path)
+    for temp in staged_temps:
+        if _read_file(temp) is not None:
+            temp.unlink()
+    return len(pending)
+
+
+def inspect_uninstall_backup(backup):
+    """Read-only verification. Historical v1 list manifests are not rewritten."""
+    backup = Path(backup)
+    home = installer.user_home().resolve()
+    store = home / ".orbit-uninstall-backups"
+    if backup.is_symlink() or store.is_symlink() or backup.resolve().parent != store.resolve():
+        raise installer.SetupError("Recovery must select a direct, nonlinked Orbit backup")
+    raw = (backup / "manifest.json")
+    if raw.is_symlink() or not raw.is_file():
+        raise installer.SetupError("Missing or linked recovery manifest")
+    record = json.loads(raw.read_text(encoding="utf-8"))
+    if isinstance(record, list):
+        raise installer.SetupError("Legacy v1 backup: manual review required; no automatic restore")
+    if not isinstance(record, dict) or record.get("schema") != _UNINSTALL_MANIFEST:
+        raise installer.SetupError("Unknown recovery manifest format")
+    if record.get("status") not in {"APPLYING", "ROLLBACK_REQUIRED", "ROLLED_BACK", "COMPLETE"}:
+        raise installer.SetupError("Backup is not in a recoverable state")
+    roots = [home]
+    if record.get("project_root"):
+        root = Path(record["project_root"])
+        if not root.is_absolute() or root.is_symlink():
+            raise installer.SetupError("Invalid recorded project root")
+        roots.append(root.resolve())
+    entries = record.get("entries")
+    if not isinstance(entries, list) or not entries:
+        raise installer.SetupError("Recovery manifest has no targets")
+    changes = []
+    seen = set()
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict) or entry.get("backup_name") != f"{index:03d}.bak":
+            raise installer.SetupError("Invalid recovery entry or backup name")
+        raw_path = entry.get("original_path")
+        if not isinstance(raw_path, str) or not raw_path:
+            raise installer.SetupError("Invalid recovery target path")
+        path = Path(raw_path)
+        canonical = path.resolve()
+        if not path.is_absolute() or not any(canonical == root or root in canonical.parents for root in roots):
+            raise installer.SetupError("Recovery target outside recorded scope")
+        if path in seen or path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+            raise installer.SetupError("Duplicate or linked recovery target")
+        seen.add(path)
+        source = backup / entry["backup_name"]
+        if source.is_symlink() or not source.is_file():
+            raise installer.SetupError("Missing recovery backup bytes")
+        original = source.read_bytes()
+        if hashlib.sha256(original).hexdigest() != entry.get("original_sha256"):
+            raise installer.SetupError("Corrupt recovery backup bytes")
+        action = entry.get("action")
+        if action not in {"REMOVE", "EDIT"}:
+            raise installer.SetupError("Invalid recovery action")
+        replacement = None
+        if action == "EDIT":
+            proposed = backup / f"{index:03d}.proposed"
+            if proposed.is_symlink() or not proposed.is_file():
+                raise installer.SetupError("Missing recovery proposed-config bytes")
+            replacement = proposed.read_bytes()
+            if hashlib.sha256(replacement).hexdigest() != entry.get("replacement_sha256"):
+                raise installer.SetupError("Corrupt recovery proposed-config bytes")
+        changes.append(Removal(path, original, replacement, "Verified recovery"))
+    return record, changes
+
+
+def recover_uninstall(backup, *, confirmation=""):
+    """Explicit, idempotent recovery after a crash. Never silently restore."""
+    if confirmation != "RESTORE ORBIT":
+        raise installer.SetupError('Recovery requires typing RESTORE ORBIT')
+    backup = Path(backup)
+    record, changes = inspect_uninstall_backup(backup)
+    count = _restore_uninstall_targets(changes)
+    record["status"] = "ROLLED_BACK"
+    record["restored_count"] = count
+    _write_uninstall_manifest(backup, record)
+    return count
+
+
+def apply_uninstall(changes, *, operation="uninstall", project=None, erase_memory=False):
+    """Fail-closed uninstall with progress journal, rollback and explicit recovery."""
     if not changes:
         return None
-    if len(set(c.path for c in changes)) != len(changes):
+    if operation not in {"uninstall", "clean"}:
+        raise installer.SetupError("Unknown uninstall operation")
+    if len({c.path for c in changes}) != len(changes):
         raise installer.SetupError("Duplicate uninstall path")
     for c in changes:
         if _read_file(c.path) != c.original:
             raise installer.SetupError("Uninstall plan stale: " + str(c.path))
+        if c.replacement is not None and c.path.with_name(c.path.name + ".orbit-uninstall-tmp").exists():
+            raise installer.SetupError("Existing uninstall temporary file: " + str(c.path))
+    if operation == "clean" and erase_memory:
+        _preflight_sqlite_removal(changes)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     backup_root = installer.user_home() / ".orbit-uninstall-backups"
-    if backup_root.is_symlink():
-        raise installer.SetupError("Refusing symlink uninstall backup root")
+    if backup_root.is_symlink() or any(p.is_symlink() for p in backup_root.parents):
+        raise installer.SetupError("Refusing linked uninstall backup root")
     backup = backup_root / stamp
     backup.mkdir(parents=True, exist_ok=False, mode=0o700)
     if os.name != "nt":
         backup.chmod(0o700)
-    manifest = []
+    entries = []
     for i, c in enumerate(changes):
         dest = backup / f"{i:03d}.bak"
         with dest.open("xb") as file:
             file.write(c.original)
+            file.flush()
+            os.fsync(file.fileno())
         if os.name != "nt":
             dest.chmod(0o600)
-        manifest.append({"original_path": str(c.path), "backup_name": dest.name,
-                         "action": "REMOVE" if c.replacement is None else "EDIT"})
-    index = backup / "manifest.json"
-    index.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    if os.name != "nt":
-        index.chmod(0o600)
+        if c.replacement is not None:
+            proposed = backup / f"{i:03d}.proposed"
+            with proposed.open("xb") as file:
+                file.write(c.replacement)
+                file.flush()
+                os.fsync(file.fileno())
+            if os.name != "nt":
+                proposed.chmod(0o600)
+        entries.append({"original_path": str(c.path), "backup_name": dest.name,
+                        "original_sha256": hashlib.sha256(c.original).hexdigest(),
+                        "replacement_sha256": (hashlib.sha256(c.replacement).hexdigest()
+                                               if c.replacement is not None else None),
+                        "action": "REMOVE" if c.replacement is None else "EDIT",
+                        "state": "PENDING"})
+    record = {"schema": _UNINSTALL_MANIFEST, "status": "APPLYING",
+              "operation": operation, "scope": "machine+project" if operation == "clean" and project else ("project" if project else "machine"),
+              "erase_memory": bool(erase_memory),
+              "project_root": str(Path(project).resolve()) if project else None,
+              "started_at": datetime.now(timezone.utc).isoformat(),
+              "entries": entries}
+    _write_uninstall_manifest(backup, record)
     try:
-        for c in changes:
+        for i, c in enumerate(changes):
             if _read_file(c.path) != c.original:
-                raise installer.SetupError("Partial uninstall: file changed; see backup " + str(backup))
+                raise installer.SetupError("Uninstall plan became stale: " + str(c.path))
+            record["entries"][i]["state"] = "STARTED"
+            _write_uninstall_manifest(backup, record)
             if c.replacement is None:
                 c.path.unlink()
             else:
                 temp = c.path.with_name(c.path.name + ".orbit-uninstall-tmp")
                 with temp.open("xb") as file:
                     file.write(c.replacement)
+                    file.flush()
+                    os.fsync(file.fileno())
                 temp.replace(c.path)
+            record["entries"][i]["state"] = "APPLIED"
+            _write_uninstall_manifest(backup, record)
+        record["status"] = "COMPLETE"
+        _write_uninstall_manifest(backup, record)
     except (OSError, installer.SetupError) as exc:
-        raise installer.SetupError('Removal incomplete; recovery backup: ' + str(backup) + '\n' + str(exc)) from exc
+        # Only restore if the observed state is still exactly our own output.
+        # Preserve all recovery files when another process edits a target.
+        try:
+            restored = _restore_uninstall_targets(changes)
+            record["status"] = "ROLLED_BACK"
+            record["restored_count"] = restored
+            record["failure"] = str(exc)
+            _write_uninstall_manifest(backup, record)
+            detail = "All original targets restored."
+        except (OSError, installer.SetupError) as restore_exc:
+            record["status"] = "ROLLBACK_REQUIRED"
+            record["failure"] = str(exc)
+            record["recovery_error"] = str(restore_exc)
+            try:
+                _write_uninstall_manifest(backup, record)
+            except OSError:
+                pass
+            detail = "Automatic restoration incomplete: " + str(restore_exc)
+        raise installer.SetupError("Removal incomplete; recovery backup: " + str(backup)
+                                   + "\n" + str(exc) + "\n" + detail) from exc
     return backup
 
 
@@ -395,7 +618,7 @@ def apply_clean_reset(changes, project=None, *, erase_memory=False, confirmation
     fresh, _ = plan_clean_reset(project, erase_memory=erase_memory)
     if fresh != changes:
         raise installer.SetupError('Clean reset preview changed; review again')
-    backup = apply_uninstall(changes)
+    backup = apply_uninstall(changes, operation='clean', project=project, erase_memory=erase_memory)
     home = installer.user_home()
     folders = [home / '.orbit-universal', home / '.gemini/config/skills/orbit',
                home / '.agents/skills/orbit', home / '.claude/skills/orbit', installer.runtime_folder()]
@@ -453,7 +676,7 @@ def run_action(action, scope, project, hosts, apply=False, *, erase_memory=False
         if not apply:
             print(f"PREVIEW ONLY: {len(changes)} planned changes. Use --apply to authorize.")
         elif changes:
-            backup = apply_uninstall(changes)
+            backup = apply_uninstall(changes, project=project if scope == "project" else None)
             print(f"Uninstalled {len(changes)} targets; backup at {backup}")
             print("Restart hosts. Shared runtime and project memories preserved.")
         else:
@@ -504,13 +727,15 @@ def menu():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Orbit unified installer / updater / safe uninstaller")
-    parser.add_argument("action", nargs="?", choices=["install","update","uninstall","clean","status"])
+    parser.add_argument("action", nargs="?", choices=["install","update","uninstall","clean","recover","status"])
     parser.add_argument("--scope", choices=installer.SCOPES, default="project")
     parser.add_argument("--project", help="Existing absolute project directory")
     parser.add_argument("--hosts", nargs="+", choices=HOSTS)
     parser.add_argument("--apply", action="store_true", help="Explicitly confirm changes")
     parser.add_argument('--erase-memory', action='store_true', help='Clean only: also delete saved memory for ALL projects and selected .orbit notes (backed up)')
     parser.add_argument('--confirm-clean', default='', help='Clean apply requires the exact text REMOVE ORBIT')
+    parser.add_argument("--backup", help="Recover only: exact backup directory under .orbit-uninstall-backups")
+    parser.add_argument("--confirm-recover", default="", help="Recover apply requires RESTORE ORBIT")
     parser.add_argument("--gui", action="store_true", help="Open native setup window (Tkinter)")
     args = parser.parse_args(argv)
     try:
@@ -521,6 +746,19 @@ def main(argv=None):
         if args.action == "status":
             from orbit_cli import doctor
             return doctor(args.project)
+        if args.action == "recover":
+            if not args.backup or args.erase_memory or args.confirm_clean or args.hosts:
+                raise installer.SetupError("Recovery requires --backup and no clean/host arguments")
+            record, targets = inspect_uninstall_backup(args.backup)
+            print("RECOVERY PREVIEW:", record["operation"], record["status"], len(targets), "targets")
+            if not args.apply:
+                print('PREVIEW ONLY; apply requires --apply --confirm-recover "RESTORE ORBIT"')
+            else:
+                count = recover_uninstall(args.backup, confirmation=args.confirm_recover)
+                print("Recovered", count, "targets. Verify IDE registrations before restarting hosts.")
+            return 0
+        if args.backup or args.confirm_recover:
+            raise installer.SetupError("Recovery flags apply only to recover")
         if args.action is None:
             if not sys.stdin.isatty():
                 parser.error("Choose an action in noninteractive mode")

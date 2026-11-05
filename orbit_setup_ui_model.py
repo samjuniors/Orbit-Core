@@ -111,7 +111,8 @@ def apply(review: SetupPreview, *, confirmation: str, delete_memory: bool = Fals
     if confirmation != "CONFIRM":
         raise installer.SetupError("Approval required before changes")
     if review.action == "uninstall":
-        return orbit_setup.apply_uninstall(list(review.changes))
+        return orbit_setup.apply_uninstall(list(review.changes),
+                                           project=review.project if review.scope == "project" else None)
     # Replan just before execution; the underlying installer rechecks file content
     # and makes backups before overwriting recognized host configuration.
     current = preview(review.action, review.hosts, review.scope, review.project)
