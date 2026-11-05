@@ -152,7 +152,7 @@ class HostPreflightTests(unittest.TestCase):
         rev = self.reserve("api")
         denied = orbit_tasks.release(self.db, {
             "project": self.project, "task_key": "api", "expected_revision": rev,
-            "reason_code": "HOST_PERMISSION_DENIED", "reason": "Host refused permission",
+            "reason_code": "HOST_PERMISSION_DENIED", "host_invocation_outcome": "DENIED_BEFORE_SESSION", "reason": "Host refused permission",
             "confirm_write": True,
         }, self.root)
         self.assertEqual(denied["status"], "BLOCKED")

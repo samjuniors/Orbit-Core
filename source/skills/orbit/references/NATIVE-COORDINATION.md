@@ -217,3 +217,25 @@ permissions, session reconciliation and independent diff/QA review remain
 **NOT VERIFIED** until an actual IDE worker returns evidence. No v0.30
 release exists; do not confuse a test fixture or a tool preview with an
 approved published package.
+
+## v0.30: native invocation outcome evidence gate (Issue #72)
+
+Before calling `orbit_task_release(confirm_write=true)`, the actual coding host
+must inspect what happened to its native invocation. Supply a truthful
+`host_invocation_outcome` value:
+
+- `NOT_ATTEMPTED` for an unstarted owner cancellation / OTHER.
+- `DENIED_BEFORE_SESSION` only when a real host permission denial occurred
+  before any native session was returned.
+- `UNAVAILABLE_BEFORE_SESSION` for a missing native tool before invocation.
+- `FAILED_BEFORE_SESSION` for an invocation failure with no session.
+
+Unknown results or `SESSION_RETURNED` must return
+`HOLD_HOST_RECONCILIATION` with no release, no refunded attempt, and no
+claimed denial. When a session exists, record it through
+`orbit_task_started` and use `orbit_task_report` only after the host
+confirms a genuine terminal state. **No GUI prompt** does not mean the host
+denied permission. The MCP still cannot authenticate caller testimony.
+This is a source contract tightening on the v0.30 development lane, not a
+retroactive rewrite of existing SQLite attempts, a second ledger, or a new
+agent executor. Owner-confirmed host test evidence remains independent.

@@ -331,13 +331,13 @@ class HostHandoffTests(unittest.TestCase):
         self.register()
         self.assertEqual(self.reserve()['status'],'RESERVED')
         preview=self.call('orbit_task_release',task_key='frontend',
-            expected_revision=2, reason_code='HOST_PERMISSION_DENIED',
+            expected_revision=2, reason_code='HOST_PERMISSION_DENIED',host_invocation_outcome='DENIED_BEFORE_SESSION',
             reason='The host refused the native agent permission request')
         self.assertEqual(preview['status'],'PREVIEW_ONLY')
         self.assertEqual(preview['proposed_status'],'BLOCKED')
         self.assertEqual(self.call('orbit_task_list')['tasks'][0]['status'],'RESERVED')
         denied=self.call('orbit_task_release',task_key='frontend',
-            expected_revision=2,reason_code='HOST_PERMISSION_DENIED',
+            expected_revision=2,reason_code='HOST_PERMISSION_DENIED',host_invocation_outcome='DENIED_BEFORE_SESSION',
             reason='The host refused the native agent permission request',
             confirm_write=True)
         self.assertEqual(denied['status'],'BLOCKED')
@@ -355,7 +355,7 @@ class HostHandoffTests(unittest.TestCase):
         self.register()
         self.reserve()
         self.call('orbit_task_release',task_key='frontend',expected_revision=2,
-                  reason_code='HOST_PERMISSION_DENIED',
+                  reason_code='HOST_PERMISSION_DENIED',host_invocation_outcome='DENIED_BEFORE_SESSION',
                   reason='Host denied access to the requested agent',
                   confirm_write=True)
         with self.assertRaisesRegex(ValueError,'fresh host/user approval'):
@@ -379,14 +379,14 @@ class HostHandoffTests(unittest.TestCase):
                 self.register(key=key,scope=['src/'+key+'/'])
                 self.reserve(key=key)
                 event=self.call('orbit_task_release',task_key=key,
-                    expected_revision=2,reason_code=code,
+                    expected_revision=2,reason_code=code,host_invocation_outcome=('UNAVAILABLE_BEFORE_SESSION' if code=='HOST_TOOL_UNAVAILABLE' else 'FAILED_BEFORE_SESSION'),
                     reason='Host reported no working tool before invocation',
                     confirm_write=True)
                 self.assertEqual(event['status'],'BLOCKED')
                 self.assertFalse(event['agent_stopped_by_mcp'])
         self.register(key='cancelled',scope=['src/cancelled/'])
         default=self.call('orbit_task_release',task_key='cancelled',
-            expected_revision=1, reason='User cancelled this pending task',
+            expected_revision=1, reason='User cancelled this pending task',host_invocation_outcome='NOT_ATTEMPTED',
             confirm_write=True)
         self.assertEqual(default['status'],'CANCELLED')
         self.assertEqual(default['reason_code'],'USER_CANCELLED')
@@ -395,7 +395,7 @@ class HostHandoffTests(unittest.TestCase):
         self.register()
         self.reserve()
         stale=self.call('orbit_task_release',task_key='frontend',
-            expected_revision=1,reason_code='HOST_PERMISSION_DENIED',
+            expected_revision=1,reason_code='HOST_PERMISSION_DENIED',host_invocation_outcome='DENIED_BEFORE_SESSION',
             reason='Native permission denied during handoff',confirm_write=True)
         self.assertEqual(stale['status'],'STALE_REVISION')
         self.assertEqual(self.call('orbit_task_list')['tasks'][0]['status'],'RESERVED')
@@ -404,7 +404,7 @@ class HostHandoffTests(unittest.TestCase):
                   confirm_write=True)
         with self.assertRaisesRegex(ValueError,'running tasks must be stopped in the host'):
             self.call('orbit_task_release',task_key='frontend',
-                      expected_revision=3,reason_code='HOST_PERMISSION_DENIED',
+                      expected_revision=3,reason_code='HOST_PERMISSION_DENIED',host_invocation_outcome='DENIED_BEFORE_SESSION',
                       reason='Attempted to release running host agent',
                       confirm_write=True)
         task=self.call('orbit_task_list')['tasks'][0]
@@ -415,6 +415,55 @@ class HostHandoffTests(unittest.TestCase):
                 'project_root':str(self.root),'project':'todo',
                 'task_key':'frontend','expected_revision':3,
                 'reason':'Permission reported denied','reason_code':'FORCE_SUCCESS'})
+
+    def test_issue72_false_denial_after_native_session_is_held(self):
+        self.register()
+        self.reserve()
+        for observed in ('UNKNOWN','NOT_ATTEMPTED','SESSION_RETURNED'):
+            with self.subTest(observed=observed):
+                held=self.call('orbit_task_release',task_key='frontend',
+                    expected_revision=2,reason_code='HOST_PERMISSION_DENIED',
+                    host_invocation_outcome=observed,
+                    reason='No prompt was presented but a native session returned',
+                    confirm_write=True)
+                self.assertEqual(held['status'],'HOLD_HOST_RECONCILIATION')
+                self.assertFalse(held['state_written'])
+        old=self.call('orbit_task_list')['tasks'][0]
+        self.assertEqual((old['status'],old['revision']),('RESERVED',2))
+        self.assertEqual(self.db.execute(
+            "SELECT disposition FROM orbit_task_attempts WHERE task_key='frontend'"
+        ).fetchone()['disposition'],'RESERVED')
+        self.call('orbit_task_started',task_key='frontend',expected_revision=2,
+                  host_session='real-native-session-stage3',confirm_write=True)
+        reported=self.call('orbit_task_report',task_key='frontend',
+            expected_revision=3,outcome='BLOCKED',
+            evidence='Native host completed but objective was not delivered',
+            observed_host_session='real-native-session-stage3',
+            host_state='COMPLETED',objective_completed=False,
+            changed_paths=[],confirm_write=True)
+        self.assertEqual(reported['status'],'BLOCKED')
+        self.assertEqual(self.db.execute(
+            "SELECT disposition FROM orbit_task_attempts WHERE task_key='frontend'"
+        ).fetchone()['disposition'],'HOST_REPORTED_BLOCKED')
+
+    def test_issue72_unstarted_cancellation_requires_explicit_observation(self):
+        self.register()
+        self.reserve()
+        for extra in ({},{'host_invocation_outcome':'UNKNOWN'},
+                      {'host_invocation_outcome':'DENIED_BEFORE_SESSION'},
+                      {'host_invocation_outcome':'SESSION_RETURNED'}):
+            held=self.call('orbit_task_release',task_key='frontend',
+                expected_revision=2,reason_code='USER_CANCELLED',
+                reason='Cancel before actual native host invocation',
+                confirm_write=True,**extra)
+            self.assertEqual(held['status'],'HOLD_HOST_RECONCILIATION')
+        released=self.call('orbit_task_release',task_key='frontend',
+            expected_revision=2,reason_code='USER_CANCELLED',
+            host_invocation_outcome='NOT_ATTEMPTED',
+            reason='Owner confirmed native agent never started',
+            confirm_write=True)
+        self.assertEqual(released['status'],'CANCELLED')
+        self.assertFalse(released['host_invocation_observation_verified'])
 
     def running_for_recovery(self, *, key="frontend"):
         self.register(key=key)
@@ -615,7 +664,7 @@ class HostHandoffTests(unittest.TestCase):
             self.assertEqual(reservation['attempt_budget']['step_used'],1)
             released=self.call('orbit_task_release',task_key=key,
                 expected_revision=reservation['task']['revision'],
-                reason='No native host agent was started; user cancelled the slot',
+                reason='No native host agent was started; user cancelled the slot',host_invocation_outcome='NOT_ATTEMPTED',
                 confirm_write=True)
             self.assertEqual(released['status'],'CANCELLED')
         rows=self.db.execute('SELECT disposition FROM orbit_task_attempts').fetchall()
@@ -675,7 +724,7 @@ class HostHandoffTests(unittest.TestCase):
         self.assertEqual(retry['task']['host_session'],'')
         release=self.call('orbit_task_release',task_key='frontend',
             expected_revision=retry['task']['revision'],
-            reason='Second attempt never launched a host agent, release it',
+            reason='Second attempt never launched a host agent, release it',host_invocation_outcome='NOT_ATTEMPTED',
             confirm_write=True)
         self.assertEqual(release['status'],'CANCELLED')
         rows=self.db.execute(
@@ -744,7 +793,7 @@ class HostHandoffTests(unittest.TestCase):
         reserved=self.reserve()
         self.assertEqual(reserved['attempt_number'],1)
         refused=self.call('orbit_task_release',task_key='frontend',expected_revision=2,
-            reason_code='HOST_PERMISSION_DENIED',
+            reason_code='HOST_PERMISSION_DENIED',host_invocation_outcome='DENIED_BEFORE_SESSION',
             reason='Native host explicitly refused this delegated task',
             confirm_write=True)
         self.assertEqual(refused['status'],'BLOCKED')
