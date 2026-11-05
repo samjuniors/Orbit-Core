@@ -154,6 +154,53 @@ jobs:
             existing_prerelease="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq '.isPrerelease')"
             expected_prerelease=true
             if [[ "$ORBIT_RELEASE_TYPE" == 'stable' ]]; then expected_prerelease=false; fi
+            if [[ "$existing_draft" == 'true' ]]; then
+              # A draft can be recovered only by an owner-authorized manual
+              # dispatch on main. Tag pushes cannot promote existing drafts.
+              if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' || "$GITHUB_REF" != 'refs/heads/main' ]]; then
+                echo "Existing draft requires an explicit manual main-branch release" >&2
+                exit 1
+              fi
+              existing_body="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')"
+              if ! grep -Fq -- "## ORBIT Core MCP v${ORBIT_RELEASE_VERSION}" <<< "$existing_body"; then
+                echo "Existing draft notes do not identify the requested version; manual review required" >&2
+                exit 1
+              fi
+              draft_assets="$RUNNER_TEMP/orbit-draft-assets.json"
+              gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > "$draft_assets"
+              draft_state="$(python scripts/verify_release_draft_assets.py --version "$ORBIT_RELEASE_VERSION" --assets-json "$draft_assets" --allow-empty)"
+              if [[ "$draft_state" == 'EMPTY' ]]; then
+                # No --clobber: partial drafts fail closed. Upload only when
+                # every requested asset is currently absent.
+                gh release upload "$ORBIT_RELEASE_TAG" \
+                  "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip" \
+                  "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
+                  "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip" \
+                  "dist/Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
+                  "dist/Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip" \
+                  "dist/Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256" \
+                  "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb" \
+                  "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256" \
+                  --repo "$GITHUB_REPOSITORY"
+              fi
+              gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > "$draft_assets"
+              verified="$(python scripts/verify_release_draft_assets.py --version "$ORBIT_RELEASE_VERSION" --assets-json "$draft_assets")"
+              if [[ "$verified" != 'COMPLETE' ]]; then
+                echo "Existing draft integrity verification failed; leaving unpublished" >&2
+                exit 1
+              fi
+              gh release edit "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease="$expected_prerelease"
+              published_draft="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+              published_channel="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq '.isPrerelease')"
+              if [[ "$published_draft" != 'false' || "$published_channel" != "$expected_prerelease" ]]; then
+                echo "Release state after draft recovery did not match approval" >&2
+                exit 1
+              fi
+              gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > "$draft_assets"
+              python scripts/verify_release_draft_assets.py --version "$ORBIT_RELEASE_VERSION" --assets-json "$draft_assets"
+              echo "Recovered and published exact verified draft $ORBIT_RELEASE_TAG"
+              exit 0
+            fi
             if [[ "$existing_draft" != 'false' || "$existing_prerelease" != "$expected_prerelease" ]]; then
               echo "Existing release $ORBIT_RELEASE_TAG has incompatible draft/channel state; refusing success" >&2
               exit 1
