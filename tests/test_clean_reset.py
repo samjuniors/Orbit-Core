@@ -74,7 +74,9 @@ class CleanResetTests(unittest.TestCase):
         self.assertNotIn(installer.SERVER, self.codex.read_text())
         self.assertEqual((self.home / '.gemini/config/agents/other-agent.md').read_bytes(), b'unrelated agent')
         manifest = json.loads((backup / 'manifest.json').read_text())
-        entry = next(x for x in manifest if Path(x['original_path']).resolve() == self.agent.resolve())
+        self.assertEqual(manifest['schema'], 'orbit-uninstall-v2')
+        self.assertEqual(manifest['status'], 'COMPLETE')
+        entry = next(x for x in manifest['entries'] if Path(x['original_path']).resolve() == self.agent.resolve())
         self.assertEqual((backup / entry['backup_name']).read_bytes(), b'customized conflicting Orbit agent')
         for project, scope in [(None, 'machine'), (self.project, 'project')]:
             installer.install(installer.plan(project, installer.HOSTS, scope))

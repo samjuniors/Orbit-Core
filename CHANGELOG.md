@@ -2,32 +2,96 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — next planned v0.30.0
+## [Unreleased] ` future development
 
-### v0.30 installed-user migration hardening (2026-11-05)
+No further feature scope is included in the v0.30.0 candidate.
 
-- Recognize byte-for-byte verified official Antigravity v0.25.1 agent files and
-  the known Windows CLI repository-rename/CRLF variant during backup-first
-  upgrades. Other owner edits remain blocked by exact SHA-256 matching.
-- Accept the stock two-field Codex MCP registration's historical single-quoted
-  TOML syntax while preserving other settings and refusing custom Orbit fields.
-- Added targeted tests for exact file fingerprints, backup and preview safety,
-  strict TOML recognition, and customization refusal. These are unreleased
-  development changes, not independent live-host acceptance.
+## [0.30.0] - Stable-channel release (2026-11-05)
 
+### Highlights
 
-### Repository standard (2026-11-04)
+- **Coordinate actual host-native work without inventing an agent executor.** The new
+  48th MCP tool, `orbit_native_coordination_preview`, assembles read-only
+  dependency-ordered task registration, ready-wave reviews, and reserved
+  handoff preflight using the existing task ledger and specialist roles.
+  Antigravity and Codex remain responsible for executing approved native workers.
+- **Recover interrupted and failed work safely.** The coordinator presents
+  revision-scoped recovery choices for FAILED, BLOCKED, REWORK and CANCELLED
+  tasks, and keeps foreign-project task state private. No task is retried,
+  registered, reserved or marked accepted by a preview alone.
+- **Avoid false permission-denial records.** An unstarted task release now
+  requires a matching caller-reported `host_invocation_outcome`; missing,
+  contradictory or session-returned evidence produces a reconciliation hold.
+  A real returned native session must be recorded and reported, not labeled
+  `HOST_PERMISSION_DENIED` merely because no prompt was shown.
+- **Unblock genuinely stock older Windows installations.** Exact SHA-256
+  fingerprints of official v0.25.1 Antigravity agent files and the verified
+  renamed/CRLF Windows CLI variant permit backup-first upgrades. The installer
+  also recognizes the original two-field Codex MCP TOML literal-string form.
+  Arbitrary file edits and custom Orbit MCP fields remain protected.
 
-- Added a problem/solution README section and new-user/contributor paths.
-- Adopted MIT open-source licensing and updated contribution guidance.
-- Added bug/feature issue forms and reviewable repository metadata.
-- Added the reusable `scripts/check_repo.py` checker for repository consistency.
-- Sponsors onboarding and the funding button remain separate pending verified account eligibility.
+- **Make clean reset recoverable.** A versioned `orbit-uninstall-v2` manifest
+  journals backups, actions, progress and completion. Active SQLite transactions
+  block destructive cleanup before host edits. Failed removal triggers
+  conflict-safe rollback, and explicit `orbit_setup.py recover --backup <path>`
+  restores verified interrupted operations. Historical v1 backups remain
+  preserved for manual review. Normal installation does not erase memory.
 
+### Install and upgrade
 
-The next development lane investigates native host coordination and honest
-permission/reconciliation evidence. It is outside v0.29.0 and does not
-authorize any v0.30 release.
+- Obtain the matching Universal Setup ZIP and SHA-256 from
+  [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases)
+  after release approval. Verify checksum and the publisher before use.
+- Python 3.10`3.13 is the supported source runtime matrix; Windows Python
+  3.12 and Linux are exercised by CI. Select only the Antigravity and Codex
+  hosts you use. Run setup **preview first** and review each affected path
+  before explicitly confirming an actual update.
+- After a successful confirmed install or upgrade, restart the selected IDE
+  and verify the actual MCP version, tool inventory, permission boundaries and
+  checkpoint recovery. Keep previous runtime files, backup copies and all
+  project-specific `.orbit`/SQLite data for rollback review.
+
+### Compatibility
+
+- Runtime tool inventory advances from **47 to 48** via a new read-only
+  `orbit_native_coordination_preview` descriptor. The `orbit_task_release`
+  contract now requires explicit matching host-invocation observation for a
+  confirmed pre-session release. Existing historical attempts and project
+  checkpoint data are not rewritten.
+- Existing v0.25.1 source installations can require stock-file migration;
+  recognized bytes are upgraded only with backups, and unknown customized
+  files or nonstandard host registrations block for manual review.
+- Existing native delegation limits, approval checks, independent QA gates
+  and read-only skill selection remain in effect. v0.30 does not install,
+  trust or execute third-party ECC/AAS skills or add a model/subagent runner.
+- Engineering metadata intentionally carries `NEXT_VERSION=0.31.0`; source
+  readiness or a versioned ZIP is not a verified public GitHub release.
+
+### Known limitations
+
+- GUI-native Antigravity/Codex worker invocation, user permission prompts,
+  restart and rollback are not independently attested on the exact final commit.
+  The owner reported acceptance and approved publication. Automated source
+  tests do not independently prove live IDE behavior; check after installation.
+- MCP does not directly authenticate the IDE's permission prompt, host
+  session liveness or model-run provenance. Owner review of worker outputs,
+  diffs and actual tests is still required before integration.
+- v0.29.0 stable was published on 2026-11-05 with eight exact-tag verified
+  distribution assets. Prior releases remain immutable; any v0.30.0 install
+  requires separately reviewed backup-first host configuration changes.
+- Some filesystem symlink/junction and GUI behaviors depend on the host OS
+  and permissions; skipped platform-specific tests are not PASS results.
+
+### Development and repository maintenance
+
+- Added read-only native/host QA integration selection, including native
+  device `NATIVE_QA` and CLI `VERIFY` evidence modes, with synthetic
+  independent regression coverage.
+- Added a problem/solution README section, MIT license, contributor
+  guidance, issue forms and repository consistency checks.
+- This candidate contains source/API and installer improvements, not
+  automatic agent execution, automatic dependency installation, or a
+  claim that apps can be built autonomously without host permissions.
 
 ## [0.29.0] — Project-aware installed-skill review release candidate (2026-11-03)
 
