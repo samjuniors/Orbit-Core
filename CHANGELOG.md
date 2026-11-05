@@ -2,69 +2,182 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — next planned v0.28.0
+## [Unreleased] — next planned v0.30.0
 
-Future v0.28.0 work is tracked independently. It is not included in
-v0.27.0, and this planning marker does not authorize publication.
+### Repository standard (2026-11-04)
 
-## [0.28.0] — Adaptive software delivery blueprint (DEVELOPMENT; NOT RELEASED)
+- Added a problem/solution README section and new-user/contributor paths.
+- Adopted MIT open-source licensing and updated contribution guidance.
+- Added bug/feature issue forms and reviewable repository metadata.
+- Added the reusable `scripts/check_repo.py` checker for repository consistency.
+- Sponsors onboarding and the funding button remain separate pending verified account eligibility.
+
+
+The next development lane investigates native host coordination and honest
+permission/reconciliation evidence. It is outside v0.29.0 and does not
+authorize any v0.30 release.
+
+## [0.29.0] — Project-aware installed-skill review release candidate (2026-11-03)
 
 ### Highlights
 
-- **Orbit-native end-to-end delivery preview:** `orbit_software_delivery_preview`
-  proposes a bounded, project-specific cross-specialist task DAG for a
-  new/existing/stalled product, feature, fix, redesign or maintenance request.
-  It reuses the existing 12 native Orbit roles, current intake, durable
-  task-ledger constraints and Swarm draft validation. The first reviewed
-  *vertical slice* leads into independently checked integration, QA,
-  security, documentation and release gates.
-- **No unwanted automation:** tool is strictly read-only and emits no
-  writable scopes by default. The owner must review actual project paths,
-  approve the plan and authorize each native host tool invocation.
-  It never starts ECC/Claude/Codex/Gemini subprocesses, chooses models,
-  installs third-party agents or certifies test output.
-- **Operations and platforms:** bounded adaptation for websites, web apps,
-  desktop/mobile apps, APIs, CLIs, libraries, plugins and other approved
-  product types; smaller fail-first plans for fixes/debugging.
-- **Reference guidance:** Original implementation informed by the MIT
-  [ECC](https://github.com/affaan-m/ECC) orchestrator/vertical-slice
-  research; no ECC source or agent templates were copied.
+- **Recommend installed skills for the actual project:** The existing read-only
+  `orbit_capability_select` now uses declared product, platform, framework,
+  operation and IDE host signals to shortlist at most five relevant local
+  `SKILL.md` capabilities. Web/mobile/CLI/ML/game conflicts and ambiguous
+  same-name skills are conservatively screened; users may request particular
+  installed skills explicitly within the same safety limits.
+- **Recheck what will be reviewed:** A bounded `orbit-skill-plan-v2` manifest
+  pins the local skill entry, tree and source hashes alongside project, host
+  and objective identity. Revalidation flags changed, missing, reordered or
+  unsuitable selections. Legacy v1 pins require fresh manual review.
+- **No hidden agent execution:** Missing local skills fall back to existing
+  host-native capabilities; denied permissions remain denied. Results never
+  auto-install, enable, authorize, import, run or trust third-party code.
+  License/version fields are labeled as unverified claims. No AAS code or
+  catalog was copied, and Orbit still uses the host's models/subagents.
 
-### Not yet certified
+### Documentation and maintenance
 
-- Native host execution with actual user approval; completed end-to-end
-  products on real Windows/Linux/macOS and independent security/rollback
-  acceptance. Development-source tests do not constitute a public release.
-  The published v0.27.0 and any future v0.27.1 releases remain untouched.
+- README no longer hard-codes a published version or MCP tool count; it points
+  to the release page, consistent with the release-readiness rule against
+  stale latest-version claims.
+- `docs/ARCHITECTURE.md` now reflects the v0.29.0 development candidate (47 tools) instead of the
+  v0.24.1 candidate (33 tools) and lists eleven runtime modules that were
+  missing from its module table.
+
+- Remove eleven unused imports flagged by pyflakes across runtime, installer,
+  setup-model and script files. Intended to be behavior-neutral; regression results are
+  recorded separately.
+
+### P0 full-stack golden-path acceptance (2026-11-04)
+
+- The [real-host golden-path acceptance ledger](docs/GOLDEN-PATH-ACCEPTANCE.md)
+  preserves the first 28-call Codex intake/planning run and its host-policy
+  blocker. In the subsequent authorized fixture continuation, actual backend,
+  frontend, QA and security specialist work was host-reported and local app
+  sources now exist; 12 Python tests were independently rerun PASS and a
+  loopback preview reached READY. Formal Orbit `BROWSER_QA` remains **BLOCKED**:
+  the optional Python Playwright dependency is absent and installation was
+  prohibited. Supplemental CUA browser checks do not replace the current
+  source/preview-bound Orbit browser result. Formal build REVIEW, CHECKPOINT,
+  and MCP restart acceptance remain unverified; no stable publication PASS.
 
 ### Install and upgrade
 
-- **Development source only:** this unreleased version can be evaluated in a
-  disposable project/host; do not mistake the development branch for a
-  published or owner-approved installer. The exact official prerelease
-  download procedure is documented in the existing release process and
-  will only apply after release QA and explicit owner authorization.
-- No automatic ECC installation, model provider, cloud service, GUI
-  dependency or native subagent runtime is included.
+- After owner-approved publication, obtain the matching v0.29.0 Universal
+  Setup ZIP and its SHA-256 checksum from
+  [Orbit Core Releases](https://github.com/samjuniors/Orbit-Core/releases).
+  Verify the asset and review the setup preview before explicitly consenting.
+- Python 3.10–3.13 is supported (Windows Python 3.12 recommended).
+  Use `Orbit Setup.cmd` on Windows or `python3 orbit_setup.py` on
+  macOS/Linux; refresh only the selected Antigravity/Codex MCP integration.
+- Local `SKILL.md` metadata is treated as untrusted. This release has no
+  skill catalog importer and does not alter third-party skill installations.
 
 ### Compatibility
 
-- Reuses Orbit's preexisting native agent roles, host-specific adapters,
-  approved intake, project memory, SQLite task ledger and two-worker Swarm.
-  Existing v0.27.x user data and prior release tags remain unchanged.
-- A new read-only MCP tool expands the development inventory from 46 to
-  **47**. Actual host tool availability depends on installation and restart.
-- Unsupported native host tools require explicit serial/fallback planning,
-  not fabricated agent execution.
+- Extends the v0.28.0 **47-tool** runtime without adding a duplicate
+  selection tool or changing the existing MCP identities. Existing
+  `.orbit` checkpoints, project SQLite, user-customized guides and host
+  configuration must be preserved. Unknown customized files require
+  explicit manual review; previous published release/tag remains intact.
+- The skill manifest is advisory and read-only, not a durable approval grant.
+  A changed skill directory or project/host context invalidates the prior
+  review and requires an independent permission and provenance decision.
 
 ### Known limitations
 
-- The preview cannot automatically produce a complete verified product;
-  agents must be invoked by the connected coding host with real permission,
-  scoped source changes and independently executed QA.
-- Authentication/permission dialogs, real native interruption/restart,
-  independent security/provenance, production rollout, and second-host
-  acceptance are not certified by development CI alone.
+- This is a **0.x release candidate**; the GitHub distribution channel
+  (stable/prerelease) is set only by an explicit owner-approved release.
+  A stable GitHub label does not promise SemVer 1.0 API compatibility.
+  Discovery is not evidence that a discovered
+  skill is trustworthy, compatible with a host or licensed for reuse.
+  A SHA-256 pin proves byte identity, not publisher authenticity or safety.
+- Host-specific loading, real skill activation, denial and rollback still
+  require independent Antigravity/Codex acceptance. No automatic third-party
+  installation, updates, execution or skill-content injection is provided.
+- Full security validation, user migration/rollback, Windows GUI behavior
+  and production suitability require separate verification.
+
+## [0.28.0] — Adaptive software delivery blueprint prerelease candidate (2026-11-02)
+
+### Highlights
+
+- **Plan complete software work across native specialists:** New read-only
+  `orbit_software_delivery_preview` proposes a scoped, dependency-ordered
+  software-delivery blueprint from discovery and architecture to first vertical
+  slice, API/UI integration, QA, security, review, documentation and release.
+  It adapts to new, existing, completed or stalled projects and build,
+  add-feature, fix, debug, redesign, maintain or resume requests.
+- **Control over every step:** Reuses the existing 12 native Orbit roles,
+  native host handoff, checkpoint and SQLite task ledger. A preview has
+  no write scopes or host-agent execution by default. Owners choose actual
+  project paths, approve scope and permit real host-native workers separately.
+- **More practical host review:** Reported real Antigravity acceptance built
+  a disposable accessible TODO web app using backend/frontend native
+  specialists and independent reviewers; representative HTTP and browser
+  checks were executed. Preview does not itself write the TODO application.
+- **Original, local-first approach:** ECC was evaluated as an MIT-licensed
+  design reference; no ECC agent source, model executor or external
+  dependency was copied into Orbit.
+
+### Install and upgrade
+
+- After this exact version is published, download the versioned
+  `ORBIT-Universal-Setup-v0.28.0.zip` and matching `.sha256` from
+  [Orbit Core Releases](https://github.com/samjuniors/Orbit-Core/releases).
+  Verify checksum, extract to a new folder, and review the installer
+  preview before explicitly authorizing any update.
+- Supported Python is 3.10–3.13 (3.12 recommended on Windows).
+  Windows: use `Orbit Setup.cmd`; macOS/Linux: `python3 orbit_setup.py`.
+  Restart/refresh the selected Antigravity or Codex MCP registration
+  before checking the newly exposed tool.
+- Plugin-suite and standalone host-native packages are separate release
+  assets. Installing the Universal Setup does not silently install models,
+  run autonomous subagents, or modify global IDE permissions.
+
+### Compatibility
+
+- Extends the v0.27.x 46-tool runtime with one read-only
+  software-delivery preview (47 tools). Existing local SQLite, `.orbit`
+  checkpoints, stock versus user-customized installation handling, and
+  previous release archives must be preserved.
+- Back up database and WAL sidecars, custom configuration and project files
+  before user-profile upgrades. A checksum is not publisher identity proof;
+  rollback may require a user-reviewed backup/restore plan.
+
+### Known limitations
+
+- This is a **0.x prerelease**, not certification that Orbit autonomously
+  builds an entire software product. The connected host must actually invoke
+  native workers with its own permissions; host capabilities differ.
+- The original first-PC Antigravity TODO fixture reported 10/10 backend
+  and 9/9 external Chrome interactions, but its Orbit integration gate
+  correctly held for missing source-linked browser QA. That historical
+  observation remains recorded and was not rewritten.
+- A separate **second-PC Antigravity** fixture (Windows) reports genuine
+  backend/frontend native worker sessions and independent reviews;
+  independently rerun Python tests passed **37/37**, including trusted and
+  untrusted Origin security cases. The actual v0.28 `orbit_browser_qa`
+  launched installed Edge through isolated Playwright 1.64.1, recorded
+  **9/9 mobile browser interactions PASS** with zero browser errors or
+  blocked remote origins, and matched the frozen source fingerprint.
+  `orbit_swarm_integration_review` now returns
+  `READY_FOR_INDEPENDENT_REVIEW`; the build recovered at `REVIEW`
+  revision 7 after a fresh MCP process. This is local evidence readiness,
+  **not** cryptographic host consent or independent release certification.
+- The first disposable TODO app emitted wildcard CORS headers. The second
+  fixture separately implemented a strict loopback-origin API and 37 passing
+  regression checks, including rejected external/null Origin. These are
+  fixture findings, not claims of a vulnerability or automatic remediation
+  inside Orbit's MCP runtime.
+- Real host permission-dialog denial, an equivalent complete **Codex**
+  delivery scenario, production installed-user migration/rollback, and
+  independent publisher signing/provenance remain unverified. Version 0.x
+  is a prerelease and still requires independent release review and owner
+  publication approval; do not imply production readiness or automatic
+  skills installation.
 
 ## [0.27.1] — Rename compatibility prerelease candidate (2026-10-31)
 

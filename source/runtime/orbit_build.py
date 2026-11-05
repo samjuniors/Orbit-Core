@@ -5,7 +5,6 @@ across MCP restarts. A reported code/test result is not independently verified.
 """
 from __future__ import annotations
 import json
-import sqlite3
 import os
 import hashlib
 from pathlib import Path

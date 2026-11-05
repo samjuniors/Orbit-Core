@@ -6,6 +6,8 @@ permission, installation, rollout, or end-to-end product acceptance tests.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sqlite3
 import sys
 import tempfile
@@ -102,6 +104,116 @@ class SkillPlanPreviewTests(unittest.TestCase):
             "technologies": ["react"], "operation": "build",
         })
         self.assertEqual([item["name"] for item in x["shortlist"]], ["react-dom"])
+
+    def test_untrusted_skill_cannot_spoof_another_directory_name(self):
+        # The SKILL.md name is a claimed ID, not a license or trusted source.
+        # Refuse mismatched frontmatter instead of returning a pinned shortlist
+        # under a different installation identity.
+        path = self.skill("unrelated-directory", "Synthetic security review")
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                "name: unrelated-directory", "name: trusted-security"
+            ),
+            encoding="utf-8",
+        )
+        found = orbit_capabilities.discover(str(self.root), home=self.home)
+        self.assertNotIn("trusted-security", [s["name"] for s in found["skills"]])
+        result = self.select(
+            "Security review", host="codex",
+            requested_skill_names=["trusted-security"],
+        )
+        self.assertEqual(result["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(result["shortlist"], [])
+        self.assertEqual(result["missing_requested"], ["trusted-security"])
+        self.assertFalse(result["activation_allowed"])
+
+    def test_windows_project_root_alias_does_not_hide_valid_local_config(self):
+        # A junction at the *declared root* is permitted; a junction below it
+        # remains forbidden by the config-child boundary.
+        if os.name != "nt":
+            self.skipTest("Windows directory-alias regression")
+        actual = self.root / "actual-project"
+        actual.mkdir()
+        (actual / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"safe-local-config": {"command": "never"}}}),
+            encoding="utf-8",
+        )
+        alias = self.root / "alias-project"
+        created = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(alias), str(actual)],
+            capture_output=True, text=True,
+        )
+        if created.returncode:
+            self.skipTest("Junction creation unavailable on this Windows host")
+        discovered = orbit_capabilities.discover(str(alias), home=self.home)
+        self.assertIn("safe-local-config", [m["name"] for m in discovered["mcp_servers"]])
+
+    def test_windows_config_junction_does_not_expose_external_mcp_metadata(self):
+        # An NTFS junction at .agents or .codex must not make Orbit inspect
+        # JSON/TOML configuration metadata beyond the project boundary.
+        if os.name != "nt":
+            self.skipTest("Windows junction regression")
+        cases = (
+            (".agents", "mcp_config.json",
+             '{"mcpServers":{"out-of-root-json":{"command":"never"}}}',
+             "out-of-root-json"),
+            (".codex", "config.toml",
+             '[mcp_servers.out-of-root-toml]\ncommand="never"\n',
+             "out-of-root-toml"),
+        )
+        for directory, filename, contents, forbidden in cases:
+            with self.subTest(directory=directory):
+                outside = self.root.parent / ("external-" + directory.lstrip("."))
+                outside.mkdir(parents=True)
+                (outside / filename).write_text(contents, encoding="utf-8")
+                junction = self.root / directory
+                result = subprocess.run(
+                    ["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), str(outside)],
+                    capture_output=True, text=True,
+                )
+                if result.returncode:
+                    self.skipTest("Junction creation unavailable on this host")
+                discovered = orbit_capabilities.discover(str(self.root), home=self.home)
+                self.assertNotIn(
+                    forbidden, [x["name"] for x in discovered["mcp_servers"]]
+                )
+
+    def test_windows_directory_junction_cannot_expose_external_skill(self):
+        # An NTFS junction is not a normal Python symlink; it must not allow
+        # discovery to parse SKILL.md from outside the project or user skill roots.
+        if os.name != "nt":
+            self.skipTest("Windows junction regression")
+        outside = self.root.parent / "outside-project" / "external-skill"
+        outside.mkdir(parents=True)
+        (outside / "SKILL.md").write_text(
+            "---\nname: external-skill\ndescription: Synthetic outside-root metadata\n"
+            "---\nNever execute.\n", encoding="utf-8",
+        )
+        link = self.root / ".agents" / "skills" / "external-skill"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        created = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(outside)],
+            capture_output=True, text=True,
+        )
+        if created.returncode:
+            self.skipTest("Junction creation unavailable on this Windows host")
+        discovered = orbit_capabilities.discover(str(self.root), home=self.home)
+        self.assertNotIn("external-skill", [s["name"] for s in discovered["skills"]])
+        chosen = self.select("external skill", host="codex",
+                             requested_skill_names=["external-skill"])
+        self.assertEqual(chosen["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(chosen["shortlist"], [])
+        self.assertFalse(chosen["activation_allowed"])
+
+    def test_oversized_skill_name_is_not_discovered(self):
+        # Agent Skills frontmatter names are at most 64 characters.
+        oversized = "a" * 65
+        self.skill(oversized, "Synthetic skill with an invalid name length")
+        found = orbit_capabilities.discover(str(self.root), home=self.home)
+        self.assertNotIn(oversized, [s["name"] for s in found["skills"]])
+        result = self.select("test", host="codex", requested_skill_names=[oversized])
+        self.assertEqual(result["status"], "HOLD_REQUESTED_SKILLS_UNAVAILABLE")
+        self.assertEqual(result["shortlist"], [])
 
     def test_declared_host_filters_other_host_skill_directory(self):
         self.skill("python-api", "Python API build", folder=".claude/skills")

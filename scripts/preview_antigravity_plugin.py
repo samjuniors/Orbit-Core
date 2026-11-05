@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
-import os
 import shutil
 from pathlib import Path
 

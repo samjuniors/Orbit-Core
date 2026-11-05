@@ -88,7 +88,10 @@ class UniversalSetupTests(unittest.TestCase):
         self.assertTrue((self.project/'.agents/agents/orbit.md').exists())
         self.assertTrue((self.project/'.claude/agents/orbit-frontend.md').exists())
         self.assertTrue((self.project/'.codex/config.toml').exists())
-        self.assertTrue((self.home/'0.28.0/orbit_delivery.py').is_file())
+        self.assertTrue((self.home/installer.VERSION/'orbit_delivery.py').is_file())
+        # The v0.29 selector runtime must be present in the installed
+        # standalone package, not only available in the source checkout.
+        self.assertTrue((self.home/installer.VERSION/'orbit_skill_plan.py').is_file())
         self.assertEqual(set(c.action for c in installer.plan(self.project,scope='project')),{'SKIP'})
 
     def test_existing_customization_refused(self):

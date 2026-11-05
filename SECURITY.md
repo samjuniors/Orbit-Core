@@ -9,6 +9,14 @@
 - Release packages require tests and content review; GitHub Actions are **not** proof of host-specific Gemini/Claude/Codex execution.
 - Report security issues privately to the repository owner. Do not open a public issue disclosing secrets or vulnerabilities.
 
+## v0.29 installed-skill discovery trust boundary
+
+- **Read-only by design:** `orbit_capability_select` can recommend and hash locally installed `SKILL.md` candidates. A shortlist or `orbit-skill-plan-v2` pin does **not** authenticate a publisher, verify a license, authorize a skill, install anything, execute helpers, or attest the host's capabilities.
+- **Scope and identity:** Skill names must match their containing directory and be no longer than 64 characters. Discovery skips redirected symlinks and Windows NTFS junctions **before reading** skill metadata and project-local JSON/Codex TOML MCP configuration. This helps prevent crossing the declared local discovery roots, but it is not a general-purpose OS filesystem sandbox.
+- **Untrusted sources:** Project-local and user-local installed skills are both possible sources. Their names, descriptions, version and license declarations remain untrusted data. Review the full source, publisher rights, exact host capability and scope-specific permission before any later action that uses a skill. Never treat a path or hash as proof of provenance.
+- **Pin freshness and residual races:** Bounded skill entry/helper-tree and location SHA-256 pins detect reviewed-byte/context differences. They do not eliminate filesystem time-of-check/time-of-use races; inspect/revalidate the full intended source immediately before any separately approved host-controlled use. Changes, missing files, incompatible platforms, other-host declarations and actual permission denials must HOLD.
+- **Host permission remains external:** The MCP's caller-declared `permission_state` is an advisory test input, **not verified consent**. The connected Antigravity/Codex host must enforce the real permission boundary; never switch to a different provider to bypass an actual denial. No automatic skill execution/import or third-party catalog fetch is part of this feature.
+
 ## Local preview process execution
 
 The v0.24 development branch adds `orbit_preview_start` with an explicit `confirm_run` flag. This executes the caller's project script, which can be unsafe even without an OS shell. The user must inspect the exact command/project and grant real host permission. The server itself cannot independently authenticate a conversational approval and does not sandbox app code; do not run untrusted repositories. Orbit probes only loopback, but external frameworks may bind differently if they ignore the supplied `HOST` setting. Verify network binding before permitting a command. No tunnels or deployments are included. Logs may contain sensitive output; keep them local and out of Git.

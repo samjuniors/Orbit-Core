@@ -82,7 +82,10 @@ def skill_policy(role,available):
 MAX_ITEMS = 120
 
 def _parse_skill(path):
-    if path.is_symlink() or not path.is_file() or path.stat().st_size > 65536:
+    # Windows directory junctions are not always reported by is_symlink().
+    # Refuse redirected paths BEFORE reading any untrusted frontmatter.
+    if (path.is_symlink() or path.resolve() != path.absolute()
+            or not path.is_file() or path.stat().st_size > 65536):
         return None
     body=path.read_text(encoding='utf-8')[:12000]
     match=re.match(r'\A---\s*\n(.*?)\n---\s*\n', body, re.S)
@@ -91,7 +94,11 @@ def _parse_skill(path):
         m=re.search(r'^'+k+r':\s*(.+?)\s*$', match.group(1), re.M)
         return m.group(1).strip().strip('"\'') if m else ''
     name,description=field('name'),field('description')
-    if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',name):return None
+    # A frontmatter alias cannot impersonate another installed skill.
+    # Agent Skills requires a bounded name matching its containing directory.
+    if (not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', name)
+            or len(name) > 64 or name != path.parent.name):
+        return None
     # Untrusted author claims are displayed only as bounded review metadata,
     # never proof of license, publisher authorization or semver compatibility.
     claimed_license=field('license')
@@ -117,7 +124,10 @@ def _skill_paths(project_root, home):
 def _configs(project_root, home):
     items=[]
     if project_root:
-        p=Path(project_root)
+        # A caller may reach its declared project root through a legitimate
+        # Windows junction/alias. Canonicalize the root once, then reject
+        # *descendant* redirects before reading any configuration.
+        p=Path(project_root).resolve()
         items += [p/'.agents/mcp_config.json',p/'.mcp.json',p/'.vscode/mcp.json',p/'.cursor/mcp.json']
     items += [home/'.gemini/config/mcp_config.json',home/'.claude.json',home/'.cursor/mcp.json',
               home/'AppData/Roaming/Claude/claude_desktop_config.json',
@@ -138,7 +148,8 @@ def discover(project_root, *, home=None):
         try: children=sorted(folder.iterdir())[:MAX_ITEMS]
         except OSError:continue
         for child in children:
-            if child.is_symlink() or not child.is_dir():continue
+            # Skip symlinks and junctions at the discovery boundary.
+            if child.is_symlink() or child.resolve() != child.absolute() or not child.is_dir():continue
             item=child/'SKILL.md'
             try: val=_parse_skill(item)
             except (OSError,UnicodeError):continue
@@ -148,7 +159,10 @@ def discover(project_root, *, home=None):
             if len(skills)>=MAX_ITEMS:break
         if len(skills)>=MAX_ITEMS:break
     for cfg in _configs(project_root,h):
-        if cfg.is_symlink() or not cfg.is_file() or cfg.stat().st_size > 256000: continue
+        # A project-local config's parent can be an NTFS junction. Reject it
+        # before any JSON read, even though discovering MCPs never runs them.
+        if (cfg.is_symlink() or cfg.resolve() != cfg.absolute()
+                or not cfg.is_file() or cfg.stat().st_size > 256000): continue
         try:
             data=json.loads(cfg.read_text(encoding='utf-8'))
             # Claude/Cursor/Antigravity use "mcpServers"; VS Code uses "servers".
@@ -164,7 +178,9 @@ def discover(project_root, *, home=None):
     try:
         import tomllib
         for cfg in configs:
-            if cfg.is_symlink() or not cfg.is_file() or cfg.stat().st_size>256000:continue
+            # Also refuse redirected Codex config roots before reading TOML.
+            if (cfg.is_symlink() or cfg.resolve() != cfg.absolute()
+                    or not cfg.is_file() or cfg.stat().st_size>256000):continue
             try:
                 data=tomllib.loads(cfg.read_text(encoding='utf-8'))
                 for name in list(data.get('mcp_servers',{}))[:MAX_ITEMS]:
