@@ -55,6 +55,88 @@ TECHNOLOGIES = frozenset({
 })
 
 
+def _implicit_quality_baseline(product_type, operation, maturity, platform):
+    """Suggest product-appropriate engineering checks without keyword matching.
+
+    A baseline means 'assess applicability', never that a particular feature
+    exists or that a vulnerability, user permission, or test result was verified.
+    Small fixes get a changed-slice assessment, not an entire release program.
+    """
+    targeted = operation in {"fix", "debug"}
+    scope = "CHANGED_SLICE" if targeted else "PRODUCT_AND_CHANGED_SLICE"
+    requirements = []
+
+    def include(area, role, expectation, evidence):
+        requirements.append({
+            "area": area,
+            "owner_role": role,
+            "expectation": expectation,
+            "needed_evidence": evidence,
+            "scope": scope,
+            "status": "APPLICABILITY_REVIEW_REQUIRED",
+            "verified": False,
+        })
+
+    include("correctness_and_reliability", "qa",
+            "Define expected behavior, failures and regression coverage "
+            "appropriate to the affected functionality.",
+            "Executed relevant tests or a specific BLOCKED/NOT_RUN reason.")
+    include("security", "security",
+            "Assess trust boundaries, input handling, privileges, secrets and "
+            "dependency risks even if the request never mentions security. "
+            "Document genuinely inapplicable checks; do not invent authentication.",
+            "Scoped threat review, findings and verified fixes or N/A rationale.")
+    include("maintainability", "architect",
+            "Respect existing architecture, compatibility, user data and "
+            "project decisions; avoid gratuitous refactors.",
+            "Inspected code/diff and relevant compatibility or regression checks.")
+    include("resource_and_license_fitness", "research",
+            "Prefer appropriate existing capabilities; verify provenance, "
+            "license and compatibility before adapting external resources.",
+            "Source/compatibility/license review or documented no-dependency choice.")
+    include("performance", "qa",
+            "Assess performance and resource limits proportional to the product; "
+            "do not invent latency targets or demand load tests for tiny fixes.",
+            "Relevant measurement or explicit not-applicable rationale.")
+
+    if product_type in VISUAL:
+        include("usability_and_accessibility", "ux",
+                "Assess relevant user journeys, platform accessibility, focus, "
+                "input modes, feedback and responsive states without a keyword prompt.",
+                "Target-platform interaction/accessibility evidence or a blocker.")
+    if product_type in DATA or product_type in {"api-service", "plugin-mcp"}:
+        include("privacy_and_data_integrity", "security",
+                "Determine whether personal or persistent data is handled; "
+                "review minimization, access, storage, loss and recovery where applicable.",
+                "Inspected data flows and privacy/backup behavior or justified N/A.")
+    if product_type in NATIVE_PLATFORM_TYPES or product_type in {"cli", "sdk-library", "plugin-mcp"}:
+        include("platform_compatibility", "qa",
+                "Use the actual target OS/runtime/SDK and deployment boundaries; "
+                "do not substitute browser-only QA for native verification.",
+                "Executed target-platform checks or explicit host limitation.")
+    if product_type in {"web-app", "api-service", "plugin-mcp", "desktop-app", "mobile-app", "os-platform"}:
+        include("operations_and_recovery", "devops",
+                "Review relevant failure handling, installation, migrations and rollback; "
+                "do not create hosting or a backend when none is required.",
+                "Reproducible failure/recovery check or documented out-of-scope case.")
+
+    return {
+        "policy": "CONTEXT_INFERRED_ENGINEERING_BASELINE",
+        "source": "PRODUCT_CLASSIFICATION_AND_OPERATION_NOT_KEYWORDS",
+        "scope": scope,
+        "project_maturity": maturity,
+        "target_platform": platform,
+        "status": "REVIEW_REQUIRED",
+        "requirements": requirements,
+        "assumptions_verified": False,
+        "permissions_granted": False,
+        "new_product_features_authorized": False,
+        "next": ("Inspect actual code, data flows, platform and user priorities. "
+                 "Confirm applicable checks and explain N/A decisions; do not "
+                 "ask the owner to list routine quality requirements individually."),
+    }
+
+
 def _platform_profile(kind, target, technology):
     """A read-only responsibility overlay, never evidence of a working SDK."""
     if target != "unspecified" and target not in TARGET_PLATFORMS:
@@ -191,7 +273,11 @@ def _workflow(product_type, operation, maturity, objective, constraints, *, limi
     add("scope", "architect", "Approve requirements and vertical-slice plan",
         ("Produce a concise product brief with user journeys or API use cases, "
          "non-goals, platform, acceptance criteria, architecture choices and "
-         "a sequence of thin, deployable vertical slices. Specify the actual "
+         "the relevant product-quality baseline even when not requested: "
+         "security, correctness, privacy, accessibility where applicable, "
+         "performance, resilience, compatibility and maintainability. "
+         "Mark irrelevant checks N/A with reasons; do not add product features. "
+         "Plan a sequence of thin, deployable vertical slices. Specify the actual "
          "test runner and a failing or baseline test for changed behavior before "
          "implementing when feasible; otherwise explain why test-first is blocked. "
          + ("Reproduce the bug first and state expected behavior. " if incident else "")
@@ -256,12 +342,12 @@ def _workflow(product_type, operation, maturity, objective, constraints, *, limi
         "Source diff, integration execution, no scope conflicts; HOLD on unsupported host tools.")
 
     add("quality", "qa", "Verify quality gates",
-        "Run relevant unit, contract, integration and end-to-end/visual tests using the actual available host and target device. Report PASS, FAIL, BLOCKED or NOT RUN separately; never infer from agent claims.",
+        "Run relevant unit, contract, integration and end-to-end/visual tests using the actual available host and target device. Assess accessibility, performance and failure paths where applicable even if not requested; record justified N/A. Report PASS, FAIL, BLOCKED or NOT RUN separately; never infer from agent claims.",
         "A completed task is not proof of a tested product.", ["integration"],
         "Test commands, environment, real output and inspected artifacts.")
 
     add("security", "security", "Security and privacy review",
-        "Review auth/permissions, inputs, filesystem, secrets, dependencies, data protection and threat boundaries appropriate to the current application. Require actual fixes for serious findings.",
+        "Proactively review applicable auth/permissions, inputs, filesystem, secrets, dependencies, data protection and threat boundaries without needing a security keyword. Do not invent auth/data features or claim a system is fully secure. Require actual fixes for serious findings.",
         "Security is a release gate, not an automatic scanner approval.", ["integration"],
         "Findings, reproduction/fix evidence and explicit unresolved-risk decision.")
 
@@ -363,6 +449,8 @@ def preview(conn, root, project, a):
                                  else "CONSERVATIVE_DEFAULT_REVIEW_REQUIRED"),
         "objective": objective, "constraints": constraints,
         "selected_from_approved_intake": bool(not a.get("product_type") and profile),
+        "implicit_quality_baseline": _implicit_quality_baseline(
+            kind, operation, maturity, platform),
         "proposed_tasks": tasks, "acceptance_contracts": contracts,
         "draft_review": {
             "status": graph["status"],
