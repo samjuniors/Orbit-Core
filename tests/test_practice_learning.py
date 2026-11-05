@@ -304,6 +304,36 @@ class PracticeLearningTests(unittest.TestCase):
                       action="draft_skill", expected_revision=1)
         self.assertFalse((self.one / ".orbit").exists())
 
+    def test_superseded_practice_drafts_new_revision_without_overwrite(self):
+        self.seed("first")
+        self.seed("second")
+        key = self.key()
+        self.call("orbit_practice_review", practice_key=key, action="approve",
+                  practice_text="Inspect actual regression evidence before accepting repeated tests.",
+                  confirm_write=True)
+        first = self.call("orbit_practice_review", practice_key=key,
+                          action="draft_skill", expected_revision=1,
+                          confirm_write=True)
+        self.assertEqual(first["status"], "SKILL_CANDIDATE_DRAFTED")
+        previous = self.one / first["candidate_relative_path"]
+        before = previous.read_bytes()
+        revised = self.call("orbit_practice_review", practice_key=key, action="supersede",
+                            expected_revision=1,
+                            rationale="Clarified test freshness requirement",
+                            practice_text="Recheck the source revision and executed regression evidence before acceptance.",
+                            confirm_write=True)
+        self.assertEqual(revised["revision"], 2)
+        second = self.call("orbit_practice_review", practice_key=key,
+                           action="draft_skill", expected_revision=2,
+                           confirm_write=True)
+        self.assertEqual(second["status"], "SKILL_CANDIDATE_DRAFTED")
+        self.assertNotEqual(first["candidate_relative_path"],
+                            second["candidate_relative_path"])
+        self.assertEqual(previous.read_bytes(), before)
+        self.assertIn("revision 2", (self.one / second["candidate_relative_path"]).read_text())
+        self.assertFalse(second["skill_installed"])
+        self.assertFalse(second["activation_allowed"])
+
     def test_skill_draft_never_overwrites_existing_parent_or_symlink(self):
         self.seed("alpha")
         self.seed("beta")
