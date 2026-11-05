@@ -4,6 +4,18 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] — next planned v0.30.0
 
+### v0.30 installed-user migration hardening (2026-11-05)
+
+- Recognize byte-for-byte verified official Antigravity v0.25.1 agent files and
+  the known Windows CLI repository-rename/CRLF variant during backup-first
+  upgrades. Other owner edits remain blocked by exact SHA-256 matching.
+- Accept the stock two-field Codex MCP registration's historical single-quoted
+  TOML syntax while preserving other settings and refusing custom Orbit fields.
+- Added targeted tests for exact file fingerprints, backup and preview safety,
+  strict TOML recognition, and customization refusal. These are unreleased
+  development changes, not independent live-host acceptance.
+
+
 ### Repository standard (2026-11-04)
 
 - Added a problem/solution README section and new-user/contributor paths.
