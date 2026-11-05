@@ -37,7 +37,7 @@ class RenamedCliUpgradeTests(unittest.TestCase):
         self.current = (root / "orbit_cli.py").read_bytes()
         # Frozen, hash-checked v0.25.1 Windows CLI migration bytes.
         # Never derive a historical fingerprint from an actively edited CLI.
-        self.old = (root / "tests/fixtures/v0251-renamed-orbit-cli-crlf.py").read_bytes()
+        self.old = (root / "tests/fixtures/v0251-renamed-orbit-cli-crlf.bin").read_bytes()
 
     def test_exact_renamed_v0251_windows_cli_is_recognized(self):
         self.assertIn(b"samjuniors/Orbit-Core", self.current)
