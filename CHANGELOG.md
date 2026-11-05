@@ -4,6 +4,10 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] — next planned v0.30.0
 
+### Funding (pending public Sponsors activation)
+
+- Prepared GitHub Sponsor button configuration for `samjuniors` and a README support section describing open-source maintenance and verification work. This is documentation-only; it should not merge until the sponsorship profile is publicly active.
+
 ### Repository standard (2026-11-04)
 
 - Added a problem/solution README section and new-user/contributor paths.
