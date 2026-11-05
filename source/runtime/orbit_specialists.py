@@ -41,6 +41,15 @@ ROLES = {
 HOST_NATIVE = {
     "invoke_subagent", "collaboration.spawn_agent", "spawn_agent", "Agent", "Task"
 }
+# Do not create a second security, QA or research agent next to Orbit's existing one.
+EXISTING_ORBIT_AGENTS = {
+    "cybersecurity": "orbit-security",
+    "qa": "orbit-qa",
+    "research": "orbit-research",
+    "software-engineer": "orbit-software-engineer",
+    "project-manager": "orbit-project-manager",
+    "creative-director": "orbit-creative-director",
+}
 
 
 def _roles(product_type, operation):
@@ -90,7 +99,7 @@ def plan(project_profile, objective, available, skill_plan, host_tools, permissi
     denied = permission_state == "DENIED"
     jobs = []
     for role in chosen:
-        name = "orbit-" + role
+        name = EXISTING_ORBIT_AGENTS[role]
         # A profile file is only a candidate: installed is not executable.
         matches = [item["name"] for item in selected
                    if name == item.get("name") or role in item.get("name", "")]
@@ -98,12 +107,14 @@ def plan(project_profile, objective, available, skill_plan, host_tools, permissi
             "role": role, "purpose": ROLES[role]["mission"],
             "acceptance": ROLES[role]["evidence"],
             "installed_role_profile_name_seen": name in installed,
+            "bundled_role_profile_source": "source/agents/" + name + ".md",
+            "bundled_role_profile_host_installed": False,
             "existing_skill_shortlist_hints": matches[:3],
             "native_host_tool_hints": hints[:3],
             "native_agent_verified": verified_native,
             "recommendation": ("HOLD_PERMISSION_DENIED" if denied else
                                "REVIEW_EXISTING_HOST_PROFILE" if name in installed else
-                               "REVIEW_NATIVE_ORIGINAL_PROFILE_CANDIDATE"),
+                               "REVIEW_BUNDLED_OR_HOST_PROFILE_BEFORE_CREATING_DUPLICATE"),
             "profile_candidate": None if name in installed or denied else _role_profile(role),
             "profile_written": False,
             "profile_installed": False,
