@@ -17,6 +17,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source" / "runtime"))
 
 import orbit_build
+import orbit_capabilities
 import orbit_mcp
 import orbit_preview
 import orbit_tasks
@@ -203,6 +204,32 @@ class HostNativeBrowserQATests(unittest.TestCase):
         self.db.execute("UPDATE build_runs SET evidence_json=?", (json.dumps(obj),))
         self.db.commit()
         self.assertEqual(self.review()["status"], "HOLD_STALE_OR_INVALID_QA")
+
+    def test_codex_native_provider_preferred_but_tool_consent_never_assumed(self):
+        plan = orbit_capabilities.browser_workflow(
+            ["browser_click", "computer_use"], [], host="codex",
+            permission_state="UNKNOWN")
+        self.assertEqual(plan["preferred"]["id"], "host_browser")
+        self.assertIn("Codex desktop", plan["host_specific_guidance"])
+        self.assertIn("Codex CLI", plan["host_specific_guidance"])
+        self.assertFalse(plan["execution_verified"])
+        self.assertFalse(plan["host_native_qa_recording"]["host_consent_attested"])
+        self.assertTrue(plan["host_native_qa_recording"]["no_separate_playwright_install_required"])
+        blocked = orbit_capabilities.browser_workflow(
+            ["browser_click", "computer_use"], [], host="codex",
+            permission_state="DENIED")
+        self.assertIsNone(blocked["preferred"])
+        self.assertEqual(blocked["decision"], "HOLD_PERMISSION_DENIED")
+        self.assertFalse(blocked["install_performed"])
+
+    def test_desktop_plugin_name_alone_does_not_prove_action(self):
+        plan = orbit_capabilities.browser_workflow(
+            ["Browser", "Computer"], [], host="codex")
+        self.assertFalse(any(
+            provider["status"] == "HOST_REPORTED_ACTION_TOOL"
+            for provider in plan["providers"]
+        ))
+        self.assertFalse(plan["execution_verified"])
 
     def test_wrong_stage_or_unapproved_host_report_cannot_pass(self):
         self.advance()
