@@ -1,4 +1,28 @@
-# Orbit Core v0.31.0 — candidate engineering and release acceptance
+# Orbit Core v0.31.0 — release and native-host acceptance
+
+**Current status (2026-11-06):** v0.31.0 PUBLISHED AS A PRERELEASE and INSTALLED on DESKTOP-5MBQ8IF for Antigravity and Codex. Local runtime/version/package acceptance PASS; native signed-in IDE execution and permission behavior remain NOT VERIFIED. This is not a stable or production certification. Historical candidate snapshots below remain unchanged as evidence of prior states.
+
+## Latest verified release and installation evidence
+
+- **Engineering:** [PR #98](https://github.com/samjuniors/Orbit-Core/pull/98), [#99](https://github.com/samjuniors/Orbit-Core/pull/99), [#100](https://github.com/samjuniors/Orbit-Core/pull/100), and [#101](https://github.com/samjuniors/Orbit-Core/pull/101) merged; release tag `v0.31.0` peels to `524b5aace4889494ee8b852bb4d1aab18b72d0cc`.
+- **GitHub:** [main CI #42187155895](https://github.com/samjuniors/Orbit-Core/actions/runs/42187155895) PASS 5/5 Ubuntu and Windows jobs. [release workflow #42187671632](https://github.com/samjuniors/Orbit-Core/actions/runs/42187671632) PASS. [Published prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.31.0) carries four archives and four SHA-256 files; all matched their official checksums on Windows.
+- **Actual Windows user installation:** versioned, checksum-verified extracted Universal ZIP update for selected Antigravity and Codex completed with 46 file changes/backups. Installed `VERSION=0.31.0`, MCP tool inventory 52; both host configurations point to `~/.orbit-universal/0.31.0/orbit_mcp.py`. Old `0.30.0` runtime and 61,440-byte local SQLite file preserved. These are file/config and subprocess readbacks, **not** evidence of tool discovery in newly restarted signed-in IDE sessions.
+- **Source-level native-denial issue [#72](https://github.com/samjuniors/Orbit-Core/issues/72):** the v0.31 `orbit_tasks.py` already rejects unknown/returned-session state when releasing a reservation as pre-invocation denial; existing `test_host_handoff.py` covers denial, unknown outcome, session-returned and recovery cases. **A genuinely denied host permission prompt is still NOT VERIFIED**; the MCP cannot authenticate host GUI consent.
+- **Source-level destructive clean issue [#85](https://github.com/samjuniors/Orbit-Core/issues/85):** v0.31 `orbit_setup.py` already includes SQLite preflight, a versioned progress manifest, compensating rollback and explicit idempotent recovery. Existing `test_uninstall_recovery.py` exercises simulated locked DB, process interruption, owner drift, config failure and old manifest compatibility. Real installed-user destructive reset is **NOT RUN**, correctly avoiding mutation of personal memory. Do not close the issue solely on unit tests.
+
+## Remaining real-host acceptance — open, not waived
+
+1. **Codex and Antigravity after a saved-work restart:** each signed-in IDE must actually call `orbit_project_scan` on a disposable selected project through `orbit-core-native` and report the returned tool identity, version and real tool inventory; filesystem configuration alone is insufficient.
+2. **Native specialists:** in an isolated fixture, register two nonoverlapping task reservations, invoke native host workers *where genuinely available*, verify actual host session IDs, changed files and tests, and independently review the task ledger and checkpoint. If native delegation is not available, record BLOCKED instead of simulating it.
+3. **Permissions and cancellation:** obtain an actual host-side denial before any native session and verify no unauthorized writes. If a native session was returned, record reconciliation rather than `HOST_PERMISSION_DENIED`. Cancel a running disposable worker, inspect true host state, restart the host and demonstrate durable resume with exact historical attempts. Chat refusal or synthetic test denial is not a native GUI denial.
+4. **Operational safety:** test GUI keyboard/DPI/host restart and v0.30→v0.31 rollback in disposable user profiles; compare SQLite/WAL/SHM and unrelated MCP configurations. Never run `clean --apply` on a real installed profile for acceptance without separately scoped destructive consent.
+5. **Security and continuous improvement:** independently reproduce a relevant security issue and remediation on a disposable fixture; demonstrate observed work → evidence-based improvement suggestion → reviewed project-local skill draft → repeatable measured improvement without global automatic activation. Keep issue scope and privacy isolation.
+
+**2026-11-06 live Codex probe:** a read-only `codex exec` attempt was started in `%TEMP%/Orbit-v031-Codex-NativeQA-20261106` but printed “Reading additional input from stdin...” and Desktop Commander later stopped returning terminal results. No host MCP invocation or result was observed. Codex acceptance is **BLOCKED** until the real process state is recovered and a proper noninteractive host call returns. Do not infer a defect in Orbit or a PASS from this event.
+
+---
+
+## Historical candidate snapshots (preserved)
 
 **Status: COMPLETE v0.31 SOURCE CONSOLIDATED ON REVIEW BRANCH / HOST ACCEPTANCE OPEN / NOT PUBLISHED.** Updated 2026-11-06. Historic acceptance evidence below is preserved and superseded by the latest checkpoint at the end of this document. Product: Orbit Core only, not other Samjuniors products. This record deliberately separates development-source tests, GitHub CI, packaged installer checks and real signed-in host work.
 
