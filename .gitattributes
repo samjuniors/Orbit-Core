@@ -12,3 +12,6 @@ NEXT_VERSION text eol=lf
 *.txt text eol=lf
 *.mcpb binary
 *.zip binary
+
+# Historical Windows CRLF stock bytes must not be normalized by Git.
+tests/fixtures/v0251-renamed-orbit-cli-crlf.bin binary
