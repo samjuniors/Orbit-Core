@@ -11,7 +11,7 @@ Orbit connects to the coding environment you already use. It helps turn requirem
 **[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core/releases)**
 
 > [!IMPORTANT]
-> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. The latest published `v0.29.0` and `v0.30.0` packages use the **stable GitHub release channel**, but a stable-channel label is **not** a production certification. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
+> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. Published packages have separate stable/prerelease channels. **v0.31.0 is a published prerelease**, not a production certification; a stable-channel label is also not a security or production certificate. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
 
 ## Why Orbit Core?
 
@@ -51,7 +51,7 @@ This one package can configure **Antigravity, Codex, Claude Code and VS Code** t
 
 **Requirements:** Python 3.10–3.13 (Windows: 3.12 recommended); no administrator permissions or `pip install` required for Orbit's core local MCP server. The Windows graphical setup additionally needs Tkinter. Installation applies to your **current OS account**, not all computer accounts.
 
-### Windows PowerShell or CLI ? works with published v0.30.0
+### Windows PowerShell and CLI — versioned setup
 
 From the extracted Universal Setup folder, preview first, then explicitly apply:
 
@@ -71,7 +71,7 @@ After one successful installation, the persistent launcher can check and install
 & "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --apply
 ```
 
-If PowerShell's local-script policy blocks the future `Orbit.ps1`, use `py -3.12 orbit_cli.py` with the same arguments from the verified ZIP; do not weaken global execution policy.
+If PowerShell's local-script policy blocks `Orbit.ps1` (included since v0.31.0), use `py -3.12 orbit_cli.py` with the same arguments from the verified ZIP; do not weaken global execution policy.
 
 The `--check` action reads metadata only; without `--apply`, an update downloads and validates its ZIP but **does not execute downloaded code**. `--apply` is an explicit authorization to execute the verified release installer and change selected host files. Backups protect recognized originals; unknown customizations require review. Restart the IDE afterward.
 
@@ -86,7 +86,7 @@ Uninstall removes selected Orbit host integrations, retaining shared runtime, pr
 
 ### Release-aware single CLI (v0.31.0 and later)
 
-The **v0.31.0 Universal Setup ZIP** includes a single `orbit` launcher for **install, update, and scoped uninstall**. It defaults to published **stable** releases; `--version X.Y.Z` pins an exact published release, and `--channel candidate` opts into an available prerelease. The ZIP also provides **`Orbit.ps1`** for PowerShell. These commands are **not included in the immutable v0.30.0 ZIP**. Use a verified v0.31.0 package once published:
+The **v0.31.0 Universal Setup ZIP** includes a single `orbit` launcher for **install, update, and scoped uninstall**. It defaults to published **stable** releases; `--version X.Y.Z` pins an exact published release, and `--channel candidate` opts into an available prerelease. The ZIP also provides **`Orbit.ps1`** for PowerShell. These commands are **not included in the immutable v0.30.0 ZIP**. Use the published, checksum-verified v0.31.0 package:
 
 ```powershell
 # From a verified v0.31.0 Universal Setup ZIP:
@@ -101,7 +101,7 @@ The **v0.31.0 Universal Setup ZIP** includes a single `orbit` launcher for **ins
 
 Each action remains **preview-first** and requires `--apply` to change files. A pinned version must exist on the selected published channel; no floating `main` source, hidden downgrades, automatic model installation or silent project-data erasure.
 
-For contributors testing unreleased source, clone `main` separately. `orbit_setup.py update` in a source checkout means **reapply local checkout files**, **not** fetch a GitHub Release. Details: [Release quick start](docs/RELEASE-QUICKSTART.md) and [update experience](docs/UPDATE-EXPERIENCE.md).
+For contributors testing development source, clone `main` separately. `orbit_setup.py update` in a source checkout means **reapply local checkout files**, **not** fetch a GitHub Release. Details: [Release quick start](docs/RELEASE-QUICKSTART.md) and [update experience](docs/UPDATE-EXPERIENCE.md).
 
 **Confirm live connectivity:** In your IDE, ask Orbit to call `orbit_project_scan` and report its running version and tool inventory. A config file alone is not proof that the MCP process reconnected.
 
@@ -124,7 +124,7 @@ For the latest available **published** version, use the [Release quick start](do
 
 - **Install:** preview one or more host integrations; apply only after reviewing changes.
 - **Update:** choose a verified **published release** in the Update Manager or the persistent `orbit.cmd update --channel stable` command. Source checkout updates are a separate maintainer path.
-- **Uninstall:** run the installed version's verified `orbit_setup.py uninstall` from its official Universal ZIP; after the release-aware CLI ships, use `orbit uninstall`. This removes **selected integrations only**, not memory or shared runtimes.
+- **Uninstall:** use the verified installed-version `orbit_setup.py uninstall` or the v0.31.0+ release-aware `orbit uninstall` CLI for a scoped uninstall. This removes **selected integrations only**, not memory or shared runtimes.
 - **Clean/reset:** an intentionally separate, destructive and typed-confirmation action. The `clean` command may affect multiple hosts and optionally saved memory. Read its preview and recovery rules in [installation options](docs/MCP-INSTALLATION-OPTIONS.md) before using it.
 
 For significant changes keep a separate backup of SQLite database/WAL/SHM, host settings and customized files. The installer preserves recoverable backups. An older release is not an automatic compatible data rollback. Refresh your IDE after installation and verify the live tool connection.
@@ -175,9 +175,9 @@ Your coding IDE / agent host
 
 The MCP runtime focuses on **project state and coordination**, while the host remains responsible for model selection, native agent execution, command permissions, source inspection and actual testing. Memory is local-first; saved research pointers are project-folder scoped and treated as untrusted reference data.
 
-### v0.31 development: reviewed learning and specialist candidates
+### v0.31.0: reviewed learning and specialist candidates
 
-The unreleased v0.31 candidate supports project-scoped improvement observations through the existing SQLite runtime. Host agents can recall prior corrections and measured QA outcomes through explicit MCP calls, but these are **caller-reported** and do not retrain any model. Promoting a generalized lesson for another project requires two matching observations, separate privacy review and explicit confirmation. A new missing specialist may be drafted under the selected project's `.orbit/agent-candidates`; that is not a host-installed or executable agent. Orbit reuses existing authorized tools, agents and skills before proposing new ones. The learning workflow is not an always-running daemon and cannot silently synchronize ChatGPT, Notion, GitHub or SQLite.
+Published prerelease v0.31.0 supports project-scoped improvement observations through the existing SQLite runtime. Host agents can recall prior corrections and measured QA outcomes through explicit MCP calls, but these are **caller-reported** and do not retrain any model. Promoting a generalized lesson for another project requires two matching observations, separate privacy review and explicit confirmation. A new missing specialist may be drafted under the selected project's `.orbit/agent-candidates`; that is not a host-installed or executable agent. Orbit reuses existing authorized tools, agents and skills before proposing new ones. The learning workflow is not an always-running daemon and cannot silently synchronize ChatGPT, Notion, GitHub or SQLite.
 
 ## Development and verification
 
@@ -205,7 +205,7 @@ The CI matrix covers Ubuntu with Python **3.10–3.13** and Windows with Python 
 | [Security](SECURITY.md) | Threat boundaries, approval caveats and known gaps |
 | [Roadmap](docs/NEXT-VERSION.md) | M1–M5 implementation and outstanding acceptance gates |
 | [Release and QA checklist](docs/RELEASE-PROCESS.md) | Repeatable checks and automatic publication workflow for every version |
-| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.30.0.md) | v0.30.0 release evidence and remaining independent host gates |
+| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.31.0.md) | v0.31.0 published prerelease, installed-runtime evidence and remaining host gates |
 | [Changelog](CHANGELOG.md) | Recorded source and release changes |
 
 ## Security and project status
