@@ -83,12 +83,12 @@ class TestUpdater(unittest.TestCase):
   self.assertEqual(orbit_cli.main(args+['--apply']),0)
   self.assertEqual(marker.read_text(),'APPLY')
 
- def test_update_default_channel_is_candidate_and_no_side_effect(self):
+ def test_update_default_channel_is_stable_and_no_side_effect(self):
   from unittest.mock import patch
   with patch.object(orbit_cli,'latest') as found:
    found.return_value={'version':'0.24.0','zip':'https://github.com/z','sha':'https://github.com/s','url':'https://github.com/release'}
    with patch.object(orbit_cli,'version',return_value='0.24.0'):
     self.assertEqual(orbit_cli.main(['update','--check']),0)
-   found.assert_called_once_with('candidate')
+   found.assert_called_once_with('stable')
 
 if __name__=='__main__':unittest.main()

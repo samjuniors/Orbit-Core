@@ -36,6 +36,10 @@ class UpdateNotificationsTests(unittest.TestCase):
         with patch.dict(os.environ, {"ORBIT_UPDATE_CHECK": "1", "ORBIT_UPDATE_CHANNEL": "candidate"}):
             pass
 
+    def test_default_auto_notice_channel_follows_published_stable(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(orbit_updates.channel(), "stable")
+
     def test_only_published_complete_release_is_offered(self):
         options = [release("0.25.1"), release("0.25.2", complete=False),
                    release("0.25.3", draft=True), release("0.24.9"),

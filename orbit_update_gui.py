@@ -31,7 +31,7 @@ def launch():
     installed = orbit_cli.version()
     current = tk.StringVar(value="Installed Orbit: " + installed)
     label("", textvariable=current, font=("Arial", 11, "bold")).pack(fill="x", padx=18, pady=7)
-    channel = tk.StringVar(value="candidate")
+    channel = tk.StringVar(value="stable")
     scope = tk.StringVar(value="machine")
     project = tk.StringVar(value="")
     hosts = {h: tk.BooleanVar(value=h in {item["host"] for item in orbit_cli.detect()
@@ -40,7 +40,7 @@ def launch():
     options = tk.Frame(app)
     options.pack(fill="x", padx=18, pady=4)
     tk.Label(options, text="Release channel").pack(side="left")
-    for value, title in (("candidate", "Candidate (0.x)"), ("stable", "Stable")):
+    for value, title in (("stable", "Stable (default)"), ("candidate", "Candidate (opt-in)")):
         tk.Radiobutton(options, text=title, variable=channel, value=value).pack(side="left", padx=8)
 
     scopes = tk.Frame(app)
@@ -154,7 +154,7 @@ def launch():
         pinned = info["version"]
         set_busy(True)
         summary.set("Applying approved update to selected hosts…")
-        args = ["update", "--channel", channel.get(), "--apply",
+        args = ["update", "--channel", channel.get(), "--scope", scope.get(), "--apply",
                 "--expect-version", pinned, "--hosts", *chosen]
         if target:
             args.extend(["--project", target])

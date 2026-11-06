@@ -48,7 +48,7 @@ def smoke(root=ROOT):
                 if z.read("server/" + path.name) != path.read_bytes():
                     raise RuntimeError("Packaged server/source mismatch: " + path.name)
 
-        for file in ("orbit_setup.py", "Orbit Setup.cmd"):
+        for file in ("orbit_setup.py", "Orbit Setup.cmd", "Orbit.ps1"):
             if not (pkg / file).is_file():
                 raise RuntimeError("Unified setup launcher missing from candidate ZIP: " + file)
         workspace = temporary / "disposable-project"
