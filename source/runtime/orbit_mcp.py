@@ -498,6 +498,7 @@ TOOLS += [
         'project_root':string(2000),'objective':string(1500),
         'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
         'host_tools':{'type':'array','maxItems':80,'items':{'type':'string'}},
+        'host_plugins':{'type':'array','maxItems':24,'items':string(100)},
         'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
         'project_profile':schema({
             'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
@@ -740,7 +741,7 @@ def execute(conn, name, a):
     if name=='orbit_preview_status': return orbit_preview.status(project_root(a), a)
     if name=='orbit_preview_stop': return orbit_preview.stop(project_root(a), a)
     if name=='orbit_capability_discover': return orbit_capabilities.discover(project_root(a))
-    if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]),permission_state=a.get('permission_state','UNKNOWN'),project_profile=a.get('project_profile'),requested_skill_names=a.get('requested_skill_names'),review_manifest=a.get('review_manifest'),host=a.get('host','unknown'))
+    if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]),host_plugins=a.get('host_plugins',[]),permission_state=a.get('permission_state','UNKNOWN'),project_profile=a.get('project_profile'),requested_skill_names=a.get('requested_skill_names'),review_manifest=a.get('review_manifest'),host=a.get('host','unknown'))
     if name=='orbit_project_scan': return scan(a)
     if name=='orbit_project_resume':
         if a.get('compact') is True:
