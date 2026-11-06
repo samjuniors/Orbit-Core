@@ -5,6 +5,7 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 ## [Unreleased] ` future development
 
 
+
 ### Development - release-aware multi-host CLI and PowerShell setup (not yet published)
 
 - Add a single CLI for **install, update and scoped uninstall** across selected
@@ -25,6 +26,19 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 
 The previously published v0.30.0 source/tag is immutable; this new scope is development only until a separate reviewed release.
+### Proposed v0.31 development ? Orbit-first coordinator compatibility
+
+- Prefer Orbit as the project lifecycle coordinator when the owner selects it,
+  while retaining existing specialist plugins and respecting host permissions.
+- Include a read-only host configuration inventory of duplicate Orbit MCP and
+  skill scopes, name-only possible aliases and overlapping coordinator names.
+- Surface possible collisions in installation preview and status without
+  disabling unrelated plugins, changing models or claiming forced precedence.
+- Document explicit activation, limitations and acceptance checks in
+  `docs/COORDINATOR-PRIORITY.md`. Development only; not a published release.
+
+
+No further feature scope is included in the v0.30.0 candidate.
 
 ## [0.30.0] - Stable-channel release (2026-11-05)
 

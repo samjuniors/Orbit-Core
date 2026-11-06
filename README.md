@@ -129,6 +129,20 @@ For the latest available **published** version, use the [Release quick start](do
 
 For significant changes keep a separate backup of SQLite database/WAL/SHM, host settings and customized files. The installer preserves recoverable backups. An older release is not an automatic compatible data rollback. Refresh your IDE after installation and verify the live tool connection.
 
+## Orbit with other plugins
+
+**Orbit-first for software-project coordination; specialist plugins remain available.**
+When you select Orbit as the lead, it manages project plans, task handoffs,
+evidence and checkpoints. It does **not** disable GitHub, browser, QA,
+other MCPs or installed specialist agents. The host/user still chooses which
+skills and tools activate; no cross-IDE mechanism can guarantee Orbit runs first.
+
+For the proposed next version, `python3 orbit_priority.py` provides a read-only,
+name-only warning of overlapping Orbit registrations, similar MCP names and
+duplicate skill scopes. Nothing is removed, run or reconfigured. For full limits,
+host differences and acceptance criteria, read
+[coordinator preference and overlap detection](docs/COORDINATOR-PRIORITY.md).
+
 ## Supported host integrations
 
 | Host | Integration | Native agent execution |
