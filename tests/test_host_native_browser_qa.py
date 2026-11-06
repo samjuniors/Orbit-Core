@@ -231,6 +231,84 @@ class HostNativeBrowserQATests(unittest.TestCase):
         ))
         self.assertFalse(plan["execution_verified"])
 
+    def test_codex_browser_plugin_and_native_bridge_are_review_candidates(self):
+        # These are names reported by the current host, not a global plugin
+        # installation scan or permission attestation.
+        plugin = ["browser@openai-bundled"]
+        tools = ["mcp__node_repl__js"]
+        planned = orbit_capabilities.browser_workflow(
+            tools, [], host="codex", host_plugins=plugin)
+        browser = planned["providers"][0]
+        self.assertEqual(browser["status"], "HOST_PLUGIN_BRIDGE_REVIEW_REQUIRED")
+        self.assertTrue(browser["bridge_reported"])
+        self.assertEqual(planned["preferred"]["id"], "host_browser")
+        self.assertFalse(planned["execution_verified"])
+        self.assertFalse(planned["permission_verified"])
+        self.assertIn("official host-provided bridge", planned["host_skill_setup"])
+        self.assertEqual(planned["reported_host_plugins"], ["browser"])
+        self.assertFalse(planned["host_native_qa_recording"]["host_consent_attested"])
+
+    def test_codex_computer_use_plugin_bridge_does_not_claim_a_click(self):
+        plan = orbit_capabilities.browser_workflow(
+            ["mcp__node_repl__js"], [], host="codex",
+            host_plugins=["computer-use@openai-bundled"])
+        self.assertEqual(plan["preferred"]["id"], "host_computer_use")
+        self.assertEqual(plan["providers"][1]["status"],
+                         "HOST_PLUGIN_BRIDGE_REVIEW_REQUIRED")
+        self.assertFalse(plan["execution_verified"])
+        cua = orbit_capabilities.browser_workflow(
+            ["mcp__cua_repl__js"], [], host="codex",
+            host_plugins=["unified-computer-use@openai-bundled"])
+        self.assertEqual(cua["preferred"]["id"], "host_computer_use")
+        self.assertFalse(cua["host_native_qa_recording"]["screenshot_verified"])
+
+    def test_plugin_or_generic_bridge_alone_cannot_be_used_as_browser(self):
+        plugin_only = orbit_capabilities.browser_workflow(
+            [], [], host="codex", host_plugins=["browser@openai-bundled"])
+        self.assertEqual(plugin_only["providers"][0]["status"],
+                         "PLUGIN_REPORTED_TOOL_UNAVAILABLE")
+        self.assertFalse(plugin_only["providers"][0]["bridge_reported"])
+        bridge_only = orbit_capabilities.browser_workflow(
+            ["mcp__node_repl__js"], [], host="codex")
+        self.assertEqual(bridge_only["providers"][0]["status"], "NOT_REPORTED")
+        self.assertFalse(bridge_only["providers"][0]["bridge_reported"])
+        # Same names in Antigravity do not constitute a Codex desktop plugin.
+        unrelated = orbit_capabilities.browser_workflow(
+            ["mcp__node_repl__js"], [], host="antigravity",
+            host_plugins=["browser@openai-bundled"])
+        self.assertEqual(unrelated["providers"][0]["status"], "NOT_REPORTED")
+
+    def test_codex_bridge_permission_denial_blocks_all_candidates(self):
+        denied = orbit_capabilities.browser_workflow(
+            ["mcp__node_repl__js"], [], host="codex",
+            host_plugins=["browser@openai-bundled"],
+            permission_state="DENIED")
+        self.assertIsNone(denied["preferred"])
+        self.assertEqual(denied["decision"], "HOLD_PERMISSION_DENIED")
+        self.assertFalse(denied["permission_verified"])
+
+    def test_capability_schema_accepts_host_plugin_inventory_but_never_certifies_it(self):
+        schema = next(t["inputSchema"] for t in orbit_mcp.TOOLS
+                      if t["name"] == "orbit_capability_select")
+        self.assertIn("host_plugins", schema["properties"])
+        self.assertEqual(schema["properties"]["host_plugins"]["maxItems"], 24)
+        result = orbit_mcp.execute(self.db, "orbit_capability_select", {
+            "project_root": str(self.root),
+            "objective": "orbit-qa: browser testing this web page",
+            "host": "codex",
+            "host_tools": ["mcp__node_repl__js"],
+            "host_plugins": ["browser@openai-bundled"],
+        })
+        self.assertEqual(result["browser_workflow"]["preferred"]["id"], "host_browser")
+        self.assertFalse(result["browser_workflow"]["execution_verified"])
+        self.assertFalse(result["browser_workflow"]["permission_verified"])
+        with self.assertRaises(ValueError):
+            orbit_capabilities.select(self.root, "browser testing",
+                                      host_plugins=["@Browser"] * 25)
+        with self.assertRaises(ValueError):
+            orbit_capabilities.select(self.root, "browser testing",
+                                      host_plugins=[42])
+
     def test_wrong_stage_or_unapproved_host_report_cannot_pass(self):
         self.advance()
         args = self.args(expected_revision=5)
