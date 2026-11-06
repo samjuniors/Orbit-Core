@@ -1,6 +1,6 @@
 # Orbit Core v0.31.0 — candidate engineering and release acceptance
 
-**Status: SOURCE INTEGRATION PREPARED / RELEASE CANDIDATE REVIEW / HOST ACCEPTANCE OPEN / NO PUBLICATION AUTHORIZED.** Recorded 2026-11-05. Product: Orbit Core only, not other Samjuniors products. This record deliberately separates development-source tests, GitHub CI, packaged installer checks and real signed-in host work.
+**Status: COMPLETE v0.31 SOURCE CONSOLIDATED ON REVIEW BRANCH / HOST ACCEPTANCE OPEN / NOT PUBLISHED.** Updated 2026-11-06. Historic acceptance evidence below is preserved and superseded by the latest checkpoint at the end of this document. Product: Orbit Core only, not other Samjuniors products. This record deliberately separates development-source tests, GitHub CI, packaged installer checks and real signed-in host work.
 
 ## Sources of truth and provenance
 
@@ -56,3 +56,14 @@ The isolated branch `feat/v031-continuous-learning-agent-factory` adds four prop
 **HOLD publication and installed-user updates** until exact candidate GitHub CI and package/version parity are confirmed, source risks/security review completed, real Antigravity/Codex acceptance completed or explicitly and accurately risk-accepted, and owner explicitly authorizes merge/publication. A draft PR is not authorization to tag, deploy, publish or install.
 
 At every meaningful milestone update this existing acceptance record with exact branch/head, test evidence, unresolved blockers, reviewed artifacts, decision date and next action. Preserve prior release downloads, tags, project memories, owner files and backups.
+
+
+## 2026-11-06 — Reconciliation against merged main (newest checkpoint)
+
+- **Source:** `main` merged [PR #98](https://github.com/samjuniors/Orbit-Core/pull/98) at `134dff7b0be6e3febb2db40dcbdebc33b4cebd02` (release CLI and coordinator warnings). The complete release candidate and learning-agent-factory draft were separately preserved, then reconciled into `integration/v031-complete-20261106` with source merge commits. Earlier drafts [#95](https://github.com/samjuniors/Orbit-Core/pull/95), [#96](https://github.com/samjuniors/Orbit-Core/pull/96), [#97](https://github.com/samjuniors/Orbit-Core/pull/97) were not rewritten or deleted.
+- **Integrated scope:** v0.31.0 is the **52-tool** candidate, including the existing resource-first specialists, default product-quality review, reviewed practices, project-isolated improvement recording, bounded recall, explicit privacy-reviewed abstract lesson promotion and reviewed specialist candidate drafting. No model training, unrestricted native agent execution, automatic skill installation or automatic cross-project memory sync.
+- **Local Windows read-only inventory:** Antigravity and Codex both show a user-scope Orbit MCP registration. Codex also contains `orbit-m5-test`, flagged `POSSIBLE_ORBIT_ALIAS` by name only. `priority_enforced=false`, `configuration_modified=false`, `host_connection_verified=false`. Do not remove this fixture without separate inspection.
+- **Local package checks on consolidated branch:** `scripts/prepare_release_candidate.py` PASS; `scripts/check_release_readiness.py` PASS; `scripts/check_version.py --strict-bundle` PASS; `scripts/build_release.py --verify` PASS with 166 Universal ZIP files, 56 Antigravity plugin files and 211 plugin-suite files; `scripts/smoke_release_zip.py` PASS (`DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS`, 52 tools). These are **locally generated unpublished artifacts**.
+- **Focused regression:** 31 tests completed, 1 skipped, zero failures. Full regression suite and exact-head GitHub CI remain to be recorded separately after completion.
+- **Live-host boundary:** Antigravity/Codex UI/native tool selection and permission/denial/restart tests are **NOT VERIFIED**; no installed runtime was changed. Publish only after reviewing the final exact-head CI and consciously accepting any remaining real-host limits; a configured MCP or smoke import does not prove live user experience.
+- **Latest release authority:** public `v0.30.0` remains unchanged until an actual `v0.31.0` tag and release are published and checksum-verified.
