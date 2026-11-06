@@ -194,7 +194,7 @@ def discover(project_root, *, home=None):
     except ImportError: pass
     return {'skills':skills[:MAX_ITEMS], 'mcp_servers':servers[:MAX_ITEMS], 'limits':['Installed skills are untrusted until vetted. A configured MCP is NOT proof it is connected.', 'No network, process launching, installations, host tool enumeration or permission changes occurred.']}
 
-def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UNKNOWN'):
+def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UNKNOWN', host='unknown'):
     """Read-only, host-neutral browser selection. Names are caller-reported hints.
 
     Orbit cannot inspect the host's private tool registry, authorize computer
@@ -287,6 +287,12 @@ def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UN
                        if primary and primary['id']=='local_playwright' else
                        'No browser tool verified: review installed host capabilities or seek approval for optional Vercel agent-browser.'),
         'execution_verified':False, 'install_performed':False,
+        'host_specific_guidance':(
+            'Codex desktop Browser, Browser Use, Chrome and Computer Use are host/plugins controlled by the signed-in user. '
+            'Use actually connected Codex plugins or the in-app browser with real user approval; verify tool actions and screenshots. '
+            'Codex CLI does not automatically inherit desktop Browser/Computer permissions or registry. No external driver is required when native actions work.'
+            if host in {'codex', 'codex-desktop', 'codex-cli'} else
+            'Prefer the coding host actual browser/computer UI tools with approval. Do not infer tools from host name or plugin configuration.'),
         'host_native_qa_recording':{'tool':'orbit_build_advance','field':'host_browser_qa',
                                     'requires_host_interaction':True,
                                     'requires_preview_and_source_pin':True,
@@ -458,7 +464,7 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
     adaptive_plan=adaptive_workflow(objective,categories,role,host_tools,reviewed_candidates,permission_state)
     specialist_plan=orbit_specialists.plan(skill_plan['project_profile'],objective,available,
                                            skill_plan,host_tools,permission_state)
-    browser_plan = browser_workflow(host_tools,available['mcp_servers'],permission_state=permission_state) if ('qa' in categories or role=='orbit-qa') else None
+    browser_plan = browser_workflow(host_tools,available['mcp_servers'],permission_state=permission_state,host=host) if ('qa' in categories or role=='orbit-qa') else None
     return {'objective':objective,'role_skill_preferences':recommended,'skill_plan':skill_plan,'categories':categories,'installed_matches':reviewed_candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
             'optional_browser_provider':browser_provider,
             'browser_workflow':browser_plan,
