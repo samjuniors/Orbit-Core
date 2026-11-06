@@ -30,6 +30,8 @@ import orbit_native_coordination
 import orbit_swarm_integrity
 import orbit_portable
 import orbit_pulse
+import orbit_improvement
+import orbit_agent_factory
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -137,6 +139,7 @@ def db_connect():
     conn.commit()
     orbit_evidence.setup(conn)
     orbit_tasks.setup(conn)
+    orbit_improvement.setup(conn)
     orbit_build.setup(conn)
     orbit_intake.setup(conn)
     orbit_build.setup_browser(conn)
@@ -536,11 +539,54 @@ TOOLS += [
     {'name':'orbit_practice_suggest','description':'Read-only opt-in M5 practice candidates from repeated, separately reviewer-accepted tasks in this exact project root/key; approvals and evidence remain caller-reported. Lists approved and optionally inactive practices without injecting instructions or running skills.','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':20},'include_inactive':{'type':'boolean'}},['project_root','project'])},
     {'name':'orbit_practice_review','description':'Preview or review a repeated practice, or explicitly draft an uninstalled project-scoped instruction-only SKILL.md from a previously approved, fresh practice (action=draft_skill). No automatic adoption, global skill install, model training, native agent execution or authenticated consent.','inputSchema':schema({'project_root':string(2000),'project':string(80),'practice_key':string(80),'action':{'type':'string','enum':['approve','reject','supersede','archive','draft_skill']},'practice_text':{'type':'string','maxLength':600},'rationale':{'type':'string','maxLength':300},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','practice_key','action'])},
 ]
+TOOLS += [
+    {'name':'orbit_improvement_record',
+     'description':'Preview or explicitly record/archive one project-local user correction, regression, review or task outcome. Evidence and scores are caller-reported data, not verified learning, model training, or automatic skill activation.',
+     'inputSchema':schema({
+        'project_root':string(2000),'project':string(80),
+        'event_key':string(48),'action':{'type':'string','enum':['record','archive']},
+        'kind':{'type':'string','enum':sorted(orbit_improvement._KINDS)},
+        'result':{'type':'string','enum':sorted(orbit_improvement._RESULTS)},
+        'lesson':string(320),'evidence_ref':string(160),
+        'score_before':{'type':'integer','minimum':0,'maximum':100},
+        'score_after':{'type':'integer','minimum':0,'maximum':100},
+        'expected_revision':{'type':'integer','minimum':1},
+        'confirm_write':{'type':'boolean'}},
+        ['project_root','project','event_key','action'])},
+    {'name':'orbit_improvement_promote',
+     'description':'Preview or explicitly opt in to sharing only a generalized repeat-verified project lesson across local projects in the same SQLite database. Explicit privacy review; no task/source/project data exported, no background or model training. Archive by SHA with revision guard.',
+     'inputSchema':schema({
+        'project_root':string(2000),'project':string(80),
+        'action':{'type':'string','enum':['share','archive']},
+        'lesson':string(220),
+        'event_keys':{'type':'array','minItems':2,'maxItems':8,'items':string(48)},
+        'lesson_sha256':{'type':'string','minLength':64,'maxLength':64},
+        'privacy_reviewed':{'type':'boolean'},
+        'expected_revision':{'type':'integer','minimum':1},
+        'confirm_write':{'type':'boolean'}},
+        ['project_root','project','action'])},
+    {'name':'orbit_improvement_context',
+     'description':'Read bounded project-local improvement observations and repeated reported lessons on resume. Untrusted evidence, no auto-promotion, no cross-project recall, no hidden scheduled work.',
+     'inputSchema':schema({
+        'project_root':string(2000),'project':string(80),
+        'limit':{'type':'integer','minimum':1,'maximum':20},
+        'include_shared':{'type':'boolean'}},
+        ['project_root','project'])},
+    {'name':'orbit_specialist_candidate',
+     'description':'Reuse existing Orbit specialist when available, otherwise preview or explicitly write a NEW instruction-only project-scoped agent candidate. No host registration, permission grant, installation, code execution or worker spawn.',
+     'inputSchema':schema({
+        'project_root':string(2000),'project':string(80),
+        'role':string(42),'mission':string(320),'acceptance':string(320),
+        'resource_review':string(320),
+        'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
+        'confirm_write':{'type':'boolean'}},
+        ['project_root','project','role'])},
+]
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
     'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_swarm_draft_preview','orbit_software_delivery_preview','orbit_swarm_host_preflight','orbit_native_coordination_preview','orbit_swarm_integration_review','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
-    'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest'}
+    'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest','orbit_improvement_context'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
 for _tool in TOOLS:
     _name=_tool['name']
@@ -593,6 +639,17 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name in {'orbit_improvement_record', 'orbit_improvement_context',
+                'orbit_improvement_promote', 'orbit_specialist_candidate'}:
+        root = project_root(a)
+        project = project_key(a)
+        if name == 'orbit_improvement_record':
+            return orbit_improvement.record(conn, root, project, a)
+        if name == 'orbit_improvement_context':
+            return orbit_improvement.context(conn, root, project, a)
+        if name == 'orbit_improvement_promote':
+            return orbit_improvement.promote(conn, root, project, a)
+        return orbit_agent_factory.candidate(root, project, a)
     if name == "orbit_project_transfer":
         root=project_root(a)
         return orbit_portable.transfer(conn,root,project_key(a),a,snapshot(root))

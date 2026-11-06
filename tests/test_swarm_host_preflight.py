@@ -84,7 +84,7 @@ class HostPreflightTests(unittest.TestCase):
         tool = next(x for x in orbit_mcp.TOOLS
                     if x["name"] == "orbit_swarm_host_preflight")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 48)
+        self.assertEqual(len(orbit_mcp.TOOLS), 52)
 
     def test_two_disjoint_reserved_tasks_have_two_complete_packets(self):
         self.create("api", paths=["backend/"])

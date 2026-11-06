@@ -31,6 +31,11 @@
 - **Next gate:** review exact CI workflow command coverage and candidate artifact manifests; test a disposable v0.30→v0.31 update/rollback, real Antigravity/Codex host invocation and permission/recovery paths. The owner must approve merge and publication separately.
 - **Release status:** HOLD; this checkpoint is not a release authorization. Do not claim all cross-chat self-improvement, native dynamic agent creation, or background autonomy are implemented; their guarded draft/selection foundations are the candidate's scope.
 
+
+## Unmerged learning follow-up development — 2026-11-06
+
+The isolated branch `feat/v031-continuous-learning-agent-factory` adds four proposed MCP interfaces to the prior 48-tool candidate: explicit project improvement recording, scoped recall, privacy-reviewed cross-project abstract lesson promotion, and a project-only specialist candidate factory. **Expected inventory after integration: 52**, not the older 48. New tests cover project isolation, no-overwrite, revisions, secret/injection guards and shared lesson revocation. These features only improve procedural records and drafts; they never train model weights, automatically execute a skill, start a worker, install plugins or attest host consent. Source and package tests must run on the exact new head and this development must be reviewed and integrated into PR #96 before publication. Do not count it as published until it is merged and retested. Real Antigravity/Codex specialist invocation and signed-in host permission are separate outstanding release gates.
+
 ## Engineering and package verification
 
 - Initial learning/specialists draft CI uncovered missing installer runtime modules and hardcoded Antigravity agent count. Fixes now add both runtime modules and validate 16 source agent profiles.
