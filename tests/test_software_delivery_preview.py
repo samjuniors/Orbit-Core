@@ -350,6 +350,65 @@ class SoftwareDeliveryPreviewTests(unittest.TestCase):
         self.assertFalse(completed["tests_verified"])
         self.assertEqual(self.db.execute("SELECT count(*) FROM orbit_agent_tasks").fetchone()[0], 0)
 
+    def test_implicit_quality_without_magic_words_or_write(self):
+        before = self.db.total_changes
+        x = self.preview(objective="Make a list of favorite books")
+        baseline = x["implicit_quality_baseline"]
+        self.assertEqual(baseline["policy"], "CONTEXT_INFERRED_ENGINEERING_BASELINE")
+        self.assertEqual(baseline["source"], "PRODUCT_CLASSIFICATION_AND_OPERATION_NOT_KEYWORDS")
+        self.assertEqual(baseline["status"], "REVIEW_REQUIRED")
+        self.assertEqual(baseline["scope"], "PRODUCT_AND_CHANGED_SLICE")
+        areas = {item["area"] for item in baseline["requirements"]}
+        self.assertTrue({"security", "correctness_and_reliability",
+                         "maintainability", "privacy_and_data_integrity",
+                         "usability_and_accessibility", "performance",
+                         "resource_and_license_fitness"} <= areas)
+        self.assertTrue(all(item["status"] == "APPLICABILITY_REVIEW_REQUIRED"
+                            and item["verified"] is False
+                            for item in baseline["requirements"]))
+        self.assertFalse(baseline["permissions_granted"])
+        self.assertFalse(baseline["new_product_features_authorized"])
+        tasks = {task["task_key"]: task for task in x["proposed_tasks"]}
+        self.assertIn("security", tasks)
+        self.assertIn("quality", tasks)
+        self.assertIn("security", tasks["scope"]["goal"])
+        self.assertEqual(before, self.db.total_changes)
+
+    def test_implicit_checks_scale_to_small_cli_fix(self):
+        x = self.preview(objective="Correct parsing", product_type="cli",
+                         operation="fix", maturity="stalled",
+                         target_platform="linux")
+        baseline = x["implicit_quality_baseline"]
+        areas = {item["area"] for item in baseline["requirements"]}
+        self.assertEqual(baseline["scope"], "CHANGED_SLICE")
+        self.assertIn("security", areas)
+        self.assertIn("correctness_and_reliability", areas)
+        self.assertIn("platform_compatibility", areas)
+        self.assertNotIn("usability_and_accessibility", areas)
+        self.assertNotIn("privacy_and_data_integrity", areas)
+        tasks = {task["task_key"] for task in x["proposed_tasks"]}
+        self.assertIn("repair", tasks)
+        self.assertIn("security", tasks)
+        self.assertNotIn("release", tasks)
+        self.assertNotIn("experience", tasks)
+        self.assertFalse(x["agent_spawned"])
+
+    def test_implicit_checks_respect_native_and_local_only_boundaries(self):
+        x = self.preview(objective="Create my diary", product_type="mobile-app",
+                         operation="build", maturity="new",
+                         target_platform="android", technology="flutter")
+        areas = {item["area"] for item in
+                 x["implicit_quality_baseline"]["requirements"]}
+        self.assertIn("usability_and_accessibility", areas)
+        self.assertIn("privacy_and_data_integrity", areas)
+        self.assertIn("platform_compatibility", areas)
+        self.assertIn("operations_and_recovery", areas)
+        tasks = {task["task_key"] for task in x["proposed_tasks"]}
+        self.assertNotIn("service", tasks)
+        self.assertFalse(x["implicit_quality_baseline"]["assumptions_verified"])
+        self.assertFalse(x["implementation_ready"])
+        self.assertFalse(x["tests_verified"])
+
     def test_metadata_exposes_read_only_and_never_executes_host(self):
         m=next(x for x in orbit_mcp.TOOLS if x["name"]=="orbit_software_delivery_preview")
         self.assertTrue(m["annotations"]["readOnlyHint"])

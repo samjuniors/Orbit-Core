@@ -28,7 +28,7 @@ migration = _load("preview_antigravity_plugin.py", "orbit_plugin_migration")
 class PackageTests(unittest.TestCase):
     def test_inventory_and_roles(self):
         files = builder.build_files(ROOT)
-        self.assertEqual(len([x for x in files if x.startswith("agents/")]), 13)
+        self.assertEqual(len([x for x in files if x.startswith("agents/")]), 16)
         self.assertIn("agents/orbit-lead-agent.md", files)
         self.assertIn("scripts/preview_antigravity_plugin.py", files)
         self.assertIn(b"mainAgent: true", files["agents/orbit-lead-agent.md"])

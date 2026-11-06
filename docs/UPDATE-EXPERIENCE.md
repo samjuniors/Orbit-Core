@@ -29,7 +29,7 @@
 ## Channels and preferences
 
 - `ORBIT_UPDATE_CHECK=0` disables automatic MCP update metadata checks and notices. The user can still open the manager manually.
-- `ORBIT_UPDATE_CHANNEL=stable` shows stable-only releases in MCP notices; `candidate` is the default while Orbit is at v0.x.
+- `ORBIT_UPDATE_CHANNEL=stable` shows stable-only releases in MCP notices; `stable` is now the default for released CLI/manager notices; `candidate` must be explicitly selected.
 - The cache at `~/.orbit-universal/update-status.json` contains only the last check time, release version/channel/link and failure status; never model chats, project memory, secrets or credentials.
 - No automatic scheduled service, cron job, web sockets or external notifications. **Checks happen while Orbit is running**; no promises when the app is closed or offline.
 - A release advertised by GitHub is not necessarily safe: SHA256 verifies bytes against release-published digest but does not authenticate the publisher. Before broad rollout, Issue #9 still requires trusted provenance/signing, real-host and upgrade acceptance.

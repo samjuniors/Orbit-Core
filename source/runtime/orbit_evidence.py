@@ -13,6 +13,8 @@ import re
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
+
+import orbit_learning
 from urllib.parse import urlsplit
 
 _KEY = re.compile(r"^[a-z0-9][a-z0-9._-]{1,79}$")
@@ -312,6 +314,11 @@ def practice_review(conn, root, project, args):
     if not _PRACTICE_KEY.fullmatch(key):
         raise ValueError("practice_key must be a key returned by practice_suggest")
     action = args["action"]
+    if action == "draft_skill":
+        # Preview first; the reviewed practice remains unchanged. The caller
+        # must separately confirm the NEW project-local draft file write.
+        return orbit_learning.draft(conn, root, project, args,
+                                    _practice_groups(conn, root, project))
     if action not in {"approve", "reject", "supersede", "archive"}:
         raise ValueError("Unsupported practice decision")
     phrase = args.get("practice_text", "")

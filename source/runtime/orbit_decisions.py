@@ -12,7 +12,8 @@ HOSTS={'antigravity','claude-code','codex','vscode','generic'}
 PLATFORMS={'web','android','ios','macos','windows','linux','server','embedded'}
 TASKS={'read','research','documentation','design','implementation','qa','review','security','architecture'}
 ROLES={'orbit','orbit-architect','orbit-frontend','orbit-backend','orbit-data','orbit-security',
-       'orbit-qa','orbit-devops','orbit-ux','orbit-writer','orbit-research','orbit-reviewer','orbit-integrator'}
+       'orbit-qa','orbit-devops','orbit-ux','orbit-writer','orbit-research','orbit-reviewer','orbit-integrator',
+       'orbit-project-manager','orbit-creative-director','orbit-software-engineer'}
 FLOWS={
     'web':('RESEARCH','PLAN','IMPLEMENT','VERIFY','PREVIEW','BROWSER_QA','REVIEW','CHECKPOINT','DONE'),
     'native':('RESEARCH','PLAN','IMPLEMENT','VERIFY','NATIVE_QA','REVIEW','CHECKPOINT','DONE'),

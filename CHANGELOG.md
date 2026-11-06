@@ -2,43 +2,41 @@
 
 All notable changes are recorded under [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] ` future development
+## [Unreleased] - future development
 
+Proposed future changes require separate owner review.
 
+## [0.31.0] - Release-candidate notes (2026-11-05)
 
-### Development - release-aware multi-host CLI and PowerShell setup (not yet published)
+### Highlights
 
-- Add a single CLI for **install, update and scoped uninstall** across selected
-  Antigravity, Codex, Claude Code and VS Code host profiles. A new `Orbit.ps1`
-  wrapper inside future Universal Setup ZIPs supports Windows PowerShell.
-- Choose a **published stable-channel release by default**, pin an exact
-  published version with `--version X.Y.Z`, or explicitly opt into a
-  prerelease channel. Never use floating development source for release installs.
-- Verify the official Universal ZIP SHA-256 and bounded archive layout before
-  allowing explicit `--apply` to execute the matching released installer.
-  Preview mode never imports or executes downloaded installer code.
-- Provide a version-specific released uninstall path that preserves shared
-  runtime, SQLite/checkpoints and unrelated host configs. Recognized changes
-  retain backups; unknown owner edits are flagged rather than overwritten.
-- Update CLI/GUI and MCP release-notice defaults to the now-published stable
-  channel; document the difference between current v0.30.0 commands and
-  upcoming functionality. This is **development source only**, not a new tag.
+- **Understand what's needed without magic words.** Propose proportionate security, functional QA, privacy, accessibility, compatibility, performance and recovery checks for the actual product type and affected code. The review never claims to have verified a risk without evidence.
+- **Select the right team and tools.** Resource-first specialist recommendations for Project Manager, Creative Director, Software Engineer and the existing cybersecurity, QA and research roles. Orbit stays the lead coordinator; available host-native agents, tools and permission settings govern work.
+- **Learn safely from verified work.** Reuse the project-scoped reviewed-practice ledger to prepare original, versioned skill candidates after repeated accepted work. Skill drafts are not automatically trusted, activated, installed or copied across projects.
+- **Prefer Orbit without disabling other plugins.** Read-only coordination priority and possible MCP/skill name conflict diagnostics are best-effort; the host and owner control tool selection.
+- **Simplify multi-host installation.** A release-aware CLI and PowerShell launcher support published-version install, update and scoped uninstall for selected local IDE/CLI hosts, with backup-first safety and previews.
 
+### Install and upgrade
 
-The previously published v0.30.0 source/tag is immutable; this new scope is development only until a separate reviewed release.
-### Proposed v0.31 development ? Orbit-first coordinator compatibility
+- Install only from a reviewed published [Orbit Core GitHub Release](https://github.com/samjuniors/Orbit-Core/releases); verify matching ZIP SHA-256 from the same release and review the publisher. A source branch or CI test ZIP does not authorize installation.
+- Python 3.10–3.13 is the source CI matrix; Windows Python 3.12 and Ubuntu are automated test hosts. Select supported Antigravity, Codex, Claude Code or VS Code integrations. Claude Desktop uses its separate .mcpb extension.
+- Preview machine/project scope, exact host settings and local files before any explicit apply; customized files and SQLite/checkpoints must be preserved. Restart the selected IDE and independently verify its connected tool/version inventory after an approved update.
+- New CLI commands and PowerShell wrapper remain host-dependent; do not auto-install external tools/models, bypass sandbox permissions or silently enable native workers.
 
-- Prefer Orbit as the project lifecycle coordinator when the owner selects it,
-  while retaining existing specialist plugins and respecting host permissions.
-- Include a read-only host configuration inventory of duplicate Orbit MCP and
-  skill scopes, name-only possible aliases and overlapping coordinator names.
-- Surface possible collisions in installation preview and status without
-  disabling unrelated plugins, changing models or claiming forced precedence.
-- Document explicit activation, limitations and acceptance checks in
-  `docs/COORDINATOR-PRIORITY.md`. Development only; not a published release.
+### Compatibility
 
+- The local MCP tool inventory remains **48**: the reviewed-practice tool adds a draft_skill action rather than creating a second memory engine. Existing SQLite schema/project records, task keys, checkpoints and releases remain preserved.
+- Universal, Antigravity and Plugin Suite packages include the learning and specialist modules, extended role metadata, the unified CLI, priority diagnostics and PowerShell launcher. Older recognized stock files are upgraded with backups; unknown owner edits require manual review.
+- Existing practice drafts remain local .orbit candidates; they are not host-installed skills or independent proof of tests. Roles must use actual connected host capabilities and real acceptance.
+- The next planned development metadata is **NEXT_VERSION=0.32.0**, not authorization to ship additional changes.
 
-No further feature scope is included in the v0.30.0 candidate.
+### Known limitations
+
+- Actual Antigravity/Codex worker invocation, host permission prompts, GUI upgrade/restart, real device/browser QA and user-installed rollback require separate signed-in acceptance. Automated CI and a configured MCP do not prove these interactions.
+- This candidate does **not** add a standalone language model, unrestricted model/agent executor, autonomous background task scheduler, model-weight training, automatically trusted third-party skills or global/cross-project skill promotion.
+- Skills generated from practice records are instruction-only, versioned draft proposals; project review data is caller-reported and must be independently checked before any host-side activation or reuse.
+- Cybersecurity and quality reviews are proportional risk assessments, not a guarantee that a product has zero vulnerabilities. Scanners, external targets, dependency installs, releases and deployment require applicable host/owner permissions.
+- Pre-release acceptance and source security review are separate from a stable GitHub release label. Unverified real-host integration and previous desktop install/rollback gates remain visible until accepted.
 
 ## [0.30.0] - Stable-channel release (2026-11-05)
 

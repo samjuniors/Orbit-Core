@@ -33,7 +33,7 @@ import orbit_pulse
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = '0.30.0'
+VERSION = '0.31.0'
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_STATE_BYTES = 24000
 SUPPORTED_PROTOCOLS = ('2025-11-25', '2025-06-18', '2025-03-26')
@@ -534,7 +534,7 @@ TOOLS += [
 ]
 TOOLS += [
     {'name':'orbit_practice_suggest','description':'Read-only opt-in M5 practice candidates from repeated, separately reviewer-accepted tasks in this exact project root/key; approvals and evidence remain caller-reported. Lists approved and optionally inactive practices without injecting instructions or running skills.','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':20},'include_inactive':{'type':'boolean'}},['project_root','project'])},
-    {'name':'orbit_practice_review','description':'Preview or explicitly approve/reject/archive/supersede a repeated task pattern as a project-scoped reference note. Revision-guarded SQLite event history; no automatic adoption, agent/model execution, or independent consent attestation.','inputSchema':schema({'project_root':string(2000),'project':string(80),'practice_key':string(80),'action':{'type':'string','enum':['approve','reject','supersede','archive']},'practice_text':{'type':'string','maxLength':600},'rationale':{'type':'string','maxLength':300},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','practice_key','action'])},
+    {'name':'orbit_practice_review','description':'Preview or review a repeated practice, or explicitly draft an uninstalled project-scoped instruction-only SKILL.md from a previously approved, fresh practice (action=draft_skill). No automatic adoption, global skill install, model training, native agent execution or authenticated consent.','inputSchema':schema({'project_root':string(2000),'project':string(80),'practice_key':string(80),'action':{'type':'string','enum':['approve','reject','supersede','archive','draft_skill']},'practice_text':{'type':'string','maxLength':600},'rationale':{'type':'string','maxLength':300},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','practice_key','action'])},
 ]
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
