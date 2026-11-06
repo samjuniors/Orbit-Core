@@ -1,6 +1,6 @@
 # Orbit Core — preferred coordinator alongside other installed plugins
 
-**Status:** Proposed v0.31 development behavior. Not shipped in published v0.30.0.
+**Status:** Implemented in the v0.31.0 source/release candidate; real-host preference and activation acceptance remain NOT VERIFIED. This feature is absent from published v0.30.0.
 
 ## Product decision
 
@@ -18,7 +18,7 @@ Host documentation:
 - [VS Code instruction precedence](https://code.visualstudio.com/docs/agents/reference/custom-instructions-reference)
 - [VS Code tool selection and controls](https://code.visualstudio.com/docs/agents/concepts/tools)
 
-## Proposed v0.31 behavior
+## v0.31.0 behavior
 
 1. The Orbit skill and host guidance describe Orbit as the preferred project coordinator for the owner's selected workflow. Keep instructions concise; let hosts load them normally.
 2. A **read-only conflict inventory** checks only recognized MCP server names in known user/project host configs and checks duplicate Orbit skill locations. It never scans plugin code, imports a plugin, reads arbitrary skill instructions, or contacts any third-party service.
@@ -27,9 +27,9 @@ Host documentation:
 5. For a confirmed Orbit project workflow, start with Orbit's project resume/intake/ledger and use task-appropriate specialist capabilities under their actual permissions. When Orbit is unavailable, disclose that and continue only within authorized host capabilities.
 6. If both an unrelated orchestration plugin and Orbit are present, the explicit user choice decides which leads; an absent choice is not blanket permission to supersede the other plugin.
 
-## Read-only diagnostic (future version)
+## Read-only diagnostic (v0.31.0 release ZIP)
 
-From a future published Universal Setup ZIP:
+From the checksum-verified v0.31.0 Universal Setup ZIP after release:
 
 ```powershell
 py -3.12 orbit_priority.py --hosts antigravity codex

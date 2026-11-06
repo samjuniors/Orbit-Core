@@ -49,7 +49,7 @@ Orbit does **not** provide its own LLM, silently install AI providers, launch ba
 
 This one package can configure **Antigravity, Codex, Claude Code and VS Code** together. It does not install those coding applications or their models. **Claude Desktop** uses its separately published `.mcpb` extension and is not silently installed by the Universal Setup.
 
-**Requirements:** Python 3.10?3.13 (Windows: 3.12 recommended); no administrator permissions or `pip install` required for Orbit's core local MCP server. The Windows graphical setup additionally needs Tkinter. Installation applies to your **current OS account**, not all computer accounts.
+**Requirements:** Python 3.10–3.13 (Windows: 3.12 recommended); no administrator permissions or `pip install` required for Orbit's core local MCP server. The Windows graphical setup additionally needs Tkinter. Installation applies to your **current OS account**, not all computer accounts.
 
 ### Windows PowerShell or CLI ? works with published v0.30.0
 
@@ -84,16 +84,16 @@ py -3.12 orbit_setup.py uninstall --scope machine --hosts antigravity codex --ap
 
 Uninstall removes selected Orbit host integrations, retaining shared runtime, project files, SQLite memory, checkpoints and unrelated MCP services. It is **not** the destructive `clean` command.
 
-### Upcoming release-aware single CLI (development; not in v0.30.0)
+### Release-aware single CLI (v0.31.0 and later)
 
-The next version is being developed to make **install, update, and uninstall** work through one permanent `orbit` launcher. It defaults to published **stable** releases; `--version X.Y.Z` pins an exact published release, and `--channel candidate` is an explicit prerelease opt-in. It will also ship **`Orbit.ps1`** inside the Universal ZIP for PowerShell. These commands **are not shipped in the immutable v0.30.0 release**:
+The **v0.31.0 Universal Setup ZIP** includes a single `orbit` launcher for **install, update, and scoped uninstall**. It defaults to published **stable** releases; `--version X.Y.Z` pins an exact published release, and `--channel candidate` opts into an available prerelease. The ZIP also provides **`Orbit.ps1`** for PowerShell. These commands are **not included in the immutable v0.30.0 ZIP**. Use a verified v0.31.0 package once published:
 
 ```powershell
-# From the verified newer Universal ZIP:
+# From a verified v0.31.0 Universal Setup ZIP:
 .\Orbit.ps1 install --hosts antigravity codex
 .\Orbit.ps1 install --hosts antigravity codex --apply
 
-# After installing the newer version, from any PowerShell directory:
+# After installing v0.31.0, from any PowerShell directory:
 & "$HOME\.orbit-universal\bin\orbit.cmd" update --check
 & "$HOME\.orbit-universal\bin\orbit.cmd" update --version X.Y.Z --hosts antigravity codex
 & "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --version X.Y.Z --hosts codex
@@ -137,7 +137,7 @@ evidence and checkpoints. It does **not** disable GitHub, browser, QA,
 other MCPs or installed specialist agents. The host/user still chooses which
 skills and tools activate; no cross-IDE mechanism can guarantee Orbit runs first.
 
-For the proposed next version, `python3 orbit_priority.py` provides a read-only,
+With v0.31.0, `python3 orbit_priority.py` provides a read-only,
 name-only warning of overlapping Orbit registrations, similar MCP names and
 duplicate skill scopes. Nothing is removed, run or reconfigured. For full limits,
 host differences and acceptance criteria, read
