@@ -22,6 +22,15 @@
 | Bounded autonomous continuation inside approved milestones | Host guidance integrated | Real native execution/cancellation/verification/stop-gates NOT VERIFIED |
 | Continuous lifelong background learning, model weight training, global skill activation, independent worker executor | NOT IMPLEMENTED | Not part of this release's safe scope; require separate owner consent/design |
 
+## Verified candidate CI checkpoint — 2026-11-06
+
+- **Exact reviewed candidate SHA:** `7d5ac1538a1703a7db938b761dcde025b9234fa4` (prior to this documentation-only checkpoint).
+- **GitHub CI run:** [42077141682](https://github.com/samjuniors/Orbit-Core/actions/runs/42077141682), completed with overall conclusion **success**. All five matrix checks completed **success**: Ubuntu Python 3.10, 3.11, 3.12 and 3.13; Windows Python 3.12. CodeRabbit was skipped, not passed.
+- This is evidence of the GitHub workflow as configured on that SHA; do **not** infer from its aggregate status that manual CLI commands, packaged Windows installer GUI interactions, real host worker sessions, or user-machine migration/rollback were independently executed.
+- Candidate remains on a draft PR stack: [#95](https://github.com/samjuniors/Orbit-Core/pull/95) into `main`, then [#96](https://github.com/samjuniors/Orbit-Core/pull/96) into the integrated branch. The current `main` still publishes v0.30.0.
+- **Next gate:** review exact CI workflow command coverage and candidate artifact manifests; test a disposable v0.30→v0.31 update/rollback, real Antigravity/Codex host invocation and permission/recovery paths. The owner must approve merge and publication separately.
+- **Release status:** HOLD; this checkpoint is not a release authorization. Do not claim all cross-chat self-improvement, native dynamic agent creation, or background autonomy are implemented; their guarded draft/selection foundations are the candidate's scope.
+
 ## Engineering and package verification
 
 - Initial learning/specialists draft CI uncovered missing installer runtime modules and hardcoded Antigravity agent count. Fixes now add both runtime modules and validate 16 source agent profiles.
