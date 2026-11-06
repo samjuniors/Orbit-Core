@@ -23,6 +23,8 @@ OLD_STOCK_SHA256 = {
     # Published v0.26.0-v0.30.0 immutable release updater/GUI stock bytes.
     # Include official ZIP LF and exact Windows CRLF forms. Only full SHA256
     # matches permit backup-first replacement; any owner edit still blocks.
+    'b82796f88aeac5eff826573d43389af16a4c4aff20bf794c8052e82f80fa789f',  # published v0.30.0 Antigravity orbit.md LF (verified against installed file)
+    '228da78ad32c36d15de0152ae8385d6db25221c695f40755e3f1b27ad024c698',  # published v0.30.0 Antigravity orbit.md CRLF
     '1e704136cf1cc7a7635c70a47f031b8920de585335e5037440ab6c436b4b5319',  # v0.26.0 orbit_cli.py CRLF (also exact prior tag forms)
     'e0cc8d6962fe8c6d8b06900d237bd51437aa0af5a6254ef6e22343d4dd289e99',  # v0.30.0 orbit_update_gui.py LF (also exact prior tag forms)
     'c9c9ac90e2eb60e7cd91b975786deb9a06270deca5f28186c412a37f77775f0b',  # v0.30.0 orbit_update_gui.py CRLF (also exact prior tag forms)
