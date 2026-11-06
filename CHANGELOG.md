@@ -12,7 +12,7 @@ Proposed future changes require separate owner review.
 
 - **Understand what's needed without magic words.** Propose proportionate security, functional QA, privacy, accessibility, compatibility, performance and recovery checks for the actual product type and affected code. The review never claims to have verified a risk without evidence.
 - **Select the right team and tools.** Resource-first specialist recommendations for Project Manager, Creative Director, Software Engineer and the existing cybersecurity, QA and research roles. Orbit stays the lead coordinator; available host-native agents, tools and permission settings govern work.
-- **Learn safely from verified work.** Reuse the project-scoped reviewed-practice ledger to prepare original, versioned skill candidates after repeated accepted work. Skill drafts are not automatically trusted, activated, installed or copied across projects.
+- **Learn from reviewed work without silently transferring projects.** Capture approved project-local corrections and source-linked QA observations, suggest repeated procedural lessons and allow only explicitly privacy-reviewed abstract lessons across projects. Create original versioned SKILL.md and missing-specialist candidates as uninstalled review drafts. User-reported evidence does not prove a result; neither skills nor agents activate automatically.
 - **Prefer Orbit without disabling other plugins.** Read-only coordination priority and possible MCP/skill name conflict diagnostics are best-effort; the host and owner control tool selection.
 - **Simplify multi-host installation.** A release-aware CLI and PowerShell launcher support published-version install, update and scoped uninstall for selected local IDE/CLI hosts, with backup-first safety and previews.
 
@@ -25,7 +25,7 @@ Proposed future changes require separate owner review.
 
 ### Compatibility
 
-- The local MCP tool inventory remains **48**: the reviewed-practice tool adds a draft_skill action rather than creating a second memory engine. Existing SQLite schema/project records, task keys, checkpoints and releases remain preserved.
+- The proposed v0.31 MCP tool inventory is **52** (v0.30.0 shipped 48): project improvement recording, project-scoped recall, opt-in privacy-reviewed abstract lesson sharing, and instruction-only agent candidate drafting extend the reviewed-practice system. Project memory, accepted task ledgers, checkpoints and previous releases are preserved.
 - Universal, Antigravity and Plugin Suite packages include the learning and specialist modules, extended role metadata, the unified CLI, priority diagnostics and PowerShell launcher. Older recognized stock files are upgraded with backups; unknown owner edits require manual review.
 - Existing practice drafts remain local .orbit candidates; they are not host-installed skills or independent proof of tests. Roles must use actual connected host capabilities and real acceptance.
 - The next planned development metadata is **NEXT_VERSION=0.32.0**, not authorization to ship additional changes.
