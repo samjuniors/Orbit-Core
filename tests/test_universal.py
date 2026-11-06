@@ -156,8 +156,8 @@ class UniversalSetupTests(unittest.TestCase):
             self.assertTrue(Path(entry['args'][0]).is_file())
             self.assertTrue(Path(entry['command']).is_file())
             self.assertTrue((installer.runtime_folder()/'orbit_preview.py').is_file())
-        self.assertEqual(len(list((self.project/'.claude/agents').glob('orbit-*.md'))),13)
-        self.assertEqual(len(list((self.project/'.agents/agents').glob('*.md'))),13)
+        self.assertEqual(len(list((self.project/'.claude/agents').glob('orbit-*.md'))),16)
+        self.assertEqual(len(list((self.project/'.agents/agents').glob('*.md'))),16)
 
     def test_mcp_process_and_shared_db(self):
         ch=installer.plan(self.project,['codex'],scope='project');installer.install(ch)
@@ -172,7 +172,7 @@ class UniversalSetupTests(unittest.TestCase):
         def req(i,method,params=None):return {'jsonrpc':'2.0','id':i,'method':method,'params':params or {}}
         def call(i,name,args):return req(i,'tools/call',{'name':name,'arguments':args})
         initial=rpc([req(1,'initialize',{'protocolVersion':'2025-11-25'}),req(2,'tools/list')])
-        self.assertEqual(len(initial[1]['result']['tools']),48)
+        self.assertEqual(len(initial[1]['result']['tools']),52)
         def tooldata(r):return json.loads(r['result']['content'][0]['text'])
         save_args={'project':'orbit-todo-lab','key':'goal','kind':'decision','summary':'Local SQLite API, no cloud sync','source':'test','confirm_write':True}
         result=rpc([call(3,'orbit_memory_save',save_args)])[0]

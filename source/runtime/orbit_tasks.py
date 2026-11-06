@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROLES = {'frontend','backend','architect','data','devops','qa','security','ux',
-         'research','reviewer','writer','integrator'}
+         'research','reviewer','writer','integrator','project-manager',
+         'creative-director','software-engineer'}
 ACTIVE = ('RESERVED','RUNNING')
 RETRYABLE = ('PLANNED','REWORK','FAILED','BLOCKED')
 # Before native invocation, preserve actionable host refusals as BLOCKED rather

@@ -53,12 +53,13 @@ def _frontmatter(path: Path) -> str:
 
 
 def validate_agents(files: list[Path]) -> None:
-    if len(files) != 13 or {p.stem for p in files} != {
+    if len(files) != 16 or {p.stem for p in files} != {
         "orbit", "orbit-architect", "orbit-backend", "orbit-data", "orbit-devops",
         "orbit-frontend", "orbit-integrator", "orbit-qa", "orbit-research",
         "orbit-reviewer", "orbit-security", "orbit-ux", "orbit-writer",
+        "orbit-project-manager", "orbit-creative-director", "orbit-software-engineer",
     }:
-        raise ValueError("Orbit's lead and 12 specialist profiles must be present")
+        raise ValueError("Orbit's lead and 15 specialist profiles must be present")
     for path in files:
         header = _frontmatter(path)
         required = MAIN_HEADER if path.stem == "orbit" else CHILD_HEADER
@@ -88,7 +89,7 @@ def build_files(root: Path = ROOT) -> dict[str, bytes]:
         "name": PLUGIN_NAME,
         "displayName": "Orbit Core",
         "version": version,
-        "description": "Local-first AI project orchestrator: Orbit lead agent, 12 specialists, skills and host-launched MCP.",
+        "description": "Local-first AI project orchestrator: Orbit lead agent, 15 specialists, skills and host-launched MCP.",
     }
     # This deliberately shares Orbit's existing default DB path. Supplying
     # PLUGIN_DATA via ORBIT_LOCAL_DB here would silently fork a user's memory.
