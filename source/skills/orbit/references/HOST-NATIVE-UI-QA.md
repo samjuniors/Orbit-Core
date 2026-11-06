@@ -10,6 +10,17 @@ Orbit coordinates app testing but does **not** own Codex's desktop, browser, Com
 4. Perform real UI actions and read the actual result, including a screenshot (or host screenshot reference) and an interaction assertion. Check layout, clicks, input, error/empty states, responsiveness and console/network errors where the actual host makes them available. Browser/Computer actions may be image-based or DOM-based; do not invent unsupported CDP or inspection abilities.
 5. At BROWSER_QA, send `orbit_build_advance` with `host_browser_qa` only after actual host execution. This is a source- and preview-pinned, **caller-reported** evidence record; Orbit cannot independently attest the host session, screenshot, host approval or network isolation. A PASS prepares later review, **not a security certification or deployment authorization**.
 
+## Codex desktop's real plugin bridge (Windows acceptance, 2026-11-06)
+
+The **bundled** Codex desktop plugins have their own host-native setup. On the owner's Windows PC, `codex plugin list` reports `browser@openai-bundled`, `computer-use@openai-bundled`, `unified-computer-use@openai-bundled` and `chrome@openai-bundled` as installed/enabled. This is **local inventory only**; the Codex desktop task still needs the plugin's actual JS bridge and permission.
+
+- **Browser** uses the host-provided Browser plugin skill `control-in-app-browser` and its documented JS tool bridge (typically `mcp__node_repl__js` in an eligible desktop session). The agent must load the bundled host skill, initialize its own supported browser runtime and use that runtime's actual page and screenshot APIs. Do **not** expect a generic `browser_click` command.
+- **Windows Computer Use** uses the host-provided `computer-use` skill and its supported JS runtime, not a universal `computer_use_click` MCP command. The bundled unified mode may expose `mcp__cua_repl__js`. Do not launch the internal helper executables directly or copy the proprietary runtime into Orbit.
+- Orbit's capability selector accepts **host-reported** `host_plugins` alongside `host_tools`. For example, only **if the active Codex desktop session itself confirms them**, the caller may report `host="codex"`, `host_plugins=["browser@openai-bundled"]`, `host_tools=["mcp__node_repl__js"]`. `HOST_PLUGIN_BRIDGE_REVIEW_REQUIRED` is an initialization/permission check, not a working browser or a PASS. A plugin without its runtime tool (or a bare runtime tool without its plugin) is not a verified provider.
+- Codex CLI and IDE extension do **not** automatically provide Codex desktop's built-in browser, even if the machine-wide plugin inventory shows it installed. Keep the native test in an authorized Codex **desktop** thread and follow the host's actual Browser/Computer skill. Do not switch to CLI or Playwright to work around a denied browser permission.
+
+This is host integration guidance, not an Orbit dependency on proprietary Codex code. In other hosts, use only their genuinely exposed native tools. Never infer a permission grant from `codex plugin list` or from a process named Computer Use.
+
 ## Host report fields
 
 `host_browser_qa` is an object with exactly these keys:
