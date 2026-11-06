@@ -175,6 +175,10 @@ Your coding IDE / agent host
 
 The MCP runtime focuses on **project state and coordination**, while the host remains responsible for model selection, native agent execution, command permissions, source inspection and actual testing. Memory is local-first; saved research pointers are project-folder scoped and treated as untrusted reference data.
 
+### v0.31 development: reviewed learning and specialist candidates
+
+The unreleased v0.31 candidate supports project-scoped improvement observations through the existing SQLite runtime. Host agents can recall prior corrections and measured QA outcomes through explicit MCP calls, but these are **caller-reported** and do not retrain any model. Promoting a generalized lesson for another project requires two matching observations, separate privacy review and explicit confirmation. A new missing specialist may be drafted under the selected project's `.orbit/agent-candidates`; that is not a host-installed or executable agent. Orbit reuses existing authorized tools, agents and skills before proposing new ones. The learning workflow is not an always-running daemon and cannot silently synchronize ChatGPT, Notion, GitHub or SQLite.
+
 ## Development and verification
 
 From a source checkout with a supported Python interpreter:

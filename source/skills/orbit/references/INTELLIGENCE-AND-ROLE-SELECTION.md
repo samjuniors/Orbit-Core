@@ -71,3 +71,12 @@ State the roles/tools selected and why, source licenses and permission
 status, actual host sessions and test evidence, learned candidate revisions,
 blockers and next action. Distinguish PREVIEW, IMPLEMENTED, VERIFIED,
 BLOCKED and NOT RUN.
+
+
+## Opt-in project improvement and specialist candidate evidence
+
+- `orbit_improvement_record` previews user corrections, actual QA findings and project-specific outcomes; confirmed writes stay in the existing local SQLite database under exact project root/key. The model cannot independently attest its evidence or score changes.
+- `orbit_improvement_context` returns bounded recent reports and two-observation reuse suggestions; these are caller-reported source notes, not trusted agent instructions. A host should inspect real source/test evidence before a change.
+- `orbit_improvement_promote` requires two matching active project observations and explicit owner/privacy confirmation to share ONLY a sanitized abstract lesson. The shared table stores no project roots, task references or source code. Another project must request `include_shared=true` to see the abstract lesson, and an owner can archive it using its SHA and revision. This is not automatic background learning, cross-account sync or executable skill activation.
+- `orbit_specialist_candidate` first reuses known Orbit roles and detects existing owner-authored project profiles. If a required specialist is still absent, it previews an original instruction-only project-local candidate; explicit confirmed writing uses exclusive create and must not overwrite owner files or create a real native host agent. Host/tool use remains independently permissioned. Do not treat caller-reported resource review as external license/security attestation.
+- Review and test actual applicability, privacy, provenance, security, experience and failure recovery even when the user omits those requirements. Distinguish source code, intended Notion decisions, and actual host execution evidence.
