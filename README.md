@@ -105,6 +105,8 @@ For contributors testing development source, clone `main` separately. `orbit_set
 
 **Confirm live connectivity:** In your IDE, ask Orbit to call `orbit_project_scan` and report its running version and tool inventory. A config file alone is not proof that the MCP process reconnected.
 
+**Antigravity CLI headless permissions:** The `agy` CLI can list `orbit-core-native` as enabled but still **soft-deny** an MCP call when `agy -p` cannot prompt for approval. Review the actual `call_mcp_tool` event and `denied_actions`, not the top-level process exit alone. Use normal interactive host approval or an **owner-reviewed, narrowly scoped** permission rule; Orbit's installer does not silently grant host permissions. Do **not** use `--dangerously-skip-permissions` to work around a denial. See [Antigravity's headless-mode permission documentation](https://antigravity.google/docs/cli/headless/) and [Orbit's v0.31 real-host acceptance](docs/RELEASE-ACCEPTANCE-v0.31.0.md).
+
 ## Everyday usage
 
 Speak to Orbit in your connected coding host, for example:
