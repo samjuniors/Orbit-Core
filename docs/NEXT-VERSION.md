@@ -1,3 +1,22 @@
+# Orbit Core — current release and next acceptance gates (2026-11-06)
+
+**Published release authority:** [v0.31.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.31.0), tagged from the verified main commit `524b5aace4889494ee8b852bb4d1aab18b72d0cc`. The release workflow and Linux/Windows CI passed, and all four archive/checksum pairs were verified. The released 52-tool MCP runtime was installed on the authorized Windows PC for Antigravity and Codex; both host configurations point at v0.31.0. This proves packaging and installation, **not signed-in IDE worker execution or production-readiness**.
+
+**Implemented in v0.31.0:** adaptive new/existing-project workflows, task ledger and checkpoint recovery, release-aware CLI, owner-selected coordinator preference, read-only plugin collision warnings, project-quality baseline, resource-first specialist recommendations, project-local reviewed practices and safeguarded improvement/agent candidate drafts. These use the coding host's models, native tools and user-granted permissions.
+
+**Remaining acceptance, in priority order:**
+
+1. Real **Codex and Antigravity** native MCP discovery after host restart, project scan and actual tool result (not a configuration readback); real specialist session IDs, handoff, cancellation and resume in disposable projects.
+2. A genuinely denied **host permission prompt before session creation** and a separate positive/negative check of the already implemented invocation-state guard from [Issue #72](https://github.com/samjuniors/Orbit-Core/issues/72).
+3. Real host GUI/installer keyboard and DPI smoke and **disposable-profile** upgrade/uninstall/rollback; the source-level transactional clean/recovery logic for [Issue #85](https://github.com/samjuniors/Orbit-Core/issues/85) has regression coverage but must not destructively test the owner's installed profile.
+4. Representative independent QA/security/learning demonstrations across relevant project types. Open design/implementation issues [#90](https://github.com/samjuniors/Orbit-Core/issues/90), [#91](https://github.com/samjuniors/Orbit-Core/issues/91) and [#92](https://github.com/samjuniors/Orbit-Core/issues/92) should be reconciled against implemented v0.31 source; do not infer live native or independent security acceptance from the 52-tool inventory.
+
+**Latest direct host probe:** a read-only Codex CLI run in a disposable TEMP project reached an stdin-waiting state without yielding an MCP response. The connected PC stopped returning terminal results; host acceptance from this probe is **BLOCKED / NOT VERIFIED**, not a test PASS/FAIL for the Orbit MCP. Restore remote session observability before retrying.
+
+The dated historical snapshots that follow record previous releases and planning cutlines. They are **superseded by this current section** where they refer to v0.27/v0.28 as current.
+
+---
+
 # Orbit Core — current published release and development queue (2026-11-03)
 
 **Latest verified published prerelease:** [v0.28.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.28.0), published **2026-11-03**, from reviewed merge commit `07067f10cb5a345be0959f1a2f9a2410eb3b0f48`. Its immutable annotated tag, successful [official publication workflow #41581180695](https://github.com/samjuniors/Orbit-Core/actions/runs/41581180695), eight public release assets and all four package/sidecar SHA-256 pairs were independently verified. [Main CI #41580966442](https://github.com/samjuniors/Orbit-Core/actions/runs/41580966442) passed all five Linux/Windows jobs. Prior [v0.27.1](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.27.1) and earlier releases remain unchanged.
