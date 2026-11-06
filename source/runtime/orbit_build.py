@@ -751,12 +751,14 @@ def validate_host_browser_qa(root, a):
     report = a.get('host_browser_qa')
     mandatory = {
         'provider', 'tool_name', 'session_reference', 'screenshot_reference',
-        'observed_url', 'approval_reference', 'actions',
+        'observed_url', 'approval_reference', 'permission_state', 'actions',
     }
     if not isinstance(report, dict) or set(report) != mandatory:
         raise ValueError('Host browser QA requires exact provider/tool/session/screenshot/url/approval/actions fields')
     if report['provider'] not in HOST_BROWSER_PROVIDERS:
         raise ValueError('Use a supported host-native browser or computer-use provider')
+    if report['permission_state'] != 'APPROVED':
+        raise ValueError('Host browser QA PASS requires caller-reported actual host approval; denied or unknown permission must HOLD')
     for key, minimum, maximum in (
             ('tool_name', 3, 100),
             ('session_reference', 8, 200),
