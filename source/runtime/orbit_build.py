@@ -730,6 +730,83 @@ def valid_stage_evidence(stage, evidence):
                all(isinstance(v,str) and 3<=len(v)<=240 for v in data[x])
                for x in keys)
 
+
+HOST_BROWSER_PROVIDERS = frozenset({
+    'host_browser', 'host_browser_use', 'host_computer_use',
+})
+HOST_BROWSER_ACTIONS = frozenset({
+    'click', 'fill', 'type', 'press', 'scroll', 'navigate', 'assert',
+    'inspect', 'screenshot',
+})
+
+
+def validate_host_browser_qa(root, a):
+    """Review a bounded native-host UI report against an actual Orbit preview.
+
+    Host interaction records and approval references are CALLER-REPORTED;
+    this does not execute a browser, authenticate consent or independently
+    inspect screenshots. It allows host-native QA without requiring a second
+    Python Playwright install, while preserving source/preview/revision guards.
+    """
+    report = a.get('host_browser_qa')
+    mandatory = {
+        'provider', 'tool_name', 'session_reference', 'screenshot_reference',
+        'observed_url', 'approval_reference', 'actions',
+    }
+    if not isinstance(report, dict) or set(report) != mandatory:
+        raise ValueError('Host browser QA requires exact provider/tool/session/screenshot/url/approval/actions fields')
+    if report['provider'] not in HOST_BROWSER_PROVIDERS:
+        raise ValueError('Use a supported host-native browser or computer-use provider')
+    for key, minimum, maximum in (
+            ('tool_name', 3, 100),
+            ('session_reference', 8, 200),
+            ('screenshot_reference', 8, 300),
+            ('approval_reference', 8, 200)):
+        value = report[key]
+        if not isinstance(value, str) or not minimum <= len(value.strip()) <= maximum:
+            raise ValueError('Host browser QA needs bounded, nonempty ' + key)
+        if any(ord(ch) < 32 for ch in value):
+            raise ValueError('Host browser QA references cannot contain control characters')
+    actions = report['actions']
+    if not isinstance(actions, list) or not 2 <= len(actions) <= 20:
+        raise ValueError('Host browser QA requires 2..20 actual interaction/inspection reports')
+    has_interaction = False
+    has_verification = False
+    for action in actions:
+        if not isinstance(action, dict) or set(action) != {'kind', 'status', 'observation'}:
+            raise ValueError('Invalid host browser action report')
+        if action['kind'] not in HOST_BROWSER_ACTIONS or action['status'] != 'PASS':
+            raise ValueError('Host browser QA cannot PASS with failed/unknown actions')
+        observation = action['observation']
+        if (not isinstance(observation, str) or not 8 <= len(observation.strip()) <= 400
+                or any(ord(ch) < 32 for ch in observation)):
+            raise ValueError('Each host browser action requires bounded observed evidence')
+        has_interaction |= action['kind'] in {'click', 'fill', 'type', 'press', 'scroll'}
+        has_verification |= action['kind'] in {'assert', 'inspect', 'screenshot'}
+    if not has_interaction or not has_verification:
+        raise ValueError('Host UI QA requires an actual interaction and a separate observation')
+    import orbit_preview
+    preview_id = a.get('preview_id')
+    if not isinstance(preview_id, str):
+        raise ValueError('Host browser QA requires an Orbit-managed preview_id')
+    session = orbit_preview.SESSIONS.get(orbit_preview.preview_key(root, preview_id))
+    if (not session or session['proc'].poll() is not None
+            or orbit_preview.status(root, {'preview_id': preview_id}).get('status') != 'READY'):
+        raise ValueError('Host browser QA requires a READY preview in this MCP session')
+    expected_url = 'http://127.0.0.1:' + str(session['port']) + '/'
+    if report['observed_url'] != expected_url:
+        raise ValueError('Host UI test must target the exact Orbit preview origin and root URL')
+    return {
+        **report,
+        'preview_id': preview_id,
+        'preview_started_at': session['started_at'],
+        'origin_policy_attested': False,
+        'host_permission_attested': False,
+        'screenshot_independently_verified': False,
+        'host_execution_attested': False,
+    }
+
+
 def advance(conn,root,a):
     row=get(conn,root,a)
     if not row: raise ValueError('Build not found')
@@ -775,8 +852,15 @@ def advance(conn,root,a):
         if ((project_line and project_line.group(1).strip()!=a['project'])
                 or (updated_line and updated_line.group(1)<row['updated_at'])):
             return {'status':'HOLD','reason':'.orbit/STATE.md must be an Orbit checkpoint for this project written after this build entered CHECKPOINT; save a fresh checkpoint first'}
-    # Independent browser checks require a pass result stored by Orbit, not caller claims.
-    if row['stage']=='BROWSER_QA' and outcome=='PASS':
+    # Host-native actions are observed by the coding host, not performed by Orbit.
+    # An explicit host report is a lower-assurance path, not a Playwright PASS.
+    if a.get('host_browser_qa') is not None and (row['stage'] != 'BROWSER_QA' or outcome != 'PASS'):
+        raise ValueError('host_browser_qa is only accepted for BROWSER_QA PASS')
+    host_ui_qa = None
+    if row['stage']=='BROWSER_QA' and outcome=='PASS' and a.get('host_browser_qa') is not None:
+        host_ui_qa = validate_host_browser_qa(root, a)
+    # Ordinary Playwright-based QA retains its existing independent source/preview gate.
+    if row['stage']=='BROWSER_QA' and outcome=='PASS' and host_ui_qa is None:
         rec=conn.execute('SELECT status,summary FROM browser_results WHERE project=? AND root=? AND build_id=? ORDER BY id DESC LIMIT 1',
                          (a['project'],str(root),row['build_id'])).fetchone()
         try:
@@ -813,7 +897,7 @@ def advance(conn,root,a):
     # never independently proves its execution or the real target platform.
     # Existing web QA keeps its separate Playwright/browser-record gate.
     pin_host_qa = (outcome == 'PASS' and
-                   (row['stage'] == 'NATIVE_QA' or
+                   (host_ui_qa is not None or row['stage'] == 'NATIVE_QA' or
                     (row['stage'] == 'VERIFY' and
                      'BROWSER_QA' not in flow and 'NATIVE_QA' not in flow)))
     source_pin = None
@@ -827,7 +911,9 @@ def advance(conn,root,a):
         return {'status':'PREVIEW_ONLY','stage':row['stage'], 'next_stage':flow[flow.index(row['stage'])+1] if outcome=='PASS' else row['stage'],
                 'source_pin_required':pin_host_qa,'source_pin_available':source_pin is not None}
     evidence_map[row['stage']]={'outcome':outcome,'evidence':evidence,'updated_at':now(),
-                                'verification':'browser-tool' if row['stage']=='BROWSER_QA' and outcome=='PASS' else 'caller-reported-not-attested'}
+                                'verification':('host-native-browser-caller-reported' if host_ui_qa is not None else
+                                                'browser-tool' if row['stage']=='BROWSER_QA' and outcome=='PASS' else
+                                                'caller-reported-not-attested')}
     if pin_host_qa:
         evidence_map[row['stage']].update(
             source_fingerprint=source_pin,
@@ -838,6 +924,15 @@ def advance(conn,root,a):
             source_identity_kind='BOUNDED_LOCAL_FILES_FINGERPRINT',
             evidence_independently_verified=False,
             host_execution_attested=False,
+        )
+    if host_ui_qa is not None:
+        evidence_map[row['stage']].update(
+            host_browser_qa=host_ui_qa,
+            preview_id=host_ui_qa['preview_id'],
+            preview_started_at=host_ui_qa['preview_started_at'],
+            host_execution_attested=False,
+            screenshot_independently_verified=False,
+            host_permission_verified=False,
         )
     new_stage=flow[flow.index(row['stage'])+1] if outcome=='PASS' else row['stage']
     with conn:
