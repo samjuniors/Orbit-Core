@@ -76,6 +76,8 @@ def install(changes):
             "e0cc8d6962fe8c6d8b06900d237bd51437aa0af5a6254ef6e22343d4dd289e99",
             "c9c9ac90e2eb60e7cd91b975786deb9a06270deca5f28186c412a37f77775f0b",
             "bde59e3bbe62976c1d1d6904459ffe3798946678311b1399eba2bb189448d524",
+            "b82796f88aeac5eff826573d43389af16a4c4aff20bf794c8052e82f80fa789f",
+            "228da78ad32c36d15de0152ae8385d6db25221c695f40755e3f1b27ad024c698",
         }
         self.assertTrue(known.issubset(installer.OLD_STOCK_SHA256))
         # Still refuse arbitrary owner-edited content.
