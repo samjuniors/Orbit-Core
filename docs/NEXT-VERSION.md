@@ -1,3 +1,15 @@
+# Orbit Core — v0.32 Autopilot Phase 1 source-development cutline (2026-11-07)
+
+**Product direction:** Founder-delegated, roadmap-scoped autonomy, but **no unbounded unattended agent**. The [proposed Autopilot Phase 1](AUTOPILOT-PHASE1.md) is implemented only on `feat/v032-autopilot-charter-phase1-20261107`; there is no published update and no installed host execution. `VERSION=0.31.0` remains the previous publication metadata; `NEXT_VERSION=0.32.0` is an unapproved prospective release cutline.
+
+**Phase 1 source scope:** new project-isolated SQLite Mission Charter with exact existing task specs, allowed write paths, feature branch, accepted decision types, 30-day-maximum expiry, bounded concurrency and attempt budget; charter-preview SHA-256, explicit caller-reported owner approval, revisioned pause/resume/stop and event log; read-only DAG next-task and founder-only decision gates. Reuses existing task ledger/swarm preflight and never invokes a native worker or grants host permissions. Caller approval/session/tool evidence is unverified until independently observed in the actual IDE. Normal `orbit_task_reserve` remains a distinct host-authorized workflow; the Phase 1 charter is advisory, not an executor security sandbox.
+
+**Before considering merge:** finish unit regression and exact-head CI, inspect portable installer module inventory and stock upgrade behavior; test charter preview, activation, stop, expiry, stale source/symlink, native host tool unavailable, cross-project isolation and full test pack on Windows and Linux. Reconcile with the separate v0.32 Browser/Computer Use draft before release integration. No tag, automatic scheduler, cross-PC sync, user-profile changes, protected branch merge, deployment or published release is authorized by this feature branch.
+
+**Phase 2 (UNIMPLEMENTED):** optional local runner using a verified official host API, real permission enforcement, bounded leases and crash recovery, visible kill/pause controls, quota limits and independent QA. **Phase 3 (UNIMPLEMENTED):** founder-away notifications and optional separate remote runner when PC is off, only with explicit cost/privacy authorization. Owner remains final authority.
+
+---
+
 # Orbit Core — current release and next acceptance gates (2026-11-06)
 
 **Published release authority:** [v0.31.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.31.0), tagged from the verified main commit `524b5aace4889494ee8b852bb4d1aab18b72d0cc`. The release workflow and Linux/Windows CI passed, and all four archive/checksum pairs were verified. The released 52-tool MCP runtime was installed on the authorized Windows PC for Antigravity and Codex; both host configurations point at v0.31.0. This proves packaging and installation, **not signed-in IDE worker execution or production-readiness**.
