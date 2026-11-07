@@ -52,7 +52,7 @@ The installer places launchers in `%USERPROFILE%\.orbit-universal\bin` for the c
 & "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex --apply
 ```
 
-Use `--channel stable` for published stable releases. **Stable is the CLI default; candidate requires an explicit opt-in.** If a newer prerelease is already installed, choosing the older stable channel does **not** silently downgrade it. `--version X.Y.Z` selects an exact published release on its channel; `--expect-version X.Y.Z` pins an earlier approved check.
+Use `--channel stable` for published stable releases. **Stable is the CLI default; candidate requires an explicit opt-in.** If a newer prerelease is already installed, choosing the older stable channel does **not** silently downgrade it. **Published v0.31 limitation:** an older stable-channel `--check` can return a downgrade-block error even though no update is applied. Use `--channel candidate` to check the prerelease track; [PR #106](https://github.com/samjuniors/Orbit-Core/pull/106) proposes a friendlier read-only result for a future release. `--version X.Y.Z` selects an exact published release on its channel; `--expect-version X.Y.Z` pins an earlier approved check.
 
 **CMD:** Call `"%USERPROFILE%\.orbit-universal\bin\orbit.cmd"` directly with the same subcommand options (omit PowerShell's `&`).
 
