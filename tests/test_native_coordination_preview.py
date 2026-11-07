@@ -519,7 +519,7 @@ class NativeCoordinationPreviewTests(unittest.TestCase):
         self.assertTrue(metadata["annotations"]["idempotentHint"])
         self.assertFalse(metadata["annotations"]["destructiveHint"])
         self.assertFalse(metadata["annotations"]["openWorldHint"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 52)
+        self.assertEqual(len(orbit_mcp.TOOLS), 55)
         self.assertIn("orbit_task_started",
                       [x["name"] for x in orbit_mcp.TOOLS])
         self.assertFalse(self.preview()["state_written"])
