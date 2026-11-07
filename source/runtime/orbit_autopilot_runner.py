@@ -146,8 +146,10 @@ def preview(conn, root, project, mission, revision):
     if not ready:
         return {"status": "HOLD_NO_APPROVED_TASK_READY", "execution_started": False}
     task = ready[0]
+    source_head = os.fsdecode(_git(root, "rev-parse", "HEAD")).strip()
     return {
-        "status": "READY_FOR_LOCAL_OPERATOR_REVIEW", "task_key": task["task_key"],
+        "status": "READY_FOR_LOCAL_OPERATOR_REVIEW",
+        "source_head_verified": source_head, "task_key": task["task_key"],
         "task_revision": task["revision"], "write_paths": task["write_paths"],
         "mission_id": mission, "mission_revision": revision,
         "source_branch_verified": branch, "runner_host": "codex-exec",
@@ -196,7 +198,8 @@ def _claim(conn, root, project, mission, plan):
         fresh = preview(conn, root, project, mission, plan["mission_revision"])
         if (fresh["status"] != "READY_FOR_LOCAL_OPERATOR_REVIEW"
                 or fresh["task_key"] != plan["task_key"]
-                or fresh["task_revision"] != plan["task_revision"]):
+                or fresh["task_revision"] != plan["task_revision"]
+            or fresh["source_head_verified"] != plan["source_head_verified"]):
             conn.rollback()
             return None
         conn.execute(
@@ -278,6 +281,12 @@ def _clone_local(root):
             raise RuntimeError("Local clone failed; source checkout not changed")
         if _source_branch(work) != _source_branch(root):
             raise RuntimeError("Isolated work branch differs from the approved source branch")
+        if _git(work, "rev-parse", "HEAD") != _git(root, "rev-parse", "HEAD"):
+            raise RuntimeError("Isolated source commit differs from reviewed source")
+        # Never leave a local checkout remote that could be pushed to. A host
+        # worker cannot publish or modify the original Git repository via
+        # a convenient 'origin' command.
+        _git(work, "remote", "remove", "origin")
         # No tracked symlink may escape the clone. Fail closed also for a
         # huge/inaccessible tree, rather than trusting a private linking layer.
         n = 0
@@ -449,6 +458,8 @@ def run_once(conn, root, project, mission, revision, *, operator_confirmed=False
             raise RuntimeError("Charter, task or source changed before launch")
         prompt = _task_prompt(conn, root, project, plan["task_key"], body)
         log_dir = work.parent
+        if _needs_stop(conn, root, project, mission, token):
+            raise RuntimeError("Charter revoked or local stop requested before host launch")
         process = launch(work, prompt, log_dir, codex_path)
         _update(conn, root, project, mission, token, RUNNING, worker_pid=process.pid)
         started = time.monotonic()
@@ -522,6 +533,8 @@ def preview_after_claim(conn, root, project, mission, revision):
         return {"status": issue}
     try:
         if _source_branch(root) != charter["branch"]:
+            return {"status": "HOLD_SOURCE_CHANGED"}
+        if _git(root, "rev-parse", "HEAD") != _git(Path(row["workspace"]), "rev-parse", "HEAD"):
             return {"status": "HOLD_SOURCE_CHANGED"}
     except (ValueError, OSError, subprocess.TimeoutExpired):
         return {"status": "HOLD_SOURCE_CHANGED"}
