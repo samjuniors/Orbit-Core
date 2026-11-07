@@ -77,3 +77,14 @@ Synthetic tests cover advancing to a second dependency only after actual
 source integration and ledger review, unreviewed/mismatching/denied
 runs holding, and headless handoff refusing mutation. CI and genuine
 signed-in execution remain separate gates.
+
+
+## Adaptive Team Builder: read-only v0.32 development slice
+
+The stacked development branch now adds `orbit_team_preview` as a **non-executing** MCP capability. It inspects up to six already registered, exact-revision tasks in one project/root, maps roles to Delivery/Engineering/Quality leads, and proposes task-specific **agent or bot** types. The suggested type is a proposal, not a new process or an activated profile. Delivery/Engineering/Quality are coordination responsibilities, not three additional always-running models.
+
+For each task, Orbit reuses the existing local `orbit_capabilities` inventory and `orbit_skill_plan` fingerprinting logic to propose project-local skill candidates and versioned hash manifests. Candidate skill names, declared project profile and advertised host tools remain **untrusted hints**; no skill text is adopted as instruction, activated, installed or given permissions. The plan may recommend an existing role profile before any new agent profile is drafted. At most two host-native worker reservations are supported by the existing ledger; this preview does not reserve them.
+
+The preview derives bounded agent→agent, agent→bot, bot→agent and bot→bot *handoff proposals* solely from saved task dependencies. Only an upstream `REVIEW_ACCEPTED` task receives the `REVIEWABLE_HANDOFF` gate. A gate is not a sent message, and it is never an authorization to invoke a host worker; real delivery remains Orbit-mediated through accepted task evidence and host permission. Tasks from other project keys or roots are never selected. No new chat store, task DB, worker scheduler, bot executor, deletion API, recursion or founder-away autonomy is introduced.
+
+**Remaining implementation work:** Review-driven staffing requests and explicit charter checks, verified host-native activation, per-worker capability leasing and revocation, structured event persistence/replay using the existing scoped ledger, safe native stop/retire and independent task-level QA. The current design needs real Codex and Antigravity host acceptance and cross-platform release/package testing before any merge or release.

@@ -127,7 +127,7 @@ class AutopilotCharterTests(unittest.TestCase):
             "SELECT action FROM orbit_autopilot_events").fetchone()[0], "ACTIVATE")
         self.assertEqual(self.call(action="status", mission_id=self.mission)["status"],
                          "ACTIVE")
-        self.assertEqual(len(orbit_mcp.TOOLS), 55)
+        self.assertEqual(len(orbit_mcp.TOOLS), 56)
 
     def test_activate_needs_exact_review_digest_and_confirm_write(self):
         p = self.preview()
