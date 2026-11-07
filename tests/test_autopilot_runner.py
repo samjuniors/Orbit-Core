@@ -286,7 +286,7 @@ class AutopilotRunnerTests(unittest.TestCase):
                 spawn.return_value = FakeExited()
                 runner._codex_process(work, "Read-only fixture task", logdir, "codex")
                 argv = spawn.call_args.args[0]
-            self.assertEqual(argv[:2], ["codex", "exec"])
+            self.assertEqual(argv[:4], ["codex", "--ask-for-approval", "never", "exec"])
             self.assertIn("workspace-write", argv)
             self.assertIn("--ephemeral", argv)
             self.assertIn("--ask-for-approval", argv)
