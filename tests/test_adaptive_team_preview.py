@@ -22,6 +22,8 @@ class AdaptiveTeamPreviewTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / "sandbox-project"
         self.root.mkdir()
+        # Match production MCP project_root canonicalization on Windows.
+        self.root = self.root.resolve(strict=True)
         self.conn = sqlite3.connect(":memory:")
         self.addCleanup(self.conn.close)
         self.conn.row_factory = sqlite3.Row
@@ -75,8 +77,10 @@ class AdaptiveTeamPreviewTests(unittest.TestCase):
         self.assertEqual(by_key["tests"]["lead"], "quality")
         self.assertEqual(by_key["tests"]["proposed_kind"], "bot")
         self.assertFalse(by_key["tests"]["tool_permission_verified"])
-        self.assertEqual(by_key["api"]["tool_hints"],
+        self.assertEqual(result["orbit_native_invocation_hints"],
                          ["collaboration.spawn_agent"])
+        self.assertEqual(by_key["api"]["worker_tool_grants"], [])
+        self.assertEqual(by_key["tests"]["worker_tool_grants"], [])
         self.assertEqual(result["handoffs"][0]["channel"], "AGENT_TO_BOT")
         self.assertEqual(result["handoffs"][0]["gate"], "REVIEWABLE_HANDOFF")
         self.assertFalse(result["handoffs"][0]["message_sent"])
