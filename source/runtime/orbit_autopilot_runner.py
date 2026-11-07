@@ -360,9 +360,8 @@ def _codex_process(work, prompt, log_dir, codex_path):
     stderr = open(log_dir / "codex-stderr.log", "xb")
     try:
         command = [
-            codex_path, "exec", "--ephemeral", "--json",
-            "--sandbox", "workspace-write",
-            "--ask-for-approval", "never",
+            codex_path, "--ask-for-approval", "never", "exec",
+            "--ephemeral", "--json", "--sandbox", "workspace-write",
             "-C", str(work), prompt,
         ]
         kwargs = {"cwd": str(work), "stdin": subprocess.DEVNULL,
