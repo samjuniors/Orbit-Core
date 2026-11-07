@@ -473,25 +473,37 @@ def run_once(conn, root, project, mission, revision, *, operator_confirmed=False
         process = launch(work, prompt, log_dir, codex_path)
         _update(conn, root, project, mission, token, RUNNING, worker_pid=process.pid)
         started = time.monotonic()
-        stopped = False
+        stop_reason = ""
         while process.poll() is None:
             if _needs_stop(conn, root, project, mission, token):
-                stopped = True
+                stop_reason = "mission_paused_stopped_or_expired"
                 break
             if time.monotonic() - started >= max_seconds:
-                stopped = True
+                stop_reason = "duration_limit"
+                break
+            if any(p.exists() and p.stat().st_size > MAX_OUTPUT_BYTES for p in (
+                    log_dir / "codex-events.jsonl", log_dir / "codex-stderr.log")):
+                stop_reason = "output_limit"
                 break
             if not _heartbeat(conn, root, project, mission, token):
-                stopped = True
+                stop_reason = "stop_raced_with_heartbeat"
                 break
             time.sleep(POLL_SECONDS)
-        if stopped:
+        if stop_reason:
             terminated = _terminate_child(process)
-            status = "STOPPED" if terminated else "RECOVERY_REQUIRED"
+            status = ("RECOVERY_REQUIRED" if not terminated else
+                      "BLOCKED" if stop_reason in {"duration_limit", "output_limit"}
+                      else "STOPPED")
             _update(conn, root, project, mission, token, status,
-                    result="stop requested or duration expired; no acceptance")
-            return {"status": status, "workspace": str(work), "worker_killed_verified": terminated}
+                    result=stop_reason + "; no source acceptance")
+            return {"status": status, "workspace": str(work),
+                    "stop_reason": stop_reason, "worker_killed_verified": terminated}
         code = process.returncode
+        if (log_dir / "codex-stderr.log").exists() and (
+                log_dir / "codex-stderr.log").stat().st_size > MAX_OUTPUT_BYTES:
+            _update(conn, root, project, mission, token, "BLOCKED",
+                    result="Host diagnostic output exceeded bounded local log cap")
+            return {"status": "BLOCKED", "workspace": str(work)}
         if _needs_stop(conn, root, project, mission, token):
             _update(conn, root, project, mission, token, "STOPPED",
                     result="charter expired/revoked during worker completion")
