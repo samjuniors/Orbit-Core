@@ -75,6 +75,14 @@ class AutopilotRunnerTests(unittest.TestCase):
             "confirm_write": True,
         }, self.root)
         self.assertEqual(plan["status"], "PLANNED")
+        followup = orbit_tasks.plan(self.db, {
+            "project": self.project, "task_key": "docs", "step": "IMPLEMENT",
+            "role": "writer", "goal": "Document the reviewed API in the fixture after it passes review",
+            "reason": "Demonstrate approval-bound sequential milestone progression",
+            "write_paths": ["docs/"], "depends_on": ["api"],
+            "confirm_write": True,
+        }, self.root)
+        self.assertEqual(followup["status"], "PLANNED")
         self.fields = {
             "mission_id": self.mission,
             "objective": "Implement one safe approved task in the synthetic roadmap",
@@ -83,8 +91,8 @@ class AutopilotRunnerTests(unittest.TestCase):
             "branch": "feat/test-autopilot",
             "expires_at": (datetime.now(timezone.utc)+timedelta(days=2)).
                 strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "task_keys": ["api"],
-            "allowed_paths": ["src/api/"],
+            "task_keys": ["api", "docs"],
+            "allowed_paths": ["src/api/", "docs/"],
             "allowed_decisions": ["implementation_detail"],
             "max_attempts_per_task": 1,
         }
@@ -347,6 +355,102 @@ class AutopilotRunnerTests(unittest.TestCase):
         self.assertEqual((isolated / "README.md").read_bytes(),
                          (self.root / "README.md").read_bytes())
         self.assertEqual(git(self.root, "status", "--porcelain"), b"")
+
+
+    def review_fixture_as_accepted(self, result, *, same_content=True):
+        # Synthetic external reviewer and source integration, not a model claim.
+        target = self.root / "src" / "api"
+        target.mkdir(parents=True, exist_ok=True)
+        source = Path(result["workspace"]) / "src" / "api" / "api.py"
+        value = source.read_bytes() if same_content else b"not the worker's source\n"
+        (target / "api.py").write_bytes(value)
+        git(self.root, "add", "src/api/api.py")
+        git(self.root, "commit", "-m", "Synthetic reviewer source integration")
+        self.db.execute(
+            """UPDATE orbit_agent_tasks
+               SET status='REVIEW_ACCEPTED', revision=revision+1,
+                   review_evidence='Synthetic reviewer independently ran fixture QA'
+               WHERE project=? AND project_root=? AND task_key='api'""",
+            (self.project, str(self.root)))
+        self.db.commit()
+
+    def test_review_handoff_enables_next_task_only_after_matching_commit(self):
+        result = self.invoke(self.launch_success)
+        self.assertEqual(runner.advance_reviewed(
+            self.db, self.root, self.project, self.mission, 1)["status"],
+            "HOLD_REVIEWED_SOURCE_NOT_COMMITTED")
+        self.review_fixture_as_accepted(result)
+        before = self.db.total_changes
+        ready = runner.advance_reviewed(self.db, self.root, self.project, self.mission, 1)
+        self.assertEqual(ready["status"], "REVIEW_HANDOFF_READY")
+        self.assertEqual(self.db.total_changes, before)
+        recorded = runner.advance_reviewed(
+            self.db, self.root, self.project, self.mission, 1, confirm_write=True)
+        self.assertEqual(recorded["status"], "REVIEW_HANDOFF_RECORDED")
+        self.assertFalse(recorded["next_worker_started"])
+        self.assertIsNone(self.job())
+        history = self.db.execute(
+            "SELECT * FROM orbit_autopilot_runner_history WHERE run_id=?",
+            (result.get("run_id", ready["run_id"]),)).fetchone()
+        self.assertIsNotNone(history)
+        next_plan = self.preview()
+        self.assertEqual(next_plan["status"], "READY_FOR_LOCAL_OPERATOR_REVIEW")
+        self.assertEqual(next_plan["task_key"], "docs")
+        self.assertFalse(next_plan["execution_started"])
+
+    def test_handoff_rejects_unreviewed_or_mismatched_source(self):
+        result = self.invoke(self.launch_success)
+        self.review_fixture_as_accepted(result, same_content=False)
+        response = runner.advance_reviewed(
+            self.db, self.root, self.project, self.mission, 1, confirm_write=True)
+        self.assertEqual(response["status"], "HOLD_REVIEWED_SOURCE_MISMATCH")
+        self.assertEqual(self.job()["state"], "REVIEW_REQUIRED")
+        self.assertEqual(self.db.execute(
+            "SELECT count(*) FROM orbit_autopilot_runner_history").fetchone()[0], 0)
+
+    def test_handoff_requires_ledger_acceptance_not_a_claim(self):
+        result = self.invoke(self.launch_success)
+        target = self.root / "src" / "api"
+        target.mkdir(parents=True)
+        (target / "api.py").write_bytes(
+            (Path(result["workspace"]) / "src/api/api.py").read_bytes())
+        git(self.root, "add", "src/api/api.py")
+        git(self.root, "commit", "-m", "Synthetic source integration without review")
+        response = runner.advance_reviewed(
+            self.db, self.root, self.project, self.mission, 1, confirm_write=True)
+        self.assertEqual(response["status"], "HOLD_INDEPENDENT_REVIEW_REQUIRED")
+        self.assertIsNotNone(self.job())
+
+    def test_handoff_noninteractive_apply_never_consumes_review(self):
+        result = self.invoke(self.launch_success)
+        self.review_fixture_as_accepted(result)
+        with tempfile.TemporaryDirectory() as folder:
+            dbpath = Path(folder, "synthetic-db.sqlite3")
+            out = sqlite3.connect(str(dbpath))
+            try:
+                self.db.backup(out)
+            finally:
+                out.close()
+            cli = ROOT / "scripts" / "orbit_autopilot_local.py"
+            response = subprocess.run(
+                [sys.executable, str(cli), "review-handoff", "--apply",
+                 "--project-root", str(self.root), "--project", self.project,
+                 "--mission-id", self.mission, "--revision", "1",
+                 "--local-db", str(dbpath)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, timeout=20, check=False)
+            self.assertEqual(response.returncode, 2)
+            self.assertIn(b"interactive local terminal", response.stderr)
+        self.assertIsNotNone(self.job())
+
+    def test_handoff_refuses_stopped_or_failed_previous_run(self):
+        self.assertEqual(runner.advance_reviewed(
+            self.db, self.root, self.project, self.mission, 1)["status"],
+            "HOLD_NO_REVIEWED_RUN")
+        self.invoke(self.launch_denied)
+        self.assertEqual(runner.advance_reviewed(
+            self.db, self.root, self.project, self.mission, 1)["status"],
+            "HOLD_NO_REVIEWED_RUN")
 
 
 if __name__ == "__main__":

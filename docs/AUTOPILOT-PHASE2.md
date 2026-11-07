@@ -47,3 +47,33 @@ Focused synthetic tests check clean feature branch/commit, isolated clone withou
 **Still required for a truly autonomous roadmap loop:** trusted independent QA and task advancement, measured daily model quota/cost controls, authenticated founder one-time mission delegation, robust Windows Job Object / POSIX orphan handling, automatic crash recovery with safe reconciliation, Antigravity permission-respecting adapter, visible enable/pause/stop UI, and real-host acceptance. Until then, this initial runner stops after one task for reviewer inspection and cannot claim continuous founder-away operation.
 
 References: [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode), [Codex sandbox and approvals](https://learn.chatgpt.com/docs/agent-approvals-security) and [Antigravity headless mode](https://antigravity.google/docs/cli/headless/). These are documentation references, not Orbit dependencies.
+
+## Phase 2 follow-up: review-bound sequential handoff (unreleased)
+
+After a successful isolated Codex turn, `REVIEW_REQUIRED` remains an enforced stop.
+A new `review-handoff` developer CLI action **previews** whether the exact
+isolated changed paths and file contents have been independently integrated into
+a new clean source Git commit on the chartered feature branch. It also requires
+the corresponding pre-existing Orbit task-ledger row to be `REVIEW_ACCEPTED`
+with reviewer evidence. The recorded source must descend from the run's original
+source head, and no unrelated committed path may appear in that reviewed range.
+
+`review-handoff --apply` requires a real local TTY and exact one-run
+confirmation. Its append-only runner history retains the previous run ID,
+source/accepted commit, changed paths, isolated workspace and reviewer-reported
+evidence before clearing the single-run slot. The *next* approved dependency
+may then appear in `preview`, but **no second task is auto-executed**; a
+fresh explicit operator confirmation remains required to run it. The reviewer
+evidence and founder identity are still caller-reported—not authenticated
+by Orbit—and a Git content comparison is not independent code QA.
+
+Unsafe, uncommitted, different-content, unrelated-change, stale charter or
+unreviewed states HOLD without deleting run state. Existing disposable
+Phase 2 databases migrate additively; legacy runs lacking exact source
+provenance cannot be silently advanced. This implements a **safe sequential
+handoff foundation**, not founder-away multi-task autonomy or an always-on bot.
+
+Synthetic tests cover advancing to a second dependency only after actual
+source integration and ledger review, unreviewed/mismatching/denied
+runs holding, and headless handoff refusing mutation. CI and genuine
+signed-in execution remain separate gates.

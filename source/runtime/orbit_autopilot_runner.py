@@ -45,7 +45,22 @@ def setup(conn):
         state TEXT NOT NULL, workspace TEXT NOT NULL,
         worker_pid INTEGER, worker_result TEXT NOT NULL,
         started_at TEXT NOT NULL, heartbeat_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        source_head TEXT NOT NULL DEFAULT '', changed_paths TEXT NOT NULL DEFAULT '[]',
         PRIMARY KEY(project, project_root, mission_id)
+    )""")
+    # Preserve existing v0.32 disposable runner rows without rewriting them.
+    columns = {row[1] for row in conn.execute(
+        "PRAGMA table_info(orbit_autopilot_runner_jobs)")}
+    if "source_head" not in columns:
+        conn.execute("ALTER TABLE orbit_autopilot_runner_jobs ADD COLUMN source_head TEXT NOT NULL DEFAULT ''")
+    if "changed_paths" not in columns:
+        conn.execute("ALTER TABLE orbit_autopilot_runner_jobs ADD COLUMN changed_paths TEXT NOT NULL DEFAULT '[]'")
+    conn.execute("""CREATE TABLE IF NOT EXISTS orbit_autopilot_runner_history (
+        run_id TEXT PRIMARY KEY, project TEXT NOT NULL, project_root TEXT NOT NULL,
+        mission_id TEXT NOT NULL, task_key TEXT NOT NULL, source_head TEXT NOT NULL,
+        reviewed_source_head TEXT NOT NULL, workspace TEXT NOT NULL,
+        changed_paths TEXT NOT NULL, review_evidence TEXT NOT NULL,
+        handoff_at TEXT NOT NULL
     )""")
     conn.commit()
 
@@ -206,10 +221,11 @@ def _claim(conn, root, project, mission, plan):
             """INSERT INTO orbit_autopilot_runner_jobs
                (project,project_root,mission_id,run_id,task_key,
                 mission_revision,state,workspace,worker_pid,worker_result,
-                started_at,heartbeat_at,updated_at)
-               VALUES(?,?,?,?,?,?, 'RUNNING','',NULL,'',?,?,?)""",
+                source_head,changed_paths,started_at,heartbeat_at,updated_at)
+               VALUES(?,?,?,?,?,?, 'RUNNING','',NULL,'',?,'[]',?,?,?)""",
             (project, str(root), mission, token, plan["task_key"],
-             plan["mission_revision"], stamp, stamp, stamp),
+             plan["mission_revision"], plan["source_head_verified"],
+             stamp, stamp, stamp),
         )
         conn.commit()
     except Exception:
@@ -219,7 +235,7 @@ def _claim(conn, root, project, mission, plan):
 
 
 def _update(conn, root, project, mission, token, state, *, workspace=None,
-            worker_pid=None, result=None):
+            worker_pid=None, result=None, changed_paths=None):
     now = _now()
     fields = ["state=?", "updated_at=?", "heartbeat_at=?"]
     values = [state, now, now]
@@ -232,6 +248,9 @@ def _update(conn, root, project, mission, token, state, *, workspace=None,
     if result is not None:
         fields.append("worker_result=?")
         values.append(result[:300])
+    if changed_paths is not None:
+        fields.append("changed_paths=?")
+        values.append(json.dumps(changed_paths, separators=(",", ":")))
     values.extend([project, str(root), mission, token])
     # NEVER overwrite a concurrent STOP_REQUESTED event with a heartbeat or
     # a delayed RUNNING update from the worker's launching thread.
@@ -515,7 +534,7 @@ def run_once(conn, root, project, mission, revision, *, operator_confirmed=False
         in_scope, paths, result = _review_changes(work, plan["write_paths"])
         _update(conn, root, project, mission, token,
                 "REVIEW_REQUIRED" if in_scope else "BLOCKED",
-                result=result)
+                result=result, changed_paths=paths if in_scope else None)
         return {
             "status": result, "workspace": str(work), "changed_paths": paths,
             "original_workspace_untouched_by_runner": True,
@@ -534,6 +553,127 @@ def run_once(conn, root, project, mission, revision, *, operator_confirmed=False
                 result="supervisor or host exception; inspect isolated run and host state")
         return {"status": state, "workspace": str(work) if work else "",
                 "reason": str(exc)[:200]}
+
+
+
+def advance_reviewed(conn, root, project, mission, revision, *, confirm_write=False):
+    """Archive one reviewed run and unlock the next task; never run a worker.
+
+    Human/host QA remains caller-reported. We independently compare Git trees
+    and exact file bytes before clearing the single-run lease; a string saying
+    "accepted" cannot erase a pending review.
+    """
+    def inspect():
+        job = _job(conn, root, project, mission)
+        if not job or job["state"] != "REVIEW_REQUIRED":
+            return {"status": "HOLD_NO_REVIEWED_RUN"}, None
+        if not job["source_head"] or not job["changed_paths"]:
+            return {"status": "HOLD_LEGACY_RUN_PROVENANCE"}, None
+        current = orbit_autopilot._load(conn, root, project, mission)
+        if not current:
+            return {"status": "HOLD_MISSION_MISSING"}, None
+        body = json.loads(current["charter_json"])
+        charter, _, issue = orbit_autopilot._guard(
+            conn, root, project, {
+                "mission_id": mission, "expected_revision": revision,
+                "reported_branch": body["branch"]})
+        if issue:
+            return {"status": issue}, None
+        try:
+            if _source_branch(root) != charter["branch"]:
+                return {"status": "HOLD_BRANCH_OR_SOURCE_DRIFT"}, None
+            head = os.fsdecode(_git(root, "rev-parse", "HEAD")).strip()
+            old_head = job["source_head"]
+            if (len(old_head) not in (40, 64)
+                    or any(ch not in "0123456789abcdef" for ch in old_head)
+                    or head == old_head):
+                return {"status": "HOLD_REVIEWED_SOURCE_NOT_COMMITTED"}, None
+            _git(root, "merge-base", "--is-ancestor", old_head, "HEAD")
+            workspace = Path(job["workspace"])
+            if (not workspace.is_dir() or workspace.is_symlink()
+                    or _git(workspace, "rev-parse", "HEAD").decode().strip() != old_head):
+                return {"status": "HOLD_ISOLATED_RUN_DRIFT"}, None
+            recorded = json.loads(job["changed_paths"])
+            actual = _changed_paths(workspace)
+            if not isinstance(recorded, list) or not actual or recorded != actual:
+                return {"status": "HOLD_ISOLATED_RUN_DRIFT"}, None
+            source_diff = _git(
+                root, "diff", "--no-ext-diff", "--no-renames",
+                "--name-only", "-z", old_head, "HEAD")
+            committed = sorted(os.fsdecode(path).replace("\\", "/")
+                               for path in source_diff.split(b"\0") if path)
+            if committed != actual:
+                return {"status": "HOLD_REVIEWED_SOURCE_MISMATCH"}, None
+            for name in actual:
+                original = root / name
+                isolated = workspace / name
+                if (original.is_symlink() or isolated.is_symlink()
+                        or not original.resolve().is_relative_to(root.resolve())
+                        or not isolated.resolve().is_relative_to(workspace.resolve())):
+                    return {"status": "HOLD_UNSAFE_REVIEWED_PATH"}, None
+                if original.is_file() != isolated.is_file():
+                    return {"status": "HOLD_REVIEWED_SOURCE_MISMATCH"}, None
+                if original.is_file():
+                    if original.stat().st_size > MAX_OUTPUT_BYTES:
+                        return {"status": "HOLD_OVERSIZED_REVIEWED_FILE"}, None
+                    if original.read_bytes() != isolated.read_bytes():
+                        return {"status": "HOLD_REVIEWED_SOURCE_MISMATCH"}, None
+                elif original.exists() or isolated.exists():
+                    return {"status": "HOLD_UNSUPPORTED_REVIEWED_PATH"}, None
+            task = conn.execute(
+                """SELECT status,review_evidence FROM orbit_agent_tasks
+                   WHERE project=? AND project_root=? AND task_key=?""",
+                (project, str(root), job["task_key"])).fetchone()
+            if (not task or task["status"] != "REVIEW_ACCEPTED"
+                    or len(task["review_evidence"].strip()) < 20):
+                return {"status": "HOLD_INDEPENDENT_REVIEW_REQUIRED"}, None
+            result = {
+                "status": "REVIEW_HANDOFF_READY", "run_id": job["run_id"],
+                "task_key": job["task_key"], "source_head_verified": head,
+                "changed_paths": actual, "reviewer_report_authenticated": False,
+                "tests_independently_verified_by_runner": False,
+                "execution_started": False,
+            }
+            return result, task["review_evidence"]
+        except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired,
+                UnicodeDecodeError, json.JSONDecodeError):
+            return {"status": "HOLD_REVIEW_PROVENANCE_UNVERIFIED"}, None
+
+    info, evidence = inspect()
+    if info["status"] != "REVIEW_HANDOFF_READY" or not confirm_write:
+        return info
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        fresh, evidence = inspect()
+        if fresh != info:
+            conn.rollback()
+            return {"status": "HOLD_CONCURRENT_REVIEW_DRIFT"}
+        job = _job(conn, root, project, mission)
+        conn.execute(
+            """INSERT INTO orbit_autopilot_runner_history
+               (run_id,project,project_root,mission_id,task_key,source_head,
+                reviewed_source_head,workspace,changed_paths,review_evidence,handoff_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            (job["run_id"], project, str(root), mission, job["task_key"],
+             job["source_head"], info["source_head_verified"], job["workspace"],
+             job["changed_paths"], evidence, _now()),
+        )
+        count = conn.execute(
+            """DELETE FROM orbit_autopilot_runner_jobs
+               WHERE project=? AND project_root=? AND mission_id=?
+                 AND run_id=? AND state='REVIEW_REQUIRED'""",
+            (project, str(root), mission, job["run_id"])).rowcount
+        if count != 1:
+            raise RuntimeError("Concurrent runner state changed during review handoff")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return {
+        **info, "status": "REVIEW_HANDOFF_RECORDED",
+        "history_preserved": True, "next_worker_started": False,
+        "next": "Use preview for the next approved task; a new run still requires explicit local operator confirmation.",
+    }
 
 
 def preview_after_claim(conn, root, project, mission, revision):
