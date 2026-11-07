@@ -260,6 +260,11 @@ class AutopilotRunnerTests(unittest.TestCase):
                 "not JSON",
                 json.dumps({"type": "turn.completed", "denied_actions": [1]}),
                 json.dumps({"type": "turn.failed"}),
+                json.dumps({"type": "item.failed", "item": {"type": "mcp_tool_call"}}),
+                json.dumps({"type": "item.completed", "item": {"type": "command_execution", "exit_code": 1}})
+                  + "\n" + json.dumps({"type": "turn.completed"}),
+                json.dumps({"type": "item.completed", "item": {"type": "command_execution", "status": "denied"}})
+                  + "\n" + json.dumps({"type": "turn.completed"}),
                 json.dumps({"type": "thread.started"}),
             ):
                 path.write_text(body+"\n")
@@ -297,6 +302,39 @@ class AutopilotRunnerTests(unittest.TestCase):
         status = runner._public(self.job())
         self.assertFalse(status["worker_running_verified"])
         self.assertTrue(status["worker_pid_recorded"])
+
+    def test_changed_git_commit_between_preview_and_claim_is_rejected(self):
+        first = self.preview()
+        (self.root / "README.md").write_text("# Changed after operator reviewed\n")
+        git(self.root, "add", "README.md")
+        git(self.root, "commit", "-m", "Synthetic post-review drift")
+        self.assertEqual(self.preview()["status"], "READY_FOR_LOCAL_OPERATOR_REVIEW")
+        self.assertIsNone(runner._claim(
+            self.db, self.root, self.project, self.mission, first))
+        self.assertIsNone(self.job())
+
+    def test_public_cli_refuses_headless_run_without_launching_codex(self):
+        with tempfile.TemporaryDirectory() as folder:
+            dbpath = Path(folder, "qa.sqlite3")
+            external = sqlite3.connect(str(dbpath))
+            try:
+                self.db.backup(external)
+            finally:
+                external.close()
+            cli = ROOT / "scripts" / "orbit_autopilot_local.py"
+            command = [
+                sys.executable, str(cli), "run",
+                "--project-root", str(self.root),
+                "--project", self.project, "--mission-id", self.mission,
+                "--revision", "1", "--local-db", str(dbpath),
+            ]
+            outcome = subprocess.run(
+                command, stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=20, check=False)
+            self.assertEqual(outcome.returncode, 2)
+            self.assertIn(b"interactive local terminal", outcome.stderr)
+            self.assertEqual(git(self.root, "status", "--porcelain"), b"")
 
     def test_clone_separate_clean_git_and_existing_files_unchanged(self):
         isolated = runner._clone_local(self.root)
