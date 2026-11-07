@@ -33,6 +33,7 @@ import orbit_portable
 import orbit_pulse
 import orbit_improvement
 import orbit_agent_factory
+import orbit_team_builder
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -574,6 +575,23 @@ TOOLS += [
         'limit':{'type':'integer','minimum':1,'maximum':20},
         'include_shared':{'type':'boolean'}},
         ['project_root','project'])},
+    {'name':'orbit_team_preview',
+     'description':'Unreleased read-only adaptive team plan from the existing task ledger, local skill fingerprints and Orbit-routed dependency handoffs. No hire, peer chat, tool grant or autonomous execution.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),
+         'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
+         'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
+         'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'project_profile':schema({
+             'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
+             'platform':{'type':'string','enum':sorted(orbit_skill_plan.PLATFORMS)},
+             'technologies':{'type':'array','maxItems':8,'items':{'type':'string','enum':sorted(orbit_skill_plan.TECHNOLOGIES)}},
+             'operation':{'type':'string','enum':sorted(orbit_skill_plan.OPERATIONS)}},[]),
+         'tasks':{'type':'array','minItems':1,'maxItems':6,'items':schema({
+             'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},
+             'kind':{'type':'string','enum':['adaptive','agent','bot']}},
+             ['task_key','expected_revision'])}
+     },['project_root','project','host','tasks'])},
     {'name':'orbit_specialist_candidate',
      'description':'Reuse existing Orbit specialist when available, otherwise preview or explicitly write a NEW instruction-only project-scoped agent candidate. No host registration, permission grant, installation, code execution or worker spawn.',
      'inputSchema':schema({
@@ -626,7 +644,7 @@ READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_rec
     'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_swarm_draft_preview','orbit_software_delivery_preview','orbit_swarm_host_preflight','orbit_native_coordination_preview','orbit_swarm_integration_review','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
     'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest','orbit_improvement_context',
-    'orbit_autopilot_next','orbit_autopilot_decision'}
+    'orbit_autopilot_next','orbit_autopilot_decision','orbit_team_preview'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
 for _tool in TOOLS:
     _name=_tool['name']
@@ -679,6 +697,9 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name=='orbit_team_preview':
+        root=project_root(a)
+        return orbit_team_builder.preview(conn,root,project_key(a),a)
     if name in {'orbit_autopilot_charter','orbit_autopilot_next','orbit_autopilot_decision'}:
         root=project_root(a)
         project=project_key(a)
