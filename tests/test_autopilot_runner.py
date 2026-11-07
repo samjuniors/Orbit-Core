@@ -332,7 +332,8 @@ class AutopilotRunnerTests(unittest.TestCase):
                 command, stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 timeout=20, check=False)
-            self.assertEqual(outcome.returncode, 2)
+            self.assertEqual(outcome.returncode, 2,
+                             outcome.stderr.decode(errors="replace")[-2000:])
             self.assertIn(b"interactive local terminal", outcome.stderr)
             self.assertEqual(git(self.root, "status", "--porcelain"), b"")
 
