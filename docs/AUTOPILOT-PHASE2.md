@@ -11,7 +11,7 @@ Preflight checks the ACTIVE, unexpired Mission Charter and revision; immutable r
 For an actual run, Orbit creates a new **isolated temporary Git clone** without Git object hardlinks, verifies the branch and commit, rejects symlinked files and overly large trees, removes the clone's `origin` remote, then invokes only the available Codex CLI:
 
 ```text
-codex exec --ephemeral --json --sandbox workspace-write --ask-for-approval never -C <isolated-clone> <bounded-task-prompt>
+codex --ask-for-approval never exec --ephemeral --json --sandbox workspace-write -C <isolated-clone> <bounded-task-prompt>
 ```
 
 No `--yolo`, `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access`, external model provider, extra writable directory or permission override. If an action requires an approval that the headless host cannot obtain, the host must deny it and the runner reports BLOCKED; Orbit never switches tools to bypass the denial. Codex CLI is **not** assumed to have Codex desktop Browser/Computer Use plugins or native specialists.
