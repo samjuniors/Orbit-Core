@@ -51,57 +51,56 @@ This one package can configure **Antigravity, Codex, Claude Code and VS Code** t
 
 **Requirements:** Python 3.10–3.13 (Windows: 3.12 recommended); no administrator permissions or `pip install` required for Orbit's core local MCP server. The Windows graphical setup additionally needs Tkinter. Installation applies to your **current OS account**, not all computer accounts.
 
-### Windows PowerShell and CLI — versioned setup
+### Installation from PowerShell or a terminal
 
-From the extracted Universal Setup folder, preview first, then explicitly apply:
+From the **verified, extracted Universal Setup ZIP**, you can use its installer without opening the GUI. First preview the exact target-file plan, then apply only after reviewing it:
 
 ```powershell
-py -3.12 orbit_setup.py install --scope machine --hosts antigravity codex
-py -3.12 orbit_setup.py install --scope machine --hosts antigravity codex --apply
+# Run inside the extracted Universal Setup folder on Windows:
+py -3.12 .\orbit_setup.py install --scope machine --hosts antigravity codex
+py -3.12 .\orbit_setup.py install --scope machine --hosts antigravity codex --apply
 ```
 
-Select only the hosts you use. Choose `--scope project --project "C:\full\path\to\project"` for a single project. These commands use the **version of the downloaded and verified ZIP**, not the latest `main` source. They do not modify saved SQLite memory or unrelated MCP entries.
+Select only the hosts you use. For one existing project use `--scope project --project "C:\full\path\to\project"`. On macOS/Linux, run the same `orbit_setup.py` commands with a supported `python3`. The installer doesn't install an IDE or model, delete SQLite memory or replace unrelated MCP entries.
 
-After one successful installation, the persistent launcher can check and install newer **published stable** releases without repeatedly downloading ZIPs manually:
+The **v0.31.0 ZIP** also includes `Orbit.ps1` and a release-aware CLI. If you want to install that **exact published prerelease**, not the older stable-channel release, specify both its channel and version:
 
 ```powershell
+# Inside the extracted, checksum-verified v0.31.0 ZIP:
+.\Orbit.ps1 install --channel candidate --version 0.31.0 --hosts antigravity codex
+.\Orbit.ps1 install --channel candidate --version 0.31.0 --hosts antigravity codex --apply
+```
+
+If PowerShell's local-script policy blocks `Orbit.ps1`, use `py -3.12 .\orbit_cli.py` with the same arguments. Do **not** weaken the machine's script policy. The release-aware command downloads its selected published version after verifying the GitHub ZIP and matching `.sha256` sidecar.
+
+### Update an existing installation
+
+**Easiest on Windows:** double-click `%USERPROFILE%\.orbit-universal\bin\Orbit Update Manager.cmd`, choose **Stable** or **Candidate**, your existing hosts and scope, then review and approve the update. This launcher is installed once and does not require downloading a new setup ZIP each time.
+
+**PowerShell or CMD:** use the permanent launcher from **any directory**:
+
+```powershell
+& "$HOME\.orbit-universal\bin\orbit.cmd" status
 & "$HOME\.orbit-universal\bin\orbit.cmd" doctor
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --check
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --apply
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --check
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex --apply
 ```
 
-If PowerShell's local-script policy blocks `Orbit.ps1` (included since v0.31.0), use `py -3.12 orbit_cli.py` with the same arguments from the verified ZIP; do not weaken global execution policy.
+- `stable` is the **default** published release channel; `candidate` explicitly opts into published prereleases. As of v0.31.0, the [v0.30.0 release](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) is the latest stable and [v0.31.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.31.0) is the newer prerelease. Always use [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases) for the live list. The updater will not silently downgrade an installed newer prerelease when you check the stable channel.
+- `--check` reads release metadata only. Without `--apply`, the update CLI verifies a package but does **not execute** downloaded installer code. It does **not** show the precise target-file change plan until the selected release installer runs; for that plan without writing files, run the verified ZIP's `orbit_setup.py install` or `update` **without** `--apply`.
+- `--apply` runs the selected checksum-verified published installer and makes only the selected host/scope changes with backup/customization guards. Save work first; restart the host IDE afterward and check the actual MCP response. GitHub checksums verify published bytes, **not independent publisher signing**.
 
-The `--check` action reads metadata only; without `--apply`, an update downloads and validates its ZIP but **does not execute downloaded code**. `--apply` is an explicit authorization to execute the verified release installer and change selected host files. Backups protect recognized originals; unknown customizations require review. Restart the IDE afterward.
-
-For **v0.30.0 scoped uninstall**, return to its extracted, checksum-verified ZIP:
+**Scoped uninstall (v0.31.0 example):** preview first, then apply only if you really want to remove Orbit from the selected host:
 
 ```powershell
-py -3.12 orbit_setup.py uninstall --scope machine --hosts antigravity codex
-py -3.12 orbit_setup.py uninstall --scope machine --hosts antigravity codex --apply
+& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --channel candidate --version 0.31.0 --hosts codex
+& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --channel candidate --version 0.31.0 --hosts codex --apply
 ```
 
-Uninstall removes selected Orbit host integrations, retaining shared runtime, project files, SQLite memory, checkpoints and unrelated MCP services. It is **not** the destructive `clean` command.
+Uninstall removes the selected Orbit integration, **not** SQLite memory, project checkpoints or unrelated MCP servers. Older installations such as v0.30.0 can use the scoped `orbit_setup.py uninstall` from their original checksum-verified ZIP. Do not use the destructive `clean` command for normal uninstall.
 
-### Release-aware single CLI (v0.31.0 and later)
-
-The **v0.31.0 Universal Setup ZIP** includes a single `orbit` launcher for **install, update, and scoped uninstall**. It defaults to published **stable** releases; `--version X.Y.Z` pins an exact published release, and `--channel candidate` opts into an available prerelease. The ZIP also provides **`Orbit.ps1`** for PowerShell. These commands are **not included in the immutable v0.30.0 ZIP**. Use the published, checksum-verified v0.31.0 package:
-
-```powershell
-# From a verified v0.31.0 Universal Setup ZIP:
-.\Orbit.ps1 install --hosts antigravity codex
-.\Orbit.ps1 install --hosts antigravity codex --apply
-
-# After installing v0.31.0, from any PowerShell directory:
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --check
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --version X.Y.Z --hosts antigravity codex
-& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --version X.Y.Z --hosts codex
-```
-
-Each action remains **preview-first** and requires `--apply` to change files. A pinned version must exist on the selected published channel; no floating `main` source, hidden downgrades, automatic model installation or silent project-data erasure.
-
-For contributors testing development source, clone `main` separately. `orbit_setup.py update` in a source checkout means **reapply local checkout files**, **not** fetch a GitHub Release. Details: [Release quick start](docs/RELEASE-QUICKSTART.md) and [update experience](docs/UPDATE-EXPERIENCE.md).
+For details, see [Release quick start](docs/RELEASE-QUICKSTART.md), [installation options](docs/MCP-INSTALLATION-OPTIONS.md) and [update experience](docs/UPDATE-EXPERIENCE.md). A development/source-checkout `orbit_setup.py update` reapplies local files: it does **not** fetch GitHub Releases.
 
 **Confirm live connectivity:** In your IDE, ask Orbit to call `orbit_project_scan` and report its running version and tool inventory. A config file alone is not proof that the MCP process reconnected.
 
