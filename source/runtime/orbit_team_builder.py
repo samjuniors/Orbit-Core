@@ -93,6 +93,9 @@ def preview(conn, root, project, args):
         "charter_verified": False,
         "native_worker_sessions_verified": False,
         "host_tools_caller_reported": True,
+        "orbit_native_invocation_hints": [
+            t for t in orbit_delegation.HOST_NATIVE_TOOLS.get(host, ()) if t in tools
+        ],
         "team_activation_allowed": False,
         "permission_state_caller_reported": permission,
         "coordination": "ORBIT_ROUTED_TASK_DEPENDENCIES_NOT_PEER_CHAT",
@@ -150,9 +153,8 @@ def preview(conn, root, project, args):
             "candidate_skill_pins": skill["manifest"],
             "skill_status": skill["status"],
             "skill_fitness_verified": False,
-            "tool_hints": [
-                t for t in orbit_delegation.HOST_NATIVE_TOOLS.get(host, ()) if t in tools
-            ],
+            "worker_tool_grants": [],
+            "worker_tool_intents": "REQUIRES_INDEPENDENT_TASK_CAPABILITY_REVIEW",
             "tool_permission_verified": False,
             "staffing_action": "ORBIT_CHARTER_AND_HOST_REVIEW_REQUIRED",
             "spawn_allowed": False,
