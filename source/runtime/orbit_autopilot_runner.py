@@ -415,8 +415,18 @@ def _completed(log):
             if not isinstance(event, dict):
                 return False
             kind = event.get("type")
-            if kind in {"turn.failed", "error"} or event.get("denied_actions"):
+            if kind in {"turn.failed", "item.failed", "error"} or event.get("denied_actions"):
                 return False
+            if kind == "item.completed":
+                item = event.get("item")
+                if not isinstance(item, dict):
+                    return False
+                if item.get("status") in {"failed", "error", "denied"}:
+                    return False
+                if (item.get("type") == "command_execution"
+                        and isinstance(item.get("exit_code"), int)
+                        and item["exit_code"] != 0):
+                    return False
             if kind == "turn.completed":
                 success = True
     return success
