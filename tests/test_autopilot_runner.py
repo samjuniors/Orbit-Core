@@ -142,6 +142,7 @@ class AutopilotRunnerTests(unittest.TestCase):
         self.assertEqual(p["status"], "READY_FOR_LOCAL_OPERATOR_REVIEW")
         self.assertEqual(p["task_key"], "api")
         self.assertEqual(p["source_branch_verified"], "feat/test-autopilot")
+        self.assertEqual(p["source_head_verified"], os.fsdecode(git(self.root, "rev-parse", "HEAD")).strip())
         self.assertEqual(p["max_tasks_per_run"], 1)
         self.assertFalse(p["execution_started"])
         self.assertEqual(self.db.total_changes, before)
@@ -301,6 +302,9 @@ class AutopilotRunnerTests(unittest.TestCase):
         isolated = runner._clone_local(self.root)
         self.assertNotEqual(isolated, self.root)
         self.assertEqual(runner._source_branch(isolated), "feat/test-autopilot")
+        self.assertEqual(git(isolated, "remote"), b"")
+        self.assertEqual(git(isolated, "rev-parse", "HEAD"),
+                         git(self.root, "rev-parse", "HEAD"))
         self.assertEqual((isolated / "README.md").read_bytes(),
                          (self.root / "README.md").read_bytes())
         self.assertEqual(git(self.root, "status", "--porcelain"), b"")
