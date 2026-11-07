@@ -230,14 +230,31 @@ def _update(conn, root, project, mission, token, state, *, workspace=None,
         fields.append("worker_result=?")
         values.append(result[:300])
     values.extend([project, str(root), mission, token])
+    # NEVER overwrite a concurrent STOP_REQUESTED event with a heartbeat or
+    # a delayed RUNNING update from the worker's launching thread.
+    clause = " AND state='RUNNING'" if state == RUNNING else ""
     with conn:
         affected = conn.execute(
             "UPDATE orbit_autopilot_runner_jobs SET " + ", ".join(fields) +
-            " WHERE project=? AND project_root=? AND mission_id=? AND run_id=?",
+            " WHERE project=? AND project_root=? AND mission_id=? AND run_id=?" + clause,
             values,
         ).rowcount
     if affected != 1:
         raise RuntimeError("Autopilot run identity changed while executing")
+
+
+def _heartbeat(conn, root, project, mission, token):
+    """Atomic live-only heartbeat. A STOP request never gets cleared."""
+    stamp = _now()
+    with conn:
+        row = conn.execute(
+            """UPDATE orbit_autopilot_runner_jobs
+               SET heartbeat_at=?, updated_at=?
+               WHERE project=? AND project_root=? AND mission_id=?
+                 AND run_id=? AND state='RUNNING'""",
+            (stamp, stamp, project, str(root), mission, token),
+        )
+    return row.rowcount == 1
 
 
 def _needs_stop(conn, root, project, mission, token):
@@ -443,7 +460,9 @@ def run_once(conn, root, project, mission, revision, *, operator_confirmed=False
             if time.monotonic() - started >= max_seconds:
                 stopped = True
                 break
-            _update(conn, root, project, mission, token, RUNNING)
+            if not _heartbeat(conn, root, project, mission, token):
+                stopped = True
+                break
             time.sleep(POLL_SECONDS)
         if stopped:
             terminated = _terminate_child(process)
@@ -473,11 +492,15 @@ def run_once(conn, root, project, mission, revision, *, operator_confirmed=False
             "next": "Independently review the isolated diff, run trusted tests and explicitly accept/rework the task. Do not auto-merge.",
         }
     except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        terminated = True
         if process is not None and process.poll() is None:
-            _terminate_child(process)
-        _update(conn, root, project, mission, token, "BLOCKED",
-                result="local supervisor or host preflight exception; manual review required")
-        return {"status": "BLOCKED", "workspace": str(work) if work else "",
+            terminated = _terminate_child(process)
+        cancelled = _needs_stop(conn, root, project, mission, token)
+        state = ("RECOVERY_REQUIRED" if not terminated else
+                 "STOPPED" if cancelled else "BLOCKED")
+        _update(conn, root, project, mission, token, state,
+                result="supervisor or host exception; inspect isolated run and host state")
+        return {"status": state, "workspace": str(work) if work else "",
                 "reason": str(exc)[:200]}
 
 
