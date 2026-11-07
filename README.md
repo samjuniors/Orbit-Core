@@ -71,13 +71,13 @@ The **v0.31.0 ZIP** also includes `Orbit.ps1` and a release-aware CLI. If you wa
 .\Orbit.ps1 install --channel candidate --version 0.31.0 --hosts antigravity codex --apply
 ```
 
-If PowerShell's local-script policy blocks `Orbit.ps1`, use `py -3.12 .\orbit_cli.py` with the same arguments. Do **not** weaken the machine's script policy. The release-aware command downloads its selected published version after verifying the GitHub ZIP and matching `.sha256` sidecar.
+If PowerShell's local-script policy blocks `Orbit.ps1`, use `py -3.12 .\orbit_cli.py` with the same arguments. Do **not** weaken the machine's script policy. The release-aware command downloads the selected published package and verifies its ZIP and matching `.sha256` sidecar **before executing the installer**.
 
 ### Update an existing installation
 
 **Easiest on Windows:** double-click `%USERPROFILE%\.orbit-universal\bin\Orbit Update Manager.cmd`, choose **Stable** or **Candidate**, your existing hosts and scope, then review and approve the update. This launcher is installed once and does not require downloading a new setup ZIP each time.
 
-**PowerShell or CMD:** use the permanent launcher from **any directory**:
+**PowerShell:** use the permanent launcher from **any directory** (for CMD, omit the leading `&`):
 
 ```powershell
 & "$HOME\.orbit-universal\bin\orbit.cmd" status
@@ -87,7 +87,7 @@ If PowerShell's local-script policy blocks `Orbit.ps1`, use `py -3.12 .\orbit_cl
 & "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex --apply
 ```
 
-- `stable` is the **default** published release channel; `candidate` explicitly opts into published prereleases. As of v0.31.0, the [v0.30.0 release](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) is the latest stable and [v0.31.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.31.0) is the newer prerelease. Always use [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases) for the live list. The updater will not silently downgrade an installed newer prerelease when you check the stable channel.
+- `stable` is the **default** published release channel; `candidate` explicitly opts into published prereleases. As checked 2026-11-07, the [v0.30.0 release](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) is the latest stable and [v0.31.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.31.0) is the newer prerelease. Always use [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases) for the live list. The updater will not silently downgrade an installed newer prerelease when you check the stable channel.
 - `--check` reads release metadata only. Without `--apply`, the update CLI verifies a package but does **not execute** downloaded installer code. It does **not** show the precise target-file change plan until the selected release installer runs; for that plan without writing files, run the verified ZIP's `orbit_setup.py install` or `update` **without** `--apply`.
 - `--apply` runs the selected checksum-verified published installer and makes only the selected host/scope changes with backup/customization guards. Save work first; restart the host IDE afterward and check the actual MCP response. GitHub checksums verify published bytes, **not independent publisher signing**.
 
