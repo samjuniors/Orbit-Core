@@ -79,27 +79,27 @@ class AutopilotCharterTests(unittest.TestCase):
     def activate(self, **kwargs):
         fields = {**self.fields, **kwargs}
         digest = self.call(action="preview", **fields)["charter_digest"]
-        return self.call(action="activate", **fields,
-                         "expected_digest": digest,
-                         "approval_reference": "actual-owner-review-claimed-123",
-                         "confirm_write": True})
+        return self.call(action="activate", **{
+            **fields, "expected_digest": digest,
+            "approval_reference": "actual-owner-review-claimed-123",
+            "confirm_write": True})
 
     def next(self, **kwargs):
-        return self.call("orbit_autopilot_next",
-                         mission_id=self.mission, expected_revision=1,
-                         reported_branch="feat/test-autopilot",
-                         host="codex", available_host_tools=["spawn_agent"],
-                         host_workspace_mode="workspace-write", **kwargs)
+        return self.call("orbit_autopilot_next", **{
+            "mission_id": self.mission, "expected_revision": 1,
+            "reported_branch": "feat/test-autopilot", "host": "codex",
+            "available_host_tools": ["spawn_agent"],
+            "host_workspace_mode": "workspace-write", **kwargs})
 
     def decision(self, kind, task="api", **kwargs):
-        return self.call("orbit_autopilot_decision", mission_id=self.mission,
-                         expected_revision=1,
-                         reported_branch="feat/test-autopilot",
-                         category=kind, task_key=task, **kwargs)
+        return self.call("orbit_autopilot_decision", **{
+            "mission_id": self.mission, "expected_revision": 1,
+            "reported_branch": "feat/test-autopilot",
+            "category": kind, "task_key": task, **kwargs})
 
     def control(self, action, rev, **kwargs):
-        return self.call(action=action, mission_id=self.mission,
-                         expected_revision=rev, **kwargs)
+        return self.call(action=action, **{
+            "mission_id": self.mission, "expected_revision": rev, **kwargs})
 
     def test_preview_is_nonmutating_and_binds_existing_task_specs(self):
         before = self.conn.total_changes
@@ -271,16 +271,16 @@ class AutopilotCharterTests(unittest.TestCase):
         self.activate()
         fields = {**self.fields, "mission_id": "second-mission"}
         digest = self.preview(**fields)["charter_digest"]
-        duplicate = self.call(action="activate", **fields,
-                              expected_digest=digest,
-                              approval_reference="reviewed-second-mission",
-                              confirm_write=True)
+        duplicate = self.call(action="activate", **{
+            **fields, "expected_digest": digest,
+            "approval_reference": "reviewed-second-mission",
+            "confirm_write": True})
         self.assertEqual(duplicate["status"], "HOLD_EXISTING_MISSION_IN_WORKSPACE")
         self.control("stop", 1, confirm_write=True)
-        accepted = self.call(action="activate", **fields,
-                             expected_digest=digest,
-                             approval_reference="reviewed-second-mission",
-                             confirm_write=True)
+        accepted = self.call(action="activate", **{
+            **fields, "expected_digest": digest,
+            "approval_reference": "reviewed-second-mission",
+            "confirm_write": True})
         self.assertEqual(accepted["status"], "CHARTER_RECORDED")
         self.assertEqual(self.preview()["status"], "HOLD_MISSION_ID_ALREADY_USED")
 
@@ -372,10 +372,10 @@ class AutopilotCharterTests(unittest.TestCase):
                   "task_keys": ["foreign"], "allowed_paths": ["else/"]}
         second = self.call(action="preview", **fields)
         self.assertEqual(second["status"], "PREVIEW_ONLY")
-        rejected = self.call(action="activate", **fields,
-                             expected_digest=second["charter_digest"],
-                             approval_reference="reviewed-foreign-mission",
-                             confirm_write=True)
+        rejected = self.call(action="activate", **{
+            **fields, "expected_digest": second["charter_digest"],
+            "approval_reference": "reviewed-foreign-mission",
+            "confirm_write": True})
         self.assertEqual(rejected["status"], "HOLD_EXISTING_MISSION_IN_WORKSPACE")
 
 
