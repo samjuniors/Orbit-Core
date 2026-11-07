@@ -61,16 +61,21 @@ def main(argv=None):
             if plan["status"] != "READY_FOR_LOCAL_OPERATOR_REVIEW":
                 print(json.dumps(plan, indent=2), flush=True)
                 return 2
-            if not sys.stdin.isatty():
+            if not sys.stdin.isatty() or not sys.stdout.isatty():
                 print("BLOCKED: --run requires an interactive local terminal; "
-                      "no stdin pipe or headless bypass is permitted", file=sys.stderr)
+                      "no stdin pipe, redirected output or headless bypass is permitted", file=sys.stderr)
                 return 2
             print(json.dumps(plan, indent=2), flush=True)
             challenge = "RUN " + mission + " " + plan["task_key"]
             print("One locally sandboxed Codex task only. This will consume host "
                   "quota, may edit an isolated temporary clone and will stop "
                   "for independent review. No merge, publish or deploy.")
-            response = input("Type " + repr(challenge) + " to approve: ")
+            try:
+                response = input("Type " + repr(challenge) + " to approve: ")
+            except (EOFError, KeyboardInterrupt):
+                print("BLOCKED: local operator input unavailable or cancelled",
+                      file=sys.stderr)
+                return 2
             if response != challenge:
                 print("BLOCKED: approval not supplied", file=sys.stderr)
                 return 2
