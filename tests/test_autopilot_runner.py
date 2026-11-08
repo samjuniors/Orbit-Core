@@ -196,6 +196,34 @@ class AutopilotRunnerTests(unittest.TestCase):
         self.assertEqual(self.db.total_changes, before)
         self.assertIsNone(self.job())
 
+    def test_legacy_runner_history_schema_migrates_without_erasing_rows(self):
+        legacy = sqlite3.connect(":memory:")
+        self.addCleanup(legacy.close)
+        legacy.execute("""CREATE TABLE orbit_autopilot_runner_history (
+            run_id TEXT PRIMARY KEY, project TEXT NOT NULL,
+            project_root TEXT NOT NULL, mission_id TEXT NOT NULL,
+            task_key TEXT NOT NULL, source_head TEXT NOT NULL,
+            reviewed_source_head TEXT NOT NULL, workspace TEXT NOT NULL,
+            changed_paths TEXT NOT NULL, review_evidence TEXT NOT NULL,
+            handoff_at TEXT NOT NULL)""")
+        day = runner._now()[:10]
+        legacy.execute("""INSERT INTO orbit_autopilot_runner_history
+            (run_id,project,project_root,mission_id,task_key,source_head,
+             reviewed_source_head,workspace,changed_paths,review_evidence,handoff_at)
+             VALUES(?,?,?,?,?,?,?,?,?,?,?)""", (
+            "previous", self.project, str(self.root), self.mission, "api",
+            "old", "new", "synthetic-workspace", "[]",
+            "Previously recorded and reviewed test evidence", day + "T03:00:00+00:00"))
+        legacy.commit()
+        runner.setup(legacy)
+        cols = {row[1] for row in legacy.execute(
+            "PRAGMA table_info(orbit_autopilot_runner_history)")}
+        self.assertIn("started_at", cols)
+        self.assertEqual(legacy.execute(
+            "SELECT started_at FROM orbit_autopilot_runner_history "
+            "WHERE run_id='previous'").fetchone()[0], "")
+        self.assertEqual(runner._local_launch_budget(legacy, self.root)["used"], 1)
+
     def test_daily_budget_counts_incomplete_local_runner_jobs(self):
         plan = self.preview()
         token = runner._claim(self.db, self.root, self.project, self.mission, plan)
