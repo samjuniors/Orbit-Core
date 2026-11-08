@@ -386,6 +386,18 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(self.event(**{**args,
             "observed_host_session": "unrelated-session"})["status"],
                          "HOLD_NATIVE_SESSION_MISMATCH")
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks SET revision=2
+               WHERE project=? AND project_root=? AND task_key='api'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        self.assertEqual(self.event(**args)["status"],
+                         "HOLD_UPSTREAM_REVIEW_REVISION_DRIFT")
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks SET revision=1
+               WHERE project=? AND project_root=? AND task_key='api'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
         proposed = self.event(**args)
         self.assertEqual(proposed["status"], "HANDOFF_RECEIPT_REVIEW")
         saved = self.event(**{**args, "expected_digest": proposed["review_digest"],
