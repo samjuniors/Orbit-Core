@@ -276,6 +276,8 @@ class AutopilotRunnerTests(unittest.TestCase):
             generated = work / "generated"
             generated.mkdir()
             (generated / "hidden.txt").write_text("unreviewed fixture output")
+            self.assertNotIn(b"generated/hidden.txt",
+                git(work, "ls-files", "--others", "--exclude-standard", "-z"))
             return process
         result = self.invoke(launch)
         self.assertEqual(result["status"], "HOLD_OUT_OF_SCOPE_CHANGES", result)
