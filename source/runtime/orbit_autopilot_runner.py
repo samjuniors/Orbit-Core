@@ -381,7 +381,9 @@ def _changed_paths(work):
     """Read actual isolated Git diff and untracked files; no shell or staging."""
     commands = [
         ("diff", "--no-ext-diff", "--no-renames", "--name-only", "-z", "HEAD"),
-        ("ls-files", "--others", "--exclude-standard", "-z"),
+        # Include ignored untracked outputs too. A worker must not hide
+        # out-of-scope data or generated files with .gitignore/info/exclude.
+        ("ls-files", "--others", "-z"),
     ]
     values = set()
     for cmd in commands:
