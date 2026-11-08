@@ -1,4 +1,4 @@
-# Orbit Core — v0.32 Autopilot Phase 1 source-development cutline (2026-11-07)
+# Orbit Core — v0.32 draft development checkpoint (2026-11-08; NOT RELEASED)
 
 **Product direction:** Founder-delegated, roadmap-scoped autonomy, but **no unbounded unattended agent**. The [proposed Autopilot Phase 1](AUTOPILOT-PHASE1.md) is implemented only on `feat/v032-autopilot-charter-phase1-20261107`; there is no published update and no installed host execution. `VERSION=0.31.0` remains the previous publication metadata; `NEXT_VERSION=0.32.0` is an unapproved prospective release cutline.
 
@@ -6,7 +6,7 @@
 
 **Before considering merge:** finish unit regression and exact-head CI, inspect portable installer module inventory and stock upgrade behavior; test charter preview, activation, stop, expiry, stale source/symlink, native host tool unavailable, cross-project isolation and full test pack on Windows and Linux. Reconcile with the separate v0.32 Browser/Computer Use draft before release integration. No tag, automatic scheduler, cross-PC sync, user-profile changes, protected branch merge, deployment or published release is authorized by this feature branch.
 
-**Phase 2 (UNIMPLEMENTED):** optional local runner using a verified official host API, real permission enforcement, bounded leases and crash recovery, visible kill/pause controls, quota limits and independent QA. **Phase 3 (UNIMPLEMENTED):** founder-away notifications and optional separate remote runner when PC is off, only with explicit cost/privacy authorization. Owner remains final authority.
+**Phase 2 status (SOURCE PROTOTYPE, NOT FINISHED OR HOST-ACCEPTED):** The stacked draft [Autopilot Phase 2 PR #108](https://github.com/samjuniors/Orbit-Core/pull/108) provides an opt-in, local single-task Codex CLI runner that uses a temporary, remote-free Git clone, 600-second cap, reviewed source path checks and an explicit terminal operator confirmation. Subsequent reviewed developer changes in [PR #117](https://github.com/samjuniors/Orbit-Core/pull/117) and [PR #120](https://github.com/samjuniors/Orbit-Core/pull/120) enforce commit/remote/unsafe-link/ignored-file output guards; [PR #119](https://github.com/samjuniors/Orbit-Core/pull/119) adds a separate UTC-day local-start-count budget. This is **not** an unattended roadmap loop: real Codex/Antigravity host permission acceptance, actual native team actions, independent QA, OS orphan-worker cleanup, resilient supervisor and meaningful token/cost limits remain **NOT IMPLEMENTED or NOT VERIFIED** as applicable. See [the Phase 2 developer contract](AUTOPILOT-PHASE2.md). **Phase 3 (UNIMPLEMENTED):** founder-away notifications and opt-in remote execution, which need separate explicit privacy/cost authorization. Owner retains final authority.
 
 ---
 
