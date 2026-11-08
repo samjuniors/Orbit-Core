@@ -784,7 +784,7 @@ class CharteredTeamEventTests(unittest.TestCase):
             {"project":self.project,"task_key":"qa"}, self.root)
         self.assertEqual(current["status"], "RUNNING")
 
-    def test_inbox_preserves_stop_reconciliation_after_restart_or_pause(self):
+    def test_inbox_preserves_stop_reconciliation_through_pause(self):
         self._native_recipient_with_handoff()
         request = {
             "action": "stop_request", "event_key": "stop-inbox-qa",
