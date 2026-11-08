@@ -468,12 +468,32 @@ def _receipt(conn, root, project, a, charter):
         return "HOLD_INVALID_TASK_DEPENDENCIES", None
     if handoff["task_key"] not in dependencies:
         return "HOLD_HANDOFF_DEPENDENCY_REMOVED", None
+    # Never accept a "received" observation without a separate recorded
+    # host-native send observation for this exact session and reviewed event.
+    # The observation is still caller-reported, not host attestation.
+    delivery_key = a.get("send_event_key")
+    if not delivery_key:
+        return "HOLD_NATIVE_SEND_REPORT_REQUIRED", None
+    sent, error = _existing_event(
+        conn, root, project, a["mission_id"], delivery_key,
+        "HOST_DELIVERY_OBSERVATION")
+    if error:
+        return error, None
+    if sent["delivery_outcome_caller_reported"] != "SENT":
+        return "HOLD_NATIVE_SEND_NOT_REPORTED_SUCCESSFUL", None
+    if (sent["task_key"] != target["task_key"]
+            or sent["peer_task_key"] != source_key
+            or sent["target_revision"] != target["revision"]
+            or sent["recipient_session_caller_reported"] != target["host_session"]
+            or sent["handoff_digest"] != _digest(handoff)):
+        return "HOLD_DELIVERY_OBSERVATION_MISMATCH", None
     note = _text(a, "summary", 12, 280)
     payload = {
         "event_type": "HANDOFF_RECEIPT",
         "task_key": target["task_key"], "peer_task_key": source_key,
         "task_revision": target["revision"],
         "handoff_digest": _digest(handoff),
+        "send_event_key": delivery_key, "send_event_digest": _digest(sent),
         "observed_host_session_caller_reported": observed,
         "receipt_note_untrusted": note,
         "host_delivery_verified": False, "peer_message_sent_by_orbit": False,
@@ -852,6 +872,17 @@ def _send_report(conn, root, project, a, charter):
         return "HOLD_WRONG_HANDOFF_RECIPIENT", None
     if task["revision"] != handoff["target_revision"] + 2:
         return "HOLD_RECIPIENT_REVISION_DRIFT", None
+    # Preserve failures as observations, but never report a successful send
+    # of a previously accepted source revision that has since changed.
+    source = conn.execute(
+        """SELECT status,revision,review_evidence FROM orbit_agent_tasks
+           WHERE project=? AND project_root=? AND task_key=?""",
+        (project, str(root), handoff["task_key"]),
+    ).fetchone()
+    if (source is None or source["status"] != "REVIEW_ACCEPTED"
+            or source["revision"] != handoff["source_revision"]
+            or not source["review_evidence"]):
+        return "HOLD_SOURCE_REVIEW_NO_LONGER_VALID", None
     if any(e["event_type"] == "HOST_DELIVERY_OBSERVATION"
            and e["peer_task_key"] == handoff_key
            for e in _history(conn, root, project, a["mission_id"])):
@@ -913,9 +944,20 @@ def record(conn, root, project, a):
                 "host_revocation_requested": e["event_key"] in revoked,
                 "host_permission_verified": False, "actual_lease_granted": False,
             })
+        reported_sends = set()
+        for e in all_events:
+            if e["event_type"] == "HOST_DELIVERY_OBSERVATION":
+                try:
+                    report = json.loads(e["payload_json"])
+                    if (e["content_sha256"] == _digest(report)
+                            and report["delivery_outcome_caller_reported"] == "SENT"):
+                        reported_sends.add(e["peer_task_key"])
+                except (ValueError, TypeError, KeyError):
+                    pass
         pending = [
             {"event_key": e["event_key"], "to_task": e["peer_task_key"],
-             "host_delivered": False, "receipt_reported": False}
+             "host_send_caller_reported": e["event_key"] in reported_sends,
+             "host_delivery_verified": False, "receipt_reported": False}
             for e in events if e["event_type"] == "HANDOFF_RECORDED"
             and e["event_key"] not in receipts
         ]
