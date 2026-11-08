@@ -810,6 +810,7 @@ class CharteredTeamEventTests(unittest.TestCase):
         }])
         self.assertEqual(self.event(action="inbox", task_key="api")[
             "native_stops_needing_reconciliation"], [])
+        self.assertEqual(before, self.conn.total_changes)
         paused = orbit_mcp.execute(self.conn, "orbit_autopilot_charter", {
             "project_root": str(self.root), "project": self.project,
             "mission_id": self.mission, "action": "pause",
@@ -817,7 +818,6 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(paused["status"], "PAUSED")
         self.assertEqual(self.event(action="inbox", task_key="qa")[
             "native_stops_needing_reconciliation"], pending)
-        self.assertEqual(before + 1, self.conn.total_changes)
 
     def test_stop_plan_native_codex_hint_or_host_ui_fallback(self):
         self._native_recipient_with_handoff()
