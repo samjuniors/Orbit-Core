@@ -818,6 +818,17 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(paused["status"], "PAUSED")
         self.assertEqual(self.event(action="inbox", task_key="qa")[
             "native_stops_needing_reconciliation"], pending)
+        # A malformed SQLite audit payload must not appear verified or disappear.
+        self.conn.execute(
+            "UPDATE orbit_team_events SET payload_json=? WHERE project=? "
+            "AND project_root=? AND mission_id=? AND event_key=?",
+            ("{}", self.project, str(self.root), self.mission, "stop-inbox-qa"))
+        damaged = self.event(action="inbox", task_key="qa")[
+            "native_stops_needing_reconciliation"]
+        self.assertEqual(len(damaged), 1)
+        self.assertFalse(damaged[0]["local_event_digest_matches"])
+        self.assertTrue(damaged[0]["reconciliation_required"])
+        self.assertFalse(damaged[0]["host_stop_verified"])
 
     def test_stop_plan_native_codex_hint_or_host_ui_fallback(self):
         self._native_recipient_with_handoff()
