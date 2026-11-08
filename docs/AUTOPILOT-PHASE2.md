@@ -16,7 +16,7 @@ codex --ask-for-approval never exec --ephemeral --json --sandbox workspace-write
 
 No `--yolo`, `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access`, external model provider, extra writable directory or permission override. If an action requires an approval that the headless host cannot obtain, the host must deny it and the runner reports BLOCKED; Orbit never switches tools to bypass the denial. Codex CLI is **not** assumed to have Codex desktop Browser/Computer Use plugins or native specialists.
 
-Structured Codex output is size-limited and must include a genuine completed turn without failure/denial events, even if the process returns exit code 0. The runner independently enumerates changed/untracked paths in the clone; changes outside charter scope cause BLOCKED. It never applies the changes to the original checkout or auto-accepts the task. A scoped successful result is `REVIEW_REQUIRED` pending independent diff/test review.
+Structured Codex output is size-limited and must include a genuine completed turn without failure/denial events, even if the process returns exit code 0. A completed worker turn also cannot hide changes by committing inside its isolated clone, adding a Git remote, deleting a tracked source file, or creating an in-scope symlink/hardlink. These conditions HOLD rather than entering independent review; they do not prove that a hostile local process could never touch other operating-system resources. The runner independently enumerates changed/untracked paths in the clone; changes outside charter scope cause BLOCKED. It never applies the changes to the original checkout or auto-accepts the task. A scoped successful result is `REVIEW_REQUIRED` pending independent diff/test review.
 
 ## Controls
 
