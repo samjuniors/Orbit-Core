@@ -511,7 +511,37 @@ def record(conn, root, project, a):
         # Browsing never renews a paused, expired or stopped charter.
         if orbit_autopilot._load(conn, root, project, mission) is None:
             return {**common, "status": "HOLD_MISSION_NOT_FOUND", "events": []}
-        events = _history(conn, root, project, mission, scope)
+        all_events = _history(conn, root, project, mission)
+        events = (_history(conn, root, project, mission, scope)
+                  if scope else all_events)
+        receipts = {e["peer_task_key"] for e in all_events
+                    if e["event_type"] == "HANDOFF_RECEIPT"}
+        revoked = {e["peer_task_key"] for e in all_events
+                   if e["event_type"] == "CAPABILITY_REVOKE_REQUEST"}
+        leases = []
+        for e in events:
+            if e["event_type"] != "CAPABILITY_INTENT":
+                continue
+            try:
+                body = json.loads(e["payload_json"])
+                deadline = datetime.fromisoformat(
+                    body["lease_expires_at"].replace("Z", "+00:00"))
+                expired = orbit_autopilot.utc_now() >= deadline
+            except (KeyError, TypeError, ValueError):
+                # Corrupt saved events cannot imply a valid lease.
+                expired = True
+            leases.append({
+                "event_key": e["event_key"], "task_key": e["task_key"],
+                "intent_expired": expired,
+                "host_revocation_requested": e["event_key"] in revoked,
+                "host_permission_verified": False, "actual_lease_granted": False,
+            })
+        pending = [
+            {"event_key": e["event_key"], "to_task": e["peer_task_key"],
+             "host_delivered": False, "receipt_reported": False}
+            for e in events if e["event_type"] == "HANDOFF_RECORDED"
+            and e["event_key"] not in receipts
+        ]
         return {
             **common, "status": "TEAM_EVENT_HISTORY", "event_count": len(events),
             "events": [
@@ -522,6 +552,9 @@ def record(conn, root, project, a):
                  "host_delivered": False}
                 for e in events
             ],
+            "capability_intents": leases,
+            "handoffs_without_reported_receipts": pending,
+            "host_receipts_authenticated": False,
         }
 
     if action == "revoke":
