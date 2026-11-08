@@ -259,6 +259,27 @@ def _retire(conn, root, project, a, charter):
         return "HOLD_HOST_SESSION_MISMATCH", None
     if not task["host_session"] and reference:
         return "HOLD_NO_RECORDED_HOST_SESSION", None
+    # A stop request may outlive an ACTIVE charter. Bind any later terminal
+    # retirement *note* to the exact session-bound request, never claiming the
+    # actual host performed a stop or revoked worker permissions.
+    stop_requests = [e for e in _history(conn, root, project, a["mission_id"])
+                     if e["event_type"] == "NATIVE_STOP_REQUEST"
+                     and e["task_key"] == task["task_key"]]
+    if len(stop_requests) > 1:
+        return "HOLD_AMBIGUOUS_STOP_REQUEST", None
+    linked_key = ""
+    linked_digest = ""
+    if stop_requests:
+        linked_key = stop_requests[0]["event_key"]
+        request, issue = _existing_event(
+            conn, root, project, a["mission_id"], linked_key,
+            "NATIVE_STOP_REQUEST")
+        if issue:
+            return issue, None
+        if (request["recipient_session_caller_reported"] != task["host_session"]
+                or request["task_revision"] >= task["revision"]):
+            return "HOLD_STOP_SESSION_OR_REVISION_DRIFT", None
+        linked_digest = _digest(request)
     payload = {
         "event_type": "RETIRE_NOTE",
         "task_key": task["task_key"], "task_revision": task["revision"],
@@ -267,6 +288,8 @@ def _retire(conn, root, project, a, charter):
         "host_session_reference_present": bool(task["host_session"]),
         "native_host_termination_verified": False,
         "native_process_killed": False, "profile_deleted": False,
+        "linked_stop_request_event_key": linked_key,
+        "linked_stop_request_digest": linked_digest,
         "audit_history_preserved": True,
     }
     return "RETIRE_NOTE_REVIEW", payload
@@ -1082,9 +1105,24 @@ def record(conn, root, project, a):
             _payload, integrity_error = _existing_event(
                 conn, root, project, mission, e["event_key"],
                 "NATIVE_STOP_REQUEST")
+            retire_notes = []
+            if integrity_error is None:
+                for note_row in all_events:
+                    if (note_row["event_type"] != "RETIRE_NOTE"
+                            or note_row["task_key"] != e["task_key"]):
+                        continue
+                    note, note_error = _existing_event(
+                        conn, root, project, mission, note_row["event_key"],
+                        "RETIRE_NOTE")
+                    if (note_error is None
+                            and note.get("linked_stop_request_event_key") == e["event_key"]
+                            and note.get("linked_stop_request_digest") == e["content_sha256"]):
+                        retire_notes.append(note_row["event_key"])
             stop_reconciliation.append({
                 "event_key": e["event_key"], "task_key": e["task_key"],
                 "local_event_digest_matches": integrity_error is None,
+                "retirement_note_caller_reported": len(retire_notes) == 1,
+                "retirement_event_key": retire_notes[0] if len(retire_notes) == 1 else None,
                 "host_stop_verified": False,
                 "native_session_identity_verified": False,
                 "reconciliation_required": True,
@@ -1105,7 +1143,7 @@ def record(conn, root, project, a):
             "host_receipts_authenticated": False,
         }
 
-    if action in {"revoke", "send_report", "stop_request", "stop_plan"}:
+    if action in {"revoke", "send_report", "stop_request", "stop_plan", "retire"}:
         charter, reason = _revoke_guard(conn, root, project, a)
     else:
         charter, state, reason = orbit_autopilot._guard(conn, root, project, a)
@@ -1151,7 +1189,7 @@ def record(conn, root, project, a):
     setup(conn)
     conn.execute("BEGIN IMMEDIATE")
     try:
-        if action in {"revoke", "send_report", "stop_request"}:
+        if action in {"revoke", "send_report", "stop_request", "retire"}:
             fresh, error = _revoke_guard(conn, root, project, a)
         else:
             fresh, _, error = orbit_autopilot._guard(conn, root, project, a)
