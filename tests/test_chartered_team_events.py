@@ -398,6 +398,23 @@ class CharteredTeamEventTests(unittest.TestCase):
                WHERE project=? AND project_root=? AND task_key='api'""",
             (self.project, str(self.root)))
         self.conn.commit()
+        self.assertEqual(self.event(**args)["status"],
+                         "HOLD_NATIVE_SEND_REPORT_REQUIRED")
+        send = {
+            "action": "send_report", "event_key": "send-to-qa",
+            "task_key": "qa", "task_revision": 3,
+            "handoff_event_key": "api-to-qa",
+            "observed_host_session": "synthetic-host-session",
+            "delivery_outcome": "SENT",
+            "summary": "Synthetic host claimed native message was delivered",
+        }
+        send_plan = self.event(**send)
+        self.assertEqual(send_plan["status"], "HOST_DELIVERY_OBSERVATION_REVIEW")
+        sender = self.event(**{**send, "expected_digest": send_plan["review_digest"],
+                               "confirm_write": True})
+        self.assertEqual(sender["status"], "HOST_DELIVERY_OBSERVATION_RECORDED")
+        self.assertFalse(sender["payload"]["actual_message_delivery_verified"])
+        args["send_event_key"] = "send-to-qa"
         proposed = self.event(**args)
         self.assertEqual(proposed["status"], "HANDOFF_RECEIPT_REVIEW")
         saved = self.event(**{**args, "expected_digest": proposed["review_digest"],
@@ -571,6 +588,167 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.conn.commit()
         self.assertEqual(self.event(**request)["status"],
                          "HOLD_MISSING_OR_AMBIGUOUS_REVIEWED_HANDOFF")
+
+
+    def _native_recipient_with_handoff(self):
+        """Synthetic native session and checked dependency, without model calls."""
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks SET status='REVIEW_ACCEPTED',
+               review_evidence='synthetic accepted source diff'
+               WHERE project=? AND project_root=? AND task_key='api'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        staff = self.staffing(
+            task_key="qa", event_key="staff-qa", worker_kind="bot",
+            requested_tool_names=["read_file"])
+        self.assertEqual(staff["status"], "STAFFING_REQUEST_REVIEW")
+        self.assertEqual(self.staffing(
+            task_key="qa", event_key="staff-qa", worker_kind="bot",
+            requested_tool_names=["read_file"],
+            review_manifest=staff["payload"]["skill_manifest"],
+            expected_digest=staff["review_digest"], confirm_write=True)["status"],
+            "STAFF_REQUEST_RECORDED")
+        lease = self._synthetic_lease(
+            task_key="qa", event_key="lease-qa",
+            staff_event_key="staff-qa", host_workspace_mode="workspace-write")
+        self.assertEqual(lease["status"], "CAPABILITY_INTENT_REVIEW")
+        self.assertEqual(self._synthetic_lease(
+            task_key="qa", event_key="lease-qa",
+            staff_event_key="staff-qa", host_workspace_mode="workspace-write",
+            lease_expires_at=lease["payload"]["lease_expires_at"],
+            expected_digest=lease["review_digest"], confirm_write=True)["status"],
+            "CAPABILITY_INTENT_RECORDED")
+        handoff = {
+            "action": "handoff", "event_key": "api-to-qa",
+            "task_key": "api", "task_revision": 1,
+            "peer_task_key": "qa", "peer_revision": 1,
+            "summary": "Synthetic reviewed API test evidence for downstream QA",
+            "evidence_ref": "git:reviewed-synthetic-upstream-source",
+        }
+        plan = self.event(**handoff)
+        self.assertEqual(plan["status"], "HANDOFF_REVIEW")
+        self.assertEqual(self.event(**{**handoff,
+            "expected_digest": plan["review_digest"],
+            "confirm_write": True})["status"], "HANDOFF_EVENT_RECORDED")
+        reserved = orbit_tasks.reserve(self.conn, {
+            "project": self.project, "task_key": "qa", "expected_revision": 1,
+            "approval_reference": "synthetic-qa-permitted-native-worker",
+            "confirm_write": True,
+        }, self.root)
+        self.assertEqual(reserved["status"], "RESERVED")
+        running = orbit_tasks.started(self.conn, {
+            "project": self.project, "task_key": "qa", "expected_revision": 2,
+            "host_session": "claimed-codex-native-session",
+            "confirm_write": True,
+        }, self.root)
+        self.assertEqual(running["status"], "RUNNING_REPORTED")
+        return {
+            "action": "route", "handoff_event_key": "api-to-qa",
+            "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "host": "codex",
+            "available_host_tools": ["collaboration.send_message"],
+        }
+
+    def test_relay_envelope_is_read_only_and_not_peer_chat(self):
+        args = self._native_recipient_with_handoff()
+        before = self.conn.total_changes
+        result = self.event(**args)
+        self.assertEqual(result["status"], "HOST_NATIVE_MESSAGE_REVIEW_REQUIRED")
+        self.assertEqual(self.conn.total_changes, before)
+        self.assertFalse(result["native_message_sent"])
+        self.assertFalse(result["recipient_delivery_verified"])
+        packet = result["relay_packet"]
+        self.assertEqual(packet["format"], "orbit-native-relay-v1")
+        self.assertEqual(packet["target_task"], "qa")
+        self.assertEqual(packet["source_task"], "api")
+        self.assertEqual(packet["native_send_tool_caller_reported"],
+                         "collaboration.send_message")
+        self.assertEqual(packet["target_session_caller_reported"],
+                         "claimed-codex-native-session")
+        self.assertFalse(packet["actual_native_delivery_verified"])
+        self.assertNotIn("Synthetic reviewed API test evidence",
+                         packet["message_body"])
+        self.assertEqual(self.event(**{**args,"confirm_write":True})["status"],
+                         "HOLD_ROUTE_READ_ONLY")
+        self.assertEqual(self.event(**{**args,"host":"antigravity",
+            "available_host_tools":["invoke_subagent"]})["status"],
+                         "HOLD_NATIVE_MESSAGE_TOOL_UNAVAILABLE")
+        self.assertEqual(self.event(**{**args,
+            "available_host_tools":[]})["status"],
+                         "HOLD_NATIVE_MESSAGE_TOOL_UNAVAILABLE")
+        self.assertEqual(self.event(**{**args,
+            "observed_host_session":"other-host-session"})["status"],
+                         "HOLD_NATIVE_SESSION_MISMATCH")
+
+    def test_audited_delivery_report_and_matching_recipient_receipt(self):
+        args = self._native_recipient_with_handoff()
+        report = {
+            "action": "send_report", "event_key": "sent-api-qa",
+            "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "handoff_event_key": "api-to-qa", "delivery_outcome": "SENT",
+            "summary": "Host reported that native message tool sent the pointer",
+        }
+        p = self.event(**report)
+        self.assertEqual(p["status"], "HOST_DELIVERY_OBSERVATION_REVIEW")
+        saved = self.event(**{**report, "expected_digest":p["review_digest"],
+                              "confirm_write":True})
+        self.assertEqual(saved["status"], "HOST_DELIVERY_OBSERVATION_RECORDED")
+        self.assertFalse(saved["payload"]["actual_message_delivery_verified"])
+        self.assertEqual(self.event(**report)["status"],
+                         "HOLD_DELIVERY_ALREADY_REPORTED")
+        inbox = self.event(action="inbox", task_key="qa")
+        self.assertEqual(len(inbox["handoffs_without_reported_receipts"]), 1)
+        self.assertTrue(
+            inbox["handoffs_without_reported_receipts"][0]["host_send_caller_reported"])
+        receipt = {
+            "action":"receipt", "event_key":"recv-api-qa", "task_key":"qa",
+            "task_revision":3, "handoff_event_key":"api-to-qa",
+            "send_event_key":"sent-api-qa",
+            "observed_host_session":"claimed-codex-native-session",
+            "summary":"Host reported QA agent received the reviewed evidence pointer",
+        }
+        a = self.event(**receipt)
+        self.assertEqual(a["status"], "HANDOFF_RECEIPT_REVIEW")
+        done = self.event(**{**receipt, "expected_digest":a["review_digest"],
+                             "confirm_write":True})
+        self.assertEqual(done["status"], "HANDOFF_RECEIPT_RECORDED")
+        self.assertFalse(done["payload"]["host_delivery_verified"])
+        self.assertEqual(len(self.event(action="inbox",task_key="qa")[
+            "handoffs_without_reported_receipts"]), 0)
+        self.assertFalse(self.event(**args)["native_message_sent"])
+        self.assertEqual(self.event(**args)["status"],
+                         "HOLD_HANDOFF_ALREADY_ACKNOWLEDGED")
+
+    def test_failed_or_cross_session_send_report_cannot_authorize_ack(self):
+        self._native_recipient_with_handoff()
+        report = {
+            "action":"send_report","event_key":"failed-send",
+            "task_key":"qa","task_revision":3,
+            "observed_host_session":"claimed-codex-native-session",
+            "handoff_event_key":"api-to-qa", "delivery_outcome":"DENIED",
+            "summary":"Host denied native message permission for this worker",
+        }
+        preview=self.event(**report)
+        self.assertEqual(preview["status"],"HOST_DELIVERY_OBSERVATION_REVIEW")
+        saved=self.event(**{**report,"expected_digest":preview["review_digest"],
+                            "confirm_write":True})
+        self.assertEqual(saved["status"],"HOST_DELIVERY_OBSERVATION_RECORDED")
+        receipt={
+            "action":"receipt","event_key":"invalid-receipt",
+            "task_key":"qa","task_revision":3,
+            "handoff_event_key":"api-to-qa","send_event_key":"failed-send",
+            "observed_host_session":"claimed-codex-native-session",
+            "summary":"Attempt to acknowledge the explicitly denied message",
+        }
+        self.assertEqual(self.event(**receipt)["status"],
+                         "HOLD_NATIVE_SEND_NOT_REPORTED_SUCCESSFUL")
+        self.assertEqual(self.event(**{**receipt,
+            "send_event_key":"missing"})["status"], "HOLD_EVENT_NOT_FOUND")
+        self.assertEqual(self.event(**{**report,
+            "observed_host_session":"other-host-session"})["status"],
+                         "HOLD_NATIVE_SESSION_MISMATCH")
 
 
 if __name__ == "__main__":
