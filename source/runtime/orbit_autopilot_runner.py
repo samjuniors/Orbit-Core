@@ -364,11 +364,31 @@ def _changed_paths(work):
     return sorted(values)
 
 
-def _review_changes(work, allowed_paths):
+def _review_changes(work, allowed_paths, *, expected_head=None):
+    """Fail closed on Git-history drift and unsafe worker-produced file types.
+
+    A worker can alter an isolated checkout despite prompt prohibitions;
+    changed-path scopes alone cannot detect a commit, reintroduced Git remote,
+    in-scope symlink, hardlink or tracked deletion. None are auto-accepted.
+    """
+    if expected_head is not None:
+        current_head = os.fsdecode(_git(work, "rev-parse", "HEAD")).strip()
+        if current_head != expected_head:
+            return False, [], "HOLD_ISOLATED_GIT_HEAD_DRIFT"
+    if _git(work, "remote").strip():
+        return False, [], "HOLD_ISOLATED_GIT_REMOTE_ADDED"
     paths = _changed_paths(work)
     permitted = orbit_tasks._scopes(allowed_paths)
     if any(not orbit_autopilot._within(path, permitted) for path in paths):
         return False, paths, "HOLD_OUT_OF_SCOPE_CHANGES"
+    for name in paths:
+        candidate = work / name
+        # Missing files include tracked deletions; links may alias outside
+        # the reviewed write scope, even when their targets appear in-tree.
+        if candidate.is_symlink() or not candidate.is_file():
+            return False, paths, "HOLD_UNSAFE_CHANGED_FILE"
+        if candidate.stat().st_nlink > 1:
+            return False, paths, "HOLD_UNSAFE_CHANGED_HARDLINK"
     if not paths and permitted:
         return False, paths, "HOLD_NO_SOURCE_CHANGES"
     return True, paths, "REVIEW_REQUIRED"
@@ -531,7 +551,8 @@ def run_once(conn, root, project, mission, revision, *, operator_confirmed=False
                     result="host exit/structured output failed or permission denied")
             return {"status": "BLOCKED", "workspace": str(work),
                     "reason": "Codex failed, was denied, or lacked an unambiguous completed turn"}
-        in_scope, paths, result = _review_changes(work, plan["write_paths"])
+        in_scope, paths, result = _review_changes(
+            work, plan["write_paths"], expected_head=plan["source_head_verified"])
         _update(conn, root, project, mission, token,
                 "REVIEW_REQUIRED" if in_scope else "BLOCKED",
                 result=result, changed_paths=paths if in_scope else None)
