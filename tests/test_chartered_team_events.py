@@ -398,6 +398,23 @@ class CharteredTeamEventTests(unittest.TestCase):
                WHERE project=? AND project_root=? AND task_key='api'""",
             (self.project, str(self.root)))
         self.conn.commit()
+        self.assertEqual(self.event(**args)["status"],
+                         "HOLD_NATIVE_SEND_REPORT_REQUIRED")
+        send = {
+            "action": "send_report", "event_key": "send-to-qa",
+            "task_key": "qa", "task_revision": 3,
+            "handoff_event_key": "api-to-qa",
+            "observed_host_session": "synthetic-host-session",
+            "delivery_outcome": "SENT",
+            "summary": "Synthetic host claimed native message was delivered",
+        }
+        send_plan = self.event(**send)
+        self.assertEqual(send_plan["status"], "HOST_DELIVERY_OBSERVATION_REVIEW")
+        sender = self.event(**{**send, "expected_digest": send_plan["review_digest"],
+                               "confirm_write": True})
+        self.assertEqual(sender["status"], "HOST_DELIVERY_OBSERVATION_RECORDED")
+        self.assertFalse(sender["payload"]["actual_message_delivery_verified"])
+        args["send_event_key"] = "send-to-qa"
         proposed = self.event(**args)
         self.assertEqual(proposed["status"], "HANDOFF_RECEIPT_REVIEW")
         saved = self.event(**{**args, "expected_digest": proposed["review_digest"],
