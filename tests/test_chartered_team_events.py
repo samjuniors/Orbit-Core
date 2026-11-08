@@ -784,7 +784,7 @@ class CharteredTeamEventTests(unittest.TestCase):
             {"project":self.project,"task_key":"qa"}, self.root)
         self.assertEqual(current["status"], "RUNNING")
 
-    def test_inbox_preserves_stop_reconciliation_through_pause(self):
+    def test_inbox_preserves_stop_reconciliation_through_pause_and_cold_restart(self):
         self._native_recipient_with_handoff()
         request = {
             "action": "stop_request", "event_key": "stop-inbox-qa",
@@ -818,6 +818,21 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(paused["status"], "PAUSED")
         self.assertEqual(self.event(action="inbox", task_key="qa")[
             "native_stops_needing_reconciliation"], pending)
+        cold_db = self.root.parent / "cold-stop-inbox.sqlite3"
+        saved_conn = sqlite3.connect(cold_db)
+        try:
+            self.conn.backup(saved_conn)
+        finally:
+            saved_conn.close()
+        recovered_conn = sqlite3.connect(cold_db)
+        recovered_conn.row_factory = sqlite3.Row
+        try:
+            recovered = orbit_mcp.execute(recovered_conn, "orbit_team_event", {
+                **self.args, "action": "inbox", "task_key": "qa"})
+        finally:
+            recovered_conn.close()
+        self.assertEqual(recovered["status"], "TEAM_EVENT_HISTORY")
+        self.assertEqual(recovered["native_stops_needing_reconciliation"], pending)
         # A malformed SQLite audit payload must not appear verified or disappear.
         self.conn.execute(
             "UPDATE orbit_team_events SET payload_json=? WHERE project=? "
