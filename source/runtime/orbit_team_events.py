@@ -15,6 +15,7 @@ import orbit_autopilot
 import orbit_capabilities
 import orbit_delegation
 import orbit_skill_plan
+import orbit_swarm_host
 import orbit_tasks
 import orbit_team_builder
 
@@ -499,10 +500,207 @@ def _revoke_guard(conn, root, project, a):
     return charter, None
 
 
+def _dispatch(conn, root, project, a, charter):
+    """Prepare one host-native invocation packet, WITHOUT invoking the host.
+
+    This combines live charter, reviewed staff/lease evidence, the task ledger,
+    and the existing all-or-nothing native-host preflight. The host must
+    independently enforce user approval and tool/file permissions.
+    """
+    base = {
+        "status": "HOLD_NATIVE_DISPATCH_NOT_READY",
+        "native_invoked": False, "host_permission_verified": False,
+        "tool_grants_applied": False, "skill_activated": False,
+        "host_session_verified": False, "state_written": False,
+        "message_sent": False,
+    }
+    if a.get("confirm_write") is True:
+        return {**base, "status": "HOLD_DISPATCH_READ_ONLY"}
+    task, reason = _task(conn, root, project, a.get("task_key"),
+                         a.get("task_revision"))
+    if reason:
+        return {**base, "status": reason}
+    if task["task_key"] not in charter["task_keys"]:
+        return {**base, "status": "HOLD_TASK_OUTSIDE_CHARTER"}
+    if task["status"] != "RESERVED" or task["host_session"]:
+        return {**base, "status": "HOLD_EXACT_UNSTARTED_RESERVATION_REQUIRED"}
+    lease_key = a.get("lease_event_key")
+    lease, reason = _existing_event(conn, root, project, a["mission_id"],
+                                    lease_key, "CAPABILITY_INTENT")
+    if reason:
+        return {**base, "status": reason}
+    staff, reason = _existing_event(conn, root, project, a["mission_id"],
+                                    lease["staff_event_key"], "STAFF_REQUEST")
+    if reason:
+        return {**base, "status": reason}
+    if (staff["task_key"] != task["task_key"]
+            or lease["task_key"] != task["task_key"]
+            or staff["task_revision"] != lease["task_revision"]
+            or lease["staff_event_digest"] != _digest(staff)):
+        return {**base, "status": "HOLD_STAFF_LEASE_INTEGRITY_DRIFT"}
+    # Reserve increments the exact task revision once. Do not reuse a lease
+    # after a retry or a past worker's terminal observation.
+    if task["revision"] != lease["task_revision"] + 1:
+        return {**base, "status": "HOLD_LEASE_NOT_BOUND_TO_RESERVATION"}
+    try:
+        expires = datetime.fromisoformat(
+            lease["lease_expires_at"].replace("Z", "+00:00"))
+    except (TypeError, ValueError, KeyError):
+        return {**base, "status": "HOLD_INVALID_LEASE_EXPIRY"}
+    if orbit_autopilot.utc_now() >= expires:
+        return {**base, "status": "HOLD_CAPABILITY_INTENT_EXPIRED"}
+    all_events = _history(conn, root, project, a["mission_id"])
+    if any(e["event_type"] == "CAPABILITY_REVOKE_REQUEST"
+           and e["peer_task_key"] == lease_key for e in all_events):
+        return {**base, "status": "HOLD_CAPABILITY_REVOCATION_REQUESTED"}
+    if any(e["event_type"] == "CAPABILITY_INTENT"
+           and e["task_key"] == task["task_key"]
+           and e["event_key"] != lease_key
+           and not any(r["event_type"] == "CAPABILITY_REVOKE_REQUEST"
+                       and r["peer_task_key"] == e["event_key"]
+                       for r in all_events)
+           for e in all_events):
+        return {**base, "status": "HOLD_AMBIGUOUS_ACTIVE_CAPABILITY_INTENT"}
+    host = a.get("host")
+    mode = a.get("host_workspace_mode", "unknown")
+    if host != staff["host"] or host != lease["host"]:
+        return {**base, "status": "HOLD_STAFF_HOST_MISMATCH"}
+    if mode != lease["host_workspace_mode_requested"]:
+        return {**base, "status": "HOLD_WORKSPACE_MODE_DIFFERS_FROM_LEASE"}
+    permission = a.get("permission_state", "UNKNOWN")
+    if permission not in {"UNKNOWN", "APPROVED", "DENIED"}:
+        raise ValueError("Unknown caller-reported host permission state")
+    if permission == "DENIED":
+        return {**base, "status": "HOLD_HOST_PERMISSION_DENIED"}
+    reported = orbit_delegation.validate_reported_tools(
+        host, a.get("available_host_tools", []))
+    if not set(lease["requested_tool_names"]) <= set(reported):
+        return {**base, "status": "HOLD_WORKER_TOOL_NOT_ADVERTISED"}
+    if set(lease["requested_tool_names"]) & NO_WORKER_DELEGATION:
+        return {**base, "status": "HOLD_PRIVILEGED_WORKER_CAPABILITY"}
+    try:
+        task_paths = orbit_tasks._scopes(json.loads(task["write_paths"]))
+        orbit_tasks._resolved_scopes(root, task_paths)
+    except (ValueError, TypeError):
+        return {**base, "status": "HOLD_UNSAFE_WRITE_SCOPE"}
+    if mode == "read-only":
+        if task_paths or lease["task_write_paths"]:
+            return {**base, "status": "HOLD_READ_ONLY_LEASE_FOR_WRITABLE_TASK"}
+    elif mode == "workspace-write":
+        if lease["task_write_paths"] != task_paths:
+            return {**base, "status": "HOLD_LEASE_WRITE_SCOPE_DRIFT"}
+    else:
+        return {**base, "status": "HOLD_UNSUPPORTED_WORKSPACE_MODE"}
+    # A manifest is a SHA inventory, not approval of third-party instructions.
+    # Recheck skill source and project profile immediately before host handoff.
+    current = orbit_skill_plan.preview(
+        root, task["role"] + ": " + task["goal"][:1350],
+        orbit_capabilities.discover(root),
+        project_profile=staff["profile"],
+        requested_skill_names=staff["requested_skill_names"],
+        review_manifest=staff["skill_manifest"],
+        permission_state=permission, host=host,
+    )
+    if (current["revalidation"]["status"] != "PINS_MATCH_CURRENT_PREVIEW_ONLY"
+            or current["status"].startswith("HOLD_")):
+        return {**base, "status": "HOLD_CHANGED_OR_UNTRUSTED_SKILL_SOURCE"}
+    by_name = {x["name"]: x for x in staff["skill_manifest"]["skills"]}
+    if (len(lease["skill_pins"]) > 3 or
+            any(by_name.get(p["name"]) != p for p in lease["skill_pins"])):
+        return {**base, "status": "HOLD_LEASE_SKILL_PINS_DRIFT"}
+    try:
+        dependencies = json.loads(task["depends_on"])
+    except (ValueError, TypeError):
+        return {**base, "status": "HOLD_INVALID_TASK_DEPENDENCIES"}
+    handoffs = []
+    for source_key in dependencies:
+        source = conn.execute(
+            """SELECT revision,status,review_evidence FROM orbit_agent_tasks
+               WHERE project=? AND project_root=? AND task_key=?""",
+            (project, str(root), source_key),
+        ).fetchone()
+        if source is None or source["status"] != "REVIEW_ACCEPTED" or not source["review_evidence"]:
+            return {**base, "status": "HOLD_UNACCEPTED_DEPENDENCY"}
+        options = []
+        for row in all_events:
+            if (row["event_type"] != "HANDOFF_RECORDED"
+                    or row["task_key"] != source_key
+                    or row["peer_task_key"] != task["task_key"]):
+                continue
+            handoff, error = _existing_event(
+                conn, root, project, a["mission_id"], row["event_key"],
+                "HANDOFF_RECORDED")
+            if error:
+                return {**base, "status": error}
+            if (handoff["source_revision"] == source["revision"]
+                    and handoff["target_revision"] == lease["task_revision"]):
+                options.append({"event_key": row["event_key"],
+                                "digest": row["content_sha256"],
+                                "source_task": source_key,
+                                "source_revision": source["revision"]})
+        if len(options) != 1:
+            return {**base, "status": "HOLD_MISSING_OR_AMBIGUOUS_REVIEWED_HANDOFF"}
+        handoffs.append(options[0])
+    # Preflight blocks conflicting reservations, unsafe aliases, missing native
+    # tools and unexpected host modes; do not partially launch a team.
+    preflight = orbit_swarm_host.review(conn, root, project, {
+        "tasks": [{"task_key": task["task_key"],
+                   "expected_revision": task["revision"]}],
+        "host": host, "available_host_tools": reported,
+        "host_workspace_mode": mode,
+    })
+    if preflight["status"] != "HOST_INVOCATIONS_REQUIRED":
+        return {**base, "status": "HOLD_NATIVE_PREFLIGHT",
+                "preflight_status": preflight["status"],
+                "issues": preflight.get("issues", [])}
+    if len(preflight["handoffs"]) != 1:
+        return {**base, "status": "HOLD_NATIVE_PACKET_MISMATCH"}
+    entry = preflight["handoffs"][0]
+    if (entry["task_key"] != task["task_key"]
+            or entry["expected_revision"] != task["revision"]
+            or entry["native_tool"] not in orbit_delegation.HOST_NATIVE_TOOLS[host]):
+        return {**base, "status": "HOLD_NATIVE_PACKET_MISMATCH"}
+    packet = {
+        "project": project, "project_root": str(root),
+        "mission_id": a["mission_id"],
+        "task_key": task["task_key"], "task_revision": task["revision"],
+        "staff_event_key": lease["staff_event_key"],
+        "lease_event_key": lease_key,
+        "lease_digest": _digest(lease),
+        "worker_kind": staff["worker_kind"],
+        "lead": staff["lead"], "role": task["role"],
+        "native_tool_caller_reported": entry["native_tool"],
+        "candidate_profile": "orbit-" + task["role"],
+        "profile_installed_in_host": False,
+        "allowed_working_mode_requested": mode,
+        "allowed_write_paths": task_paths if mode == "workspace-write" else [],
+        "worker_requested_tools_not_granted": lease["requested_tool_names"],
+        "skill_pins_not_activated": lease["skill_pins"],
+        "capability_intent_expires_at": lease["lease_expires_at"],
+        "reviewed_handoff_references": handoffs,
+        "native_task_handoff": entry["handoff"],
+        "prohibited_actions": orbit_delegation.NO_SIDE_EFFECTS,
+        "host_permission_authenticated": False,
+        "host_worker_session_verified": False,
+        "host_must_recheck": [
+            "Actual host/native tool and workspace permissions",
+            "Founder/owner consent, task revision, source branch and active mission",
+            "Untrusted local skill provenance, source code and license",
+            "Per-worker tool and file ACLs; reject unavailable permissions",
+            "Real native session reference before orbit_task_started",
+        ],
+    }
+    if len(json.dumps(packet, ensure_ascii=True)) > 12000:
+        return {**base, "status": "HOLD_NATIVE_DISPATCH_PACKET_TOO_LARGE"}
+    return {**base, "status": "HOST_NATIVE_DISPATCH_REVIEW_REQUIRED",
+            "dispatch_packet": packet,
+            "next": "Host must independently verify permissions, then invoke its real native tool; this read-only response neither grants access nor starts a worker."}
+
+
 def record(conn, root, project, a):
     """Preview or append an immutable proposal/evidence event within the charter."""
     action = a.get("action")
-    if action not in {"staff", "handoff", "retire", "inbox", "lease", "revoke", "receipt"}:
+    if action not in {"staff", "handoff", "retire", "inbox", "lease", "revoke", "receipt", "dispatch"}:
         raise ValueError("Unknown team event action")
     mission = orbit_autopilot._mission_id(a)
     common = _common(mission, root, project, action)
@@ -566,6 +764,8 @@ def record(conn, root, project, a):
         charter, state, reason = orbit_autopilot._guard(conn, root, project, a)
     if reason:
         return {**common, "status": reason}
+    if action == "dispatch":
+        return {**common, **_dispatch(conn, root, project, a, charter)}
     if action == "staff":
         status, payload = _staff(conn, root, project, a, charter)
     elif action == "handoff":

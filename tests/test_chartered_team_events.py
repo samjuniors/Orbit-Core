@@ -421,5 +421,157 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(len(orbit_mcp.TOOLS), 57)
 
 
+    def _reserved_native_dispatch(self):
+        """Create synthetic chartered staff+lease+reservation, no real host."""
+        self.approve_staff()
+        lease = self._synthetic_lease(host_workspace_mode="workspace-write")
+        self.assertEqual(lease["status"], "CAPABILITY_INTENT_REVIEW")
+        saved = self._synthetic_lease(
+            host_workspace_mode="workspace-write",
+            lease_expires_at=lease["payload"]["lease_expires_at"],
+            expected_digest=lease["review_digest"], confirm_write=True)
+        self.assertEqual(saved["status"], "CAPABILITY_INTENT_RECORDED")
+        reservation = orbit_tasks.reserve(self.conn, {
+            "project": self.project, "task_key": "api",
+            "expected_revision": 1,
+            "approval_reference": "synthetic-real-host-review-not-attested",
+            "confirm_write": True,
+        }, self.root)
+        self.assertEqual(reservation["status"], "RESERVED")
+        self.assertEqual(reservation["task"]["revision"], 2)
+        return {
+            "action": "dispatch", "task_key": "api", "task_revision": 2,
+            "lease_event_key": "lease-api", "host": "codex",
+            "available_host_tools": ["collaboration.spawn_agent", "read_file", "test_runner"],
+            "host_workspace_mode": "workspace-write",
+        }
+
+    def test_dispatch_existing_native_preflight_without_invocation(self):
+        args = self._reserved_native_dispatch()
+        before = self.conn.total_changes
+        result = self.event(**args)
+        self.assertEqual(result["status"], "HOST_NATIVE_DISPATCH_REVIEW_REQUIRED")
+        self.assertEqual(self.conn.total_changes, before)
+        self.assertFalse(result["native_invoked"])
+        self.assertFalse(result["host_permission_verified"])
+        self.assertFalse(result["tool_grants_applied"])
+        self.assertFalse(result["skill_activated"])
+        self.assertFalse(result["message_sent"])
+        p = result["dispatch_packet"]
+        self.assertEqual(p["task_key"], "api")
+        self.assertEqual(p["task_revision"], 2)
+        self.assertEqual(p["native_tool_caller_reported"], "collaboration.spawn_agent")
+        self.assertEqual(p["allowed_write_paths"], ["src/api/"])
+        self.assertEqual(p["worker_requested_tools_not_granted"], ["read_file"])
+        self.assertEqual(p["lease_event_key"], "lease-api")
+        self.assertFalse(p["host_permission_authenticated"])
+        self.assertFalse(p["profile_installed_in_host"])
+        self.assertEqual(p["reviewed_handoff_references"], [])
+
+    def test_dispatch_holds_on_host_denial_scope_expansion_and_stale_task(self):
+        args = self._reserved_native_dispatch()
+        self.assertEqual(self.event(**{**args, "host":"antigravity"})["status"],
+                         "HOLD_STAFF_HOST_MISMATCH")
+        self.assertEqual(self.event(**{**args, "host_workspace_mode":"read-only"})["status"],
+                         "HOLD_WORKSPACE_MODE_DIFFERS_FROM_LEASE")
+        self.assertEqual(self.event(**{**args, "permission_state":"DENIED"})["status"],
+                         "HOLD_HOST_PERMISSION_DENIED")
+        self.assertEqual(self.event(**{**args, "available_host_tools":["collaboration.spawn_agent"]})["status"],
+                         "HOLD_WORKER_TOOL_NOT_ADVERTISED")
+        self.assertEqual(self.event(**{**args, "task_revision":1})["status"],
+                         "HOLD_STALE_TASK_REVISION")
+        self.assertEqual(self.event(**{**args, "confirm_write":True})["status"],
+                         "HOLD_DISPATCH_READ_ONLY")
+        self.assertFalse(self.event(**{**args, "confirm_write":True})["state_written"])
+
+    def test_dispatch_revocation_and_expired_intent_never_launch(self):
+        from unittest.mock import patch
+        args = self._reserved_native_dispatch()
+        lease = self.event(action="inbox", task_key="api")["capability_intents"][0]
+        # Expiry controls the dispatch even if the mission itself is still active.
+        from datetime import datetime
+        future = datetime.now(timezone.utc) + timedelta(hours=12)
+        with patch.object(orbit_autopilot, "utc_now", return_value=future):
+            self.assertEqual(self.event(**args)["status"],
+                             "HOLD_CAPABILITY_INTENT_EXPIRED")
+        rev = {
+            "action": "revoke", "event_key": "revoke-api",
+            "task_key": "api", "lease_event_key": "lease-api",
+            "summary": "Worker task scope is revoked by local operator request",
+        }
+        preview = self.event(**rev)
+        self.assertEqual(preview["status"], "CAPABILITY_REVOKE_REVIEW")
+        saved = self.event(**{**rev, "expected_digest": preview["review_digest"],
+                             "confirm_write": True})
+        self.assertEqual(saved["status"], "CAPABILITY_REVOKE_REQUEST_RECORDED")
+        self.assertEqual(self.event(**args)["status"],
+                         "HOLD_CAPABILITY_REVOCATION_REQUESTED")
+
+    def test_dispatch_requires_reviewed_dependency_handoff(self):
+        # Staff QA bot and bind a write-scoped capability intent while PLANNED.
+        proposal = self.staffing(
+            task_key="qa", event_key="staff-qa", worker_kind="bot",
+            requested_tool_names=["read_file"])
+        self.assertEqual(proposal["status"], "STAFFING_REQUEST_REVIEW")
+        approved = self.staffing(
+            task_key="qa", event_key="staff-qa", worker_kind="bot",
+            requested_tool_names=["read_file"],
+            review_manifest=proposal["payload"]["skill_manifest"],
+            expected_digest=proposal["review_digest"], confirm_write=True)
+        self.assertEqual(approved["status"], "STAFF_REQUEST_RECORDED")
+        lease = self._synthetic_lease(
+            task_key="qa", event_key="lease-qa", staff_event_key="staff-qa",
+            host_workspace_mode="workspace-write")
+        self.assertEqual(lease["status"], "CAPABILITY_INTENT_REVIEW")
+        saved = self._synthetic_lease(
+            task_key="qa", event_key="lease-qa", staff_event_key="staff-qa",
+            host_workspace_mode="workspace-write",
+            lease_expires_at=lease["payload"]["lease_expires_at"],
+            expected_digest=lease["review_digest"], confirm_write=True)
+        self.assertEqual(saved["status"], "CAPABILITY_INTENT_RECORDED")
+        # Synthetic task-review evidence (never independently verified by test).
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks SET status='REVIEW_ACCEPTED',
+               review_evidence='synthetic approved source diff'
+               WHERE project=? AND project_root=? AND task_key='api'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        handoff = {
+            "action": "handoff", "event_key": "api-to-qa",
+            "task_key": "api", "task_revision": 1,
+            "peer_task_key": "qa", "peer_revision": 1,
+            "summary": "Synthetic reviewed API test evidence for QA",
+            "evidence_ref": "git:synthetic-approved-commit",
+        }
+        plan = self.event(**handoff)
+        self.assertEqual(plan["status"], "HANDOFF_REVIEW")
+        saved = self.event(**{**handoff, "expected_digest": plan["review_digest"],
+                             "confirm_write": True})
+        self.assertEqual(saved["status"], "HANDOFF_EVENT_RECORDED")
+        reserved = orbit_tasks.reserve(self.conn, {
+            "project": self.project, "task_key": "qa", "expected_revision": 1,
+            "approval_reference": "synthetic-qa-operator-reviewed",
+            "confirm_write": True,
+        }, self.root)
+        self.assertEqual(reserved["status"], "RESERVED")
+        request = {
+            "action": "dispatch", "task_key": "qa", "task_revision": 2,
+            "lease_event_key": "lease-qa", "host": "codex",
+            "available_host_tools": ["collaboration.spawn_agent", "read_file"],
+            "host_workspace_mode": "workspace-write",
+        }
+        result = self.event(**request)
+        self.assertEqual(result["status"], "HOST_NATIVE_DISPATCH_REVIEW_REQUIRED")
+        self.assertEqual(len(result["dispatch_packet"]["reviewed_handoff_references"]), 1)
+        self.assertEqual(result["dispatch_packet"]["worker_kind"], "bot")
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks SET revision=2
+               WHERE project=? AND project_root=? AND task_key='api'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        self.assertEqual(self.event(**request)["status"],
+                         "HOLD_MISSING_OR_AMBIGUOUS_REVIEWED_HANDOFF")
+
+
 if __name__ == "__main__":
     unittest.main()
