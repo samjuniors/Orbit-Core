@@ -155,6 +155,55 @@ class AutopilotRunnerTests(unittest.TestCase):
         self.assertFalse(p["execution_started"])
         self.assertEqual(self.db.total_changes, before)
 
+    def test_daily_local_launch_limit_is_workspace_scoped_across_missions(self):
+        day = runner._now()[:10]
+        insert = """INSERT INTO orbit_autopilot_runner_history
+          (run_id,project,project_root,mission_id,task_key,source_head,
+           reviewed_source_head,workspace,changed_paths,review_evidence,
+           handoff_at,started_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"""
+        def add_run(key, root, started, handed):
+            self.db.execute(insert, (
+                key, "synthetic-other-project", str(root), "other-mission",
+                "other-task", "old-git-head", "new-git-head", "fixture-path",
+                '["src/api/change.py"]', "caller-reported-reviewed fixture",
+                handed, started))
+        # Other roots and previous UTC days must not spend this root's budget.
+        add_run("foreign-root", self.root.parent / "other", day + "T02:00:00+00:00",
+                day + "T03:00:00+00:00")
+        add_run("previous-day", self.root, "2020-01-01T02:00:00+00:00",
+                "2020-01-01T03:00:00+00:00")
+        self.db.commit()
+        self.assertEqual(self.preview()["local_launch_budget"]["used"], 0)
+        for index in range(runner.MAX_LOCAL_LAUNCHES_PER_UTC_DAY - 1):
+            add_run("same-day-" + str(index), self.root,
+                    day + "T02:00:00+00:00", day + "T03:00:00+00:00")
+        self.db.commit()
+        remaining = self.preview()
+        self.assertEqual(remaining["status"], "READY_FOR_LOCAL_OPERATOR_REVIEW")
+        self.assertEqual(remaining["local_launch_budget"]["used"],
+                         runner.MAX_LOCAL_LAUNCHES_PER_UTC_DAY - 1)
+        # Legacy history without stored start day is charged conservatively on
+        # the day of handoff instead of dropping the run from the quota.
+        add_run("legacy-row", self.root, "", day + "T07:00:00+00:00")
+        self.db.commit()
+        before = self.db.total_changes
+        blocked = self.preview()
+        self.assertEqual(blocked["status"], "HOLD_DAILY_LOCAL_LAUNCH_BUDGET")
+        self.assertEqual(blocked["local_launch_budget"]["used"],
+                         runner.MAX_LOCAL_LAUNCHES_PER_UTC_DAY)
+        self.assertFalse(blocked["local_launch_budget"]["model_tokens_or_cost_measured"])
+        self.assertEqual(self.db.total_changes, before)
+        self.assertIsNone(self.job())
+
+    def test_daily_budget_counts_incomplete_local_runner_jobs(self):
+        plan = self.preview()
+        token = runner._claim(self.db, self.root, self.project, self.mission, plan)
+        self.assertTrue(token)
+        self.assertEqual(runner._local_launch_budget(self.db, self.root)["used"], 1)
+        self.assertEqual(self.preview()["status"],
+                         "HOLD_RECONCILE_POSSIBLE_HOST_PROCESS")
+
     def test_no_operator_confirmation_never_claims_or_launches(self):
         result = runner.run_once(
             self.db, self.root, self.project, self.mission, 1,
