@@ -1074,6 +1074,21 @@ def record(conn, root, project, a):
             for e in events if e["event_type"] == "HANDOFF_RECORDED"
             and e["event_key"] not in receipts
         ]
+        stop_reconciliation = []
+        for e in events:
+            if e["event_type"] != "NATIVE_STOP_REQUEST":
+                continue
+            # A local event digest is not host-verified worker termination.
+            _payload, integrity_error = _existing_event(
+                conn, root, project, mission, e["event_key"],
+                "NATIVE_STOP_REQUEST")
+            stop_reconciliation.append({
+                "event_key": e["event_key"], "task_key": e["task_key"],
+                "local_event_digest_matches": integrity_error is None,
+                "host_stop_verified": False,
+                "native_session_identity_verified": False,
+                "reconciliation_required": True,
+            })
         return {
             **common, "status": "TEAM_EVENT_HISTORY", "event_count": len(events),
             "events": [
@@ -1086,6 +1101,7 @@ def record(conn, root, project, a):
             ],
             "capability_intents": leases,
             "handoffs_without_reported_receipts": pending,
+            "native_stops_needing_reconciliation": stop_reconciliation,
             "host_receipts_authenticated": False,
         }
 

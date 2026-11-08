@@ -784,6 +784,67 @@ class CharteredTeamEventTests(unittest.TestCase):
             {"project":self.project,"task_key":"qa"}, self.root)
         self.assertEqual(current["status"], "RUNNING")
 
+    def test_inbox_preserves_stop_reconciliation_through_pause_and_cold_restart(self):
+        self._native_recipient_with_handoff()
+        request = {
+            "action": "stop_request", "event_key": "stop-inbox-qa",
+            "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "summary": "Stop synthetic native worker for reconciliation",
+        }
+        preview = self.event(**request)
+        self.assertEqual(preview["status"], "NATIVE_STOP_REQUEST_REVIEW")
+        recorded = self.event(**{**request,
+            "expected_digest": preview["review_digest"], "confirm_write": True})
+        self.assertEqual(recorded["status"], "NATIVE_STOP_REQUEST_RECORDED")
+        before = self.conn.total_changes
+        inbox = self.event(action="inbox")
+        pending = inbox["native_stops_needing_reconciliation"]
+        self.assertEqual(inbox["status"], "TEAM_EVENT_HISTORY")
+        self.assertEqual(pending, [{
+            "event_key": "stop-inbox-qa", "task_key": "qa",
+            "local_event_digest_matches": True,
+            "host_stop_verified": False,
+            "native_session_identity_verified": False,
+            "reconciliation_required": True,
+        }])
+        self.assertEqual(self.event(action="inbox", task_key="api")[
+            "native_stops_needing_reconciliation"], [])
+        self.assertEqual(before, self.conn.total_changes)
+        paused = orbit_mcp.execute(self.conn, "orbit_autopilot_charter", {
+            "project_root": str(self.root), "project": self.project,
+            "mission_id": self.mission, "action": "pause",
+            "expected_revision": 1, "confirm_write": True})
+        self.assertEqual(paused["status"], "PAUSED")
+        self.assertEqual(self.event(action="inbox", task_key="qa")[
+            "native_stops_needing_reconciliation"], pending)
+        cold_db = self.root.parent / "cold-stop-inbox.sqlite3"
+        saved_conn = sqlite3.connect(cold_db)
+        try:
+            self.conn.backup(saved_conn)
+        finally:
+            saved_conn.close()
+        recovered_conn = sqlite3.connect(cold_db)
+        recovered_conn.row_factory = sqlite3.Row
+        try:
+            recovered = orbit_mcp.execute(recovered_conn, "orbit_team_event", {
+                **self.args, "action": "inbox", "task_key": "qa"})
+        finally:
+            recovered_conn.close()
+        self.assertEqual(recovered["status"], "TEAM_EVENT_HISTORY")
+        self.assertEqual(recovered["native_stops_needing_reconciliation"], pending)
+        # A malformed SQLite audit payload must not appear verified or disappear.
+        self.conn.execute(
+            "UPDATE orbit_team_events SET payload_json=? WHERE project=? "
+            "AND project_root=? AND mission_id=? AND event_key=?",
+            ("{}", self.project, str(self.root), self.mission, "stop-inbox-qa"))
+        damaged = self.event(action="inbox", task_key="qa")[
+            "native_stops_needing_reconciliation"]
+        self.assertEqual(len(damaged), 1)
+        self.assertFalse(damaged[0]["local_event_digest_matches"])
+        self.assertTrue(damaged[0]["reconciliation_required"])
+        self.assertFalse(damaged[0]["host_stop_verified"])
+
     def test_stop_plan_native_codex_hint_or_host_ui_fallback(self):
         self._native_recipient_with_handoff()
         plan = {
