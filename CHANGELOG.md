@@ -6,6 +6,10 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 Proposed future changes require separate owner review.
 
+### Funding (2026-11-08)
+
+- Added a GitHub Sponsors funding configuration for `samjuniors` and an optional README support section. This documentation-only patch does not change runtime, package versions, tests or releases.
+
 ## [0.31.0] - Release-candidate notes (2026-11-05)
 
 ### Highlights
