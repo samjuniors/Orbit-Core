@@ -804,6 +804,8 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(pending, [{
             "event_key": "stop-inbox-qa", "task_key": "qa",
             "local_event_digest_matches": True,
+            "retirement_note_caller_reported": False,
+            "retirement_event_key": None,
             "host_stop_verified": False,
             "native_session_identity_verified": False,
             "reconciliation_required": True,
@@ -844,6 +846,59 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertFalse(damaged[0]["local_event_digest_matches"])
         self.assertTrue(damaged[0]["reconciliation_required"])
         self.assertFalse(damaged[0]["host_stop_verified"])
+
+    def test_retire_after_pause_links_exact_stop_without_claiming_host_proof(self):
+        self._native_recipient_with_handoff()
+        premature = self.event(action="retire", event_key="retire-early",
+            task_key="qa", task_revision=3, host_terminal_state="STOPPED",
+            observed_host_session="claimed-codex-native-session")
+        self.assertEqual(premature["status"], "HOLD_NATIVE_WORKER_RECONCILIATION")
+        stop_args = {
+            "action": "stop_request", "event_key": "stop-qa",
+            "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "summary": "Stop requested for synthetic paused-mission worker",
+        }
+        stop = self.event(**stop_args)
+        self.assertEqual(self.event(**{**stop_args,
+            "expected_digest": stop["review_digest"],
+            "confirm_write": True})["status"], "NATIVE_STOP_REQUEST_RECORDED")
+        paused = orbit_mcp.execute(self.conn, "orbit_autopilot_charter", {
+            "project_root": str(self.root), "project": self.project,
+            "mission_id": self.mission, "action": "pause",
+            "expected_revision": 1, "confirm_write": True})
+        self.assertEqual(paused["status"], "PAUSED")
+        # Synthetic host terminal observation updates the EXISTING task ledger.
+        # Direct fixture writes do not independently authenticate the host.
+        self.conn.execute(
+            "UPDATE orbit_agent_tasks SET status='CANCELLED', revision=4 "
+            "WHERE project=? AND project_root=? AND task_key='qa'",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        report = {
+            "action": "retire", "event_key": "retire-after-pause",
+            "task_key": "qa", "task_revision": 4,
+            "expected_revision": 2,
+            "host_terminal_state": "STOPPED",
+            "observed_host_session": "claimed-codex-native-session",
+        }
+        preview = self.event(**report)
+        self.assertEqual(preview["status"], "RETIRE_NOTE_REVIEW")
+        self.assertEqual(preview["payload"]["linked_stop_request_event_key"], "stop-qa")
+        self.assertFalse(preview["payload"]["native_host_termination_verified"])
+        saved = self.event(**{**report,
+            "expected_digest": preview["review_digest"], "confirm_write": True})
+        self.assertEqual(saved["status"], "RETIRE_NOTE_RECORDED")
+        inbox = self.event(action="inbox", task_key="qa")
+        pending = inbox["native_stops_needing_reconciliation"]
+        self.assertEqual(len(pending), 1)
+        self.assertTrue(pending[0]["retirement_note_caller_reported"])
+        self.assertEqual(pending[0]["retirement_event_key"], "retire-after-pause")
+        self.assertFalse(pending[0]["host_stop_verified"])
+        self.assertTrue(pending[0]["reconciliation_required"])
+        self.assertEqual(self.event(**{**report,
+            "observed_host_session": "wrong-session"})["status"],
+            "HOLD_HOST_SESSION_MISMATCH")
 
     def test_stop_plan_native_codex_hint_or_host_ui_fallback(self):
         self._native_recipient_with_handoff()
