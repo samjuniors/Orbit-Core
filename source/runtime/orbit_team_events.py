@@ -448,12 +448,15 @@ def _receipt(conn, root, project, a, charter):
     if handoff["peer_task_key"] != target["task_key"]:
         return "HOLD_WRONG_HANDOFF_RECIPIENT", None
     source = conn.execute(
-        """SELECT status,depends_on FROM orbit_agent_tasks
+        """SELECT status,revision,review_evidence FROM orbit_agent_tasks
            WHERE project=? AND project_root=? AND task_key=?""",
         (project, str(root), handoff["task_key"]),
     ).fetchone()
     if source is None or source["status"] != "REVIEW_ACCEPTED":
         return "HOLD_SOURCE_REVIEW_NO_LONGER_VALID", None
+    if (source["revision"] != handoff["source_revision"]
+            or not source["review_evidence"]):
+        return "HOLD_UPSTREAM_REVIEW_REVISION_DRIFT", None
     if any(e["event_type"] == "HANDOFF_RECEIPT" and
            e["peer_task_key"] == source_key
            for e in _history(conn, root, project, a["mission_id"])):
