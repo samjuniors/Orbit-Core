@@ -123,7 +123,7 @@ class AutopilotRunnerTests(unittest.TestCase):
         assert "Task: api" in prompt
         assert executable
         target = work / "src" / "api"
-        target.mkdir(parents=True)
+        target.mkdir(parents=True, exist_ok=True)
         (target / "api.py").write_text("def health(): return True\n")
         (logs / "codex-events.jsonl").write_text(
             json.dumps({"type": "thread.started", "thread_id": "fake"})
