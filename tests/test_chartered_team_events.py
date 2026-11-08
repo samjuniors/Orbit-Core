@@ -773,6 +773,13 @@ class CharteredTeamEventTests(unittest.TestCase):
                          "HOLD_STOP_ALREADY_REQUESTED")
         self.assertEqual(self.event(**recipient)["status"],
                          "HOLD_RECIPIENT_STOP_REQUESTED")
+        self.assertEqual(self.event(
+            action="receipt", event_key="post-stop-receipt",
+            task_key="qa", task_revision=3,
+            handoff_event_key="api-to-qa",
+            observed_host_session="claimed-codex-native-session",
+            summary="Attempted receipt after native worker stop request")["status"],
+                         "HOLD_RECIPIENT_STOP_REQUESTED")
         current = orbit_tasks._row(self.conn,
             {"project":self.project,"task_key":"qa"}, self.root)
         self.assertEqual(current["status"], "RUNNING")
