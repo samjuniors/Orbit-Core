@@ -594,11 +594,11 @@ TOOLS += [
              ['task_key','expected_revision'])}
      },['project_root','project','host','tasks'])},
     {'name':'orbit_team_event',
-     'description':'Charter-bound team staffing, capability intent, revoke, handoff, receipt, retirement and read-only native dispatch preflight. The packet binds existing task reservations, skill pins, host tool hints and reviewed dependencies; the real host alone grants permission and invokes workers.',
+     'description':'Charter-bound team staffing, capability intent, revoke, handoff, receipt, retirement and read-only native dispatch or Orbit-routed relay previews. It records caller-reported host delivery outcomes and requires one before a bounded handoff receipt. Actual host permissions, worker invocation and peer message delivery remain outside the MCP.',
      'inputSchema':schema({
          'project_root':string(2000),'project':string(80),
          'mission_id':string(80),
-         'action':{'type':'string','enum':['staff','handoff','retire','inbox','lease','revoke','receipt','dispatch']},
+         'action':{'type':'string','enum':['staff','handoff','retire','inbox','lease','revoke','receipt','dispatch','route','send_report']},
          'expected_revision':{'type':'integer','minimum':1},
          'reported_branch':string(150),
          'event_key':string(64),
@@ -612,6 +612,8 @@ TOOLS += [
          'staff_event_key':string(64),
          'lease_event_key':string(64),
          'handoff_event_key':string(64),
+         'send_event_key':string(64),
+         'delivery_outcome':{'type':'string','enum':['SENT','DENIED','FAILED','UNKNOWN']},
          'lease_tool_names':{'type':'array','maxItems':3,'items':string(64)},
          'lease_skill_names':{'type':'array','maxItems':3,'items':string(80)},
          'lease_expires_at':string(20),
