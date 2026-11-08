@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import datetime, timedelta, timezone
 
 import orbit_autopilot
 import orbit_capabilities
@@ -270,10 +271,238 @@ def _retire(conn, root, project, a, charter):
     return "RETIRE_NOTE_REVIEW", payload
 
 
+def _existing_event(conn, root, project, mission, event_key, expected_type):
+    if not isinstance(event_key, str) or not EVENT_KEY.fullmatch(event_key):
+        raise ValueError("Referenced event key must be a bounded stable slug")
+    event = _lookup(conn, root, project, mission, event_key)
+    if event is None:
+        return None, "HOLD_EVENT_NOT_FOUND"
+    if event["event_type"] != expected_type:
+        return None, "HOLD_EVENT_TYPE_MISMATCH"
+    try:
+        body = json.loads(event["payload_json"])
+    except (ValueError, TypeError):
+        return None, "HOLD_UNREADABLE_EVENT"
+    if _digest(body) != event["content_sha256"]:
+        return None, "HOLD_EVENT_INTEGRITY_CHANGED"
+    return body, None
+
+
+def _list_names(value, name, max_items):
+    if (not isinstance(value, list) or len(value) > max_items
+            or any(not isinstance(v, str) or not v
+                   or not orbit_delegation.ALLOWED_TOOL_PATTERN.fullmatch(v)
+                   for v in value)
+            or len(set(value)) != len(value)):
+        raise ValueError(name + " must contain distinct bounded names")
+    return value
+
+
+def _lease_expiry(when, charter):
+    if not isinstance(when, str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", when):
+        raise ValueError("lease_expires_at must be UTC ISO timestamp")
+    try:
+        end = datetime.fromisoformat(when.replace("Z", "+00:00"))
+        charter_end = datetime.fromisoformat(
+            charter["expires_at"].replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError("Invalid lease expiry time") from None
+    now = orbit_autopilot.utc_now()
+    if not (now < end <= min(now + timedelta(hours=24), charter_end)):
+        return "HOLD_LEASE_EXPIRY_OUTSIDE_CHARTER"
+    return None
+
+
+def _lease(conn, root, project, a, charter):
+    """Request a time-boxed capability *intent*; no host token or ACL is issued."""
+    task, error = _task(conn, root, project, a.get("task_key"),
+                        a.get("task_revision"))
+    if error:
+        return error, None
+    if task["task_key"] not in charter["task_keys"]:
+        return "HOLD_TASK_OUTSIDE_CHARTER", None
+    if task["status"] not in {"PLANNED", "RESERVED"}:
+        return "HOLD_WORKER_ALREADY_RUNNING_OR_TERMINAL", None
+    staff_key = a.get("staff_event_key")
+    staff, error = _existing_event(conn, root, project, a["mission_id"],
+                                  staff_key, "STAFF_REQUEST")
+    if error:
+        return error, None
+    if (staff["task_key"] != task["task_key"]
+            or staff["task_revision"] != task["revision"]):
+        return "HOLD_STAFF_TASK_REVISION_DRIFT", None
+    host = staff["host"]
+    listed = orbit_delegation.validate_reported_tools(
+        host, a.get("available_host_tools", []))
+    selected_tools = a.get("lease_tool_names", [])
+    _list_names(selected_tools, "lease_tool_names", 3)
+    if set(selected_tools) & NO_WORKER_DELEGATION:
+        return "HOLD_PRIVILEGED_WORKER_CAPABILITY", None
+    if not set(selected_tools) <= set(staff["requested_tool_names"]):
+        return "HOLD_CAPABILITY_SCOPE_EXPANSION", None
+    if not set(selected_tools) <= set(listed):
+        return "HOLD_HOST_TOOL_NOT_CURRENTLY_REPORTED", None
+    selected_skills = a.get("lease_skill_names", [])
+    if not isinstance(selected_skills, list):
+        raise ValueError("lease_skill_names must be a list")
+    orbit_skill_plan._validate_requested(selected_skills)
+    if len(selected_skills) > 3 or not set(selected_skills) <= set(
+            staff["requested_skill_names"]):
+        return "HOLD_SKILL_SCOPE_EXPANSION", None
+    permission = a.get("permission_state", "UNKNOWN")
+    if permission not in {"UNKNOWN", "APPROVED", "DENIED"}:
+        raise ValueError("Unknown caller-reported permission state")
+    if permission == "DENIED":
+        return "HOLD_PERMISSION_DENIED", None
+    # Recheck exact manifest against the local current skill tree, even when
+    # this particular lease selects a subset of the staff request's skills.
+    source = orbit_skill_plan.preview(
+        root, task["role"] + ": " + task["goal"][:1350],
+        orbit_capabilities.discover(root),
+        project_profile=staff["profile"],
+        requested_skill_names=staff["requested_skill_names"],
+        review_manifest=staff["skill_manifest"],
+        permission_state=permission, host=host)
+    if source["revalidation"]["status"] != "PINS_MATCH_CURRENT_PREVIEW_ONLY":
+        return "HOLD_SKILL_SOURCE_CHANGED", None
+    if source["status"].startswith("HOLD_"):
+        return source["status"], None
+    selected_pins = [
+        pin for pin in staff["skill_manifest"]["skills"]
+        if pin["name"] in set(selected_skills)
+    ]
+    if len(selected_pins) != len(selected_skills):
+        return "HOLD_SKILL_PINS_INCOMPLETE", None
+    deadline = a.get("lease_expires_at")
+    if _lease_expiry(deadline, charter):
+        return "HOLD_LEASE_EXPIRY_OUTSIDE_CHARTER", None
+    mode = a.get("host_workspace_mode", "read-only")
+    if mode not in ("read-only", "workspace-write"):
+        raise ValueError("Unknown proposed host workspace mode")
+    try:
+        scopes = orbit_tasks._scopes(json.loads(task["write_paths"]))
+        orbit_tasks._resolved_scopes(root, scopes)
+    except (ValueError, TypeError):
+        return "HOLD_CHANGED_WRITABLE_SCOPE", None
+    payload = {
+        "event_type": "CAPABILITY_INTENT",
+        "task_key": task["task_key"], "task_revision": task["revision"],
+        "staff_event_key": staff_key, "staff_event_digest": _digest(staff),
+        "host": host, "worker_kind": staff["worker_kind"],
+        "host_workspace_mode_requested": mode,
+        "requested_tool_names": sorted(selected_tools),
+        "skill_pins": selected_pins,
+        "task_write_paths": scopes if mode == "workspace-write" else [],
+        "lease_expires_at": deadline,
+        "host_permission_reported": permission,
+        "host_tool_grants": [], "host_skill_activation": False,
+        "host_lease_token_issued": False, "native_worker_invoked": False,
+    }
+    return "CAPABILITY_INTENT_REVIEW", payload
+
+
+def _revoke(conn, root, project, a, charter):
+    """A revoke request can be recorded even after mission pause/stop/expiry."""
+    lease_key = a.get("lease_event_key")
+    lease, error = _existing_event(conn, root, project, a["mission_id"],
+                                  lease_key, "CAPABILITY_INTENT")
+    if error:
+        return error, None
+    if lease["task_key"] not in charter["task_keys"]:
+        return "HOLD_TASK_OUTSIDE_CHARTER", None
+    if a.get("task_key") != lease["task_key"]:
+        return "HOLD_REVOKE_TASK_MISMATCH", None
+    if any(e["event_type"] == "CAPABILITY_REVOKE_REQUEST"
+           and e["peer_task_key"] == lease_key
+           for e in _history(conn, root, project, a["mission_id"])):
+        return "HOLD_REVOKE_ALREADY_REQUESTED", None
+    reason = _text(a, "summary", 12, 280)
+    return "CAPABILITY_REVOKE_REVIEW", {
+        "event_type": "CAPABILITY_REVOKE_REQUEST",
+        "task_key": lease["task_key"], "peer_task_key": lease_key,
+        "lease_digest": _digest(lease), "reason_untrusted": reason,
+        "host_revocation_verified": False,
+        "native_worker_stopped": False, "token_invalidated_by_orbit": False,
+    }
+
+
+def _receipt(conn, root, project, a, charter):
+    """Only record a caller-reported native recipient observation; no send."""
+    target, error = _task(conn, root, project, a.get("task_key"),
+                          a.get("task_revision"))
+    if error:
+        return error, None
+    if target["task_key"] not in charter["task_keys"]:
+        return "HOLD_TASK_OUTSIDE_CHARTER", None
+    if target["status"] != "RUNNING" or not target["host_session"]:
+        return "HOLD_RECIPIENT_NATIVE_SESSION_NOT_RUNNING", None
+    observed = a.get("observed_host_session")
+    if observed != target["host_session"]:
+        return "HOLD_NATIVE_SESSION_MISMATCH", None
+    source_key = a.get("handoff_event_key")
+    handoff, error = _existing_event(conn, root, project, a["mission_id"],
+                                    source_key, "HANDOFF_RECORDED")
+    if error:
+        return error, None
+    if handoff["peer_task_key"] != target["task_key"]:
+        return "HOLD_WRONG_HANDOFF_RECIPIENT", None
+    source = conn.execute(
+        """SELECT status,revision,review_evidence FROM orbit_agent_tasks
+           WHERE project=? AND project_root=? AND task_key=?""",
+        (project, str(root), handoff["task_key"]),
+    ).fetchone()
+    if source is None or source["status"] != "REVIEW_ACCEPTED":
+        return "HOLD_SOURCE_REVIEW_NO_LONGER_VALID", None
+    if (source["revision"] != handoff["source_revision"]
+            or not source["review_evidence"]):
+        return "HOLD_UPSTREAM_REVIEW_REVISION_DRIFT", None
+    if any(e["event_type"] == "HANDOFF_RECEIPT" and
+           e["peer_task_key"] == source_key
+           for e in _history(conn, root, project, a["mission_id"])):
+        return "HOLD_HANDOFF_ALREADY_ACKNOWLEDGED", None
+    try:
+        dependencies = json.loads(target["depends_on"])
+    except (ValueError, TypeError):
+        return "HOLD_INVALID_TASK_DEPENDENCIES", None
+    if handoff["task_key"] not in dependencies:
+        return "HOLD_HANDOFF_DEPENDENCY_REMOVED", None
+    note = _text(a, "summary", 12, 280)
+    payload = {
+        "event_type": "HANDOFF_RECEIPT",
+        "task_key": target["task_key"], "peer_task_key": source_key,
+        "task_revision": target["revision"],
+        "handoff_digest": _digest(handoff),
+        "observed_host_session_caller_reported": observed,
+        "receipt_note_untrusted": note,
+        "host_delivery_verified": False, "peer_message_sent_by_orbit": False,
+        "task_accepted": False,
+    }
+    return "HANDOFF_RECEIPT_REVIEW", payload
+
+
+def _revoke_guard(conn, root, project, a):
+    """Fail closed on stale identity but permit emergency revoke after pause."""
+    row = orbit_autopilot._load(conn, root, project,
+                                orbit_autopilot._mission_id(a))
+    if row is None:
+        return None, "HOLD_MISSION_NOT_FOUND"
+    if (type(a.get("expected_revision")) is not int
+            or a["expected_revision"] != row["revision"]):
+        return None, "HOLD_STALE_REVISION"
+    try:
+        charter = json.loads(row["charter_json"])
+    except (TypeError, ValueError):
+        return None, "HOLD_INVALID_CHARTER"
+    if a.get("reported_branch") != charter["branch"]:
+        return None, "HOLD_BRANCH_MISMATCH"
+    return charter, None
+
+
 def record(conn, root, project, a):
     """Preview or append an immutable proposal/evidence event within the charter."""
     action = a.get("action")
-    if action not in {"staff", "handoff", "retire", "inbox"}:
+    if action not in {"staff", "handoff", "retire", "inbox", "lease", "revoke", "receipt"}:
         raise ValueError("Unknown team event action")
     mission = orbit_autopilot._mission_id(a)
     common = _common(mission, root, project, action)
@@ -285,7 +514,37 @@ def record(conn, root, project, a):
         # Browsing never renews a paused, expired or stopped charter.
         if orbit_autopilot._load(conn, root, project, mission) is None:
             return {**common, "status": "HOLD_MISSION_NOT_FOUND", "events": []}
-        events = _history(conn, root, project, mission, scope)
+        all_events = _history(conn, root, project, mission)
+        events = (_history(conn, root, project, mission, scope)
+                  if scope else all_events)
+        receipts = {e["peer_task_key"] for e in all_events
+                    if e["event_type"] == "HANDOFF_RECEIPT"}
+        revoked = {e["peer_task_key"] for e in all_events
+                   if e["event_type"] == "CAPABILITY_REVOKE_REQUEST"}
+        leases = []
+        for e in events:
+            if e["event_type"] != "CAPABILITY_INTENT":
+                continue
+            try:
+                body = json.loads(e["payload_json"])
+                deadline = datetime.fromisoformat(
+                    body["lease_expires_at"].replace("Z", "+00:00"))
+                expired = orbit_autopilot.utc_now() >= deadline
+            except (KeyError, TypeError, ValueError):
+                # Corrupt saved events cannot imply a valid lease.
+                expired = True
+            leases.append({
+                "event_key": e["event_key"], "task_key": e["task_key"],
+                "intent_expired": expired,
+                "host_revocation_requested": e["event_key"] in revoked,
+                "host_permission_verified": False, "actual_lease_granted": False,
+            })
+        pending = [
+            {"event_key": e["event_key"], "to_task": e["peer_task_key"],
+             "host_delivered": False, "receipt_reported": False}
+            for e in events if e["event_type"] == "HANDOFF_RECORDED"
+            and e["event_key"] not in receipts
+        ]
         return {
             **common, "status": "TEAM_EVENT_HISTORY", "event_count": len(events),
             "events": [
@@ -296,17 +555,29 @@ def record(conn, root, project, a):
                  "host_delivered": False}
                 for e in events
             ],
+            "capability_intents": leases,
+            "handoffs_without_reported_receipts": pending,
+            "host_receipts_authenticated": False,
         }
 
-    charter, state, reason = orbit_autopilot._guard(conn, root, project, a)
+    if action == "revoke":
+        charter, reason = _revoke_guard(conn, root, project, a)
+    else:
+        charter, state, reason = orbit_autopilot._guard(conn, root, project, a)
     if reason:
         return {**common, "status": reason}
     if action == "staff":
         status, payload = _staff(conn, root, project, a, charter)
     elif action == "handoff":
         status, payload = _handoff(conn, root, project, a, charter)
-    else:
+    elif action == "retire":
         status, payload = _retire(conn, root, project, a, charter)
+    elif action == "lease":
+        status, payload = _lease(conn, root, project, a, charter)
+    elif action == "revoke":
+        status, payload = _revoke(conn, root, project, a, charter)
+    else:
+        status, payload = _receipt(conn, root, project, a, charter)
     if payload is None:
         return {**common, "status": status}
     event = _event_key(a)
@@ -325,7 +596,10 @@ def record(conn, root, project, a):
     setup(conn)
     conn.execute("BEGIN IMMEDIATE")
     try:
-        fresh, _, error = orbit_autopilot._guard(conn, root, project, a)
+        if action == "revoke":
+            fresh, error = _revoke_guard(conn, root, project, a)
+        else:
+            fresh, _, error = orbit_autopilot._guard(conn, root, project, a)
         if error or fresh != charter:
             conn.rollback()
             return {**common, "status": error or "HOLD_CHANGED_CHARTER"}
@@ -333,8 +607,14 @@ def record(conn, root, project, a):
             check, current = _staff(conn, root, project, a, fresh)
         elif action == "handoff":
             check, current = _handoff(conn, root, project, a, fresh)
-        else:
+        elif action == "retire":
             check, current = _retire(conn, root, project, a, fresh)
+        elif action == "lease":
+            check, current = _lease(conn, root, project, a, fresh)
+        elif action == "revoke":
+            check, current = _revoke(conn, root, project, a, fresh)
+        else:
+            check, current = _receipt(conn, root, project, a, fresh)
         if current is None or _digest(current) != digest:
             conn.rollback()
             return {**common, "status": "HOLD_STALE_EVENT_PAYLOAD"}
@@ -354,6 +634,15 @@ def record(conn, root, project, a):
         ):
             conn.rollback()
             return {**common, "status": "HOLD_EXISTING_STAFF_REQUEST"}
+        if action == "lease" and any(
+            e["event_type"] == "CAPABILITY_INTENT" and e["task_key"] == payload["task_key"]
+            and not any(r["event_type"] == "CAPABILITY_REVOKE_REQUEST"
+                        and r["peer_task_key"] == e["event_key"]
+                        for r in history)
+            for e in history
+        ):
+            conn.rollback()
+            return {**common, "status": "HOLD_EXISTING_CAPABILITY_INTENT"}
         conn.execute(
             """INSERT INTO orbit_team_events
                (project,project_root,mission_id,event_key,event_type,task_key,
@@ -372,5 +661,8 @@ def record(conn, root, project, a):
         "staff": "STAFF_REQUEST_RECORDED",
         "handoff": "HANDOFF_EVENT_RECORDED",
         "retire": "RETIRE_NOTE_RECORDED",
+        "lease": "CAPABILITY_INTENT_RECORDED",
+        "revoke": "CAPABILITY_REVOKE_REQUEST_RECORDED",
+        "receipt": "HANDOFF_RECEIPT_RECORDED",
     }[action], "state_written": True,
             "next": "Host must separately verify permission, source evidence, and worker lifecycle. No native action was performed."}

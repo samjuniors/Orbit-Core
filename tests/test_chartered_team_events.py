@@ -230,5 +230,196 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(len(orbit_mcp.TOOLS), 57)
 
 
+    def _synthetic_lease(self, **kwargs):
+        fields = {
+            "action": "lease", "event_key": "lease-api",
+            "task_key": "api", "task_revision": 1,
+            "staff_event_key": "staff-api",
+            "available_host_tools": ["read_file", "test_runner"],
+            "lease_tool_names": ["read_file"],
+            "lease_skill_names": [],
+            "lease_expires_at": (datetime.now(timezone.utc) +
+                                 timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "host_workspace_mode": "read-only",
+            "permission_state": "UNKNOWN",
+        }
+        return self.event(**{**fields, **kwargs})
+
+    def _save_lease(self):
+        self.approve_staff()
+        preview = self._synthetic_lease()
+        self.assertEqual(preview["status"], "CAPABILITY_INTENT_REVIEW")
+        result = self._synthetic_lease(
+            lease_expires_at=preview["payload"]["lease_expires_at"],
+            expected_digest=preview["review_digest"], confirm_write=True)
+        self.assertEqual(result["status"], "CAPABILITY_INTENT_RECORDED")
+        return preview
+
+    def test_capability_intent_is_no_host_grant_and_pinned_to_staff_request(self):
+        self.approve_staff()
+        before = self.conn.total_changes
+        preview = self._synthetic_lease()
+        self.assertEqual(preview["status"], "CAPABILITY_INTENT_REVIEW")
+        self.assertEqual(before, self.conn.total_changes)
+        self.assertEqual(preview["payload"]["requested_tool_names"], ["read_file"])
+        self.assertFalse(preview["payload"]["host_skill_activation"])
+        self.assertEqual(preview["payload"]["host_tool_grants"], [])
+        self.assertFalse(preview["payload"]["host_lease_token_issued"])
+        expiry = preview["payload"]["lease_expires_at"]
+        mismatch = self._synthetic_lease(
+            lease_expires_at=expiry, expected_digest="0"*64, confirm_write=True)
+        self.assertEqual(mismatch["status"], "HOLD_DIGEST_MISMATCH")
+        saved = self._synthetic_lease(
+            lease_expires_at=expiry, expected_digest=preview["review_digest"],
+            confirm_write=True)
+        self.assertEqual(saved["status"], "CAPABILITY_INTENT_RECORDED")
+        self.assertFalse(saved["tool_permission_granted"])
+        replay = self._synthetic_lease(
+            lease_expires_at=expiry, expected_digest=preview["review_digest"],
+            confirm_write=True)
+        self.assertEqual(replay["status"], "ALREADY_RECORDED")
+        inbox = self.event(action="inbox", task_key="api")
+        self.assertEqual(len(inbox["capability_intents"]), 1)
+        self.assertFalse(inbox["capability_intents"][0]["actual_lease_granted"])
+
+    def test_capability_expansion_privilege_drift_and_expiry_hold(self):
+        self.approve_staff()
+        self.assertEqual(
+            self._synthetic_lease(lease_tool_names=["spawn_agent"])["status"],
+            "HOLD_PRIVILEGED_WORKER_CAPABILITY")
+        self.assertEqual(
+            self._synthetic_lease(lease_tool_names=["write_file"])["status"],
+            "HOLD_CAPABILITY_SCOPE_EXPANSION")
+        self.assertEqual(
+            self._synthetic_lease(available_host_tools=[])["status"],
+            "HOLD_HOST_TOOL_NOT_CURRENTLY_REPORTED")
+        self.assertEqual(
+            self._synthetic_lease(lease_skill_names=["unapproved-skill"])["status"],
+            "HOLD_SKILL_SCOPE_EXPANSION")
+        self.assertEqual(
+            self._synthetic_lease(lease_expires_at="2099-01-01T00:00:00Z")["status"],
+            "HOLD_LEASE_EXPIRY_OUTSIDE_CHARTER")
+        self.assertEqual(
+            self._synthetic_lease(task_revision=42)["status"],
+            "HOLD_STALE_TASK_REVISION")
+        self.assertEqual(
+            self._synthetic_lease(permission_state="DENIED")["status"],
+            "HOLD_PERMISSION_DENIED")
+        self.assertEqual(
+            self._synthetic_lease(staff_event_key="missing-event")["status"],
+            "HOLD_EVENT_NOT_FOUND")
+
+    def test_duplicate_active_capability_intent_must_first_be_revoked(self):
+        previous = self._save_lease()
+        p = self._synthetic_lease(
+            event_key="lease-again",
+            lease_expires_at=previous["payload"]["lease_expires_at"])
+        self.assertEqual(p["status"], "CAPABILITY_INTENT_REVIEW")
+        denied = self._synthetic_lease(
+            event_key="lease-again",
+            lease_expires_at=previous["payload"]["lease_expires_at"],
+            expected_digest=p["review_digest"], confirm_write=True)
+        self.assertEqual(denied["status"], "HOLD_EXISTING_CAPABILITY_INTENT")
+
+    def test_revoke_request_allowed_on_paused_charter_without_claiming_host_stop(self):
+        self._save_lease()
+        change = orbit_mcp.execute(self.conn, "orbit_autopilot_charter", {
+            "project_root": str(self.root), "project": self.project,
+            "mission_id": self.mission, "action": "pause",
+            "expected_revision": 1, "confirm_write": True})
+        self.assertEqual(change["status"], "PAUSED")
+        args = {
+            "action": "revoke", "event_key": "revoke-api",
+            "lease_event_key": "lease-api", "task_key": "api",
+            "expected_revision": 2, "summary": "Revoke proposed access after paused mission",
+        }
+        preview = self.event(**args)
+        self.assertEqual(preview["status"], "CAPABILITY_REVOKE_REVIEW")
+        out = self.event(**{**args, "expected_digest": preview["review_digest"],
+                            "confirm_write": True})
+        self.assertEqual(out["status"], "CAPABILITY_REVOKE_REQUEST_RECORDED")
+        self.assertFalse(out["payload"]["host_revocation_verified"])
+        self.assertFalse(out["worker_stopped"])
+        self.assertEqual(self.event(**args)["status"],
+                         "HOLD_REVOKE_ALREADY_REQUESTED")
+        inbox = self.event(action="inbox", task_key="api")
+        self.assertTrue(
+            inbox["capability_intents"][0]["host_revocation_requested"])
+        self.assertFalse(inbox["capability_intents"][0]["actual_lease_granted"])
+
+    def test_host_reported_handoff_receipt_not_a_native_message(self):
+        request = {
+            "action": "handoff", "event_key": "api-to-qa",
+            "task_key": "api", "task_revision": 1,
+            "peer_task_key": "qa", "peer_revision": 1,
+            "summary": "Reviewed implementation evidence for downstream QA task",
+            "evidence_ref": "git:synthetic-reviewed-api-commit",
+        }
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks
+               SET status='REVIEW_ACCEPTED',review_evidence='local synthetic review'
+               WHERE project=? AND project_root=? AND task_key='api'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        preview = self.event(**request)
+        self.assertEqual(preview["status"], "HANDOFF_REVIEW")
+        recorded = self.event(**{**request, "expected_digest": preview["review_digest"],
+                                  "confirm_write": True})
+        self.assertEqual(recorded["status"], "HANDOFF_EVENT_RECORDED")
+        self.assertEqual(len(self.event(action="inbox", task_key="qa")[
+            "handoffs_without_reported_receipts"]), 1)
+        args = {
+            "action": "receipt", "event_key": "qa-receipt",
+            "task_key": "qa", "task_revision": 3,
+            "handoff_event_key": "api-to-qa",
+            "observed_host_session": "synthetic-host-session",
+            "summary": "Host reported viewing reviewed upstream evidence",
+        }
+        self.assertEqual(self.event(**args)["status"],
+                         "HOLD_STALE_TASK_REVISION")
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks
+               SET status='RUNNING',revision=3,host_session='synthetic-host-session'
+               WHERE project=? AND project_root=? AND task_key='qa'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        self.assertEqual(self.event(**{**args,
+            "observed_host_session": "unrelated-session"})["status"],
+                         "HOLD_NATIVE_SESSION_MISMATCH")
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks SET revision=2
+               WHERE project=? AND project_root=? AND task_key='api'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        self.assertEqual(self.event(**args)["status"],
+                         "HOLD_UPSTREAM_REVIEW_REVISION_DRIFT")
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks SET revision=1
+               WHERE project=? AND project_root=? AND task_key='api'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        proposed = self.event(**args)
+        self.assertEqual(proposed["status"], "HANDOFF_RECEIPT_REVIEW")
+        saved = self.event(**{**args, "expected_digest": proposed["review_digest"],
+                              "confirm_write": True})
+        self.assertEqual(saved["status"], "HANDOFF_RECEIPT_RECORDED")
+        self.assertFalse(saved["payload"]["host_delivery_verified"])
+        self.assertFalse(saved["peer_message_sent"])
+        self.assertEqual(self.event(**args)["status"],
+                         "HOLD_HANDOFF_ALREADY_ACKNOWLEDGED")
+        inbox = self.event(action="inbox", task_key="qa")
+        self.assertEqual(len(inbox["handoffs_without_reported_receipts"]), 0)
+        self.assertFalse(inbox["host_receipts_authenticated"])
+
+    def test_capability_receipt_actions_reject_unknown_fields(self):
+        with self.assertRaises(ValueError):
+            self.event(action="lease", event_key="unsafe",
+                       host_override_unsafe=True)
+        with self.assertRaises(ValueError):
+            self.event(action="receipt", event_key="unsafe",
+                       grant_permissions=True)
+        self.assertEqual(len(orbit_mcp.TOOLS), 57)
+
+
 if __name__ == "__main__":
     unittest.main()
