@@ -240,6 +240,15 @@ def _retire(conn, root, project, a, charter):
         return "HOLD_NATIVE_WORKER_RECONCILIATION", None
     if task["status"] not in {"REVIEW_ACCEPTED", "FAILED", "BLOCKED", "CANCELLED"}:
         return "HOLD_TASK_NOT_TERMINAL", None
+    # Neither a saved request nor an empty task session is evidence that a
+    # native worker ever existed; never claim such a worker was retired.
+    if not task["host_session"]:
+        return "HOLD_NO_RECORDED_HOST_SESSION", None
+    if not any(
+        row["event_type"] == "STAFF_REQUEST" and row["task_key"] == task["task_key"]
+        for row in _history(conn, root, project, a["mission_id"])
+    ):
+        return "HOLD_NO_STAFF_REQUEST_FOR_WORKER", None
     observed = a.get("host_terminal_state")
     if observed not in {"COMPLETED", "FAILED", "CANCELLED", "STOPPED"}:
         return "HOLD_HOST_TERMINAL_OBSERVATION_REQUIRED", None
