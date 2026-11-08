@@ -158,6 +158,32 @@ def install(changes):
                                             "--hosts","codex"]),1)
         self.assertFalse(self.marker.exists())
 
+    def test_stable_metadata_check_after_newer_candidate_is_read_only(self):
+        # A user on published candidate v0.31.0 should be able to LOOK at
+        # the older stable v0.30.0 without treating it as a failed update.
+        runtime=self.home/".orbit-universal"/"0.31.0"
+        runtime.mkdir(parents=True)
+        (runtime/"orbit_mcp.py").write_text("# synthetic")
+        info={"version":"0.30.0","url":"https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0",
+              "release_notes":"Test stable release only"}
+        with (patch.object(orbit_cli,"published_release",return_value=info),
+              patch.object(orbit_cli,"download",side_effect=AssertionError("No ZIP download for --check"))):
+            output=io.StringIO()
+            from contextlib import redirect_stdout, redirect_stderr
+            with redirect_stdout(output):
+                self.assertEqual(orbit_cli.main(["update","--channel","stable","--check"]),0)
+                self.assertEqual(orbit_cli.main(["update","--channel","stable",
+                                                 "--version","0.30.0","--check"]),0)
+            self.assertIn("older than installed v0.31.0",output.getvalue())
+            self.assertIn("No downgrade or file changes performed",output.getvalue())
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(orbit_cli.main(["update","--channel","stable",
+                                                 "--hosts","codex"]),1)
+                self.assertEqual(orbit_cli.main(["update","--channel","stable",
+                                                 "--hosts","codex","--apply"]),1)
+        self.assertEqual((runtime/"orbit_mcp.py").read_text(),"# synthetic")
+        self.assertFalse(self.marker.exists())
+
     def test_project_scope_requires_project_and_preserves_home(self):
         self.assertEqual(orbit_cli.main(["install","--scope","project",
                                         "--hosts","codex"]),1)
