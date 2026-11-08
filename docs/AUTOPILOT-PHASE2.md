@@ -116,3 +116,20 @@ This stacked source extension reuses the **same** `orbit_team_event` MCP and pro
 All new writes use the existing ACTIVE/unexpired/branch/revision-bound charter guard except emergency `revoke`, which accepts a matching mission identity, branch claim and latest charter revision even after pause/stop/expiry. No global permissions, recursive agent spawning, automatic installation, execution loops, auto-merges or self-updating policies have been introduced.
 
 **Host integration still required:** authenticated active host identity and native session inventory; permission-grant adapter with non-bypassable tool allowlists and model quotas; actual per-task tools/skills activation and revocation; explicit host-native handoff delivery and acknowledgment; independent QA and task retirement. A GitHub CI PASS cannot establish any of these live conditions.
+
+
+## Native Team Dispatch: permission-gated handoff packet (v0.32 draft)
+
+`orbit_team_event(action="dispatch")` is **read-only** and adds no MCP tool, native process, root permission, runner loop or database. It connects the previous separately reviewed `staff` and `lease` events to the existing task-ledger `RESERVED` state and `orbit_swarm_host.review` native-host preflight.
+
+A packet is returned **only if**:
+
+1. The active, unexpired founder Mission Charter still covers the task's immutable scope, caller-declared feature branch and exact mission revision. The exact **unstarted** task is already reserved, has no host session and is at precisely the first revision after the recorded staff/capability request. Old/retried reservations cannot silently reuse a worker capability intent.
+2. The referenced staff/lease events have their saved content hashes intact, are for the exact task and host, and the capability intent has not expired or received a revocation request. No other unresolved intent for that task is present. Worker tool candidates are still advertised by the declared host and never include recursive spawning/interrupt/messaging powers.
+3. The effective host working mode matches the reviewed capability intent. A read-only intent cannot dispatch a writable task, while writable intents must match the current task write scopes; real alias and conflict checks run through the existing native preflight. Local skill source tree/location SHA pins are rechecked immediately before packet creation.
+4. Every task dependency has current `REVIEW_ACCEPTED` evidence and exactly one previously recorded Orbit-routed handoff bound to the accepted upstream revision and the downstream pre-reservation revision; stale or ambiguous handoffs fail closed. The packet includes only event pointers/digests—not arbitrary peer instructions as trusted prompts.
+5. `orbit_swarm_host.review` accepts the exact reserved task without another active conflicting reservation, symlink/path escape, exceeded two-worker capacity, unavailable native tool or inconsistent host workspace mode. It returns a validated native invocation hint; **actual availability, consent and execution remain host-controlled**.
+
+The `dispatch_packet` includes the task/mission/host/skill pins, proposed tool **names not grants**, reviewed evidence pointers, exact allowed paths, native host handoff payload and explicit host-side rechecks. It never calls `collaboration.spawn_agent`, Antigravity's `invoke_subagent`, any model, an installer or an OS process. `confirm_write=true` is refused for dispatch; use the existing real host-native tool and then `orbit_task_started` with the genuine returned session. No agent/bot can bypass Orbit's founder/host authority through this API.
+
+**Acceptance still needed:** permission attestation from the actual host, actual native tool invocation and per-worker tool enforcement, native session lifecycle/stop, delivered bounded messages and acknowledgments, hostile-source security tests and signed-in Codex/Antigravity acceptance. Source-level GitHub CI is necessary but does not substitute for these.
