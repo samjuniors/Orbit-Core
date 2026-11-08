@@ -221,7 +221,7 @@ class AutopilotRunnerTests(unittest.TestCase):
             (work / "src/api/previous.py").unlink()
             return result
         result = self.invoke(launch)
-        self.assertEqual(result["status"], "HOLD_UNSAFE_CHANGED_FILE")
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CHANGED_FILE", result)
         self.assertEqual(self.job()["state"], "BLOCKED")
         self.assertTrue(old.is_file())
 
