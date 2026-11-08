@@ -598,7 +598,7 @@ TOOLS += [
      'inputSchema':schema({
          'project_root':string(2000),'project':string(80),
          'mission_id':string(80),
-         'action':{'type':'string','enum':['staff','handoff','retire','inbox','lease','revoke','receipt','dispatch','route','send_report']},
+         'action':{'type':'string','enum':['staff','handoff','retire','inbox','lease','revoke','receipt','dispatch','route','send_report','stop_request','stop_plan']},
          'expected_revision':{'type':'integer','minimum':1},
          'reported_branch':string(150),
          'event_key':string(64),

@@ -458,9 +458,12 @@ def _receipt(conn, root, project, a, charter):
     if (source["revision"] != handoff["source_revision"]
             or not source["review_evidence"]):
         return "HOLD_UPSTREAM_REVIEW_REVISION_DRIFT", None
+    history = _history(conn, root, project, a["mission_id"])
+    if any(e["event_type"] == "NATIVE_STOP_REQUEST"
+           and e["task_key"] == target["task_key"] for e in history):
+        return "HOLD_RECIPIENT_STOP_REQUESTED", None
     if any(e["event_type"] == "HANDOFF_RECEIPT" and
-           e["peer_task_key"] == source_key
-           for e in _history(conn, root, project, a["mission_id"])):
+           e["peer_task_key"] == source_key for e in history):
         return "HOLD_HANDOFF_ALREADY_ACKNOWLEDGED", None
     try:
         dependencies = json.loads(target["depends_on"])
@@ -815,6 +818,9 @@ def _route(conn, root, project, a, charter):
         return {**base, "status": "HOLD_INVALID_LEASE_EXPIRY"}
     if orbit_autopilot.utc_now() >= deadline:
         return {**base, "status": "HOLD_CAPABILITY_INTENT_EXPIRED"}
+    if any(e["event_type"] == "NATIVE_STOP_REQUEST"
+           and e["task_key"] == task["task_key"] for e in all_events):
+        return {**base, "status": "HOLD_RECIPIENT_STOP_REQUESTED"}
     if any(e["event_type"] == "HANDOFF_RECEIPT" and
            e["peer_task_key"] == source_key for e in all_events):
         return {**base, "status": "HOLD_HANDOFF_ALREADY_ACKNOWLEDGED"}
@@ -904,10 +910,117 @@ def _send_report(conn, root, project, a, charter):
     }
 
 
+def _stop_request(conn, root, project, a, charter):
+    """Record explicit operator-facing native worker stop intent, never PID kill."""
+    item, reason = _task(conn, root, project, a.get("task_key"),
+                         a.get("task_revision"))
+    if reason:
+        return reason, None
+    if item["task_key"] not in charter["task_keys"]:
+        return "HOLD_TASK_OUTSIDE_CHARTER", None
+    if item["status"] != "RUNNING" or not item["host_session"]:
+        return "HOLD_NATIVE_RUNNING_SESSION_REQUIRED", None
+    if a.get("observed_host_session") != item["host_session"]:
+        return "HOLD_NATIVE_SESSION_MISMATCH", None
+    if any(row["event_type"] == "NATIVE_STOP_REQUEST"
+           and row["task_key"] == item["task_key"]
+           for row in _history(conn, root, project, a["mission_id"])):
+        return "HOLD_STOP_ALREADY_REQUESTED", None
+    reason_text = _text(a, "summary", 12, 280)
+    return "NATIVE_STOP_REQUEST_REVIEW", {
+        "event_type": "NATIVE_STOP_REQUEST", "task_key": item["task_key"],
+        "task_revision": item["revision"],
+        "recipient_session_caller_reported": item["host_session"],
+        "requested_reason_untrusted": reason_text,
+        "native_host_stop_confirmed": False,
+        "process_terminated_by_orbit": False,
+        "task_scope_released": False,
+    }
+
+
+def _stop_plan(conn, root, project, a, charter):
+    """Read-only host-native stop hint; manual host UI fallback otherwise."""
+    common = {
+        "native_stop_invoked": False, "host_stop_verified": False,
+        "process_killed": False, "task_scope_released": False,
+        "state_written": False,
+    }
+    if a.get("confirm_write") is True:
+        return {**common, "status": "HOLD_STOP_PLAN_READ_ONLY"}
+    task, reason = _task(conn, root, project, a.get("task_key"),
+                         a.get("task_revision"))
+    if reason:
+        return {**common, "status": reason}
+    if task["task_key"] not in charter["task_keys"]:
+        return {**common, "status": "HOLD_TASK_OUTSIDE_CHARTER"}
+    if task["status"] != "RUNNING" or not task["host_session"]:
+        return {**common, "status": "HOLD_NATIVE_RUNNING_SESSION_REQUIRED"}
+    if a.get("observed_host_session") != task["host_session"]:
+        return {**common, "status": "HOLD_NATIVE_SESSION_MISMATCH"}
+    history = _history(conn, root, project, a["mission_id"])
+    requests = [row for row in history
+                if row["event_type"] == "NATIVE_STOP_REQUEST"
+                and row["task_key"] == task["task_key"]]
+    if len(requests) != 1:
+        return {**common, "status": "HOLD_EXACT_STOP_REQUEST_REQUIRED"}
+    stop_key = requests[0]["event_key"]
+    request, reason = _existing_event(
+        conn, root, project, a["mission_id"], stop_key, "NATIVE_STOP_REQUEST")
+    if reason:
+        return {**common, "status": reason}
+    if (request["task_revision"] != task["revision"]
+            or request["recipient_session_caller_reported"] != task["host_session"]):
+        return {**common, "status": "HOLD_STOP_SESSION_OR_REVISION_DRIFT"}
+    host = a.get("host")
+    if host not in orbit_delegation.HOST_NATIVE_TOOLS:
+        raise ValueError("Unsupported coding host for native stop")
+    tools = orbit_delegation.validate_reported_tools(
+        host, a.get("available_host_tools", []))
+    staff_rows = [row for row in history
+                  if row["event_type"] == "STAFF_REQUEST"
+                  and row["task_key"] == task["task_key"]]
+    if len(staff_rows) != 1:
+        return {**common, "status": "HOLD_STOP_STAFF_IDENTITY_MISSING"}
+    staff, reason = _existing_event(
+        conn, root, project, a["mission_id"],
+        staff_rows[0]["event_key"], "STAFF_REQUEST")
+    if reason:
+        return {**common, "status": reason}
+    if staff["host"] != host:
+        return {**common, "status": "HOLD_STOP_HOST_MISMATCH"}
+    # Do not pretend every supported IDE exposes a native interrupt tool.
+    if host != "codex" or "collaboration.interrupt_agent" not in tools:
+        return {**common, "status": "HOLD_NATIVE_STOP_TOOL_UNAVAILABLE",
+                "next": "Stop the exact worker in the host's native UI; inspect real liveness and then use orbit_task_report with a genuine observed terminal state."}
+    return {
+        **common, "status": "HOST_NATIVE_STOP_REVIEW_REQUIRED",
+        "host_action_hint": {
+            "format": "orbit-native-stop-v1",
+            "project": project, "mission_id": a["mission_id"],
+            "task_key": task["task_key"],
+            "task_revision": task["revision"],
+            "stop_event_key": stop_key,
+            "stop_digest": _digest(request),
+            "host": host,
+            "native_stop_tool_caller_reported": "collaboration.interrupt_agent",
+            "target_session_caller_reported": task["host_session"],
+            "native_session_identity_verified": False,
+            "actual_stop_verified": False,
+            "required_after_host": [
+                "Verify native host tool consent and exact worker session",
+                "Observe real host terminal state; never guess by stale PID",
+                "Record task outcome with orbit_task_report under revision gate",
+                "Inspect source/test evidence; archive worker only after host confirms stop",
+            ],
+        },
+        "next": "The signed-in host must invoke its real stop tool or UI. The MCP does not terminate a worker or free task scope.",
+    }
+
+
 def record(conn, root, project, a):
     """Preview or append an immutable proposal/evidence event within the charter."""
     action = a.get("action")
-    if action not in {"staff", "handoff", "retire", "inbox", "lease", "revoke", "receipt", "dispatch", "route", "send_report"}:
+    if action not in {"staff", "handoff", "retire", "inbox", "lease", "revoke", "receipt", "dispatch", "route", "send_report", "stop_request", "stop_plan"}:
         raise ValueError("Unknown team event action")
     mission = orbit_autopilot._mission_id(a)
     common = _common(mission, root, project, action)
@@ -976,7 +1089,7 @@ def record(conn, root, project, a):
             "host_receipts_authenticated": False,
         }
 
-    if action in {"revoke", "send_report"}:
+    if action in {"revoke", "send_report", "stop_request", "stop_plan"}:
         charter, reason = _revoke_guard(conn, root, project, a)
     else:
         charter, state, reason = orbit_autopilot._guard(conn, root, project, a)
@@ -986,6 +1099,8 @@ def record(conn, root, project, a):
         return {**common, **_dispatch(conn, root, project, a, charter)}
     if action == "route":
         return {**common, **_route(conn, root, project, a, charter)}
+    if action == "stop_plan":
+        return {**common, **_stop_plan(conn, root, project, a, charter)}
     if action == "staff":
         status, payload = _staff(conn, root, project, a, charter)
     elif action == "handoff":
@@ -998,6 +1113,8 @@ def record(conn, root, project, a):
         status, payload = _revoke(conn, root, project, a, charter)
     elif action == "send_report":
         status, payload = _send_report(conn, root, project, a, charter)
+    elif action == "stop_request":
+        status, payload = _stop_request(conn, root, project, a, charter)
     else:
         status, payload = _receipt(conn, root, project, a, charter)
     if payload is None:
@@ -1018,7 +1135,7 @@ def record(conn, root, project, a):
     setup(conn)
     conn.execute("BEGIN IMMEDIATE")
     try:
-        if action in {"revoke", "send_report"}:
+        if action in {"revoke", "send_report", "stop_request"}:
             fresh, error = _revoke_guard(conn, root, project, a)
         else:
             fresh, _, error = orbit_autopilot._guard(conn, root, project, a)
@@ -1037,6 +1154,8 @@ def record(conn, root, project, a):
             check, current = _revoke(conn, root, project, a, fresh)
         elif action == "send_report":
             check, current = _send_report(conn, root, project, a, fresh)
+        elif action == "stop_request":
+            check, current = _stop_request(conn, root, project, a, fresh)
         else:
             check, current = _receipt(conn, root, project, a, fresh)
         if current is None or _digest(current) != digest:
@@ -1089,5 +1208,6 @@ def record(conn, root, project, a):
         "revoke": "CAPABILITY_REVOKE_REQUEST_RECORDED",
         "receipt": "HANDOFF_RECEIPT_RECORDED",
         "send_report": "HOST_DELIVERY_OBSERVATION_RECORDED",
+        "stop_request": "NATIVE_STOP_REQUEST_RECORDED",
     }[action], "state_written": True,
             "next": "Host must separately verify permission, source evidence, and worker lifecycle. No native action was performed."}

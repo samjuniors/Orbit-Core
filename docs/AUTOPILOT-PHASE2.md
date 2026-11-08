@@ -146,3 +146,14 @@ The existing `orbit_team_event` API now supports the following coordinated path 
 5. `inbox` shows unacknowledged handoffs and whether a host send was *reported*, never falsely calling the report an independently verified delivery. The event journal has no recursive peer-to-peer subscriptions, automatic retry, background polling, cross-project visibility or secret-bearing message logs.
 
 **Unresolved live acceptance:** Host-native permission enforcement, real Codex `collaboration.send_message` invocation signature and session identity, actual observer trust, Antigravity fallback coordination, safe worker stop/recovery and independently verified delivery/QA require signed-in real host tests. Successful CI is synthetic source evidence only.
+
+
+## Native worker stop and reconciliation intents (v0.32 draft, no process control)
+
+Two additional `orbit_team_event` actions reuse the same bounded project/mission journal and the **existing host-native task ledger**:
+
+- **`stop_request` (append-only audit):** Accept a single digest-confirmed request for an exact RUNNING task revision and matching caller-observed native host session. It remains recordable when the Mission Charter has been paused/stopped/expired so stopping an already-running worker is never blocked by the mission gate. It does not claim actual process termination, release task file reservations, revoke a model token or delete any user profile. Duplicate requests HOLD.
+- **`stop_plan` (read-only):** Retrieve the exact stop request and matched live recorded task/session for the original staffing host. For Codex, only a currently caller-advertised `collaboration.interrupt_agent` produces a **host-native interrupt hint** (not a call). For Antigravity and all other hosts without a verified native interrupt tool, HOLD with instructions to use the host's real UI; **never invent a stop tool or kill a persisted PID**. A stale revision, wrong host, wrong session, missing stop request or attempt to `confirm_write` to the plan fails closed.
+- While a stop request remains outstanding, a worker cannot receive a new Orbit-routed relay preview. Host actions, worker liveness and actual session termination remain independently verified by the connected coding IDE. After genuine host termination, the normal `orbit_task_report` and reviewed task ledger transition are mandatory before retirement is considered.
+
+The v0.32 implementation **does not automatically stop a worker**, revoke host tool permissions, free a task reservation, alter an active status or continue background execution. The local Codex runner has its own attached-process stop logic and intentionally does not kill arbitrary stored PIDs; do not conflate that controlled child process with an IDE-native worker.

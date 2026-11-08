@@ -751,5 +751,108 @@ class CharteredTeamEventTests(unittest.TestCase):
                          "HOLD_NATIVE_SESSION_MISMATCH")
 
 
+    def test_native_stop_request_is_audit_only_and_not_pid_kill(self):
+        recipient = self._native_recipient_with_handoff()
+        request = {
+            "action": "stop_request", "event_key": "stop-qa",
+            "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "summary": "Owner requested stop of this bounded synthetic worker",
+        }
+        before = self.conn.total_changes
+        p = self.event(**request)
+        self.assertEqual(p["status"], "NATIVE_STOP_REQUEST_REVIEW")
+        self.assertEqual(before, self.conn.total_changes)
+        self.assertFalse(p["payload"]["process_terminated_by_orbit"])
+        saved = self.event(**{**request,
+            "expected_digest": p["review_digest"], "confirm_write": True})
+        self.assertEqual(saved["status"], "NATIVE_STOP_REQUEST_RECORDED")
+        self.assertTrue(saved["state_written"])
+        self.assertFalse(saved["payload"]["task_scope_released"])
+        self.assertEqual(self.event(**request)["status"],
+                         "HOLD_STOP_ALREADY_REQUESTED")
+        self.assertEqual(self.event(**recipient)["status"],
+                         "HOLD_RECIPIENT_STOP_REQUESTED")
+        self.assertEqual(self.event(
+            action="receipt", event_key="post-stop-receipt",
+            task_key="qa", task_revision=3,
+            handoff_event_key="api-to-qa",
+            observed_host_session="claimed-codex-native-session",
+            summary="Attempted receipt after native worker stop request")["status"],
+                         "HOLD_RECIPIENT_STOP_REQUESTED")
+        current = orbit_tasks._row(self.conn,
+            {"project":self.project,"task_key":"qa"}, self.root)
+        self.assertEqual(current["status"], "RUNNING")
+
+    def test_stop_plan_native_codex_hint_or_host_ui_fallback(self):
+        self._native_recipient_with_handoff()
+        plan = {
+            "action": "stop_plan", "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "host": "codex",
+            "available_host_tools": ["collaboration.interrupt_agent"],
+        }
+        self.assertEqual(self.event(**plan)["status"],
+                         "HOLD_EXACT_STOP_REQUEST_REQUIRED")
+        request = {
+            "action": "stop_request", "event_key": "stop-qa",
+            "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "summary": "Stop for host reconciliation of native task session",
+        }
+        p = self.event(**request)
+        self.assertEqual(p["status"], "NATIVE_STOP_REQUEST_REVIEW")
+        self.assertEqual(self.event(**{**request,
+            "expected_digest": p["review_digest"], "confirm_write": True})["status"],
+            "NATIVE_STOP_REQUEST_RECORDED")
+        before = self.conn.total_changes
+        ready = self.event(**plan)
+        self.assertEqual(ready["status"], "HOST_NATIVE_STOP_REVIEW_REQUIRED")
+        self.assertEqual(before, self.conn.total_changes)
+        self.assertFalse(ready["native_stop_invoked"])
+        self.assertFalse(ready["task_scope_released"])
+        self.assertEqual(ready["host_action_hint"]["native_stop_tool_caller_reported"],
+                         "collaboration.interrupt_agent")
+        self.assertEqual(ready["host_action_hint"]["target_session_caller_reported"],
+                         "claimed-codex-native-session")
+        self.assertFalse(ready["host_action_hint"]["actual_stop_verified"])
+        self.assertEqual(self.event(**{**plan,"host":"antigravity",
+            "available_host_tools":["invoke_subagent"]})["status"],
+                         "HOLD_STOP_HOST_MISMATCH")
+        self.assertEqual(self.event(**{**plan,
+            "available_host_tools":[]})["status"],
+                         "HOLD_NATIVE_STOP_TOOL_UNAVAILABLE")
+        self.assertEqual(self.event(**{**plan,
+            "observed_host_session":"wrong-session"})["status"],
+                         "HOLD_NATIVE_SESSION_MISMATCH")
+        self.assertEqual(self.event(**{**plan, "confirm_write": True})["status"],
+                         "HOLD_STOP_PLAN_READ_ONLY")
+
+    def test_paused_mission_still_accepts_stop_request_and_safe_plan(self):
+        self._native_recipient_with_handoff()
+        paused = orbit_mcp.execute(self.conn, "orbit_autopilot_charter", {
+            "project_root":str(self.root),"project":self.project,
+            "mission_id":self.mission,"action":"pause",
+            "expected_revision":1,"confirm_write":True})
+        self.assertEqual(paused["status"],"PAUSED")
+        req={
+            "action":"stop_request","event_key":"paused-stop",
+            "task_key":"qa","task_revision":3,
+            "expected_revision":2,
+            "observed_host_session":"claimed-codex-native-session",
+            "summary":"Pause requires stopping exact synthetic host worker",
+        }
+        p=self.event(**req)
+        self.assertEqual(p["status"],"NATIVE_STOP_REQUEST_REVIEW")
+        saved=self.event(**{**req,"expected_digest":p["review_digest"],
+                            "confirm_write":True})
+        self.assertEqual(saved["status"],"NATIVE_STOP_REQUEST_RECORDED")
+        hint=self.event(action="stop_plan", task_key="qa",task_revision=3,
+                        expected_revision=2,host="codex",
+                        observed_host_session="claimed-codex-native-session",
+                        available_host_tools=["collaboration.interrupt_agent"])
+        self.assertEqual(hint["status"],"HOST_NATIVE_STOP_REVIEW_REQUIRED")
+        self.assertFalse(hint["native_stop_invoked"])
+
 if __name__ == "__main__":
     unittest.main()
