@@ -82,12 +82,14 @@ class CharteredTeamEventTests(unittest.TestCase):
                                  {**self.args, **kwargs})
 
     def staffing(self, **kwargs):
-        return self.event(
-            action="staff", event_key="staff-api", task_key="api",
-            task_revision=1, worker_kind="agent", host="codex",
-            available_host_tools=["collaboration.spawn_agent", "read_file", "test_runner"],
-            requested_tool_names=["read_file", "test_runner"],
-            requested_skill_names=[], permission_state="UNKNOWN", **kwargs)
+        fields = {
+            "action": "staff", "event_key": "staff-api", "task_key": "api",
+            "task_revision": 1, "worker_kind": "agent", "host": "codex",
+            "available_host_tools": ["collaboration.spawn_agent", "read_file", "test_runner"],
+            "requested_tool_names": ["read_file", "test_runner"],
+            "requested_skill_names": [], "permission_state": "UNKNOWN",
+        }
+        return self.event(**{**fields, **kwargs})
 
     def approve_staff(self, **kwargs):
         proposal = self.staffing(**kwargs)
