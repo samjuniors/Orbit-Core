@@ -594,11 +594,11 @@ TOOLS += [
              ['task_key','expected_revision'])}
      },['project_root','project','host','tasks'])},
     {'name':'orbit_team_event',
-     'description':'Draft and optionally append a charter-bound staffing, agent/bot handoff or retirement evidence event to the EXISTING project task ledger adjunct journal. No native agent execution, skill activation, peer message, host permission or deletion occurs.',
+     'description':'Draft/review charter-bound staffing, candidate worker capability intent, revoke request, handoff/receipt or retirement evidence in project-local task adjunct journal. These are untrusted host reports; no native tool grant, peer message, worker stop, or code execution occurs.',
      'inputSchema':schema({
          'project_root':string(2000),'project':string(80),
          'mission_id':string(80),
-         'action':{'type':'string','enum':['staff','handoff','retire','inbox']},
+         'action':{'type':'string','enum':['staff','handoff','retire','inbox','lease','revoke','receipt']},
          'expected_revision':{'type':'integer','minimum':1},
          'reported_branch':string(150),
          'event_key':string(64),
@@ -609,6 +609,13 @@ TOOLS += [
          'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
          'requested_tool_names':{'type':'array','maxItems':6,'items':string(64)},
          'requested_skill_names':{'type':'array','maxItems':3,'items':string(80)},
+         'staff_event_key':string(64),
+         'lease_event_key':string(64),
+         'handoff_event_key':string(64),
+         'lease_tool_names':{'type':'array','maxItems':3,'items':string(64)},
+         'lease_skill_names':{'type':'array','maxItems':3,'items':string(80)},
+         'lease_expires_at':string(20),
+         'host_workspace_mode':{'type':'string','enum':['read-only','workspace-write']},
          'project_profile':schema({
              'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
              'platform':{'type':'string','enum':sorted(orbit_skill_plan.PLATFORMS)},
