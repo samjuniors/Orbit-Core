@@ -34,6 +34,7 @@ import orbit_pulse
 import orbit_improvement
 import orbit_agent_factory
 import orbit_team_builder
+import orbit_team_events
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -592,6 +593,44 @@ TOOLS += [
              'kind':{'type':'string','enum':['adaptive','agent','bot']}},
              ['task_key','expected_revision'])}
      },['project_root','project','host','tasks'])},
+    {'name':'orbit_team_event',
+     'description':'Draft and optionally append a charter-bound staffing, agent/bot handoff or retirement evidence event to the EXISTING project task ledger adjunct journal. No native agent execution, skill activation, peer message, host permission or deletion occurs.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),
+         'mission_id':string(80),
+         'action':{'type':'string','enum':['staff','handoff','retire','inbox']},
+         'expected_revision':{'type':'integer','minimum':1},
+         'reported_branch':string(150),
+         'event_key':string(64),
+         'task_key':string(80),'task_revision':{'type':'integer','minimum':1},
+         'peer_task_key':string(80),'peer_revision':{'type':'integer','minimum':1},
+         'worker_kind':{'type':'string','enum':['agent','bot']},
+         'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
+         'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'requested_tool_names':{'type':'array','maxItems':6,'items':string(64)},
+         'requested_skill_names':{'type':'array','maxItems':3,'items':string(80)},
+         'project_profile':schema({
+             'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
+             'platform':{'type':'string','enum':sorted(orbit_skill_plan.PLATFORMS)},
+             'technologies':{'type':'array','maxItems':8,'items':{'type':'string','enum':sorted(orbit_skill_plan.TECHNOLOGIES)}},
+             'operation':{'type':'string','enum':sorted(orbit_skill_plan.OPERATIONS)}},[]),
+         'review_manifest':schema({
+             'format':{'type':'string','enum':['orbit-skill-plan-v2']},
+             'context_sha256':{'type':'string','minLength':64,'maxLength':64},
+             'skills':{'type':'array','maxItems':3,'items':schema({
+                 'name':string(80),
+                 'sha256':{'type':'string','minLength':64,'maxLength':64},
+                 'tree_sha256':{'type':'string','minLength':64,'maxLength':64},
+                 'location_sha256':{'type':'string','minLength':64,'maxLength':64}
+             },['name','sha256','tree_sha256','location_sha256'])}
+         },['format','context_sha256','skills']),
+         'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
+         'summary':string(280),'evidence_ref':string(200),
+         'host_terminal_state':{'type':'string','enum':['COMPLETED','FAILED','CANCELLED','STOPPED']},
+         'observed_host_session':string(240),
+         'expected_digest':{'type':'string','minLength':64,'maxLength':64},
+         'confirm_write':{'type':'boolean'}
+     },['project_root','project','mission_id','action'])},
     {'name':'orbit_specialist_candidate',
      'description':'Reuse existing Orbit specialist when available, otherwise preview or explicitly write a NEW instruction-only project-scoped agent candidate. No host registration, permission grant, installation, code execution or worker spawn.',
      'inputSchema':schema({
@@ -697,6 +736,9 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name=='orbit_team_event':
+        root=project_root(a)
+        return orbit_team_events.record(conn,root,project_key(a),a)
     if name=='orbit_team_preview':
         root=project_root(a)
         return orbit_team_builder.preview(conn,root,project_key(a),a)

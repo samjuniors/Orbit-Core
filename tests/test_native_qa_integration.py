@@ -390,7 +390,7 @@ class NativeHostQAIntegrationTests(unittest.TestCase):
         self.assertNotIn("native-qa-lab", json.dumps(other))
         with self.assertRaises(ValueError):
             self.review("external")
-        self.assertEqual(len(orbit_mcp.TOOLS), 56)
+        self.assertEqual(len(orbit_mcp.TOOLS), 57)
         tool = next(x for x in orbit_mcp.TOOLS
                     if x["name"] == "orbit_swarm_integration_review")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
