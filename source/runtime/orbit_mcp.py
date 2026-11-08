@@ -594,11 +594,11 @@ TOOLS += [
              ['task_key','expected_revision'])}
      },['project_root','project','host','tasks'])},
     {'name':'orbit_team_event',
-     'description':'Draft/review charter-bound staffing, candidate worker capability intent, revoke request, handoff/receipt or retirement evidence in project-local task adjunct journal. These are untrusted host reports; no native tool grant, peer message, worker stop, or code execution occurs.',
+     'description':'Charter-bound team staffing, capability intent, revoke, handoff, receipt, retirement and read-only native dispatch preflight. The packet binds existing task reservations, skill pins, host tool hints and reviewed dependencies; the real host alone grants permission and invokes workers.',
      'inputSchema':schema({
          'project_root':string(2000),'project':string(80),
          'mission_id':string(80),
-         'action':{'type':'string','enum':['staff','handoff','retire','inbox','lease','revoke','receipt']},
+         'action':{'type':'string','enum':['staff','handoff','retire','inbox','lease','revoke','receipt','dispatch']},
          'expected_revision':{'type':'integer','minimum':1},
          'reported_branch':string(150),
          'event_key':string(64),
