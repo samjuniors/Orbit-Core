@@ -30,6 +30,7 @@ import orbit_tasks
 RUNNING = "RUNNING"
 TERMINAL = {"REVIEW_REQUIRED", "BLOCKED", "STOPPED", "RECOVERY_REQUIRED"}
 MAX_SECONDS = 600
+MAX_LOCAL_LAUNCHES_PER_UTC_DAY = 4
 MAX_OUTPUT_BYTES = 1_500_000
 POLL_SECONDS = 0.2
 
@@ -60,9 +61,37 @@ def setup(conn):
         mission_id TEXT NOT NULL, task_key TEXT NOT NULL, source_head TEXT NOT NULL,
         reviewed_source_head TEXT NOT NULL, workspace TEXT NOT NULL,
         changed_paths TEXT NOT NULL, review_evidence TEXT NOT NULL,
-        handoff_at TEXT NOT NULL
+        handoff_at TEXT NOT NULL, started_at TEXT NOT NULL DEFAULT ''
     )""")
+    history_cols = {row[1] for row in conn.execute(
+        "PRAGMA table_info(orbit_autopilot_runner_history)")}
+    if "started_at" not in history_cols:
+        conn.execute("ALTER TABLE orbit_autopilot_runner_history "
+                     "ADD COLUMN started_at TEXT NOT NULL DEFAULT ''")
     conn.commit()
+
+
+def _local_launch_budget(conn, root):
+    """Enforce local start count per root and UTC day; not host token billing.
+
+    Both active/blocked jobs and reviewed historical runs count. Legacy
+    history missing start times is conservatively charged on handoff day.
+    """
+    day = _now()[:10]
+    jobs = conn.execute(
+        """SELECT COUNT(*) FROM orbit_autopilot_runner_jobs
+           WHERE project_root=? AND substr(started_at,1,10)=?""",
+        (str(root), day)).fetchone()[0]
+    archived = conn.execute(
+        """SELECT COUNT(*) FROM orbit_autopilot_runner_history
+           WHERE project_root=? AND
+            (substr(started_at,1,10)=? OR
+             (started_at='' AND substr(handoff_at,1,10)=?))""",
+        (str(root), day, day)).fetchone()[0]
+    return {"used": jobs + archived,
+            "limit": MAX_LOCAL_LAUNCHES_PER_UTC_DAY,
+            "period": day + " UTC",
+            "model_tokens_or_cost_measured": False}
 
 
 def _job(conn, root, project, mission):
@@ -142,6 +171,11 @@ def preview(conn, root, project, mission, revision):
         return {"status": "HOLD_PREVIOUS_RUN", "previous": _public(previous),
                 "execution_started": False}
 
+    budget = _local_launch_budget(conn, root)
+    if budget["used"] >= budget["limit"]:
+        return {"status": "HOLD_DAILY_LOCAL_LAUNCH_BUDGET",
+                "local_launch_budget": budget, "execution_started": False}
+
     # The existing DAG validates task status, dependencies, scope collisions,
     # concurrent active reservations and read-only workspaces. Codex EXEC is a
     # host process adapter, NOT an alleged native "spawn_agent" tool. Pass no
@@ -171,7 +205,8 @@ def preview(conn, root, project, mission, revision):
         "sandbox_policy": "workspace-write",
         "approval_policy": "never (outside-sandbox requests fail)",
         "max_run_seconds": MAX_SECONDS,
-        "max_tasks_per_run": 1, "source_checkout_will_be_edited": False,
+        "max_tasks_per_run": 1, "local_launch_budget": budget,
+        "source_checkout_will_be_edited": False,
         "permission_approval_authenticated": False, "execution_started": False,
         "next": "The local operator must review this exact mission and type its confirmation in a real terminal; the Codex host may still deny a tool.",
     }
@@ -673,11 +708,12 @@ def advance_reviewed(conn, root, project, mission, revision, *, confirm_write=Fa
         conn.execute(
             """INSERT INTO orbit_autopilot_runner_history
                (run_id,project,project_root,mission_id,task_key,source_head,
-                reviewed_source_head,workspace,changed_paths,review_evidence,handoff_at)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                reviewed_source_head,workspace,changed_paths,review_evidence,
+               handoff_at,started_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
             (job["run_id"], project, str(root), mission, job["task_key"],
              job["source_head"], info["source_head_verified"], job["workspace"],
-             job["changed_paths"], evidence, _now()),
+             job["changed_paths"], evidence, _now(), job["started_at"]),
         )
         count = conn.execute(
             """DELETE FROM orbit_autopilot_runner_jobs
