@@ -15,6 +15,7 @@ import orbit_autopilot
 import orbit_capabilities
 import orbit_delegation
 import orbit_skill_plan
+import orbit_swarm_host
 import orbit_tasks
 import orbit_team_builder
 
