@@ -458,9 +458,12 @@ def _receipt(conn, root, project, a, charter):
     if (source["revision"] != handoff["source_revision"]
             or not source["review_evidence"]):
         return "HOLD_UPSTREAM_REVIEW_REVISION_DRIFT", None
+    history = _history(conn, root, project, a["mission_id"])
+    if any(e["event_type"] == "NATIVE_STOP_REQUEST"
+           and e["task_key"] == target["task_key"] for e in history):
+        return "HOLD_RECIPIENT_STOP_REQUESTED", None
     if any(e["event_type"] == "HANDOFF_RECEIPT" and
-           e["peer_task_key"] == source_key
-           for e in _history(conn, root, project, a["mission_id"])):
+           e["peer_task_key"] == source_key for e in history):
         return "HOLD_HANDOFF_ALREADY_ACKNOWLEDGED", None
     try:
         dependencies = json.loads(target["depends_on"])
