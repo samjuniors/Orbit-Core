@@ -272,7 +272,7 @@ class AutopilotRunnerTests(unittest.TestCase):
             # The output is explicitly ignored by Git but remains an actual
             # worker-created file outside the chartered writable paths.
             with (work / ".git/info/exclude").open("a", encoding="utf-8") as fh:
-                fh.write("\\ngenerated/\\n")
+                fh.write("\ngenerated/\n")
             generated = work / "generated"
             generated.mkdir()
             (generated / "hidden.txt").write_text("unreviewed fixture output")
