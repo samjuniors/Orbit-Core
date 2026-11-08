@@ -153,7 +153,7 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(self.staffing(permission_state="DENIED")["status"],
                          "HOLD_PERMISSION_DENIED")
         with self.assertRaises(ValueError):
-            self.staffing(requested_tool_names=["not-advertised"],
+            self.staffing(requested_tool_names=["read_file"],
                           permission_state="INVALID")
         result = self.staffing(requested_tool_names=["not-advertised"])
         self.assertEqual(result["status"], "HOLD_UNADVERTISED_TOOL")
@@ -214,7 +214,9 @@ class CharteredTeamEventTests(unittest.TestCase):
     def test_paused_charter_holds_write_and_history_is_still_visible(self):
         self.approve_staff()
         control = orbit_mcp.execute(self.conn, "orbit_autopilot_charter", {
-            **self.args, "action": "pause", "confirm_write": True})
+            "project_root": str(self.root), "project": self.project,
+            "mission_id": self.mission, "expected_revision": 1,
+            "action": "pause", "confirm_write": True})
         self.assertEqual(control["status"], "PAUSED")
         self.assertEqual(self.staffing(event_key="another")["status"],
                          "HOLD_MISSION_INACTIVE")
