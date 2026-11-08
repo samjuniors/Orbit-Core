@@ -189,6 +189,67 @@ class AutopilotRunnerTests(unittest.TestCase):
         self.assertEqual(self.job()["state"], "BLOCKED")
         self.assertEqual(self.preview()["status"], "HOLD_PREVIOUS_RUN")
 
+    def test_worker_git_commit_cannot_hide_changed_files(self):
+        def launch(work, prompt, logs, executable):
+            process = self.launch_success(work, prompt, logs, executable)
+            git(work, "add", "src/api/api.py")
+            git(work, "-c", "user.name=Test", "-c", "user.email=qa@example.invalid",
+                "commit", "-m", "worker must not commit")
+            return process
+        result = self.invoke(launch)
+        self.assertEqual(result["status"], "HOLD_ISOLATED_GIT_HEAD_DRIFT")
+        self.assertEqual(self.job()["state"], "BLOCKED")
+        self.assertFalse((self.root / "src/api/api.py").exists())
+
+    def test_worker_added_git_remote_does_not_pass_review(self):
+        def launch(work, prompt, logs, executable):
+            process = self.launch_success(work, prompt, logs, executable)
+            git(work, "remote", "add", "origin", "https://example.invalid/blocked.git")
+            return process
+        result = self.invoke(launch)
+        self.assertEqual(result["status"], "HOLD_ISOLATED_GIT_REMOTE_ADDED")
+        self.assertEqual(self.job()["state"], "BLOCKED")
+
+    def test_in_scope_tracked_deletion_is_not_auto_reviewable(self):
+        old = self.root / "src/api/previous.py"
+        old.parent.mkdir(parents=True)
+        old.write_text("preserve historical source\\n")
+        git(self.root, "add", "src/api/previous.py")
+        git(self.root, "commit", "-m", "Fixture tracked file for deletion test")
+        def launch(work, prompt, logs, executable):
+            result = self.launch_success(work, prompt, logs, executable)
+            (work / "src/api/previous.py").unlink()
+            return result
+        result = self.invoke(launch)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CHANGED_FILE")
+        self.assertEqual(self.job()["state"], "BLOCKED")
+        self.assertTrue(old.is_file())
+
+    def test_in_scope_symlink_cannot_alias_another_file(self):
+        def launch(work, prompt, logs, executable):
+            result = self.launch_success(work, prompt, logs, executable)
+            target = work / "src/api/symlink.py"
+            try:
+                target.symlink_to(work / "README.md")
+            except (OSError, NotImplementedError) as exc:
+                self.skipTest("Host forbids disposable symlink creation: " + str(exc))
+            return result
+        result = self.invoke(launch)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CHANGED_FILE")
+        self.assertEqual(self.job()["state"], "BLOCKED")
+
+    def test_in_scope_hardlink_cannot_alias_another_file(self):
+        def launch(work, prompt, logs, executable):
+            result = self.launch_success(work, prompt, logs, executable)
+            try:
+                os.link(work / "README.md", work / "src/api/linked.py")
+            except (OSError, NotImplementedError) as exc:
+                self.skipTest("Host forbids disposable hardlink creation: " + str(exc))
+            return result
+        result = self.invoke(launch)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CHANGED_HARDLINK")
+        self.assertEqual(self.job()["state"], "BLOCKED")
+
     def test_out_of_scope_code_never_autoreviewed_or_applied(self):
         result = self.invoke(self.launch_rogue)
         self.assertEqual(result["status"], "HOLD_OUT_OF_SCOPE_CHANGES")
