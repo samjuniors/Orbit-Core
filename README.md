@@ -33,6 +33,7 @@ AI coding agents can implement work quickly, but long-running projects still nee
 
 Orbit is an **MCP (Model Context Protocol) tool server and host-adapted workflow** for organizing software work across a project's lifetime: new applications, existing codebases, incremental features, debugging, redesign and maintenance.
 
+- **Research before planning.** For new products and major design choices, compare applicable competitors and open-source alternatives (including license, reuse and build-vs-integrate tradeoffs) before proposing the stack or roadmap; small fixes use focused technical research. New full-build RESEARCH evidence uses a versioned gate in the v0.32 development source, while existing builds remain resumable.
 - **Plan with context.** Gather only consequential decisions, support custom requirements, and use approved milestone gates rather than a fixed interview for every task.
 - **Coordinate specialists.** Prepare bounded tasks, file ownership and evidence requirements. Real subagents run **only through native tools provided by the connected host**.
 - **Remember useful progress.** Keep project checkpoints, task records and approved reference pointers in local SQLite; retrieve compact context instead of rereading every document.
