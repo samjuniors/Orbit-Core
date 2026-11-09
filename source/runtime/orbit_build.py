@@ -660,6 +660,10 @@ def begin(conn,root,a):
     flow=SCOPED_FLOWS[kind] if kind else flow_for_project(conn,root,a)
     stage=flow[0]
     evidence={'__orbit_policy':'approval-v1','__orbit_flow':list(flow)}
+    if not kind:
+        # Newly created full builds require competitor and OSS comparison evidence.
+        # Legacy builds remain untouched and keep their original RESEARCH schema.
+        evidence['__orbit_research_policy']='comparison-v1'
     if kind:
         evidence['__orbit_change_kind']=kind
         evidence['__orbit_anchor']={'build_id':source_id,'revision':anchor['revision']} if anchor else {
@@ -730,6 +734,66 @@ def valid_stage_evidence(stage, evidence):
                all(isinstance(v,str) and 3<=len(v)<=240 for v in data[x])
                for x in keys)
 
+
+# New full-build research gate. This checks structure and traceable pointers only;
+# the coding host must actually visit sources, check licenses and assess freshness.
+# Existing persisted builds without the marker continue to accept the v0.31 schema.
+RESEARCH_ROUTES={'REUSE','ADAPT','INTEGRATE','BUILD_NEW','NO_BUILD'}
+RESEARCH_V2_KEYS={'task','candidates','decision','sources','risks',
+                  'competitors','open_source','exceptions','routes_considered',
+                  'selected_route','unknowns','checked_on'}
+
+def valid_research_comparison(evidence):
+    try:
+        report=json.loads(evidence)
+    except (ValueError,TypeError):
+        return False
+    if not isinstance(report,dict) or set(report)!=RESEARCH_V2_KEYS:
+        return False
+    baseline={k:report[k] for k in ('task','candidates','decision','sources','risks')}
+    if not valid_stage_evidence('RESEARCH',json.dumps(baseline)):
+        return False
+    checked=report['checked_on']
+    if not isinstance(checked,str):
+        return False
+    try:
+        if datetime.strptime(checked,'%Y-%m-%d').strftime('%Y-%m-%d')!=checked:
+            return False
+    except ValueError:
+        return False
+    routes=report['routes_considered']
+    if (not isinstance(routes,list) or not 2<=len(routes)<=5 or
+            len(set(str(x) for x in routes))!=len(routes) or
+            any(not isinstance(x,str) or x not in RESEARCH_ROUTES for x in routes) or
+            'BUILD_NEW' not in routes or
+            not any(x in routes for x in ('REUSE','ADAPT','INTEGRATE','NO_BUILD')) or
+            report['selected_route'] not in routes):
+        return False
+    if (not isinstance(report['unknowns'],list) or len(report['unknowns'])>6 or
+            any(not isinstance(x,str) or not 4<=len(x.strip())<=240
+                for x in report['unknowns'])):
+        return False
+    exceptions=report['exceptions']
+    if not isinstance(exceptions,dict) or any(k not in {'competitors','open_source'} for k in exceptions):
+        return False
+    for section,fields in (('competitors',{'name','source','finding'}),
+                           ('open_source',{'name','source','finding','license'})):
+        options=report[section]
+        if not isinstance(options,list) or len(options)>6:
+            return False
+        if not options:
+            reason=exceptions.get(section)
+            if not isinstance(reason,str) or not 16<=len(reason.strip())<=240:
+                return False
+        for item in options:
+            if (not isinstance(item,dict) or set(item)!=fields or
+                    any(not isinstance(item[k],str) or not 3<=len(item[k].strip())<=250
+                        for k in fields) or
+                    not item['source'].startswith('https://') or
+                    not re.fullmatch(r'https://[^\s/@]+(?:/[^\s]*)?',item['source'])):
+                return False
+    return True
+
 def advance(conn,root,a):
     row=get(conn,root,a)
     if not row: raise ValueError('Build not found')
@@ -739,8 +803,8 @@ def advance(conn,root,a):
     outcome=a['outcome']
     if outcome not in {'PASS','FAIL','BLOCKED'}: raise ValueError('outcome must be PASS/FAIL/BLOCKED')
     evidence=a['evidence']
-    if not isinstance(evidence,str) or not 1<=len(evidence)<=1600:
-        raise ValueError('evidence must be bounded text')
+    if not isinstance(evidence,str) or not 1<=len(evidence)<=4500:
+        raise ValueError('evidence must be bounded text (max 4500 characters)')
     evidence_map=json.loads(row['evidence_json'])
     if evidence_map.get('__orbit_control',{}).get('paused') is True:
         return {'status':'HOLD','reason':'Build ledger is paused; resume with the current revision before advancing.'}
@@ -755,7 +819,13 @@ def advance(conn,root,a):
             and evidence_map.get('__orbit_policy')=='approval-v1'
             and not valid_approved_plan(evidence)):
         return {'status':'HOLD','reason':'Show/edit the plan, list bounded tasks and obtain actual user plan approval or explicit build delegation before implementation.'}
-    if outcome=='PASS' and not valid_stage_evidence(row['stage'],evidence):
+    if (row['stage']=='RESEARCH' and outcome=='PASS' and
+            evidence_map.get('__orbit_research_policy')=='comparison-v1'):
+        if not valid_research_comparison(evidence):
+            return {'status':'HOLD','reason':('Fresh product RESEARCH requires an evidence-backed competitor/open-source comparison, '
+                   'source links, dated findings, considered reuse/build routes and explicit unknowns before PLAN. '
+                   'See source/skills/orbit/references/RESEARCH-FIRST.md. Sources are host-reported, not independently verified.')}
+    elif outcome=='PASS' and not valid_stage_evidence(row['stage'],evidence):
         return {'status':'HOLD','reason':'RESEARCH/VERIFY PASS needs structured task, reuse, command, edge-case and security evidence.'}
     # A readiness probe is evidence of a live local app server, not a functional pass.
     if row['stage']=='PREVIEW' and outcome=='PASS':

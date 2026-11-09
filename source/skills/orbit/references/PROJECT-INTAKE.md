@@ -1,6 +1,6 @@
 # Orbit guided project intake (v0.24 development candidate)
 
-**Before planning a fresh nontrivial project, interview the user; do not silently choose the stack.** This is host-model behavior, not an independent AI service or new MCP tool.
+**Before planning a fresh nontrivial project, research relevant alternatives and interview only for consequential unknowns; do not silently choose the stack.** See [RESEARCH-FIRST](RESEARCH-FIRST.md). An essential product-audience scoping question can precede research when necessary; the research synthesis and options must precede architectural decisions and a roadmap. This is host-model behavior, not an independent AI service or web-search MCP tool.
 
 1. Audit the actual project, Git branch, README, requirements, docs, ADRs, existing stack, .orbit/STATE.md and decisions. **Do not repeat an interview on a resumed or already specified project.**
 2. Interpret everyday language ("build a todo app") into a compact **PROPOSED** brief: goal, audience, product, feature scope, non-goals, quality constraints, acceptance criteria and unanswered decisions. Do not invent auth, cloud hosting, team accounts, spending or safety-sensitive features.
@@ -41,7 +41,7 @@ Before selecting a stack or coding algorithms, run `orbit_capability_discover` /
 
 ## Research stage before planning
 
-For new product build IDs, an accepted interview begins the RESEARCH stage. Assess task type, domain invariants, existing source, native platform features, verified prebuilt components and potential license/security issues. Provide concise structured `orbit_build_advance` evidence as a JSON **string**: `task`, `candidates` (list), `decision`, `sources` (list), `risks` (list). Only move to PLAN after research is approved. A resumed existing build remains at its stored stage.
+For new full product build IDs, intake and initial read-only scoping are followed by research on direct/adjacent competitors, relevant open-source solutions, native and already approved components, domain constraints, license/security/maintenance and alternatives (including not building). Present an evidenced comparison and recommended route before proposing stack or roadmap. New build runs with policy marker `comparison-v1` require the full JSON research evidence documented in [RESEARCH-FIRST](RESEARCH-FIRST.md) to pass RESEARCH → PLAN, not only the original task/candidates/decision/sources/risks fields. Existing persisted RESEARCH runs without this marker retain their original evidence contract; focus existing scoped fixes on root cause without forced market research. Source links are caller-reported and must be actually inspected by the host before declaring PASS.
 
 
 ## Choose depth and adapt like a product manager

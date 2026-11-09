@@ -4,6 +4,22 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'source/runtime'))
 import orbit_mcp,orbit_build,orbit_intake
 P={'type':'web-app','complexity':'moderate','maturity':'prototype','goal':'Todo app','audience':'Personal','constraints':'Offline','stack':'SQLite','risk':'Normal'}
 Q=[{'id':'target','prompt':'Who should use the app?','options':['Personal','Team'],'recommended':'Personal'}]
+
+def researched(task):
+ return json.dumps({
+  'task':task,'candidates':['Native platform APIs','Reviewed OSS starter'],
+  'decision':'Integrate reviewed components with clear offline behavior',
+  'sources':['https://example.org/todo','https://github.com/example/todo'],
+  'risks':['License and offline persistence need host verification'],
+  'competitors':[{'name':'Existing Task App','source':'https://example.org/todo',
+                  'finding':'Alternative provides simple tasks and onboarding'}],
+  'open_source':[{'name':'Open Task List','source':'https://github.com/example/todo',
+                  'license':'MIT','finding':'Candidate reusable list primitive'}],
+  'exceptions':{},'routes_considered':['REUSE','INTEGRATE','BUILD_NEW','NO_BUILD'],
+  'selected_route':'INTEGRATE','unknowns':['Real integration tests are pending'],
+  'checked_on':'2026-11-09'
+ })
+
 class TestIntake(unittest.TestCase):
  def setUp(self):
   self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
@@ -175,8 +191,7 @@ class TestIntake(unittest.TestCase):
   self.assertEqual(start['phase'],'BUILDING')
   self.assertEqual(start['progress']['stage'],'RESEARCH')
   self.assertEqual(start['progress']['completed_stages'],0)
-  research=json.dumps({'task':'Build Todo app','candidates':['existing DOM','vanilla JS'],
-     'decision':'Use accessible native HTML','sources':['README.md'],'risks':['data persistence']})
+  research=researched('Build Todo app')
   from_research=self.do('orbit_build_advance',build_id='exp-1',expected_revision=1,
       outcome='PASS',evidence=research,confirm_write=True)
   self.assertEqual(from_research['run']['stage'],'PLAN')
@@ -210,8 +225,7 @@ class TestIntake(unittest.TestCase):
      state=orbit_mcp.execute(database,'orbit_build_status',a)['run']
      self.assertEqual(state['stage'],stage)
      if stage=='RESEARCH':
-      evidence=json.dumps({'task':'Build correct product','candidates':['existing code'],'decision':'Reuse stable components',
-          'sources':['README.md'],'risks':['missing tests']})
+      evidence=researched('Build correct product')
      elif stage=='PLAN':
       evidence=json.dumps({'title':'Approved product plan','summary':'Implement selected platform product',
         'tasks':['Implement main application','Run domain tests'],
