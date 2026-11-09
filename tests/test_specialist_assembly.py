@@ -94,6 +94,23 @@ class SpecialistAssemblyTests(unittest.TestCase):
         self.assertTrue(all(x["profile_candidate"] is None for x in result["candidate_roles"]))
         self.assertFalse(result["native_agent_spawned"])
 
+    def test_existing_design_specialists_have_revision_bound_handoff_instructions(self):
+        expected = {
+            "orbit-creative-director.md": "## Review-bound design handoff",
+            "orbit-ux.md": "## Review-bound design handoff",
+            "orbit-frontend.md": "## Review-bound frontend design implementation",
+            "orbit-qa.md": "## Independent design handoff verification",
+        }
+        for name, header in expected.items():
+            with self.subTest(agent=name):
+                source = (ROOT / "source" / "agents" / name).read_text(encoding="utf-8")
+                self.assertIn(header, source)
+                self.assertIn("source", source.lower())
+                self.assertIn("Orbit", source)
+        guide = ROOT / "docs" / "FRONTEND-DESIGN-HANDOFF.md"
+        self.assertTrue(guide.is_file())
+        self.assertIn("NOT HOST-ACCEPTED", guide.read_text(encoding="utf-8"))
+
     def test_canonical_security_agent_and_role_contracts(self):
         names = {x["role"]: x["bundled_role_profile_source"]
                  for x in self.plan()["candidate_roles"]}
