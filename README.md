@@ -215,6 +215,14 @@ Orbit uses preview-first operations, revision checks and bounded task scopes, bu
 
 Open items—including publisher authenticity, real-host acceptance and independently verifiable QA—are tracked in [security issue #9](https://github.com/samjuniors/Orbit-Core/issues/9) and the [roadmap](docs/NEXT-VERSION.md). Do not interpret a recorded `PASS` or a merged candidate as a production certification.
 
+## Support the project
+
+Orbit Core is developed and maintained by **samjuniors**. GitHub Sponsors supports continued open-source work across Orbit Core and other present or future projects, including cross-platform verification, installation and recovery checks, bug fixes, documentation, accessibility and security review.
+
+**[Sponsor samjuniors on GitHub](https://github.com/sponsors/samjuniors)**
+
+Sponsorship is optional. You can also help by reporting reproducible bugs, improving documentation and contributing reviewed changes.
+
 ## Community and contributing
 
 For contribution workflow and project compatibility expectations, read [CONTRIBUTING.md](CONTRIBUTING.md). Orbit Core is open source under the [MIT License](LICENSE); preserve the copyright and permission notice when redistributing.
