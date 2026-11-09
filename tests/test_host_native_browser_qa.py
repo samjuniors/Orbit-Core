@@ -319,7 +319,7 @@ class HostNativeBrowserQATests(unittest.TestCase):
         self.assertEqual(schema["properties"]["host_browser_qa"]["type"], "object")
         self.assertIn("permission_state",
                       schema["properties"]["host_browser_qa"]["required"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 52)
+        self.assertEqual(len(orbit_mcp.TOOLS), 57)
 
 
 if __name__ == "__main__":
