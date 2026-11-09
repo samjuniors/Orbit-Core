@@ -731,7 +731,7 @@ class SkillPlanPreviewTests(unittest.TestCase):
                         if m["name"] == "orbit_capability_select")
         self.assertTrue(metadata["annotations"]["readOnlyHint"])
         self.assertFalse(metadata["annotations"]["destructiveHint"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 52)
+        self.assertEqual(len(orbit_mcp.TOOLS), 57)
         orbit_mcp.validate("orbit_capability_select", {
             "project_root": str(self.root), "objective": "Fix API",
             "project_profile": {

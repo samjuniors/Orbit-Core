@@ -1,65 +1,87 @@
-# Orbit Core - installing and managing published releases
+# Install, update and uninstall published Orbit Core releases
 
-**Current published versions (verified 2026-11-05):** [v0.30.0 stable](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) and [v0.29.0 stable](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.29.0). Always check [Releases](https://github.com/samjuniors/Orbit-Core/releases) for newer versions; a Git branch is not a published distribution. A stable-channel version is not a production/security certification.
+**Choose your release from [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases).** Verified on 2026-11-07: **v0.30.0** is the newest stable-channel release, while **v0.31.0** is the newer published prerelease. GitHub `main`, an open PR or CI artifact is **not** an official published release. Neither channel certifies security or production readiness.
 
-## Windows: easiest setup
+## 1. Windows — easiest setup
 
-1. Download `ORBIT-Universal-Setup-vX.Y.Z.zip` and its matching `.sha256` from the **same official GitHub release**. Verify the checksum (for example `Get-FileHash .\ORBIT-Universal-Setup-vX.Y.Z.zip -Algorithm SHA256`). A matching checksum establishes integrity against the published sidecar, not independent publisher signing.
-2. Extract. Double-click **Orbit Setup.cmd**. Pick **This computer** (your OS account) or **One project**; select **Antigravity, Codex, Claude Code and/or VS Code**. You can select several hosts in one installation.
-3. Review the exact path changes. Apply only with explicit approval. Other MCP integrations and custom owner files must be retained or flagged for manual review.
-4. Restart the chosen IDE. Ask the host to call `orbit_project_scan` and report live MCP version/tools; a written config is not proof of a successful connection.
+1. Download **`ORBIT-Universal-Setup-vX.Y.Z.zip`** and its matching **`.sha256`** sidecar from the **same [official release](https://github.com/samjuniors/Orbit-Core/releases)**. Compare the sidecar with `Get-FileHash .\ORBIT-Universal-Setup-vX.Y.Z.zip -Algorithm SHA256`. This proves integrity against the published sidecar, not independent publisher signing.
+2. Extract the ZIP and double-click **`Orbit Setup.cmd`**. Windows needs Python 3.10–3.13 with Tkinter (3.12 recommended). Orbit's core MCP does not need administrator rights or its own model/API key.
+3. Choose **This computer** (current OS user) or **One project**, select one or more of Antigravity, Codex, Claude Code and VS Code, and review the planned CREATE / UPGRADE / SKIP / MERGE / PRESERVE changes before applying.
+4. Save work and restart each selected IDE. Ask the host to **actually call `orbit_project_scan`** and report the tool response and version. Config files or installer success alone do not prove live connection.
 
-**Requirements:** Python 3.10-3.13, Windows Python 3.12 recommended, Tkinter for the GUI. No administrator account and no model/API keys are required for the local MCP server itself.
+**macOS/Linux:** From the verified, extracted ZIP, run `python3 orbit_setup.py install --scope machine --hosts codex` to preview and repeat with `--apply` after reviewing. Use a supported Python 3.10–3.13. For a single existing workspace add `--scope project --project /absolute/existing/project`.
 
-## Windows: PowerShell installation from the official v0.30.0 ZIP
+## 2. Windows PowerShell — from the verified ZIP
+
+If you prefer the terminal instead of the setup wizard, from the extracted Universal Setup folder:
 
 ```powershell
-# In the extracted Universal Setup directory:
-py -3.12 orbit_setup.py install --scope machine --hosts antigravity codex
-py -3.12 orbit_setup.py install --scope machine --hosts antigravity codex --apply
+py -3.12 .\orbit_setup.py install --scope machine --hosts antigravity codex
+py -3.12 .\orbit_setup.py install --scope machine --hosts antigravity codex --apply
+```
 
-# Current installed launcher, no ZIP redownload needed for subsequent updates:
+The **v0.31.0 ZIP** also includes `Orbit.ps1` and the release-aware `orbit_cli.py`. Its default channel is **stable**. To install the **exact v0.31.0 published prerelease**, specify both `--channel candidate` and `--version 0.31.0`:
+
+```powershell
+.\Orbit.ps1 install --channel candidate --version 0.31.0 --hosts antigravity codex
+.\Orbit.ps1 install --channel candidate --version 0.31.0 --hosts antigravity codex --apply
+```
+
+If PowerShell policy blocks the local script, use `py -3.12 .\orbit_cli.py` with the same arguments instead. Do not weaken Windows execution policy.
+
+## 3. Update after the first installation (no new ZIP required)
+
+The installer places launchers in `%USERPROFILE%\.orbit-universal\bin` for the current OS account. It does not modify PATH automatically.
+
+**Windows GUI:** Double-click `%USERPROFILE%\.orbit-universal\bin\Orbit Update Manager.cmd` in File Explorer. Select **Stable** (default) or **Candidate**, scope and hosts; check release information and approve. No background install, automatic IDE restart or overwrite of unknown owner customizations.
+
+**PowerShell, from any directory:**
+
+```powershell
+# Installed version / local diagnostics:
+& "$HOME\.orbit-universal\bin\orbit.cmd" status
 & "$HOME\.orbit-universal\bin\orbit.cmd" doctor
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --check
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --apply
 
-# Scoped uninstall from the original verified v0.30.0 Universal Setup directory:
-py -3.12 orbit_setup.py uninstall --scope machine --hosts antigravity codex
-py -3.12 orbit_setup.py uninstall --scope machine --hosts antigravity codex --apply
+# Check the newest published prerelease without installing:
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --check
+
+# Check the package and intended scope without executing its installer:
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex
+
+# Apply only after reviewing the official release:
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex --apply
 ```
 
-Use `--scope project --project "C:\absolute\path\to\project"` to act on exactly one workspace. Uninstall preserves SQLite, checkpoints, shared runtime and other MCP registrations; do not use the separate destructive `clean` path for normal uninstall.
+Use `--channel stable` for published stable releases. **Stable is the CLI default; candidate requires an explicit opt-in.** If a newer prerelease is already installed, choosing the older stable channel does **not** silently downgrade it. **Published v0.31 limitation:** an older stable-channel `--check` can return a downgrade-block error even though no update is applied. Use `--channel candidate` to check the prerelease track; [PR #106](https://github.com/samjuniors/Orbit-Core/pull/106) proposes a friendlier read-only result for a future release. `--version X.Y.Z` selects an exact published release on its channel; `--expect-version X.Y.Z` pins an earlier approved check.
 
-## New published-release-aware CLI: next release, not v0.30.0
+**CMD:** Call `"%USERPROFILE%\.orbit-universal\bin\orbit.cmd"` directly with the same subcommand options (omit PowerShell's `&`).
 
-Work in progress on a separate feature branch: same `orbit` command will manage **install, update, uninstall** from a selected published release. The permanent CLI will choose newest **stable** by default, support `--version X.Y.Z` and `--channel candidate`, verify released ZIP SHA256 and refuse an unpublished version. No action applies without `--apply`.
+**What preview means:** `--check` fetches public release metadata only. An update without `--apply` checks the ZIP and SHA-256 but does **not run the downloaded installer** or print a complete target-file plan. To inspect each proposed file change without applying, extract the verified ZIP and run its `orbit_setup.py install` or `orbit_setup.py update` **without** `--apply`. The latter reapplies that extracted package, rather than checking GitHub for a newer release.
+
+## 4. Uninstall a selected host; keep project memory
+
+With the v0.31.0 release-aware CLI, preview before removing only selected Orbit host integrations:
 
 ```powershell
-# From a future checksum-verified Universal Setup ZIP:
-.\Orbit.ps1 install --hosts antigravity codex
-.\Orbit.ps1 install --hosts antigravity codex --apply
-
-# Once that newer version is installed:
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --check
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --version X.Y.Z --hosts codex
-& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --version X.Y.Z --hosts codex
-# Add --apply only after reviewing the preview/selected release.
+& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --channel candidate --version 0.31.0 --hosts codex
+& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --channel candidate --version 0.31.0 --hosts codex --apply
 ```
 
-If your PowerShell policy blocks local `Orbit.ps1`, run `py -3.12 orbit_cli.py` with the same arguments from the verified ZIP instead; no global policy change is needed.
+Use your **actual installed published release version and its channel**. For a previous v0.30.0 installation, extract its matching checksum-verified ZIP and use `py -3.12 .\orbit_setup.py uninstall --scope machine --hosts antigravity codex` to preview; repeat with `--apply` only after review.
 
-For macOS/Linux use `python3 orbit_cli.py install ...` from the official future Universal ZIP, or the installed `~/.orbit-universal/bin/orbit` launcher. The `--version` switch is pinned to the selected release and is not a request to download arbitrary Git commits. An explicit downgrade remains a separately reviewed compatibility risk.
+A scoped uninstall preserves shared runtime, SQLite memory, project checkpoints, other MCP services and owner files. The separate `clean` operation may be destructive. There is **no automatic database-schema downgrade**; take compatible backups before considering an older release.
 
-**Limits:** CLI preview checks release metadata and ZIP integrity without executing downloaded installer code. To see exact target file actions for a published ZIP, extract and run its `orbit_setup.py install/uninstall` **without** `--apply`. The CLI `--apply` boundary authorizes verified released installer code and may still fail closed on an owner-customized path. Backups are necessary; releases are not automatically reversible.
+## 5. Which release package?
 
-## Separate packages
+| Published file | Purpose |
+| --- | --- |
+| `ORBIT-Universal-Setup-vX.Y.Z.zip` | Recommended one installer for multiple local coding hosts |
+| `Orbit-Antigravity-Plugin-vX.Y.Z.zip` | Optional Antigravity-native plugin packaging; not an additional requirement |
+| `Orbit-Core-Plugin-Suite-vX.Y.Z.zip` | Alternate multi-host packaging, not required alongside Universal Setup |
+| `ORBIT-Claude-Desktop-vX.Y.Z.mcpb` | Separate Claude **Desktop** extension; not updated by the local Python CLI |
 
-- **Universal Setup ZIP:** one installer for the currently supported local coding hosts.
-- **Antigravity Plugin ZIP / Plugin Suite ZIP:** alternative host-specific/native distribution layouts; don't layer them blindly over the same existing custom installation.
-- **Claude Desktop `.mcpb`:** installed and updated through its desktop extension workflow, **not** automatically installed by the local Python launcher.
-- **ChatGPT/other remote plugins:** separately distributed by their host platforms; not a local Orbit CLI target.
+The updater verifies a release ZIP against its published checksum, rejects unsafe archives and preserves unrecognized customizations for review. A checksum is **not a cryptographic publisher signature**. Do not use development-branch ZIPs as releases, install extra browser/agent dependencies without approval, bypass IDE permissions, or assume a successful installer enables a native subagent.
 
-## Maintainer release process
+**Troubleshooting:** Save work, restart your IDE, run `orbit doctor` from the installed launcher and test a genuine `orbit_project_scan` response. An Antigravity headless command can still be denied by the host's MCP permission policy; use normal scoped approval rather than bypassing it.
 
-[RELEASE-PROCESS.md](RELEASE-PROCESS.md) governs source/version parity, candidate branches, reviews, exact-head CI, genuine IDE acceptance, owner approval and immutable GitHub release publication. Release automation reads the exact changelog version section; never republish or retag old versions to change instructions.
+More detail: [README quick start](../README.md#quick-start), [update experience](UPDATE-EXPERIENCE.md), [installation options](MCP-INSTALLATION-OPTIONS.md), [release engineering process](RELEASE-PROCESS.md).
