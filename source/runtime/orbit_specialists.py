@@ -10,6 +10,7 @@ import re
 VISUAL = {"website", "web-app", "mobile-app", "desktop-app", "game"}
 DATA = {"web-app", "mobile-app", "desktop-app", "api-service", "data-automation"}
 NATIVE = {"mobile-app", "desktop-app", "os-platform", "game", "sdk-library", "cli", "plugin-mcp"}
+DESIGN_OPERATIONS = {"build", "add-feature", "redesign", "maintain", "resume"}
 
 ROLES = {
     "project-manager": {
@@ -62,6 +63,44 @@ def _roles(product_type, operation):
         if product_type in VISUAL:
             roles.insert(1, "creative-director")
     return roles
+
+
+def _design_handoff(product_type, operation, denied):
+    """Read-only, untrusted review contract for a genuine visual product.
+
+    This is an agent coordination *hint*, not an approved design artifact,
+    proof that an editor is installed, or evidence that browser QA ran.
+    """
+    if denied or product_type not in VISUAL or operation not in DESIGN_OPERATIONS:
+        return None
+    return {
+        "status": "PROPOSED_DESIGN_HANDOFF",
+        "participants": ["orbit-creative-director", "orbit-ux",
+                         "orbit-frontend", "orbit-qa"],
+        "handoff_requirements": [
+            "Current project source revision, screen scope and existing design assets",
+            "Accepted existing design rules or owner-reviewed design decisions",
+            "Component and token mapping for the actual frontend framework",
+            "Responsive and loading/empty/error/partial interaction states",
+            "Keyboard, focus, contrast, motion and reduced-motion acceptance",
+            "Exact changed files plus independent rendered-app QA evidence",
+        ],
+        "preferred_artifacts": [
+            "Existing project design contract and component library",
+            "If approved and needed: project-local DESIGN.md or equivalent tokens",
+            "Source-bound frontend diff and independent QA report",
+        ],
+        "external_design_tool_required": False,
+        "tool_selection": "HOST_NATIVE_FIRST_APPROVED_EXTERNAL_ONLY",
+        "owner_design_approval_authenticated": False,
+        "design_document_identity_verified": False,
+        "design_artifact_written": False,
+        "native_worker_invoked": False,
+        "rendered_visual_qa_verified": False,
+        "next": "Inspect existing product design and real host tools; the founder reviews "
+                "new design decisions before scoped implementation. Visual canvas, "
+                "MCP configuration and claimed screenshots never prove execution.",
+    }
 
 
 def _role_profile(role):
@@ -127,6 +166,7 @@ def plan(project_profile, objective, available, skill_plan, host_tools, permissi
         "project_type": kind, "operation": operation,
         "decision_basis": "PROJECT_CLASSIFICATION_NOT_REQUEST_KEYWORDS",
         "candidate_roles": jobs,
+        "design_handoff": _design_handoff(kind, operation, denied),
         "resource_order": [
             "Inspect existing project files and approved project tools",
             "Check current host built-ins and truly available native workers",

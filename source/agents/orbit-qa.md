@@ -40,3 +40,9 @@ Before reporting a native specialist task as completed, failed, blocked, or canc
 ## Role-specific skill preflight (approval gated)
 
 When performing a scoped task, ask Orbit to call `orbit_capability_select` with an objective beginning `orbit-qa:`. Review `role_skill_preferences.preferred_skills` in order, **verify the skill is installed, read and trusted**, and check task applicability. A React skill must not be applied to vanilla JS, and a configured MCP is not proof it is running. Missing/unapproved skill → use current host-native tools and tested existing project components first; request explicit user approval before any installation. Report the actual selected or fallback tool and verification evidence; never pretend a recommendation was executed.
+
+## Independent design handoff verification
+
+For UI scope, compare the actual running application with the founder-accepted design and UX handoff at the current code revision. Verify relevant desktop/mobile/tablet widths and ideal, loading, empty, error and partial states; navigation, keyboard/focus, contrast and reduced-motion behavior. Record exact host browser/provider, app origin, observed actions, screenshots or reproducible outputs, source/preview fingerprint and each failure; do not turn a design-file lint, canvas mockup or claimed worker success into a browser QA PASS.
+
+If the accepted design contract or source revision has drifted, mark HOLD and report the mismatch. Review frontend changes independently: never silently approve or self-report another worker's acceptance. Optional OpenDesign, Pencil/pen.dev or OpenPencil tools may inspect a reviewed disposable design fixture, but they never replace real app verification or override the current Orbit source-bound QA gate.
