@@ -1,4 +1,4 @@
-# MCP and agent installation options (Orbit v0.24 development)
+# MCP and agent installation options (published local releases)
 
 Orbit is a **local stdio MCP server plus optional host-specific skills and agent instructions**. It is not a cloud MCP service, self-running model, or an automatic marketplace listing. The coding host owns execution and native agent support.
 
@@ -7,7 +7,7 @@ Orbit is a **local stdio MCP server plus optional host-specific skills and agent
 | Host | Native supported connection | Orbit option |
 | --- | --- | --- |
 | Google Antigravity IDE/CLI | MCP Store or global `~/.gemini/config/mcp_config.json` / project `.agents/mcp_config.json` | Installer merges `orbit-core-native`; refresh host and call a read-only tool |
-| OpenAI Codex CLI/Desktop | `codex mcp add` or `~/.codex/config.toml` / project `.codex/config.toml` | Installer writes scoped native TOML, skills and AGENTS.md guidance |
+| OpenAI Codex CLI/Desktop | `codex mcp add` or `~/.codex/config.toml` / project `.codex/config.toml` | Installer writes scoped native TOML, an Orbit skill and host guidance |
 | Anthropic Claude Code | `claude mcp add` or scoped MCP configuration, plus `.claude/skills` and agents | Installer preserves existing entries and installs local Orbit skill/agent definitions |
 | Visual Studio Code Copilot | MCP: Add Server / manifest, or `.vscode/mcp.json` with `servers` | Optional VS Code target, separate format and preservation of unrelated servers |
 | Claude Desktop (regular chat) | Desktop extension packaging | Separate versioned `ORBIT-Claude-Desktop-vX.Y.Z.mcpb`, not native coding subagents |
@@ -16,23 +16,27 @@ Official references: https://antigravity.google/docs/mcp ; https://code.visualst
 
 ## Orbit installer and detection
 
-The GUI checks existing CLI executables and host configuration files *without launching a coding host*. It selects detected hosts by default, but the user may override. `python installer.py --scope machine --hosts auto` previews detected installation targets. Add `--install` only after checking the changes. For an explicitly chosen host, pass `--hosts antigravity`, `codex`, `claude-code` or `vscode`. For a project-specific install pass `--scope project --project ABSOLUTE_PATH`. A configuration file does **not** prove MCP connection; refresh the host and execute one read-only `orbit_intake_status` or `orbit_capability_discover` call.
+For a first install, use the **published Universal Setup ZIP** and double-click `Orbit Setup.cmd` on Windows (or invoke `python3 orbit_setup.py install --scope machine --hosts antigravity codex` from the extracted ZIP). Preview exact changes before adding `--apply`. The GUI checks host executables and configuration files **without launching a coding host**; its suggested host selection can be overridden. For one existing project choose `--scope project --project ABSOLUTE_PATH`. `installer.py` is a lower-level maintainer entry point, not the recommended new-user setup. A configuration file does **not** prove MCP connection; restart the selected host and execute a real read-only `orbit_project_scan` call. The installer does not grant host permissions.
 
 Avoid installing additional marketplaces, agent CLIs, downloadable MCP servers or browser dependencies without purpose, provenance/security review and user approval. Existing OAuth credentials, account settings and unrelated MCP definitions are never migrated into Orbit.
 
-## Stable update command
+## Persistent, published-release-aware update command
 
 On Windows, the new installer writes `%USERPROFILE%\.orbit-universal\bin\orbit.cmd` plus a Python administration script. It does not modify user PATH automatically. Run from PowerShell:
 
 ```powershell
 & "$HOME\.orbit-universal\bin\orbit.cmd" detect
 & "$HOME\.orbit-universal\bin\orbit.cmd" status
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --check
-& "$HOME\.orbit-universal\bin\orbit.cmd" update
-& "$HOME\.orbit-universal\bin\orbit.cmd" update --apply
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --check
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --hosts antigravity codex
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel stable --hosts antigravity codex --apply
+
+# Opt in to published prereleases instead:
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --check
+& "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex --apply
 ```
 
-`update` uses only **official published stable GitHub Releases**, validates the archive SHA256 against the published release sidecar, refuses zip-slip paths and symlinks, shows file changes before applying, backs up old configs and avoids overwriting owner changes. If no stable release exists, it reports that rather than installing an unsigned development branch. Candidate/local updates require an independently trusted ZIP SHA256 and explicit `--from-zip`; no automatic source-code execution from a floating branch.
+`update` defaults to **official published stable releases**; `--channel candidate` opts into **published prereleases**, not branch snapshots. It validates the release ZIP SHA256 against its release sidecar and refuses unsafe archive paths and symlinks. A normal no-`--apply` update is a verified package preview, **not** the full per-file plan; to inspect that exact plan without writes, extract the verified ZIP and run `orbit_setup.py update` without `--apply`. An approved `--apply` runs the verified published installer, uses backup/customization guards and preserves other MCP entries. An offline local `--from-zip` requires a separately trusted `--sha256`; no floating source checkout is an authorized published update.
 
 `orbit` alone works only if the bin directory is separately added to the user's PATH, which Orbit deliberately does not do without permission.
 
@@ -49,4 +53,4 @@ For a *new* project, the MCP's intake gate requires a proposed interview, user-a
 
 ## Fastest verified user path
 
-Use the published GitHub Release ZIP once, preview and install selected host integrations, then use `orbit doctor` and `orbit update --check` / `orbit update --apply` from the stable per-user launcher. 0.x uses the candidate channel by default; no repeated manual ZIP download is required after this setup. The updater never silently overwrites customized files. Read `README.md` and `RELEASE-QUICKSTART.md` for exact commands. Source branch ZIPs are development snapshots, **not** signed or published release assets.
+Download a published Universal Setup ZIP with its matching SHA256 **once**, preview/install selected host integrations, and thereafter use the Windows **Orbit Update Manager** from `%USERPROFILE%\.orbit-universal\bin\Orbit Update Manager.cmd` or the per-user `orbit.cmd` launcher. The CLI **defaults to stable**, while `--channel candidate` opts into published prereleases. A newer installed candidate is not silently downgraded to an older stable version. **Published v0.31 limitation:** `update --channel stable --check` can return a downgrade-block error when stable is older than the installed candidate; no files change. Use `--channel candidate --check` for the prerelease track. [PR #106](https://github.com/samjuniors/Orbit-Core/pull/106) proposes an improved read-only response. A first-time v0.31.0 prerelease install can be pinned with `--channel candidate --version 0.31.0` (see [release quick start](RELEASE-QUICKSTART.md)); do not claim it is installed merely because the setup wrote config files. No repeated ZIP download is needed for normal later updates; customized files require review. Development-branch ZIPs are **not** published release assets or independently signed distributions.
