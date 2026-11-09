@@ -42,7 +42,26 @@ class BuildBrowserTests(unittest.TestCase):
 
     def stage_evidence(self,stage):
         if stage=='RESEARCH':
-            return '{"task":"Build tested todo product","candidates":["native HTML UI","existing SQLite"],"decision":"Reuse native tools and test existing code", "sources":["README.md"],"risks":["bad user data"]}'
+            return json.dumps({
+                'task': 'Build tested todo product',
+                'candidates': ['native HTML UI', 'existing SQLite'],
+                'decision': 'Integrate reviewed task interface components',
+                'sources': ['https://example.org/todo','https://github.com/example/todo'],
+                'risks': ['bad user data and unverified license'],
+                'competitors': [
+                    {'name': 'Example Todo', 'source': 'https://example.org/todo',
+                     'finding': 'Basic list product offers onboarding'}
+                ],
+                'open_source': [
+                    {'name': 'Example Open Todo', 'source': 'https://github.com/example/todo',
+                     'license': 'MIT', 'finding': 'Potential reusable checklist'}
+                ],
+                'exceptions': {},
+                'routes_considered': ['REUSE','INTEGRATE','BUILD_NEW','NO_BUILD'],
+                'selected_route': 'INTEGRATE',
+                'unknowns': ['Host must independently verify upstream claims'],
+                'checked_on': '2026-11-09'
+            })
         if stage=='PLAN':
             return '{"title":"Build Todo application","summary":"Single-user accessible todo CRUD with local testing","tasks":["Implement a local task model","Create semantic accessible task UI","Run acceptance and regression checks"],"approval_method":"user_approved_plan","approval_reference":"user-confirmed-plan-message"}'
         if stage=='VERIFY':
