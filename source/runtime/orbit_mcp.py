@@ -27,6 +27,7 @@ import orbit_swarm_draft
 import orbit_delivery
 import orbit_swarm_host
 import orbit_native_coordination
+import orbit_autopilot
 import orbit_swarm_integrity
 import orbit_portable
 import orbit_pulse
@@ -139,6 +140,7 @@ def db_connect():
     conn.commit()
     orbit_evidence.setup(conn)
     orbit_tasks.setup(conn)
+    orbit_autopilot.setup(conn)
     orbit_improvement.setup(conn)
     orbit_build.setup(conn)
     orbit_intake.setup(conn)
@@ -582,11 +584,49 @@ TOOLS += [
         'confirm_write':{'type':'boolean'}},
         ['project_root','project','role'])},
 ]
+TOOLS.extend([
+    {'name':'orbit_autopilot_charter',
+     'description':'Phase 1 Autopilot: preview or record an immutable, expiring project/roadmap/task-scoped Mission Charter; pause/resume/stop with revisions and audit. Caller approval references are NOT authenticated. No unattended runner, model, agent, host permission or Git action is activated.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),'mission_id':string(80),
+         'action':{'type':'string','enum':['preview','activate','status','pause','resume','stop']},
+         'objective':string(750),'roadmap_ref':string(220),'roadmap_revision':string(128),
+         'branch':string(150),'expires_at':string(20),
+         'task_keys':{'type':'array','minItems':1,'maxItems':12,'items':string(80)},
+         'allowed_paths':{'type':'array','maxItems':24,'items':string(240)},
+         'allowed_decisions':{'type':'array','minItems':1,'maxItems':4,
+                              'items':{'type':'string','enum':sorted(orbit_autopilot.DECISIONS)}},
+         'max_parallel':{'type':'integer','minimum':1,'maximum':2},
+         'max_attempts_per_task':{'type':'integer','minimum':1,'maximum':3},
+         'expected_digest':string(64),
+         'expected_revision':{'type':'integer','minimum':1},
+         'approval_reference':string(200),'confirm_write':{'type':'boolean'}},
+         ['project_root','project','mission_id','action'])},
+    {'name':'orbit_autopilot_next',
+     'description':'Read-only Autopilot next-ready task recommendation tied to active, unexpired charter, task fingerprint, branch claim, DAG and retry limits. NO host invocation, automatic agent, permission grant, source modification or workflow loop.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),'mission_id':string(80),
+         'expected_revision':{'type':'integer','minimum':1},
+         'reported_branch':string(150),
+         'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},
+         'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'host_workspace_mode':{'type':'string','enum':list(orbit_delegation.HOST_WORKSPACE_MODES)}},
+         ['project_root','project','mission_id','expected_revision','reported_branch'])},
+    {'name':'orbit_autopilot_decision',
+     'description':'Read-only classifier for routine delegated or founder-only decisions against active charter and one approved task. Never implements a decision, modifies code or authenticates owner/host approval.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),'mission_id':string(80),
+         'expected_revision':{'type':'integer','minimum':1},'reported_branch':string(150),
+         'task_key':string(80),
+         'category':{'type':'string','enum':sorted(orbit_autopilot.DECISIONS | orbit_autopilot.FOUNDER_ONLY)}},
+         ['project_root','project','mission_id','expected_revision','reported_branch','task_key','category'])},
+])
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
     'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_swarm_draft_preview','orbit_software_delivery_preview','orbit_swarm_host_preflight','orbit_native_coordination_preview','orbit_swarm_integration_review','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
-    'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest','orbit_improvement_context'}
+    'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest','orbit_improvement_context',
+    'orbit_autopilot_next','orbit_autopilot_decision'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
 for _tool in TOOLS:
     _name=_tool['name']
@@ -639,6 +679,14 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name in {'orbit_autopilot_charter','orbit_autopilot_next','orbit_autopilot_decision'}:
+        root=project_root(a)
+        project=project_key(a)
+        if name=='orbit_autopilot_charter':
+            return orbit_autopilot.charter(conn,root,project,a)
+        if name=='orbit_autopilot_next':
+            return orbit_autopilot.next_task(conn,root,project,a)
+        return orbit_autopilot.decision(conn,root,project,a)
     if name in {'orbit_improvement_record', 'orbit_improvement_context',
                 'orbit_improvement_promote', 'orbit_specialist_candidate'}:
         root = project_root(a)

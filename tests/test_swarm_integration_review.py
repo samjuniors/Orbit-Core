@@ -105,7 +105,7 @@ class SwarmIntegrationReviewTests(unittest.TestCase):
         tool = next(t for t in orbit_mcp.TOOLS
                     if t["name"] == "orbit_swarm_integration_review")
         self.assertTrue(tool["annotations"]["readOnlyHint"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 52)
+        self.assertEqual(len(orbit_mcp.TOOLS), 55)
 
     def test_active_browser_qa_rejects_old_future_and_boolean_build_revisions(self):
         self.build()
