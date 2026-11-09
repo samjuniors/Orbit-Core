@@ -418,6 +418,54 @@ class AutopilotRunnerTests(unittest.TestCase):
         self.assertEqual(self.job()["state"], "STOPPED")
         self.assertTrue(kill.called)
 
+    def test_pause_then_fast_resume_stops_live_worker_before_next_poll(self):
+        """Restoring ACTIVE must not revive the old revision's host process."""
+        def launch(work, prompt, logs, executable):
+            self.assertFalse(runner._needs_stop(
+                self.db, self.root, self.project, self.mission, self.job()["run_id"]))
+            paused = orbit_autopilot.charter(self.db, self.root, self.project, {
+                "action": "pause", "mission_id": self.mission,
+                "expected_revision": 1, "confirm_write": True})
+            self.assertEqual(paused["status"], "PAUSED")
+            resumed = orbit_autopilot.charter(self.db, self.root, self.project, {
+                "action": "resume", "mission_id": self.mission,
+                "expected_revision": 2, "confirm_write": True,
+                "approval_reference": "new-operator-review-is-still-caller-claimed"})
+            self.assertEqual(resumed["status"], "ACTIVE")
+            self.assertEqual(resumed["revision"], 3)
+            self.assertTrue(runner._needs_stop(
+                self.db, self.root, self.project, self.mission, self.job()["run_id"]))
+            return FakeLive()
+
+        with patch.object(runner, "_terminate_child", return_value=True) as kill:
+            result = self.invoke(launch)
+        self.assertEqual(result["status"], "STOPPED")
+        self.assertEqual(self.job()["state"], "STOPPED")
+        self.assertTrue(kill.called)
+        self.assertEqual(self.preview(3)["status"], "HOLD_PREVIOUS_RUN")
+
+    def test_pause_then_fast_resume_rejects_completed_turn_before_review(self):
+        """An exiting worker is not accepted after its charter revision changed."""
+        def launch(work, prompt, logs, executable):
+            process = self.launch_success(work, prompt, logs, executable)
+            paused = orbit_autopilot.charter(self.db, self.root, self.project, {
+                "action": "pause", "mission_id": self.mission,
+                "expected_revision": 1, "confirm_write": True})
+            self.assertEqual(paused["status"], "PAUSED")
+            resumed = orbit_autopilot.charter(self.db, self.root, self.project, {
+                "action": "resume", "mission_id": self.mission,
+                "expected_revision": 2, "confirm_write": True,
+                "approval_reference": "new-operator-review-is-still-caller-claimed"})
+            self.assertEqual(resumed["status"], "ACTIVE")
+            return process
+
+        result = self.invoke(launch)
+        self.assertEqual(result["status"], "STOPPED")
+        self.assertEqual(self.job()["state"], "STOPPED")
+        self.assertEqual(runner.advance_reviewed(
+            self.db, self.root, self.project, self.mission, 3)["status"],
+            "HOLD_NO_REVIEWED_RUN")
+
     def test_turn_output_malformed_or_denied_fails_closed(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "events.jsonl")
