@@ -35,6 +35,34 @@ class SpecialistAssemblyTests(unittest.TestCase):
         self.assertFalse(result["external_resource_automatically_installed"])
         self.assertEqual(len(set(roles)), len(roles))
 
+    def test_visual_design_handoff_is_only_a_review_packet(self):
+        for kind in ("website", "web-app", "mobile-app", "desktop-app", "game"):
+            with self.subTest(product=kind):
+                result = self.plan(kind=kind, operation="redesign")
+                contract = result["design_handoff"]
+                self.assertEqual(contract["status"], "PROPOSED_DESIGN_HANDOFF")
+                self.assertEqual(contract["participants"],
+                                 ["orbit-creative-director", "orbit-ux",
+                                  "orbit-frontend", "orbit-qa"])
+                self.assertFalse(contract["external_design_tool_required"])
+                self.assertFalse(contract["owner_design_approval_authenticated"])
+                self.assertFalse(contract["native_worker_invoked"])
+                self.assertFalse(contract["design_artifact_written"])
+                self.assertFalse(contract["rendered_visual_qa_verified"])
+                self.assertTrue(any("Existing" in item
+                                    for item in contract["preferred_artifacts"]))
+                self.assertFalse(result["native_agent_spawned"])
+
+    def test_design_handoff_does_not_appear_for_trivial_or_nonvisual_work(self):
+        for kind, operation in (
+                ("cli", "build"), ("api-service", "redesign"),
+                ("sdk-library", "maintain"), ("web-app", "fix"),
+                ("mobile-app", "test")):
+            with self.subTest(product=kind, operation=operation):
+                self.assertIsNone(self.plan(kind=kind, operation=operation)["design_handoff"])
+        self.assertIsNone(self.plan(kind="web-app", operation="redesign",
+                                    permission="DENIED")["design_handoff"])
+
     def test_small_cli_fix_does_not_create_design_army(self):
         result = self.plan(kind="cli", operation="fix")
         roles = [x["role"] for x in result["candidate_roles"]]
