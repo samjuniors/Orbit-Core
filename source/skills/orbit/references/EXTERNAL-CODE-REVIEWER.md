@@ -72,3 +72,37 @@ https://github.com/samjuniors/-ai-code-reviewer/blob/dev/v0.1.0-agent-interop/in
 
 This integration should remain opt-in and non-blocking for Orbit projects that
 do not install the external reviewer.
+
+
+## v0.2 draft: CI and fix/recheck specialist cycle
+
+The standalone reviewer is adding further optional **read-only** MCP tools
+on [draft PR #5](https://github.com/samjuniors/-ai-code-reviewer/pull/5).
+Do not assume these tools are installed simply because this document mentions
+them. The lead must inspect the **live host tool inventory**.
+
+When present and owner-authorized:
+
+1. During implementation, request `code_review_worktree` with
+   `scope=staged|unstaged|all`; untracked content is not included.
+2. For a committed task, obtain `code_review_static` or the unapproved
+   `code_review_orbit_gate` packet with original Git SHAs.
+3. Use `code_review_fix_plan` only with the prior static findings.
+   It creates scoped suggestions and a bounded retry number; it **does not
+   run** an agent or permit a write.
+4. If the owner already approved a fix task, use Orbit's normal
+   task reserve/host-native delegation and review gates for actual edits.
+5. Re-run actual authorized tests after a fix and call
+   `code_review_fix_recheck` with the original report and new descendant
+   commit. Pattern absence means NEEDS_VERIFICATION, not REVIEW_ACCEPTED.
+6. For CI problems, ask `code_review_ci_triage` to analyze actual redacted
+   provider status and job-step evidence. When GitHub fails *before steps*,
+   record NO_JOB_STEP_EVIDENCE and escalate to provider/runner/permissions
+   diagnosis. Do not blindly edit application source.
+7. Retry within the approved task scope (at most two candidate repairs by
+   default); repeated failures, denied permissions and unclear root cause
+   require owner review, never an unbounded autonomous loop.
+
+All these reviewer tools keep `writes_authorized=false` or equivalent,
+and do not mutate Orbit task ledgers. Actual host testing and CI acceptance
+are still NOT RUN; no automatic fix or release is implied.
