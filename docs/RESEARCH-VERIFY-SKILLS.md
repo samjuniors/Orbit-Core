@@ -1,6 +1,6 @@
 # Research and verification gates; preferred skills and component reuse
 
-This experimental branch is **not** main or v0.25. Built from v0.24.
+**Historical v0.24-era contract.** The 5-field RESEARCH format below still applies to persisted legacy builds. New full builds from the v0.32 development source use the source/skills/orbit/references/RESEARCH-FIRST.md comparison-v1 format with competitor and open-source evidence. This document remains as background for verification and reusable skills, not the authoritative fresh-build research contract.
 
 ## Lifecycle design
 **Fresh** application build IDs start at `RESEARCH`, then `PLAN → IMPLEMENT → VERIFY → PREVIEW → BROWSER_QA → REVIEW → CHECKPOINT → DONE`. Existing builds stay at their previously persisted stage and revision.
