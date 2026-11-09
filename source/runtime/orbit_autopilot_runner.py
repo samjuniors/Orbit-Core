@@ -318,9 +318,14 @@ def _needs_stop(conn, root, project, mission, token):
     row = _job(conn, root, project, mission)
     if not row or row["run_id"] != token or row["state"] != RUNNING:
         return True
-    current = orbit_autopilot._public(
-        orbit_autopilot._load(conn, root, project, mission))
-    return current["status"] != "ACTIVE"
+    # Every pause/resume/stop advances the charter revision. An operator may
+    # pause and resume before the next poll; checking ACTIVE alone would let the
+    # old run continue under a superseded approval. A resumed mission requires
+    # a NEW run/review, never re-authorization of this process.
+    mission_row = orbit_autopilot._load(conn, root, project, mission)
+    if not mission_row or mission_row["revision"] != row["mission_revision"]:
+        return True
+    return orbit_autopilot._public(mission_row)["status"] != "ACTIVE"
 
 
 def _clone_local(root):
