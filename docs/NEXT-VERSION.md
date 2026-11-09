@@ -1,3 +1,13 @@
+# Orbit Core — v0.32 research-first development (2026-11-09)
+
+**Development branch (not merged or released):** feature/research-first-v0320, targeting the next version indicated by NEXT_VERSION=0.32.0. Current published v0.31.0 prerelease and installed host versions are unchanged. The separate ChatGPT Orbit companion has already saved its research-first workflow as v0.26.1.
+
+**Source changes proposed:** a versioned comparison-v1 RESEARCH gate for new full builds; before RESEARCH → PLAN, require a sourced comparison of relevant competitors and open-source choices, a dated route recommendation, uncertainties and explicit exception reasons when no alternative applies. The host must really investigate sources; the MCP verifies input structure, not third-party truth. Existing persisted build stages/revisions remain compatible with the prior five-field research schema; scoped fixes can continue with focused root-cause investigation. The main Orbit skill, intake reference, research agent and MCP tool schema are synchronized without introducing a model runner or automatic browsing.
+
+**Acceptance status:** NEW TESTS ADDED; exact-head CI, Ubuntu/Windows matrix, installed Antigravity/Codex host behavior and rollout are NOT VERIFIED until the PR's checks and later authorized host testing. The owner controls merge, version bump, installer/release generation and publication. Do not label this as v0.32.0 installed or stable.
+
+---
+
 # Orbit Core — current release and next acceptance gates (2026-11-06)
 
 **Published release authority:** [v0.31.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.31.0), tagged from the verified main commit `524b5aace4889494ee8b852bb4d1aab18b72d0cc`. The release workflow and Linux/Windows CI passed, and all four archive/checksum pairs were verified. The released 52-tool MCP runtime was installed on the authorized Windows PC for Antigravity and Codex; both host configurations point at v0.31.0. This proves packaging and installation, **not signed-in IDE worker execution or production-readiness**.
