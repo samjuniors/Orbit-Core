@@ -10,6 +10,22 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'source/runtime'))
 import orbit_build, orbit_mcp, orbit_intake
 
 
+
+def researched(task):
+    return json.dumps({
+        'task':task,'candidates':['Native web APIs','Reviewed OSS task library'],
+        'decision':'Integrate reviewed components with accessible UI',
+        'sources':['https://example.org/tasks','https://github.com/example/tasks'],
+        'risks':['Persistence and license require verification'],
+        'competitors':[{'name':'Existing Tasks','source':'https://example.org/tasks',
+                        'finding':'Alternative offers ordinary task onboarding'}],
+        'open_source':[{'name':'Open Tasks','source':'https://github.com/example/tasks',
+                        'license':'MIT','finding':'Reusable task list primitive'}],
+        'exceptions':{},'routes_considered':['REUSE','INTEGRATE','BUILD_NEW','NO_BUILD'],
+        'selected_route':'INTEGRATE','unknowns':['Real host QA remains pending'],
+        'checked_on':'2026-11-09'
+    })
+
 class ProductFeedbackTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
@@ -63,9 +79,7 @@ class ProductFeedbackTests(unittest.TestCase):
         self.assertEqual(experience['open_feedback'],1)
         self.assertIn('custom calendar',experience['feedback'][0]['note'])
         self.assertEqual(self.call('orbit_project_resume')['experience']['phase'],'CHANGES_REQUESTED')
-        evidence=json.dumps({'task':'Research UI','candidates':['native web APIs'],
-            'decision':'Use native components','sources':['README.md'],
-            'risks':['date boundaries']})
+        evidence=researched('Research UI behavior')
         blocked=self.call('orbit_build_advance',expected_revision=self.revision(),
                     outcome='PASS',evidence=evidence,confirm_write=True)
         self.assertEqual(blocked['status'],'HOLD')
@@ -123,9 +137,7 @@ class ProductFeedbackTests(unittest.TestCase):
         self.assertEqual(self.call('orbit_build_status')['experience']['open_feedback'],1)
 
     def test_plan_feedback_requires_resolve_and_real_plan_approval(self):
-        evidence=json.dumps({'task':'Build app UI','candidates':['native web APIs'],
-            'decision':'Use trusted existing components','sources':['README.md'],
-            'risks':['persisting data']})
+        evidence=researched('Build app UI workflow')
         self.call('orbit_build_advance',expected_revision=1,outcome='PASS',
                   evidence=evidence,confirm_write=True)
         self.assertEqual(self.call('orbit_build_status')['run']['stage'],'PLAN')
