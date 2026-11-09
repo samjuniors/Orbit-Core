@@ -194,13 +194,39 @@ def discover(project_root, *, home=None):
     except ImportError: pass
     return {'skills':skills[:MAX_ITEMS], 'mcp_servers':servers[:MAX_ITEMS], 'limits':['Installed skills are untrusted until vetted. A configured MCP is NOT proof it is connected.', 'No network, process launching, installations, host tool enumeration or permission changes occurred.']}
 
-def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UNKNOWN'):
+def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UNKNOWN', host='unknown', host_plugins=None):
     """Read-only, host-neutral browser selection. Names are caller-reported hints.
 
     Orbit cannot inspect the host's private tool registry, authorize computer
     control, invoke native browser APIs or attest a tool ran. The lead host must
     check the real tool/schema and consent before any browser interaction.
     """
+    # Codex desktop bundles Browser and Computer Use as plugins, not always
+    # one browser_click/computer_click tool. In supported desktop sessions the
+    # plugin skill uses a host-provided JS bridge; Codex CLI does not inherit
+    # those capabilities. A plugin name or bridge alone is NEVER proof of a
+    # usable browser, permission, or executed UI action.
+    host_plugins = host_plugins or []
+    known_codex_plugins = {'browser', 'computer-use', 'unified-computer-use', 'chrome'}
+    reported_codex_plugins = set()
+    if host == 'codex':
+        for label in host_plugins:
+            item = label.lower().removeprefix('@')
+            for plugin in known_codex_plugins:
+                if item in (plugin, plugin + '@openai-bundled'):
+                    reported_codex_plugins.add(plugin)
+    reported_tools = set(host_tools)
+    node_repl_bridge = bool(reported_tools & {
+        'mcp__node_repl__js', 'node_repl__js', 'node_repl.js',
+    })
+    cua_repl_bridge = bool(reported_tools & {
+        'mcp__cua_repl__js', 'cua_repl__js', 'cua_repl.js',
+    })
+    codex_browser_bridge = ('browser' in reported_codex_plugins and node_repl_bridge)
+    codex_computer_bridge = (
+        ('computer-use' in reported_codex_plugins and node_repl_bridge)
+        or ('unified-computer-use' in reported_codex_plugins and cua_repl_bridge)
+    )
     native, computer, browser_use, vercel = [], [], [], []
     for original in host_tools:
         name = original.lower().replace('-', '_').replace('.', '_')
@@ -252,10 +278,24 @@ def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UN
         re.sub(r'_+', '_', name.lower().replace('-', '_'))=='browser_use'
         for name in browser_use)
     providers = [
-        {'id':'host_browser','tools':native[:8], 'status':'HOST_REPORTED_ACTION_TOOL' if native_ready else
-         'INSUFFICIENT_TOOLS' if native else 'NOT_REPORTED'},
-        {'id':'host_computer_use','tools':computer[:8], 'status':'HOST_REPORTED_ACTION_TOOL' if computer_ready else
-         'INSUFFICIENT_TOOLS' if computer else 'NOT_REPORTED'},
+        {'id':'host_browser','tools':native[:8],
+         'reported_plugin': 'browser@openai-bundled' if 'browser' in reported_codex_plugins else None,
+         'bridge_reported':codex_browser_bridge,
+         'status':('HOST_REPORTED_ACTION_TOOL' if native_ready else
+                   'HOST_PLUGIN_BRIDGE_REVIEW_REQUIRED' if codex_browser_bridge else
+                   'INSUFFICIENT_TOOLS' if native else
+                   'PLUGIN_REPORTED_TOOL_UNAVAILABLE' if 'browser' in reported_codex_plugins else
+                   'NOT_REPORTED')},
+        {'id':'host_computer_use','tools':computer[:8],
+         'reported_plugin': ('computer-use@openai-bundled' if 'computer-use' in reported_codex_plugins else
+                             'unified-computer-use@openai-bundled' if 'unified-computer-use' in reported_codex_plugins else None),
+         'bridge_reported':codex_computer_bridge,
+         'status':('HOST_REPORTED_ACTION_TOOL' if computer_ready else
+                   'HOST_PLUGIN_BRIDGE_REVIEW_REQUIRED' if codex_computer_bridge else
+                   'INSUFFICIENT_TOOLS' if computer else
+                   'PLUGIN_REPORTED_TOOL_UNAVAILABLE' if
+                   ('computer-use' in reported_codex_plugins or 'unified-computer-use' in reported_codex_plugins) else
+                   'NOT_REPORTED')},
         {'id':'host_browser_use','tools':browser_use[:8], 'status':'HOST_REPORTED_ACTION_TOOL' if browser_use_ready else
          'INSUFFICIENT_TOOLS' if browser_use else 'NOT_REPORTED'},
         {'id':'local_playwright','browsers_detected':detected, 'playwright_installed':playwright,
@@ -266,6 +306,10 @@ def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UN
          'CONFIGURED_OR_INSTALLED_REVIEW_REQUIRED' if cli_installed or configured or vercel else 'NOT_INSTALLED'}
     ]
     primary = next((p for p in providers if p['status']=='HOST_REPORTED_ACTION_TOOL'),None)
+    # Prefer native host plugin initialization over adding Playwright, but
+    # expose only a setup/review candidate, not an actionable verified tool.
+    if not primary:
+        primary = next((p for p in providers if p['status']=='HOST_PLUGIN_BRIDGE_REVIEW_REQUIRED'),None)
     if not primary and playwright:
         primary = providers[3]
     # Denied consent must not be bypassed with a different browser/provider.
@@ -287,9 +331,32 @@ def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UN
                        if primary and primary['id']=='local_playwright' else
                        'No browser tool verified: review installed host capabilities or seek approval for optional Vercel agent-browser.'),
         'execution_verified':False, 'install_performed':False,
+        'reported_host_plugins':sorted(reported_codex_plugins),
+        'host_bridge_tools_reported':{'node_repl_js':node_repl_bridge,'cua_repl_js':cua_repl_bridge},
+        'host_skill_setup':('Read the active Codex Browser or Computer Use plugin skill in the current desktop session; '
+                            'initialize through its official host-provided bridge, confirm user permission, '
+                            'and observe a real tool action and UI state. Never launch the helper executable '
+                            'or substitute Codex CLI for desktop Browser/Computer Use.'
+                            if codex_browser_bridge or codex_computer_bridge else None),
+        'host_specific_guidance':(
+            'Codex desktop Browser, Browser Use, Chrome and Computer Use are host/plugins controlled by the signed-in user. '
+            'Use actually connected Codex plugins or the in-app browser with real user approval; verify tool actions and screenshots. '
+            'Codex CLI does not automatically inherit desktop Browser/Computer permissions or registry. No external driver is required when native actions work.'
+            if host in {'codex', 'codex-desktop', 'codex-cli'} else
+            'Prefer the coding host actual browser/computer UI tools with approval. Do not infer tools from host name or plugin configuration.'),
+        'host_native_qa_recording':{'tool':'orbit_build_advance','field':'host_browser_qa',
+                                    'requires_host_interaction':True,
+                                    'requires_preview_and_source_pin':True,
+                                    'screenshot_verified':False,
+                                    'host_consent_attested':False,
+                                    'no_separate_playwright_install_required':True},
         'privacy':'Avoid personal browser tabs, saved login profiles, credentials and remote/cloud sessions without separate explicit permission; prefer a disposable loopback test session.',
         'notes':'A reported host tool name is a hint only. No host browser/computer command or external CLI is invoked by this selector.',
-        'qa_gate':'Host/computer-use and agent-browser evidence is supplemental in current source. BROWSER_QA PASS still requires a fresh Orbit-recorded Playwright run bound to source revision and managed preview. Never forge or bypass that gate.',
+        'qa_gate':('BROWSER_QA PASS accepts either a fresh Orbit-recorded Playwright run or a ' 
+                   'separately approved, bounded host-native UI report passed to orbit_build_advance(host_browser_qa=...). ' 
+                   'The host report needs a real tool/session, interactive action, independent observation, screenshot reference, ' 
+                   'current Orbit-managed preview and source pin. Host-reported approvals/actions/screenshots are NOT independently attested. ' 
+                   'Never fabricate a native QA result or bypass denied permission.'),
         'fallback':'Only missing or failed tools permit an independently authorized fallback; DENIED consent stops this operation. Never bypass denied permission by switching providers.'
     }
 
@@ -356,7 +423,7 @@ def adaptive_workflow(objective, categories, role, host_tools, candidates, permi
     }
 
 
-def select(project_root, objective, host_tools=None, *, home=None, permission_state='UNKNOWN',
+def select(project_root, objective, host_tools=None, *, host_plugins=None, home=None, permission_state='UNKNOWN',
            project_profile=None, requested_skill_names=None, review_manifest=None,
            host='unknown'):
     if not isinstance(objective,str) or not objective.strip() or len(objective)>1500: raise ValueError('objective must contain 1..1500 characters')
@@ -364,6 +431,11 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
     if host_tools is None:
         host_tools = []
     if not isinstance(host_tools,list) or len(host_tools)>80 or any(not isinstance(x,str) or len(x)>100 for x in host_tools):raise ValueError('host_tools must be a short list of names')
+    if host_plugins is None:
+        host_plugins = []
+    if (not isinstance(host_plugins,list) or len(host_plugins)>24 or
+            any(not isinstance(x,str) or not x or len(x)>100 for x in host_plugins)):
+        raise ValueError('host_plugins must be a short list of host-reported names')
     if permission_state not in ('UNKNOWN','APPROVED','DENIED'):
         raise ValueError('permission_state must be UNKNOWN, APPROVED or DENIED')
     available=discover(project_root,home=home)
@@ -448,7 +520,7 @@ def select(project_root, objective, host_tools=None, *, home=None, permission_st
     adaptive_plan=adaptive_workflow(objective,categories,role,host_tools,reviewed_candidates,permission_state)
     specialist_plan=orbit_specialists.plan(skill_plan['project_profile'],objective,available,
                                            skill_plan,host_tools,permission_state)
-    browser_plan = browser_workflow(host_tools,available['mcp_servers'],permission_state=permission_state) if ('qa' in categories or role=='orbit-qa') else None
+    browser_plan = browser_workflow(host_tools,available['mcp_servers'],permission_state=permission_state,host=host,host_plugins=host_plugins) if ('qa' in categories or role=='orbit-qa') else None
     return {'objective':objective,'role_skill_preferences':recommended,'skill_plan':skill_plan,'categories':categories,'installed_matches':reviewed_candidates[:8], 'configured_mcp_servers':available['mcp_servers'][:20], 'host_reported_tools':host_tools[:50], 'external_research_candidates':research,
             'optional_browser_provider':browser_provider,
             'browser_workflow':browser_plan,
