@@ -51,3 +51,7 @@ For token/quota efficiency, don't load all skill instructions or every project d
 ## Platform and model decision extension
 
 New separate read-only `orbit_decision_route` and `orbit_model_route` tools distinguish web/native/mobile/SDK/MCP/OS needs, keep custom component options, and recommend model tiers using only the names reported by the active host. Host model changes, installed libraries and iOS/Android device verification remain external and require actual supported tool invocation plus approvals. [Source-reviewed architecture and library matrix](ADAPTIVE-DECISION-ENGINE.md).
+
+## Engineering workflow reference · 2026-11-13
+
+The [mattpocock/skills snapshot](https://github.com/mattpocock/skills/commit/5863806dd4e15c63174bee4e7515a4256792ecfa) and [MIT notice](https://github.com/mattpocock/skills/blob/5863806dd4e15c63174bee4e7515a4256792ecfa/LICENSE) inform original additions to the Architect, Project Manager, Software Engineer, QA and Reviewer roles. Use canonical decisions, criterion-linked tasks and comparable symptom checks through the existing Orbit workflow. Keep review authority with the host and owner, and route recurring delivery friction into existing project-scoped practice review. See [Orbit research and references](https://app.notion.com/p/4074f681d488816e9fe7f4504982c948) for the six-workflow comparison and provenance.
