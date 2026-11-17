@@ -20,6 +20,29 @@ HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
 # Hashes of exact vendor-packed v0.22.0 stock files ONLY: safe upgrade after backup.
 OLD_STOCK_SHA256 = {
+    # Exact preceding stock agents from v0.31.0 and candidate a3a3fa7.
+    '898bb2227baa37e6b8b0c4dbde7cd54ac34cb2957afbe9e9b7bac3e65f9df184',  # v0.31.0 architect, native, CRLF
+    '28018a8ae9df42abe76e9cfc073795090b85bc7a5cb4fcec8ed658582fdc55d6',  # v0.31.0 architect, Claude, LF
+    '35341a579928d2516fb71ed5640ab13fb490d1601cc80b65020e2685a295704b',  # v0.31.0 architect, Claude, CRLF
+    '0ae0ce4fa9f5f82d18485e1d6e4302e4a39397605744a4cbcf2844fcdba80062',  # v0.31.0 project-manager, native, LF
+    'ab30e01b73dfa4a4899e0eaeb4dc38430499f2a507cc128722de7c23cc7b0631',  # v0.31.0 project-manager, native, CRLF
+    '7b257ab7340b7704c49388d5ac8e2c5adeafae265b8ff22fd23f582f782f3d72',  # v0.31.0 project-manager, Claude, LF
+    'ff57bcbc5a05ee51dc2525552bee5656feeb67f88acf60e4443a4c19e961de9d',  # v0.31.0 project-manager, Claude, CRLF
+    '590b2e4838465c0157b918c44f6dd890006e8d5e60505f98d12b868f4fad27d3',  # v0.31.0 software-engineer, native, LF
+    '5a3dcd57f95c59b772c071dbe94a18d531efd0b731135647e7a3d61d11f895dc',  # v0.31.0 software-engineer, native, CRLF
+    '8c981a4fdbd702a6057766f035e8c3024551c2191ebaa6272581df8494f55a5d',  # v0.31.0 software-engineer, Claude, LF
+    '0f5cef7ff7c06e7a0df7a8b59fe2263027db3ec53b2aa0c78c986a4e3705c43e',  # v0.31.0 software-engineer, Claude, CRLF
+    '0c6b4531b99b551c6f81c942aa6862d1c15eb96e631f9584b481b6cf0e578430',  # v0.31.0 qa, native, LF
+    '23caf8f59ddf8f2f70572f6ba9058ba2cc144d833d9ade9f03d34d989dbed7ab',  # v0.31.0 qa, native, CRLF
+    '3c0f6cbcdd7c745243fbeb7efaa616036d7190ae9a92e0cf40fe6a83ef64ba37',  # v0.31.0 qa, Claude, LF
+    'fa6374cad3b7ff40aa0ef4cb6f68c3fa1d2059b27ba63355237151e69460b2c9',  # v0.31.0 qa, Claude, CRLF
+    '24458c2d56542a86aaa79e4587dd1e946c4eedd466605196fe509e5a9608710e',  # v0.31.0 reviewer, native, CRLF
+    'ae2ac83210c557d280897628e9dc203f4dd044ddb364d4f2291e825cc5d78f8b',  # v0.31.0 reviewer, Claude, LF
+    'a05736d4ecc17891175552625aa66ec50324b1c1f39a032bd518d5dd28f4c789',  # v0.31.0 reviewer, Claude, CRLF
+    '33f1fa46988aa026819674025d6411fa7072fdac4e6bbd3565e4d66d2c40f032',  # v0.32 candidate qa, native, LF
+    '005e5b2c8fa2b089399b468dfc9062d5da0fbfbdc4a2d4ae8f19a620b3a6b6f8',  # v0.32 candidate qa, native, CRLF
+    '5073319abf607db7f69eeeac9c6bdb53863ec422d4def6be43b6c3db7a7f119d',  # v0.32 candidate qa, Claude, LF
+    '49ccba9445d6860bf4705d9734111c97346fa8e7df39e0d665fe81a0442f301d',  # v0.32 candidate qa, Claude, CRLF
     # Published v0.26.0-v0.30.0 immutable release updater/GUI stock bytes.
     # Include official ZIP LF and exact Windows CRLF forms. Only full SHA256
     # matches permit backup-first replacement; any owner edit still blocks.

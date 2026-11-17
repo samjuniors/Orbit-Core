@@ -26,6 +26,19 @@ migration = _load("preview_antigravity_plugin.py", "orbit_plugin_migration")
 
 
 class PackageTests(unittest.TestCase):
+    def test_existing_roles_package_engineering_evidence_guidance(self):
+        files = builder.build_files(ROOT)
+        expectations = {
+            "architect": b"canonical glossary or ADR",
+            "project-manager": b"accepted criterion",
+            "software-engineer": b"smallest observable behavior",
+            "qa": b"same symptom check",
+            "reviewer": b"Specification coverage",
+        }
+        for role, marker in expectations.items():
+            with self.subTest(role=role):
+                self.assertIn(marker, files[f"agents/orbit-{role}-agent.md"])
+
     def test_inventory_and_roles(self):
         files = builder.build_files(ROOT)
         self.assertEqual(len([x for x in files if x.startswith("agents/")]), 16)
