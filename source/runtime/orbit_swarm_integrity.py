@@ -236,6 +236,74 @@ def review(conn, root, project, args):
         return {**base, "status": "HOLD_QA_MODE_MISMATCH",
                 "source_matches": True,
                 "reason": "Browser QA cannot substitute for a native/CLI build's recorded verification. Select the correct QA mode and inspect real host evidence."}
+    # Host-native UI tests can use Codex/Antigravity's already connected browser
+    # or computer tools without installing another Playwright. This is a
+    # source-pinned CALLER-REPORTED record, not independently attested QA.
+    try:
+        saved = json.loads(build["evidence_json"])
+        native = saved.get("BROWSER_QA") if isinstance(saved, dict) else None
+        native_report = native.get("host_browser_qa") if isinstance(native, dict) else None
+    except (ValueError, TypeError):
+        native = None
+        native_report = None
+        saved = {}
+    if isinstance(native, dict) and native.get("verification") == "host-native-browser-caller-reported":
+        actions = native_report.get("actions") if isinstance(native_report, dict) else None
+        correct = (
+            native.get("outcome") == "PASS"
+            and build["stage"] in {"REVIEW", "CHECKPOINT", "DONE"}
+            and native.get("source_identity_kind") == "BOUNDED_LOCAL_FILES_FINGERPRINT"
+            and native.get("source_fingerprint") == fingerprint
+            and native.get("qa_project") == project
+            and native.get("qa_build_id") == build_id
+            and native.get("qa_stage") == "BROWSER_QA"
+            and type(native.get("qa_build_revision")) is int
+            and 1 <= native["qa_build_revision"] < build["revision"]
+            and native.get("host_execution_attested") is False
+            and native.get("host_permission_verified") is False
+            and native.get("screenshot_independently_verified") is False
+            and isinstance(native_report, dict)
+            and native_report.get("provider") in orbit_build.HOST_BROWSER_PROVIDERS
+            and native_report.get("preview_id") == native.get("preview_id")
+            and type(native_report.get("preview_started_at")) in (float, int)
+            and native_report.get("preview_started_at") == native.get("preview_started_at")
+            and native_report.get("host_execution_attested") is False
+            and native_report.get("host_permission_attested") is False
+            and native_report.get("origin_policy_attested") is False
+            and native_report.get("screenshot_independently_verified") is False
+            and isinstance(native_report.get("session_reference"), str)
+            and len(native_report["session_reference"]) >= 8
+            and isinstance(native_report.get("screenshot_reference"), str)
+            and len(native_report["screenshot_reference"]) >= 8
+            and isinstance(actions, list) and len(actions) >= 2
+            and all(isinstance(item, dict) and item.get("status") == "PASS"
+                    and item.get("kind") in orbit_build.HOST_BROWSER_ACTIONS
+                    for item in actions)
+            and any(item["kind"] in {"click", "fill", "type", "press", "scroll"} for item in actions)
+            and any(item["kind"] in {"assert", "inspect", "screenshot"} for item in actions)
+            and isinstance(saved.get("__orbit_feedback", []), list)
+            and all(isinstance(note, dict) and note.get("status") != "OPEN"
+                    for note in saved.get("__orbit_feedback", []))
+        )
+        if not correct:
+            return {**base, "status": "HOLD_STALE_OR_INVALID_QA",
+                    "source_matches": True,
+                    "reason": "Invalid, stale or unbound host-native browser evidence. Repeat approved UI checks and record against the current build."}
+        return {**base, "status": "READY_FOR_INDEPENDENT_REVIEW",
+                "source_matches": True,
+                "recorded_host_browser_qa_matches_source": True,
+                "recorded_qa_build_id": build_id,
+                "recorded_build_stage": build["stage"],
+                "recorded_host_provider": native_report["provider"],
+                "actual_host_browser_execution_verified": False,
+                "host_permission_verified": False,
+                "network_origin_policy_attested": False,
+                "screenshot_independently_verified": False,
+                "merge_performed": False,
+                "reason": ("Host-reported browser/computer-use evidence is pinned to the current "
+                           "source and build revision, but actions, screenshot, origin policy and "
+                           "host consent are not independently authenticated. Inspect native "
+                           "host transcript and actual UI before accepting changes.")}
     if not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='browser_results'"
     ).fetchone():

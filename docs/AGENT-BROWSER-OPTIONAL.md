@@ -9,17 +9,14 @@ License: Apache-2.0. This is third-party tooling and not redistributed by Orbit.
   browser interactions, responsive viewports, screenshots and UI review.
 - Orbit continues to own local preview, task ledger, build stage, and checkpoint.
 - Antigravity/Claude/Codex host owns model actions, approvals, and actual provider calls.
-- Never treat a configured MCP as connected, nor its claimed PASS as a recorded
-  Orbit Playwright pass. Existing `orbit_browser_qa` remains the gate for
-  BROWSER_QA in this version; this provider is supplemental pending a verified
-  adapter. No new MCP tool is added by this provider-selection feature.
+- Never treat a configured MCP as connected, nor its claimed PASS as an Orbit-recorded Playwright run. The v0.32 development candidate offers an explicitly caller-reported host-native evidence option through `orbit_build_advance(host_browser_qa=...)` once a genuine approved browser interaction and observation have occurred. It is not independently attested. Existing `orbit_browser_qa` remains the strict locally executed Playwright option; no new browser executor is added.
 
 ## Host-first provider selection
 
 - Call `orbit_capability_select(objective="orbit-qa: browser testing", host_tools=...)` with the connected host's *actual* tool names. Inspect `browser_workflow` for ordered candidates and readiness. This is a recommendation, not an executable selector.
 - Prefer native host browser actions; if unavailable, use approved host computer-use or connected Browser Use actions; then installed local Playwright using Edge/Chrome/Chromium; finally consider this Vercel provider.
 - Real host execution is mandatory. Browser navigation, computer screen/click access and provider connections may access private session data; obtain genuine scope-specific consent, prefer an isolated loopback app and do not auto-attach existing user browser profiles, CDP sessions or remote/cloud browsers.
-- Even successful native-browser/agent-browser actions are supplemental host evidence. The current Orbit BROWSER_QA gate still requires Orbit-recorded, source- and preview-bound Playwright PASS; report BLOCKED instead of bypassing the gate.
+- Actual native-host browser or Computer Use tests can be recorded through the v0.32 development candidate's bounded source/preview/revision-bound host report **after** permission and real tool execution. Distinguish that caller-reported record from a Playwright result and independently review native actions/screenshots. If the tool is not available or permission is denied, report BLOCKED; do not claim a test took place.
 - **M3 local QA network boundary (development branch):** Orbit's built-in Playwright runner only permits HTTP traffic to its own exact `http://127.0.0.1:<preview port>` origin, and WebSockets to the matching `ws://127.0.0.1:<preview port>`. Other loopback ports (including localhost aliases) and external origins are blocked; `data:`, `blob:`, and `about:` inline resources remain usable. WebSocket routing requires Playwright **1.48+**; older versions return a reviewable dependency HOLD instead of a security claim. This does **not** make the browser an operating-system network sandbox: other transports (such as WebRTC), installed extensions and host tools require separate security controls. Real host-browser/Computer Use providers have their **own** permissions and are not controlled by the built-in Playwright routes. Multi-service apps need a separately reviewed explicit allowlist, not a silent wildcard.
 
 
@@ -75,8 +72,7 @@ License: Apache-2.0. This is third-party tooling and not redistributed by Orbit.
 - Record precise tool names, input, outputs, screenshot paths and failures.
 - When testing finishes, close the third-party browser session. Never
   terminate unrelated processes.
-- If `orbit_browser_qa` is unavailable, report BROWSER_QA as BLOCKED; optional
-  agent-browser screenshots don't bypass this version's evidence gate.
+- If local Playwright is unavailable, use an actually approved host-native provider and review the `HOST-NATIVE-UI-QA.md` reference for the evidence contract. If no provider was executed or the host could not observe UI results, report BROWSER_QA as BLOCKED.
 
 Upstream version, APIs, and Windows launcher behavior may change. This guide
 records an integration strategy, not a claim of successful end-to-end host QA.

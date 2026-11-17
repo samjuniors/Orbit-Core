@@ -35,6 +35,34 @@ class SpecialistAssemblyTests(unittest.TestCase):
         self.assertFalse(result["external_resource_automatically_installed"])
         self.assertEqual(len(set(roles)), len(roles))
 
+    def test_visual_design_handoff_is_only_a_review_packet(self):
+        for kind in ("website", "web-app", "mobile-app", "desktop-app", "game"):
+            with self.subTest(product=kind):
+                result = self.plan(kind=kind, operation="redesign")
+                contract = result["design_handoff"]
+                self.assertEqual(contract["status"], "PROPOSED_DESIGN_HANDOFF")
+                self.assertEqual(contract["participants"],
+                                 ["orbit-creative-director", "orbit-ux",
+                                  "orbit-frontend", "orbit-qa"])
+                self.assertFalse(contract["external_design_tool_required"])
+                self.assertFalse(contract["owner_design_approval_authenticated"])
+                self.assertFalse(contract["native_worker_invoked"])
+                self.assertFalse(contract["design_artifact_written"])
+                self.assertFalse(contract["rendered_visual_qa_verified"])
+                self.assertTrue(any("Existing" in item
+                                    for item in contract["preferred_artifacts"]))
+                self.assertFalse(result["native_agent_spawned"])
+
+    def test_design_handoff_does_not_appear_for_trivial_or_nonvisual_work(self):
+        for kind, operation in (
+                ("cli", "build"), ("api-service", "redesign"),
+                ("sdk-library", "maintain"), ("web-app", "fix"),
+                ("mobile-app", "test")):
+            with self.subTest(product=kind, operation=operation):
+                self.assertIsNone(self.plan(kind=kind, operation=operation)["design_handoff"])
+        self.assertIsNone(self.plan(kind="web-app", operation="redesign",
+                                    permission="DENIED")["design_handoff"])
+
     def test_small_cli_fix_does_not_create_design_army(self):
         result = self.plan(kind="cli", operation="fix")
         roles = [x["role"] for x in result["candidate_roles"]]
@@ -65,6 +93,23 @@ class SpecialistAssemblyTests(unittest.TestCase):
         self.assertEqual(result["status"], "HOLD_PERMISSION_DENIED")
         self.assertTrue(all(x["profile_candidate"] is None for x in result["candidate_roles"]))
         self.assertFalse(result["native_agent_spawned"])
+
+    def test_existing_design_specialists_have_revision_bound_handoff_instructions(self):
+        expected = {
+            "orbit-creative-director.md": "## Review-bound design handoff",
+            "orbit-ux.md": "## Review-bound design handoff",
+            "orbit-frontend.md": "## Review-bound frontend design implementation",
+            "orbit-qa.md": "## Independent design handoff verification",
+        }
+        for name, header in expected.items():
+            with self.subTest(agent=name):
+                source = (ROOT / "source" / "agents" / name).read_text(encoding="utf-8")
+                self.assertIn(header, source)
+                self.assertIn("source", source.lower())
+                self.assertIn("Orbit", source)
+        guide = ROOT / "docs" / "FRONTEND-DESIGN-HANDOFF.md"
+        self.assertTrue(guide.is_file())
+        self.assertIn("NOT HOST-ACCEPTED", guide.read_text(encoding="utf-8"))
 
     def test_canonical_security_agent_and_role_contracts(self):
         names = {x["role"]: x["bundled_role_profile_source"]

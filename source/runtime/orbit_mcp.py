@@ -27,11 +27,14 @@ import orbit_swarm_draft
 import orbit_delivery
 import orbit_swarm_host
 import orbit_native_coordination
+import orbit_autopilot
 import orbit_swarm_integrity
 import orbit_portable
 import orbit_pulse
 import orbit_improvement
 import orbit_agent_factory
+import orbit_team_builder
+import orbit_team_events
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -139,6 +142,7 @@ def db_connect():
     conn.commit()
     orbit_evidence.setup(conn)
     orbit_tasks.setup(conn)
+    orbit_autopilot.setup(conn)
     orbit_improvement.setup(conn)
     orbit_build.setup(conn)
     orbit_intake.setup(conn)
@@ -498,6 +502,7 @@ TOOLS += [
         'project_root':string(2000),'objective':string(1500),
         'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
         'host_tools':{'type':'array','maxItems':80,'items':{'type':'string'}},
+        'host_plugins':{'type':'array','maxItems':24,'items':string(100)},
         'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
         'project_profile':schema({
             'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
@@ -522,7 +527,7 @@ TOOLS += [
     {'name':'orbit_project_action','description':'Host-neutral, situation-based lifecycle intent/status router; read-only except approved revision-guarded pause/resume of one selected Orbit build. Does not stop host agents/previews.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'action':string(240),'build_id':string(40),'maturity':{'type':'string','enum':['new','partially_built','existing','completed','maintained','stalled']},'reason':{'type':'string','maxLength':400},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','action'])},
     {'name':'orbit_build_status','description':'Read persistent app build stage and evidence, across host/MCP restarts.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40)},['project_root','project','build_id'])},
     {'name':'orbit_build_feedback','description':'Record or resolve a genuine user change request linked to a native plan/walkthrough artifact. Does not edit host artifact or self-approve changes.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'action':{'type':'string','enum':['request','resolve']},'source':{'type':'string','enum':['plan','preview','walkthrough','other']},'note':string(600),'user_reference':string(200),'feedback_id':string(40),'resolution_evidence':string(600),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','build_id','action','expected_revision'])},
-    {'name':'orbit_build_advance','description':'Revision-guarded explicit stage advance; browser QA PASS requires a real Orbit-recorded Playwright PASS.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['PASS','FAIL','BLOCKED']},'evidence':string(1600),'preview_id':string(40),'confirm_write':{'type':'boolean'}},['project_root','project','build_id','expected_revision','outcome','evidence'])}
+    {'name':'orbit_build_advance','description':'Revision-guarded stage advance. Browser QA PASS requires either a fresh Orbit Playwright result or a bounded, source-pinned caller-reported host-native UI test with real action and screenshot references; host evidence is NOT independently attested.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'build_id':string(40),'expected_revision':{'type':'integer','minimum':1},'outcome':{'type':'string','enum':['PASS','FAIL','BLOCKED']},'evidence':string(1600),'preview_id':string(40),'host_browser_qa':{'type':'object','properties':{'provider':{'type':'string','enum':['host_browser','host_browser_use','host_computer_use']},'tool_name':string(100),'session_reference':string(200),'screenshot_reference':string(300),'observed_url':string(300),'approval_reference':string(200),'permission_state':{'type':'string','enum':['APPROVED']},'actions':{'type':'array','minItems':2,'maxItems':20,'items':{'type':'object','properties':{'kind':{'type':'string','enum':['click','fill','type','press','scroll','navigate','assert','inspect','screenshot']},'status':{'type':'string','enum':['PASS']},'observation':string(400)},'required':['kind','status','observation'],'additionalProperties':False}}},'required':['provider','tool_name','session_reference','screenshot_reference','observed_url','approval_reference','permission_state','actions'],'additionalProperties':False},'confirm_write':{'type':'boolean'}},['project_root','project','build_id','expected_revision','outcome','evidence'])}
 ]
 TOOLS += [
  {'name':'orbit_intake_status','description':'Read guided product intake and progressive autonomy.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
@@ -572,6 +577,70 @@ TOOLS += [
         'limit':{'type':'integer','minimum':1,'maximum':20},
         'include_shared':{'type':'boolean'}},
         ['project_root','project'])},
+    {'name':'orbit_team_preview',
+     'description':'Unreleased read-only adaptive team plan from the existing task ledger, local skill fingerprints and Orbit-routed dependency handoffs. No hire, peer chat, tool grant or autonomous execution.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),
+         'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
+         'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
+         'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'project_profile':schema({
+             'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
+             'platform':{'type':'string','enum':sorted(orbit_skill_plan.PLATFORMS)},
+             'technologies':{'type':'array','maxItems':8,'items':{'type':'string','enum':sorted(orbit_skill_plan.TECHNOLOGIES)}},
+             'operation':{'type':'string','enum':sorted(orbit_skill_plan.OPERATIONS)}},[]),
+         'tasks':{'type':'array','minItems':1,'maxItems':6,'items':schema({
+             'task_key':string(80),'expected_revision':{'type':'integer','minimum':1},
+             'kind':{'type':'string','enum':['adaptive','agent','bot']}},
+             ['task_key','expected_revision'])}
+     },['project_root','project','host','tasks'])},
+    {'name':'orbit_team_event',
+     'description':'Charter-bound team staffing, capability intent, revoke, handoff, receipt, retirement and read-only native dispatch or Orbit-routed relay previews. It records caller-reported host delivery outcomes and requires one before a bounded handoff receipt. Actual host permissions, worker invocation and peer message delivery remain outside the MCP.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),
+         'mission_id':string(80),
+         'action':{'type':'string','enum':['staff','handoff','retire','inbox','lease','revoke','receipt','dispatch','route','send_report','stop_request','stop_plan']},
+         'expected_revision':{'type':'integer','minimum':1},
+         'reported_branch':string(150),
+         'event_key':string(64),
+         'task_key':string(80),'task_revision':{'type':'integer','minimum':1},
+         'peer_task_key':string(80),'peer_revision':{'type':'integer','minimum':1},
+         'worker_kind':{'type':'string','enum':['agent','bot']},
+         'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
+         'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'requested_tool_names':{'type':'array','maxItems':6,'items':string(64)},
+         'requested_skill_names':{'type':'array','maxItems':3,'items':string(80)},
+         'staff_event_key':string(64),
+         'lease_event_key':string(64),
+         'handoff_event_key':string(64),
+         'send_event_key':string(64),
+         'delivery_outcome':{'type':'string','enum':['SENT','DENIED','FAILED','UNKNOWN']},
+         'lease_tool_names':{'type':'array','maxItems':3,'items':string(64)},
+         'lease_skill_names':{'type':'array','maxItems':3,'items':string(80)},
+         'lease_expires_at':string(20),
+         'host_workspace_mode':{'type':'string','enum':['read-only','workspace-write']},
+         'project_profile':schema({
+             'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
+             'platform':{'type':'string','enum':sorted(orbit_skill_plan.PLATFORMS)},
+             'technologies':{'type':'array','maxItems':8,'items':{'type':'string','enum':sorted(orbit_skill_plan.TECHNOLOGIES)}},
+             'operation':{'type':'string','enum':sorted(orbit_skill_plan.OPERATIONS)}},[]),
+         'review_manifest':schema({
+             'format':{'type':'string','enum':['orbit-skill-plan-v2']},
+             'context_sha256':{'type':'string','minLength':64,'maxLength':64},
+             'skills':{'type':'array','maxItems':3,'items':schema({
+                 'name':string(80),
+                 'sha256':{'type':'string','minLength':64,'maxLength':64},
+                 'tree_sha256':{'type':'string','minLength':64,'maxLength':64},
+                 'location_sha256':{'type':'string','minLength':64,'maxLength':64}
+             },['name','sha256','tree_sha256','location_sha256'])}
+         },['format','context_sha256','skills']),
+         'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
+         'summary':string(280),'evidence_ref':string(200),
+         'host_terminal_state':{'type':'string','enum':['COMPLETED','FAILED','CANCELLED','STOPPED']},
+         'observed_host_session':string(240),
+         'expected_digest':{'type':'string','minLength':64,'maxLength':64},
+         'confirm_write':{'type':'boolean'}
+     },['project_root','project','mission_id','action'])},
     {'name':'orbit_specialist_candidate',
      'description':'Reuse existing Orbit specialist when available, otherwise preview or explicitly write a NEW instruction-only project-scoped agent candidate. No host registration, permission grant, installation, code execution or worker spawn.',
      'inputSchema':schema({
@@ -582,11 +651,49 @@ TOOLS += [
         'confirm_write':{'type':'boolean'}},
         ['project_root','project','role'])},
 ]
+TOOLS.extend([
+    {'name':'orbit_autopilot_charter',
+     'description':'Phase 1 Autopilot: preview or record an immutable, expiring project/roadmap/task-scoped Mission Charter; pause/resume/stop with revisions and audit. Caller approval references are NOT authenticated. No unattended runner, model, agent, host permission or Git action is activated.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),'mission_id':string(80),
+         'action':{'type':'string','enum':['preview','activate','status','pause','resume','stop']},
+         'objective':string(750),'roadmap_ref':string(220),'roadmap_revision':string(128),
+         'branch':string(150),'expires_at':string(20),
+         'task_keys':{'type':'array','minItems':1,'maxItems':12,'items':string(80)},
+         'allowed_paths':{'type':'array','maxItems':24,'items':string(240)},
+         'allowed_decisions':{'type':'array','minItems':1,'maxItems':4,
+                              'items':{'type':'string','enum':sorted(orbit_autopilot.DECISIONS)}},
+         'max_parallel':{'type':'integer','minimum':1,'maximum':2},
+         'max_attempts_per_task':{'type':'integer','minimum':1,'maximum':3},
+         'expected_digest':string(64),
+         'expected_revision':{'type':'integer','minimum':1},
+         'approval_reference':string(200),'confirm_write':{'type':'boolean'}},
+         ['project_root','project','mission_id','action'])},
+    {'name':'orbit_autopilot_next',
+     'description':'Read-only Autopilot next-ready task recommendation tied to active, unexpired charter, task fingerprint, branch claim, DAG and retry limits. NO host invocation, automatic agent, permission grant, source modification or workflow loop.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),'mission_id':string(80),
+         'expected_revision':{'type':'integer','minimum':1},
+         'reported_branch':string(150),
+         'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},
+         'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'host_workspace_mode':{'type':'string','enum':list(orbit_delegation.HOST_WORKSPACE_MODES)}},
+         ['project_root','project','mission_id','expected_revision','reported_branch'])},
+    {'name':'orbit_autopilot_decision',
+     'description':'Read-only classifier for routine delegated or founder-only decisions against active charter and one approved task. Never implements a decision, modifies code or authenticates owner/host approval.',
+     'inputSchema':schema({
+         'project_root':string(2000),'project':string(80),'mission_id':string(80),
+         'expected_revision':{'type':'integer','minimum':1},'reported_branch':string(150),
+         'task_key':string(80),
+         'category':{'type':'string','enum':sorted(orbit_autopilot.DECISIONS | orbit_autopilot.FOUNDER_ONLY)}},
+         ['project_root','project','mission_id','expected_revision','reported_branch','task_key','category'])},
+])
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
     'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_swarm_draft_preview','orbit_software_delivery_preview','orbit_swarm_host_preflight','orbit_native_coordination_preview','orbit_swarm_integration_review','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
-    'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest','orbit_improvement_context'}
+    'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest','orbit_improvement_context',
+    'orbit_autopilot_next','orbit_autopilot_decision','orbit_team_preview'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
 for _tool in TOOLS:
     _name=_tool['name']
@@ -639,6 +746,20 @@ def validate(name, args):
 
 def execute(conn, name, a):
     validate(name,a)
+    if name=='orbit_team_event':
+        root=project_root(a)
+        return orbit_team_events.record(conn,root,project_key(a),a)
+    if name=='orbit_team_preview':
+        root=project_root(a)
+        return orbit_team_builder.preview(conn,root,project_key(a),a)
+    if name in {'orbit_autopilot_charter','orbit_autopilot_next','orbit_autopilot_decision'}:
+        root=project_root(a)
+        project=project_key(a)
+        if name=='orbit_autopilot_charter':
+            return orbit_autopilot.charter(conn,root,project,a)
+        if name=='orbit_autopilot_next':
+            return orbit_autopilot.next_task(conn,root,project,a)
+        return orbit_autopilot.decision(conn,root,project,a)
     if name in {'orbit_improvement_record', 'orbit_improvement_context',
                 'orbit_improvement_promote', 'orbit_specialist_candidate'}:
         root = project_root(a)
@@ -740,7 +861,7 @@ def execute(conn, name, a):
     if name=='orbit_preview_status': return orbit_preview.status(project_root(a), a)
     if name=='orbit_preview_stop': return orbit_preview.stop(project_root(a), a)
     if name=='orbit_capability_discover': return orbit_capabilities.discover(project_root(a))
-    if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]),permission_state=a.get('permission_state','UNKNOWN'),project_profile=a.get('project_profile'),requested_skill_names=a.get('requested_skill_names'),review_manifest=a.get('review_manifest'),host=a.get('host','unknown'))
+    if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]),host_plugins=a.get('host_plugins',[]),permission_state=a.get('permission_state','UNKNOWN'),project_profile=a.get('project_profile'),requested_skill_names=a.get('requested_skill_names'),review_manifest=a.get('review_manifest'),host=a.get('host','unknown'))
     if name=='orbit_project_scan': return scan(a)
     if name=='orbit_project_resume':
         if a.get('compact') is True:

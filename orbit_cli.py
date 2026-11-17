@@ -202,6 +202,10 @@ def update(a):
             desired=tuple(map(int,v.split('.')))
             existing=tuple(map(int,current.split('.')))
             if desired<existing:
+                if a.check:
+                    print('Selected '+a.channel+' release v'+v+' is older than installed v'+current+
+                          '; metadata check only. No downgrade or file changes performed.')
+                    return 0
                 raise ValueError('Refusing automatic downgrade; review compatibility and use --force explicitly')
             if desired==existing:
                 print('No newer '+a.channel+' release. Use install to add another host or --force to repair.')
