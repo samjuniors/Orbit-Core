@@ -352,11 +352,11 @@ def browser_workflow(host_tools, configured_mcp_servers, *, permission_state='UN
                                     'no_separate_playwright_install_required':True},
         'privacy':'Avoid personal browser tabs, saved login profiles, credentials and remote/cloud sessions without separate explicit permission; prefer a disposable loopback test session.',
         'notes':'A reported host tool name is a hint only. No host browser/computer command or external CLI is invoked by this selector.',
-        'qa_gate':('BROWSER_QA PASS accepts either a fresh Orbit-recorded Playwright run or a ' 
-                   'separately approved, bounded host-native UI report passed to orbit_build_advance(host_browser_qa=...). ' 
-                   'The host report needs a real tool/session, interactive action, independent observation, screenshot reference, ' 
-                   'current Orbit-managed preview and source pin. Host-reported approvals/actions/screenshots are NOT independently attested. ' 
-                   'Never fabricate a native QA result or bypass denied permission.'),
+        'qa_gate':('BROWSER_QA PASS accepts either a fresh Orbit-recorded Playwright run or'
+                   ' a separately approved, bounded host-native UI report passed to orbit_build_advance(host_browser_qa=...).'
+                   ' The host report needs a real tool/session, interactive action, independent observation, screenshot reference,'
+                   ' current Orbit-managed preview and source pin. Host-reported approvals/actions/screenshots are NOT independently attested.'
+                   ' Never fabricate a native QA result or bypass denied permission.'),
         'fallback':'Only missing or failed tools permit an independently authorized fallback; DENIED consent stops this operation. Never bypass denied permission by switching providers.'
     }
 

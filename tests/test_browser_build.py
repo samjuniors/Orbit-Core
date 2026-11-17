@@ -8,6 +8,7 @@ import socket
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -22,9 +23,21 @@ tasks.push(name); let li=document.createElement('li');li.textContent=name;docume
 document.querySelector('#todo').value='';};
 </script></body></html>'''
 
+def _cleanup_temporary_preview(temp):
+    """Retry only transient Windows directory locks after preview termination."""
+    for attempt in range(12):
+        try:
+            temp.cleanup()
+            return
+        except PermissionError as exc:
+            if os.name != 'nt' or getattr(exc, 'winerror', None) not in (5, 32, 145) or attempt == 11:
+                raise
+            time.sleep(0.25)
+
+
 class BuildBrowserTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(lambda: _cleanup_temporary_preview(self.temp))
         self.root=Path(self.temp.name)/'todo';self.root.mkdir()
         (self.root/'index.html').write_text(TODO_PAGE)
         self.db=sqlite3.connect(str(Path(self.temp.name)/'state.sqlite'))
