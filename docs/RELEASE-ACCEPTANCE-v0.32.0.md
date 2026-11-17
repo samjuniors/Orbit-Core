@@ -15,12 +15,12 @@
 - **Initial immutable v0.31.0 → candidate v0.32.0: FAIL (reproduced)** — installer rejected unrecognized unmodified `orbit_cli.py`. Source traced to 7 missing exact SHA-256 stock file digests.
 - **Fixed v0.31.0 → v0.32.0: PASS** after collecting 12 installed stock digests from the actual immutable `v0.31.0` tag and adding only 7 missing exact hashes. `tests/test_universal.py` now checks the official stock digests. Owner-edited stock file still triggers refusal before writes; unchanged `AGENTS.md`, `.orbit/STATE.md`, DB bytes and prior runtime survive.
 - **Codex CLI 0.166.0 actual MCP invocation: PASS** in ephemeral read-only isolated session. Server `orbit-v032-qa` exposed 57 tools; `orbit_capability_discover` returned `isError=false`, with 15 local-unverified skills and 8 configured-not-connection-verified MCP entries. No write action was requested.
-- Candidate full regression suite: **PENDING FINAL POST-PATCH RERUN**.
+- Candidate full regression: first complete Windows Python 3.12 run **PASS** (693 tests, 29 skipped); repeat run **FAIL** with one transient `WinError 32` in `test_browser_build` temporary directory teardown (693 tests, 29 skipped). Targeted Windows cleanup now retries only explicit file-in-use PermissionError codes for a bounded period, without swallowing persistent failures. Focused `test_browser_build.py` 17-test suite PASS in 3 consecutive Windows runs (3 skipped each). Exact candidate commit CI and another complete suite remain the final authority.
 
 ## Not verified / release blockers
 
 1. Actual signed-in Antigravity IDE v0.32 plugin connection, native specialist sessions, cancellation, permission prompts/denial, restart/checkpoint continuity and browser/GUI acceptance: **NOT VERIFIED**. The Codex read-only discovery call does not substitute for native worker acceptance.
-2. Exact candidate-head GitHub CI, merged-main CI, release-tag equality, asset download validation and updater detection: **NOT RUN** until a reviewed release branch is committed/pushed and the owner authorizes merge/publication.
+2. Exact candidate-head GitHub CI: draft [PR #129](https://github.com/samjuniors/Orbit-Core/pull/129) opened; Ubuntu matrix 4/4 initially PASS, Windows job PENDING on the first candidate commit. The updated Windows cleanup patch must be pushed and rechecked at its new exact head. Merged-main CI, release-tag equality, download and updater verification remain **NOT RUN** pending owner-approved merge/publication.
 3. Actual installed-user upgrade, GUI scaling, interactive rollback and cross-device compatibility: **NOT VERIFIED**. Disposable previous-tag upgrade is not a real-user validation.
 4. Review all stacked v0.32 PRs and the broad difference since v0.31.0 for breaking behavior, privacy, security and release notes. Existing source branch uses v0.31.0 metadata until this candidate.
 
