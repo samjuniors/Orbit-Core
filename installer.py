@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
-VERSION = '0.31.0'
+VERSION = '0.32.0'
 SERVER = "orbit-core-native"
 HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
@@ -43,6 +43,15 @@ OLD_STOCK_SHA256 = {
     '005e5b2c8fa2b089399b468dfc9062d5da0fbfbdc4a2d4ae8f19a620b3a6b6f8',  # v0.32 candidate qa, native, CRLF
     '5073319abf607db7f69eeeac9c6bdb53863ec422d4def6be43b6c3db7a7f119d',  # v0.32 candidate qa, Claude, LF
     '49ccba9445d6860bf4705d9734111c97346fa8e7df39e0d665fe81a0442f301d',  # v0.32 candidate qa, Claude, CRLF
+    # Exactly verified installed stock bytes from immutable published v0.31.0 tag.
+    # Upgrade only after backup; any owner modification still blocks.
+    'b6879ab36e338af7d9a3292da1a02ab806a79d851ce35a7179930178563f8cf8',  # v0.31.0 project host stock COMPONENT-REUSE.md
+    'db68b4ed437d8ebe5373201368b270939d0f96381fd9e926a6c60257c212f48f',  # v0.31.0 project host stock INTELLIGENCE-AND-ROLE-SELECTION.md
+    '337a829f64008ddb4faf6981ea454219fc57f8e35075d4ef11a4b6ba02e10e9e',  # v0.31.0 project host stock NATIVE-COORDINATION.md
+    '5cc37b7f2c5bb3360383ec6889cb0159f290694f88dbc6bbc9a8fe61d863e6b1',  # v0.31.0 project host stock SKILL.md
+    '693f90e5cdf0c05b04210f0cbbb17e8ae478105c03c309a57bc4933addec97cb',  # v0.31.0 project host stock SOFTWARE-DELIVERY.md
+    '962e4b027553811e93a0669889f26f84b18d15020dfd7c40604b01a6e1a2ae1b',  # v0.31.0 project host stock TASK-LIFECYCLE.md
+    'e402a46c24937b2a15476275cc4799fde9da85f7ea7bc3e94a2eae282433c2ff',  # v0.31.0 project host stock orbit_cli.py
     # Published v0.26.0-v0.30.0 immutable release updater/GUI stock bytes.
     # Include official ZIP LF and exact Windows CRLF forms. Only full SHA256
     # matches permit backup-first replacement; any owner edit still blocks.

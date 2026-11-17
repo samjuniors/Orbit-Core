@@ -10,6 +10,33 @@ Proposed future changes require separate owner review.
 
 - Added a GitHub Sponsors funding configuration for `samjuniors` and an optional README support section. This documentation-only patch does not change runtime, package versions, tests or releases.
 
+## [0.32.0] - Proposed prerelease candidate (2026-11-17)
+
+### Highlights
+
+- **Improve review evidence and engineering decisions.** Existing Orbit Architect, Project Manager, Software Engineer, Reviewer and QA guidance now asks for testable acceptance criteria, evidence-backed reviews, failure diagnosis and verification of proposed fixes. This is an original adaptation to Orbit's existing roles, not an installed third-party skills collection.
+- **Add five read-only or bounded coordination interfaces.** The MCP tool inventory grows from 52 to 57 without removals: `orbit_autopilot_charter`, `orbit_autopilot_decision`, `orbit_autopilot_next`, `orbit_team_event` and `orbit_team_preview`. These provide scoped mission decisions, next-step previews and native-team handoff evidence, not unrestricted agent execution.
+- **Continue opt-in adaptive orchestration development.** Incorporates the reviewed v0.32 candidate-line work for bounded local Autopilot charters, host-native QA and specialist design handoffs. The connected IDE remains the model/agent executor and holds permissions; Orbit does not independently launch unrestricted agents.
+- **Keep project continuity local.** Existing tasks, checkpoints and SQLite state remain project scoped; read-only previews are not execution or approval.
+
+### Install and upgrade
+
+- Obtain the verified versioned Universal Setup ZIP, relevant host plugin package and checksum from [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases), after owner-approved publication.
+- Preview project/machine scope and exact file changes before applying. Preserve existing custom host configuration, local checkpoint state and SQLite/WAL files.
+- Windows Python 3.12 and Ubuntu Python 3.10–3.13 are covered by the automated source CI matrix; validate Antigravity/Codex host connection and actual tool behavior in the signed-in IDE after restarting it.
+
+### Compatibility
+
+- Intended next minor prerelease from v0.31.0. Adds opt-in planning, QA and role instruction capabilities; no permission elevation, automatic third-party skill activation or required hosted model.
+- Previously installed v0.31.0 runtime and owner customizations must remain recoverable. Changes to host-native tool contracts, installation and rollback require independent validation on the target package.
+
+### Known limitations
+
+- Host-native invocation, denied permission prompts, cancellation/restart reconciliation, browser/computer-use GUI interactions and installed-user rollback are not established by code regression tests or disposable MCP protocol checks.
+- Autopilot remains scoped and opt-in. No continuous unattended cloud operation, implicit owner approval, or autonomous release execution is supported by this candidate.
+- Security and review outputs are evidence-based recommendations; caller-reported outcomes must not be promoted to independently verified facts.
+- Pending real-IDE acceptance and independent release review remain explicit prerequisites to a public production-readiness claim.
+
 ## [0.31.0] - Release-candidate notes (2026-11-05)
 
 ### Highlights

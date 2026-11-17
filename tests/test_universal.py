@@ -46,6 +46,28 @@ class UniversalSetupTests(unittest.TestCase):
                 self.assertIn(digest, installer.OLD_STOCK_SHA256)
         self.assertNotIn('0' * 64, installer.OLD_STOCK_SHA256)
 
+    def test_published_v031_project_stock_allowlist(self):
+        # Hashes obtained from the immutable v0.31.0 tag's disposable installer.
+        exact = {
+            'COMPONENT-REUSE.md': 'b6879ab36e338af7d9a3292da1a02ab806a79d851ce35a7179930178563f8cf8',
+            'DECISION-ROUTING.md': '2f81e2dcb796a3eb432464a51eb245a068f9e5bc245d7ce2e8379de093c3d802',
+            'DOCS-AND-CONTEXT.md': 'f3fb5178201dd0d7ea73f1897756624eb387d4ce8b767ceebd1630636a6bae4d',
+            'HANDOFF.md': 'f5c9a5933b95a4b12c54a9b00541a9ce0dff491c1f7261c451dc75f291fc2049',
+            'INTELLIGENCE-AND-ROLE-SELECTION.md': 'db68b4ed437d8ebe5373201368b270939d0f96381fd9e926a6c60257c212f48f',
+            'NATIVE-COORDINATION.md': '337a829f64008ddb4faf6981ea454219fc57f8e35075d4ef11a4b6ba02e10e9e',
+            'PRODUCT-KIT-ADOPTION.md': '240c938ea40da8126a56e4adceb59ff5081b4560fdd10a2b9e63ac1aed564d43',
+            'PROJECT-INTAKE.md': 'b45ad9da0a259838c16a84ed8f4f3440973761e9bc1174e82527d10206d8c418',
+            'SKILL.md': '5cc37b7f2c5bb3360383ec6889cb0159f290694f88dbc6bbc9a8fe61d863e6b1',
+            'SOFTWARE-DELIVERY.md': '693f90e5cdf0c05b04210f0cbbb17e8ae478105c03c309a57bc4933addec97cb',
+            'TASK-LIFECYCLE.md': '962e4b027553811e93a0669889f26f84b18d15020dfd7c40604b01a6e1a2ae1b',
+            'orbit_cli.py': 'e402a46c24937b2a15476275cc4799fde9da85f7ea7bc3e94a2eae282433c2ff',
+        }
+        for name, digest in exact.items():
+            with self.subTest(name=name):
+                self.assertIn(digest, installer.OLD_STOCK_SHA256)
+        # Do not broaden matching to digest prefixes or edited user files.
+        self.assertNotIn('0' * 64, installer.OLD_STOCK_SHA256)
+
     def test_capability_module_supports_isolated_package_import(self):
         """Repository import must not depend on a prior test modifying sys.path."""
         cmd = [
