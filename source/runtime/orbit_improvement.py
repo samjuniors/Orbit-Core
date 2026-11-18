@@ -172,12 +172,19 @@ def context(conn, root, project, args):
             """SELECT lesson_sha256, lesson, revision FROM orbit_shared_lessons
                 WHERE status='ACTIVE' ORDER BY updated_at DESC LIMIT 12"""
         ).fetchall()]
+    # Durable style preferences must not disappear behind the unrelated
+    # 20-most-recent task/QA observations used for the normal context budget.
+    preference_rows = conn.execute("""SELECT event_key,lesson,evidence_ref,revision
+        FROM orbit_improvement_events WHERE root=? AND project=?
+        AND status='ACTIVE' AND kind='project-style-preference'
+        ORDER BY updated_at DESC, event_key LIMIT 8""",
+        (str(root), project)).fetchall()
     preferences = [
         {"event_key": x["event_key"], "preference": x["lesson"],
          "approval_reference": x["evidence_ref"], "revision": x["revision"],
          "approval_independently_verified": False}
-        for x in rows if x["kind"] == "project-style-preference"
-    ][:8]
+        for x in preference_rows
+    ]
     return {
         "project_style_preference_claims": preferences,
         "project_style_preference_scope": "THIS_PROJECT_ONLY",
