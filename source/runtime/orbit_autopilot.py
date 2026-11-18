@@ -49,6 +49,15 @@ def setup(conn):
         occurred_at TEXT NOT NULL,
         PRIMARY KEY (project, project_root, mission_id, revision)
     )""")
+    # Additive migration of the existing journal: no second approval database.
+    # Legacy rows lack hashes, so previous unrecorded approvals cannot be proved
+    # unique. New ACTIVATE/RESUME references are reserved atomically per root.
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(orbit_autopilot_events)")}
+    if "approval_sha256" not in columns:
+        conn.execute("ALTER TABLE orbit_autopilot_events ADD COLUMN approval_sha256 TEXT")
+    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS orbit_autopilot_unique_approval
+        ON orbit_autopilot_events(project_root, approval_sha256)
+        WHERE approval_sha256 IS NOT NULL""")
     conn.commit()
 
 
@@ -91,6 +100,48 @@ def _expiry(value):
 def _digest(body):
     raw = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _approval_hash(reference):
+    """One-way duplicate marker; a caller reference is never an identity proof."""
+    return hashlib.sha256(("orbit-approval-use-v1\0" + reference).encode("utf-8")).hexdigest()
+
+
+def _resume_review(row, root, project, mission, reference):
+    """Bind a pause -> resume proposal to the *current* immutable mission state."""
+    body = json.loads(row["charter_json"])
+    return _digest({
+        "format": "orbit-resume-review-v1", "project": project,
+        "root_sha256": hashlib.sha256(str(root).encode("utf-8")).hexdigest(),
+        "mission_id": mission, "expected_revision": row["revision"],
+        "state": row["state"], "charter_sha256": _digest(body),
+        "task_spec_fingerprint": body["task_spec_fingerprint"],
+        "allowed_paths": body["resolved_allowed_paths"],
+        "branch": body["branch"], "approval_sha256": _approval_hash(reference),
+    })
+
+
+def _resume_preflight(conn, row, root, project, reported_branch):
+    """Return only a hold reason, not a host permission verdict."""
+    body = json.loads(row["charter_json"])
+    if reported_branch != body["branch"]:
+        return "HOLD_BRANCH_MISMATCH"
+    try:
+        signature, resolved = _registered_specs(
+            conn, root, project, body["task_keys"], body["allowed_paths"])
+        if (signature != body["task_spec_fingerprint"]
+                or resolved != body["resolved_allowed_paths"]):
+            return "HOLD_CHARTER_SOURCE_DRIFT"
+    except (ValueError, TypeError):
+        return "HOLD_CHARTER_SOURCE_DRIFT"
+    # A pause does not terminate native workers; refuse to resume with live
+    # reservations until the real host has reconciled them.
+    busy = conn.execute("""SELECT 1 FROM orbit_agent_tasks
+        WHERE project_root=? AND status IN ('RESERVED','RUNNING') LIMIT 1""",
+        (str(root),)).fetchone()
+    if busy:
+        return "HOLD_HOST_RECONCILIATION"
+    return None
 
 
 def _within(path, allowed):
@@ -206,11 +257,13 @@ def _public(row):
 def charter(conn, root, project, a):
     mission = _mission_id(a)
     action = a.get("action")
-    if action not in {"preview", "activate", "status", "pause", "resume", "stop"}:
+    if action not in {"preview", "activate", "status", "timeline", "pause", "resume", "stop"}:
         raise ValueError("Invalid charter action")
     row = _load(conn, root, project, mission)
     if action == "status":
         return _public(row)
+    if action == "timeline":
+        return timeline(conn, root, project, mission, a)
     if action in {"preview", "activate"}:
         body = _charter(conn, root, project, a)
         digest = _digest(body)
@@ -252,6 +305,14 @@ def charter(conn, root, project, a):
             if _digest(current) != digest:
                 conn.rollback()
                 return {"status": "HOLD_CHARTER_CHANGED", "state_written": False}
+            reference_hash = _approval_hash(approval)
+            already = conn.execute("""SELECT 1 FROM orbit_autopilot_events
+                WHERE project_root=? AND approval_sha256=? LIMIT 1""",
+                (str(root), reference_hash)).fetchone()
+            if already:
+                conn.rollback()
+                return {"status": "HOLD_APPROVAL_REFERENCE_REUSED",
+                        "approval_authenticated": False, "state_written": False}
             when = _timestamp()
             conn.execute(
                 """INSERT INTO orbit_autopilot_missions
@@ -263,9 +324,9 @@ def charter(conn, root, project, a):
             )
             conn.execute(
                 """INSERT INTO orbit_autopilot_events
-                   (project,project_root,mission_id,revision,action,occurred_at)
-                   VALUES (?,?,?,?,?,?)""",
-                (project, str(root), mission, 1, "ACTIVATE", when),
+                   (project,project_root,mission_id,revision,action,occurred_at,approval_sha256)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (project, str(root), mission, 1, "ACTIVATE", when, reference_hash),
             )
             conn.commit()
         except Exception:
@@ -291,13 +352,31 @@ def charter(conn, root, project, a):
         deadline = datetime.fromisoformat(json.loads(row["charter_json"])["expires_at"].replace("Z", "+00:00"))
         if utc_now() >= deadline:
             return {**_public(row), "status": "HOLD_EXPIRED"}
-    if a.get("confirm_write") is not True:
-        return {**_public(row), "status": "PREVIEW_ONLY", "requested_action": action}
+    proposal = None
     reference = row["approval_reference"]
     if action == "resume":
-        reference = _bounded(a.get("approval_reference"), "approval_reference", 8, 200)
-        if reference == row["approval_reference"]:
+        preflight = _resume_preflight(conn, row, root, project,
+                                      a.get("reported_branch"))
+        if preflight:
+            return {**_public(row), "status": preflight, "state_written": False}
+        if a.get("approval_reference") is not None:
+            reference = _bounded(a["approval_reference"], "approval_reference", 8, 200)
+            if reference == row["approval_reference"]:
+                raise ValueError("Resume requires a fresh caller-reported approval reference")
+            proposal = _resume_review(row, root, project, mission, reference)
+        elif a.get("confirm_write") is True:
             raise ValueError("Resume requires a fresh caller-reported approval reference")
+    if a.get("confirm_write") is not True:
+        return {**_public(row), "status": "PREVIEW_ONLY",
+                "requested_action": action,
+                "resume_review_digest": proposal if action == "resume" else None,
+                "next": ("Review the exact pause revision, bound task source, "
+                         "allowed paths, reported branch, and proposal digest. "
+                         "The real host must independently authenticate permission."
+                         if action == "resume" else "Require real host permission.")}
+    if action == "resume" and a.get("expected_resume_digest") != proposal:
+        return {**_public(row), "status": "HOLD_RESUME_REVIEW_DIGEST_MISMATCH",
+                "approval_authenticated": False, "state_written": False}
     target = {"pause": "PAUSED", "resume": "ACTIVE", "stop": "STOPPED"}[action]
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -305,6 +384,24 @@ def charter(conn, root, project, a):
         if now is None or now["revision"] != expected or now["state"] != state:
             conn.rollback()
             return {"status": "HOLD_STALE_REVISION", "state_written": False}
+        if action == "resume":
+            preflight = _resume_preflight(conn, now, root, project, a.get("reported_branch"))
+            if preflight:
+                conn.rollback()
+                return {"status": preflight, "state_written": False}
+            if _resume_review(now, root, project, mission, reference) != proposal:
+                conn.rollback()
+                return {"status": "HOLD_RESUME_REVIEW_DIGEST_MISMATCH",
+                        "state_written": False}
+            reference_hash = _approval_hash(reference)
+            if conn.execute("""SELECT 1 FROM orbit_autopilot_events
+                WHERE project_root=? AND approval_sha256=? LIMIT 1""",
+                (str(root), reference_hash)).fetchone():
+                conn.rollback()
+                return {"status": "HOLD_APPROVAL_REFERENCE_REUSED",
+                        "approval_authenticated": False, "state_written": False}
+        else:
+            reference_hash = None
         timestamp = _timestamp()
         cursor = conn.execute(
             """UPDATE orbit_autopilot_missions
@@ -318,9 +415,10 @@ def charter(conn, root, project, a):
             return {"status": "HOLD_STALE_REVISION", "state_written": False}
         conn.execute(
             """INSERT INTO orbit_autopilot_events
-               (project,project_root,mission_id,revision,action,occurred_at)
-               VALUES (?,?,?,?,?,?)""",
-            (project, str(root), mission, expected + 1, action.upper(), timestamp),
+               (project,project_root,mission_id,revision,action,occurred_at,approval_sha256)
+               VALUES (?,?,?,?,?,?,?)""",
+            (project, str(root), mission, expected + 1, action.upper(),
+             timestamp, reference_hash),
         )
         conn.commit()
     except Exception:
@@ -329,6 +427,38 @@ def charter(conn, root, project, a):
     return {**_public(_load(conn, root, project, mission)),
             "status": target, "state_written": True,
             "next": "Host must separately verify permission and session state; this does not stop running agents."}
+
+
+def timeline(conn, root, project, mission, a):
+    """Redacted, read-only local event correlation; no cloud telemetry or agent run."""
+    limit = a.get("limit", 20)
+    if type(limit) is not int or not 1 <= limit <= 50:
+        raise ValueError("Timeline limit must be 1..50")
+    if not _load(conn, root, project, mission):
+        return {"status": "NO_MISSION", "events": [], "state_written": False,
+                "host_execution_verified": False}
+    rows = conn.execute("""SELECT revision,action,occurred_at,approval_sha256
+        FROM orbit_autopilot_events
+        WHERE project=? AND project_root=? AND mission_id=?
+        ORDER BY revision DESC LIMIT ?""",
+        (project, str(root), mission, limit)).fetchall()
+    trace_key = _digest({"format": "orbit-local-trace-v1", "project": project,
+                         "root_sha256": hashlib.sha256(str(root).encode()).hexdigest(),
+                         "mission_id": mission})[:32]
+    events = []
+    for item in reversed(rows):
+        rev = item["revision"]
+        events.append({"span_id": _digest({"trace_key": trace_key, "revision": rev})[:24],
+                       "revision": rev, "event": item["action"],
+                       "occurred_at": item["occurred_at"],
+                       "approval_reference_fingerprint_recorded": bool(item["approval_sha256"]),
+                       "host_execution_verified": False, "owner_authenticated": False})
+    return {"status": "LOCAL_TRACE_CONTEXT", "trace_id": trace_key,
+            "events": events, "project": project, "mission_id": mission,
+            "local_only": True, "cloud_trace_exported": False,
+            "agent_executed": False, "state_written": False,
+            "host_execution_verified": False, "owner_authenticated": False,
+            "note": "Existing local Mission Charter events; no raw approval references or tool payloads."}
 
 
 def _guard(conn, root, project, a):
