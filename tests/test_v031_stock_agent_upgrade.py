@@ -33,7 +33,7 @@ class OfficialV031AgentUpgradeTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.home = Path(tmp.name)
+        self.home = Path(tmp.name).resolve()
         self.runtime = self.home / ".orbit-universal"
         self.locations = {}
         for name, (fixture, digest) in PREVIOUS.items():
@@ -55,7 +55,7 @@ class OfficialV031AgentUpgradeTests(unittest.TestCase):
         with self._environment():
             preview = installer.plan(None, ["antigravity", "codex"], "machine")
             for name, (path, original) in self.locations.items():
-                matches = [c for c in preview if c.target == path]
+                matches = [c for c in preview if c.target.resolve() == path.resolve()]
                 self.assertEqual(len(matches), 1, name)
                 self.assertEqual(matches[0].action, "UPGRADE", name)
                 self.assertEqual(path.read_bytes(), original)
