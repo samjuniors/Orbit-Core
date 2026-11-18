@@ -16,10 +16,9 @@ import threading
 EXECUTES_PROJECT_CODE = frozenset({"orbit_preview_start", "orbit_browser_qa"})
 # Individually reviewed safe recovery operations. Do not use the MCP tool
 # annotation readOnlyHint as an authorization mechanism.
-RECOVERY_READS = frozenset({
-    "orbit_project_scan", "orbit_task_list", "orbit_team_preview",
-    "orbit_swarm_preview", "orbit_gate_evaluate",
-})
+# Never expose project notes, tasks, memory, research pointers or trace
+# payloads after containment: "read-only" does not mean non-exfiltrating.
+RECOVERY_READS = frozenset({"orbit_gate_evaluate"})
 VALID_MODES = frozenset({"NORMAL", "GUARDED", "CONTAINED"})
 
 
@@ -58,10 +57,6 @@ class Defense:
     def _safe_recovery(name, args):
         if name in RECOVERY_READS:
             return True
-        if name == "orbit_autopilot_charter":
-            return args.get("action") in {"status", "timeline"}
-        if name == "orbit_team_event":
-            return args.get("action") == "inbox"
         if name == "orbit_update_status":
             return args.get("refresh") is not True
         if name == "orbit_preview_stop":
