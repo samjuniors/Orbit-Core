@@ -209,6 +209,14 @@ class VisualInventoryTests(unittest.TestCase):
                  "confirm_write": True}
         saved = orbit_mcp.execute(self.db, "orbit_improvement_record", entry)
         self.assertEqual(saved["status"], "OBSERVATION_RECORDED")
+        for n in range(24):
+            orbit_improvement.record(self.db, self.root, "app-a", {
+                "event_key": "later-task-event-%02d" % n, "action": "record",
+                "kind": "task-outcome", "result": "unknown",
+                "lesson": "A later independent routine task observation %02d." % n,
+                "evidence_ref": "test-task-evidence-%02d" % n,
+                "confirm_write": True,
+            })
         a = {"project_root": str(self.root), "project": "app-a",
              "product_type": "web-app", "include_project_style_context": True}
         matched = orbit_mcp.execute(self.db, "orbit_decision_route", a)
