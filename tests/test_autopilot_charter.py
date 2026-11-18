@@ -98,6 +98,15 @@ class AutopilotCharterTests(unittest.TestCase):
             "category": kind, "task_key": task, **kwargs})
 
     def control(self, action, rev, **kwargs):
+        if action == "resume":
+            kwargs.setdefault("reported_branch", "feat/test-autopilot")
+            if kwargs.get("confirm_write") is True and kwargs.get("approval_reference") and (
+                    "expected_resume_digest" not in kwargs):
+                proposal = self.call(action="resume", mission_id=self.mission,
+                                     expected_revision=rev, reported_branch=kwargs["reported_branch"],
+                                     approval_reference=kwargs["approval_reference"])
+                if proposal.get("status") == "PREVIEW_ONLY":
+                    kwargs["expected_resume_digest"] = proposal["resume_review_digest"]
         return self.call(action=action, **{
             "mission_id": self.mission, "expected_revision": rev, **kwargs})
 
@@ -252,6 +261,172 @@ class AutopilotCharterTests(unittest.TestCase):
         self.assertEqual([row[0] for row in self.conn.execute(
             "SELECT action FROM orbit_autopilot_events ORDER BY revision")],
             ["ACTIVATE", "PAUSE", "RESUME", "STOP"])
+
+    def test_resume_must_repreview_exact_revision_and_action_scope(self):
+        self.activate()
+        self.control("pause", 1, confirm_write=True)
+        preview = self.control("resume", 2, approval_reference="owner-new-review-123")
+        self.assertEqual(preview["status"], "PREVIEW_ONLY")
+        self.assertEqual(len(preview["resume_review_digest"]), 64)
+        self.assertFalse(preview["execution_allowed"])
+        self.assertFalse(preview["approval_authenticated"])
+        raw = self.call(action="resume", mission_id=self.mission,
+                        expected_revision=2, reported_branch="feat/test-autopilot",
+                        approval_reference="owner-new-review-123",
+                        confirm_write=True)
+        self.assertEqual(raw["status"], "HOLD_RESUME_REVIEW_DIGEST_MISMATCH")
+        wrong = self.call(action="resume", mission_id=self.mission,
+                          expected_revision=2, reported_branch="feat/test-autopilot",
+                          approval_reference="owner-different-review-456",
+                          expected_resume_digest=preview["resume_review_digest"],
+                          confirm_write=True)
+        self.assertEqual(wrong["status"], "HOLD_RESUME_REVIEW_DIGEST_MISMATCH")
+        accepted = self.control("resume", 2, approval_reference="owner-new-review-123",
+                                expected_resume_digest=preview["resume_review_digest"],
+                                confirm_write=True)
+        self.assertEqual(accepted["status"], "ACTIVE")
+        self.assertFalse(accepted["host_permissions_verified"])
+        self.assertFalse(accepted["execution_allowed"])
+
+    def test_approval_replay_after_two_pause_resume_cycles_is_held(self):
+        self.activate()
+        self.control("pause", 1, confirm_write=True)
+        self.control("resume", 2, approval_reference="first-fresh-ref-2026",
+                     confirm_write=True)
+        self.control("pause", 3, confirm_write=True)
+        self.control("resume", 4, approval_reference="second-fresh-ref-2026",
+                     confirm_write=True)
+        self.control("pause", 5, confirm_write=True)
+        # Unlike the original last-reference-only guard, these match older
+        # (not current) references and MUST NOT be accepted again.
+        for previous in ("first-fresh-ref-2026", "actual-owner-review-claimed-123"):
+            candidate = self.control("resume", 6, approval_reference=previous,
+                                     confirm_write=True)
+            self.assertEqual(candidate["status"], "HOLD_APPROVAL_REFERENCE_REUSED")
+            self.assertEqual(self.call(action="status", mission_id=self.mission)["revision"], 6)
+        allowed = self.control("resume", 6, approval_reference="third-fresh-ref-2026",
+                               confirm_write=True)
+        self.assertEqual(allowed["revision"], 7)
+        self.assertEqual(self.conn.execute(
+            """SELECT COUNT(*) FROM orbit_autopilot_events
+               WHERE approval_sha256 IS NOT NULL""").fetchone()[0], 4)
+
+    def test_resume_preflight_holds_branch_drift_and_changed_source(self):
+        self.activate()
+        self.control("pause", 1, confirm_write=True)
+        mismatch = self.control("resume", 2, reported_branch="feat/wrong",
+                                approval_reference="other-review-2026")
+        self.assertEqual(mismatch["status"], "HOLD_BRANCH_MISMATCH")
+        self.conn.execute("UPDATE orbit_agent_tasks SET goal=? WHERE task_key='api'",
+                          ("Unauthorized changed task goal",))
+        self.conn.commit()
+        drift = self.control("resume", 2, approval_reference="new-review-for-drift")
+        self.assertEqual(drift["status"], "HOLD_CHARTER_SOURCE_DRIFT")
+        self.assertEqual(self.call(action="status", mission_id=self.mission)["status"],
+                         "PAUSED")
+
+    def test_resume_holds_until_host_task_reconciliation(self):
+        self.activate()
+        self.control("pause", 1, confirm_write=True)
+        self.conn.execute("""UPDATE orbit_agent_tasks SET status='RESERVED'
+                             WHERE task_key='api'""")
+        self.conn.commit()
+        hold = self.control("resume", 2, approval_reference="reconcile-host-first")
+        self.assertEqual(hold["status"], "HOLD_HOST_RECONCILIATION")
+        self.assertEqual(self.call(action="status", mission_id=self.mission)["status"], "PAUSED")
+
+    def test_read_only_trace_has_no_raw_approval_and_is_project_isolated(self):
+        self.activate()
+        self.control("pause", 1, confirm_write=True)
+        self.control("resume", 2, approval_reference="secret-review-should-not-echo",
+                     confirm_write=True)
+        before = self.conn.total_changes
+        out = self.call(action="timeline", mission_id=self.mission, limit=10)
+        self.assertEqual(out["status"], "LOCAL_TRACE_CONTEXT")
+        self.assertEqual([x["event"] for x in out["events"]],
+                         ["ACTIVATE", "PAUSE", "RESUME"])
+        self.assertEqual([x["revision"] for x in out["events"]], [1, 2, 3])
+        self.assertEqual(len(out["trace_id"]), 32)
+        self.assertTrue(out["local_only"])
+        self.assertFalse(out["cloud_trace_exported"])
+        self.assertFalse(out["owner_authenticated"])
+        self.assertFalse(out["host_execution_verified"])
+        self.assertFalse(out["state_written"])
+        self.assertNotIn("secret-review-should-not-echo", json.dumps(out))
+        self.assertEqual(self.conn.total_changes, before)
+        other = self.call(action="timeline", mission_id=self.mission,
+                          project_root=str(self.other))
+        self.assertEqual(other["status"], "NO_MISSION")
+        self.assertEqual(other["events"], [])
+        with self.assertRaises(ValueError):
+            self.call(action="timeline", mission_id=self.mission, limit=0)
+
+    def test_approval_fingerprint_unique_across_missions_in_one_root(self):
+        self.activate()
+        self.control("stop", 1, confirm_write=True)
+        self.make_task("new-work", ["src/new/"])
+        spec = {**self.fields, "mission_id": "another-mission",
+                "task_keys": ["new-work"], "allowed_paths": ["src/new/"]}
+        digest = self.call(action="preview", **spec)["charter_digest"]
+        result = self.call(action="activate", **spec, expected_digest=digest,
+                           approval_reference="actual-owner-review-claimed-123",
+                           confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_APPROVAL_REFERENCE_REUSED")
+        accepted = self.call(action="activate", **spec, expected_digest=digest,
+                             approval_reference="another-genuine-reference-2026",
+                             confirm_write=True)
+        self.assertEqual(accepted["status"], "CHARTER_RECORDED")
+
+    def test_sqlite_cross_connection_resume_is_single_use_and_revision_guarded(self):
+        """Two host DB connections cannot both consume the same review proposal."""
+        self.activate()
+        self.control("pause", 1, confirm_write=True)
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        dbfile = Path(folder.name, "disposable-orbit.sqlite3")
+        left = sqlite3.connect(dbfile, timeout=5)
+        self.addCleanup(left.close)
+        left.row_factory = sqlite3.Row
+        self.conn.backup(left)
+        right = sqlite3.connect(dbfile, timeout=5)
+        self.addCleanup(right.close)
+        right.row_factory = sqlite3.Row
+        payload = {"action": "resume", "mission_id": self.mission,
+                   "expected_revision": 2,
+                   "reported_branch": "feat/test-autopilot",
+                   "approval_reference": "two-connections-reviewed-2026"}
+        preview = orbit_autopilot.charter(left, self.root, self.project, payload)
+        self.assertEqual(preview["status"], "PREVIEW_ONLY")
+        accepted = orbit_autopilot.charter(left, self.root, self.project, {
+            **payload, "expected_resume_digest": preview["resume_review_digest"],
+            "confirm_write": True})
+        self.assertEqual(accepted["status"], "ACTIVE")
+        replay = orbit_autopilot.charter(right, self.root, self.project, {
+            **payload, "expected_resume_digest": preview["resume_review_digest"],
+            "confirm_write": True})
+        self.assertEqual(replay["status"], "HOLD_STALE_REVISION")
+        self.assertEqual(right.execute("""SELECT COUNT(*) FROM orbit_autopilot_events
+            WHERE approval_sha256 IS NOT NULL""").fetchone()[0], 2)
+        self.assertFalse(replay["state_written"])
+
+    def test_existing_event_journal_migrates_without_data_loss(self):
+        fresh = sqlite3.connect(":memory:")
+        self.addCleanup(fresh.close)
+        fresh.row_factory = sqlite3.Row
+        fresh.execute("""CREATE TABLE orbit_autopilot_events
+           (project TEXT NOT NULL, project_root TEXT NOT NULL, mission_id TEXT NOT NULL,
+            revision INTEGER NOT NULL, action TEXT NOT NULL, occurred_at TEXT NOT NULL,
+            PRIMARY KEY(project,project_root,mission_id,revision))""")
+        fresh.execute("""INSERT INTO orbit_autopilot_events
+            VALUES('legacy', '/legacy', 'mission', 1, 'ACTIVATE', '2026-01-01')""")
+        fresh.commit()
+        orbit_autopilot.setup(fresh)
+        orbit_autopilot.setup(fresh)
+        row = fresh.execute("""SELECT action, approval_sha256 FROM orbit_autopilot_events
+                               WHERE project='legacy'""").fetchone()
+        self.assertEqual(row["action"], "ACTIVATE")
+        self.assertIsNone(row["approval_sha256"])
+
 
     def test_expiry_prevents_new_selection_and_resume(self):
         self.activate()
