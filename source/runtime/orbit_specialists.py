@@ -210,7 +210,7 @@ def review_visual_coverage(expected, observations, source_revision):
         raise ValueError("A bounded source revision is required")
     if not isinstance(expected, dict) or not 1 <= len(expected) <= 40:
         raise ValueError("Expected screens must be a nonempty bounded mapping")
-    if not isinstance(observations, list) or len(observations) > 200:
+    if not isinstance(observations, list) or len(observations) > 400:
         raise ValueError("Observations must be a bounded list")
     needed = set()
     for screen, states in expected.items():
