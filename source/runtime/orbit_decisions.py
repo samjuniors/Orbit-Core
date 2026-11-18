@@ -198,6 +198,6 @@ def components(product_type,platforms,stack,preference):
             ] if product_type in {'website','web-app','mobile-app','desktop-app','game'} else []),
             'design_md_required_at_project_start': False,
             'external_sources_installed': False,
-            'candidates':result[:9],
+            'candidates':result[:12],  # bounded, retains legacy candidates after optional sources
             'custom_component_allowed':True,
             'warning':'Recommendations are read-only research pointers, not verified installed components or permission to install.'}
