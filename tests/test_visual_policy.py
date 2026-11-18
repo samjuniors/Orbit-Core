@@ -41,6 +41,26 @@ class VisualPolicyTests(unittest.TestCase):
             "desktop-app", "redesign", design_approved=True)["status"],
             "ASK_ONE_MATERIAL_SCOPE_QUESTION")
 
+    def test_guide_asks_only_when_material_and_never_learns_globally_from_one_fix(self):
+        scoped = orbit_specialists.guide_decision(
+            "visual-correction", approved_project_style=True)
+        self.assertEqual(scoped["status"], "APPLY_SCOPED_EXISTING_STYLE")
+        self.assertTrue(scoped["correction_is_not_global_preference"])
+        self.assertFalse(scoped["user_preference_written"])
+        self.assertFalse(scoped["native_action_executed"])
+        self.assertEqual(orbit_specialists.guide_decision(
+            "visual-correction", approved_project_style=False)["status"],
+            "OFFER_SCOPED_ALTERNATIVES")
+        self.assertEqual(orbit_specialists.guide_decision(
+            "redesign", scope_clear=False)["status"],
+            "ASK_ONE_MATERIAL_QUESTION")
+        self.assertEqual(orbit_specialists.guide_decision(
+            "routine", consequential=True)["status"],
+            "REQUIRE_OWNER_DECISION")
+        self.assertEqual(orbit_specialists.guide_decision(
+            "routine", permission_state="DENIED")["status"],
+            "HOLD_PERMISSION_DENIED")
+
     def test_permission_denial_is_not_bypassed(self):
         self.assertEqual(orbit_specialists.visual_decision(
             "web-app", "redesign", permission_state="DENIED")["status"],
