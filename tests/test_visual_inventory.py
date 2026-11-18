@@ -199,6 +199,24 @@ class VisualInventoryTests(unittest.TestCase):
         self.assertFalse(res["selection_applied"])
         self.assertEqual(len(orbit_mcp.TOOLS), 57)
 
+    def test_approved_project_style_is_visible_only_in_same_project_decisions(self):
+        entry = {"project_root": str(self.root), "project": "app-a",
+                 "action": "record", "event_key": "project-icon-density",
+                 "kind": "project-style-preference", "result": "unknown",
+                 "lesson": "Use compact monochrome icons for the current project interface.",
+                 "evidence_ref": "user-approved-icons-456",
+                 "approval_reference": "user-approved-icons-456",
+                 "confirm_write": True}
+        saved = orbit_mcp.execute(self.db, "orbit_improvement_record", entry)
+        self.assertEqual(saved["status"], "OBSERVATION_RECORDED")
+        a = {"project_root": str(self.root), "project": "app-a",
+             "product_type": "web-app", "include_project_style_context": True}
+        matched = orbit_mcp.execute(self.db, "orbit_decision_route", a)
+        self.assertEqual(len(matched["project_style_context"]["claims"]), 1)
+        self.assertFalse(matched["project_style_context"]["preferences_auto_applied"])
+        other = orbit_mcp.execute(self.db, "orbit_decision_route", dict(a, project="app-b"))
+        self.assertEqual(other["project_style_context"]["claims"], [])
+
     def test_nonvisual_decision_does_not_scan_ui(self):
         res = orbit_mcp.execute(self.db, "orbit_decision_route", {
             "project_root": str(self.root), "project": "sdk",
