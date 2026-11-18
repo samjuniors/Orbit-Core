@@ -52,6 +52,11 @@ OLD_STOCK_SHA256 = {
     '693f90e5cdf0c05b04210f0cbbb17e8ae478105c03c309a57bc4933addec97cb',  # v0.31.0 project host stock SOFTWARE-DELIVERY.md
     '962e4b027553811e93a0669889f26f84b18d15020dfd7c40604b01a6e1a2ae1b',  # v0.31.0 project host stock TASK-LIFECYCLE.md
     'e402a46c24937b2a15476275cc4799fde9da85f7ea7bc3e94a2eae282433c2ff',  # v0.31.0 project host stock orbit_cli.py
+    # v0.31.0 official unmodified Antigravity agent bytes (Issue #130).
+    # Exact SHA256 only, verified against immutable v0.31.0 source. Owner edits
+    # remain unrecognized and must still block before any file modification.
+    'cb22cb9021995e7814fdf82da38539065b759ec885c21ffb0e392d3dd4bbe600',  # v0.31.0 native orbit-creative-director.md, LF
+    '7ffa5061f3192ee8156ef4bee44ed65bbf72e5219363034b4338816216bb59e4',  # v0.31.0 native orbit.md, LF
     # Published v0.26.0-v0.30.0 immutable release updater/GUI stock bytes.
     # Include official ZIP LF and exact Windows CRLF forms. Only full SHA256
     # matches permit backup-first replacement; any owner edit still blocks.
