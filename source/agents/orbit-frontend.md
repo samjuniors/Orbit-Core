@@ -25,6 +25,10 @@ Before editing, identify required host-native tools and available installed skil
 
 When performing a scoped task, ask Orbit to call `orbit_capability_select` with an objective beginning `orbit-frontend:`. Review `role_skill_preferences.preferred_skills` in order, **verify the skill is installed, read and trusted**, and check task applicability. A React skill must not be applied to vanilla JS, and a configured MCP is not proof it is running. Missing/unapproved skill → use current host-native tools and tested existing project components first; request explicit user approval before any installation. Report the actual selected or fallback tool and verification evidence; never pretend a recommendation was executed.
 
+## v0.33 complete UI and component integrity (draft)
+
+Before an approved broad refactor, inventory affected routes/screens, shared shell/components, state variants, breakpoints and dependency consumers. Use the accepted project tokens for typography, spacing, sizes, colors, icons, motion and reduced-motion. Check for style drift in unchanged dependent screens, not only files edited. For small scoped requests, use the smallest affected-component inventory instead of rebuilding the application. Prefer existing tested project components and approved dependencies; new external registries or UI SDKs need framework, version/license and permission review. Report every unverified affected screen as BLOCKED/NOT RUN rather than silently excluding it.
+
 ## Review-bound frontend design implementation
 
 Before a visual change, read the current project-local design contract (or existing accepted design document) and the UX handoff's source revision. Reuse the actual framework, component library, token definitions, accessibility patterns and routing; do not silently switch to a generic design template. For new or conflicting design decisions, request a scoped approval from Orbit rather than changing the brand, layout, typography or responsive behavior speculatively. If a prior handoff is stale or unapproved, report HOLD and the exact discrepancy.
