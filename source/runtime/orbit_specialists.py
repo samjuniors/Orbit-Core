@@ -107,6 +107,8 @@ def _design_handoff(product_type, operation, denied):
         "change_policy": "Small icon/style fixes stay scoped; broad refactors require a source-bound screen/state inventory and independent UI coverage.",
         "ui_coverage_review_available_in_python": True,
         "ui_coverage_review_mcp_exposed": False,
+        "guide_decision_available_in_python": True,
+        "guide_decision_mcp_exposed": False,
         "external_design_tool_required": False,
         "tool_selection": "HOST_NATIVE_FIRST_APPROVED_EXTERNAL_ONLY",
         "owner_design_approval_authenticated": False,
@@ -119,6 +121,44 @@ def _design_handoff(product_type, operation, denied):
                 "MCP configuration and claimed screenshots never prove execution.",
     }
 
+
+
+
+def guide_decision(request_kind, *, scope_clear=True, consequential=False,
+                   approved_project_style=False, permission_state="UNKNOWN"):
+    """Advise the host when to ask or recommend; no model, tool or memory action."""
+    if request_kind not in {"routine", "visual-correction", "redesign", "research"}:
+        raise ValueError("Unsupported request kind")
+    if permission_state not in {"UNKNOWN", "APPROVED", "DENIED"}:
+        raise ValueError("Unknown permission state")
+    if permission_state == "DENIED":
+        status = "HOLD_PERMISSION_DENIED"
+    elif consequential:
+        status = "REQUIRE_OWNER_DECISION"
+    elif not scope_clear:
+        status = "ASK_ONE_MATERIAL_QUESTION"
+    elif request_kind == "visual-correction" and approved_project_style:
+        status = "APPLY_SCOPED_EXISTING_STYLE"
+    elif request_kind == "visual-correction":
+        status = "OFFER_SCOPED_ALTERNATIVES"
+    elif request_kind == "redesign":
+        status = "PROPOSE_VISUAL_DIRECTIONS"
+    else:
+        status = "RECOMMEND_BOUNDED_DEFAULT"
+    return {
+        "status": status,
+        "preference_precedence": [
+            "Explicit current user instruction",
+            "Approved project-specific decision",
+            "Explicit approved user-level preference applicable here",
+            "Reversible, justified project default",
+        ],
+        "correction_is_not_global_preference": True,
+        "ask_only_consequential_questions": True,
+        "user_preference_written": False,
+        "native_action_executed": False,
+        "host_permission_authenticated": False,
+    }
 
 
 def visual_decision(product_type, operation, *, brief_approved=False,
