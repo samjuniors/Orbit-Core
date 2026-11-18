@@ -179,7 +179,7 @@ def components(product_type,platforms,stack,preference):
             'recommended_stages':list(FLOWS[profile]),'initial_question':required_question,
             'component_preference':preference,
             'reuse_policy': [
-                'Inspect the actual project component library, tokens, icons and design decisions first',
+                'Inspect existing project components, tokens, icons and approved design decisions first',
                 'Prefer existing tested components and already approved dependencies',
                 'Review compatible official registries and version-pinned sources when there is a real gap',
                 'Create a custom component when requested or justified, with interaction and accessibility tests',
