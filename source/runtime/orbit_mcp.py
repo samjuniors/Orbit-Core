@@ -653,10 +653,10 @@ TOOLS += [
 ]
 TOOLS.extend([
     {'name':'orbit_autopilot_charter',
-     'description':'Phase 1 Autopilot: preview or record an immutable, expiring project/roadmap/task-scoped Mission Charter; pause/resume/stop with revisions and audit. Caller approval references are NOT authenticated. No unattended runner, model, agent, host permission or Git action is activated.',
+     'description':'Phase 1 Autopilot: preview or record scoped Mission Charters; exact-revision pause/resume requires a source-bound digest and journaled single-use caller reference; local-only redacted event timeline. NOT owner authentication, host permission, native agent or execution.',
      'inputSchema':schema({
          'project_root':string(2000),'project':string(80),'mission_id':string(80),
-         'action':{'type':'string','enum':['preview','activate','status','pause','resume','stop']},
+         'action':{'type':'string','enum':['preview','activate','status','timeline','pause','resume','stop']},
          'objective':string(750),'roadmap_ref':string(220),'roadmap_revision':string(128),
          'branch':string(150),'expires_at':string(20),
          'task_keys':{'type':'array','minItems':1,'maxItems':12,'items':string(80)},
@@ -666,7 +666,10 @@ TOOLS.extend([
          'max_parallel':{'type':'integer','minimum':1,'maximum':2},
          'max_attempts_per_task':{'type':'integer','minimum':1,'maximum':3},
          'expected_digest':string(64),
+         'expected_resume_digest':string(64),
          'expected_revision':{'type':'integer','minimum':1},
+         'reported_branch':string(150),
+         'limit':{'type':'integer','minimum':1,'maximum':50},
          'approval_reference':string(200),'confirm_write':{'type':'boolean'}},
          ['project_root','project','mission_id','action'])},
     {'name':'orbit_autopilot_next',
