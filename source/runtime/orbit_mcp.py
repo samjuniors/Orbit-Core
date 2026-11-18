@@ -552,6 +552,7 @@ TOOLS += [
         'qa_target_routes':{'type':'array','maxItems':25,'items':string(150)},
         'ui_coverage_packet':schema({
             'source_revision':string(128),
+            'source_snapshot_sha256':string(64),
             'scope':{'type':'string','enum':['full-product','changed-slice']},
             'runtime_routes_reviewed':{'type':'boolean'},
             'expected':{'type':'object'},
@@ -871,6 +872,14 @@ def execute(conn, name, a):
                                     coverage['status'] = 'HOLD_UNMAPPED_STATIC_ROUTES'
                             if packet.get('runtime_routes_reviewed') is not True:
                                 coverage['status'] = 'HOLD_RUNTIME_SCOPE_NOT_REVIEWED'
+                            # A host-reported Git/source revision is not enough:
+                            # require that the actual bounded files scanned NOW
+                            # match the snapshot used to prepare the QA packet.
+                            current_snapshot = inventory['source_snapshot_sha256']
+                            if packet.get('source_snapshot_sha256') != current_snapshot:
+                                coverage['status'] = 'HOLD_SOURCE_SNAPSHOT_MISMATCH'
+                            coverage['source_snapshot_matches_inspected_files'] = (
+                                packet.get('source_snapshot_sha256') == current_snapshot)
                             coverage['runtime_route_review_independently_verified'] = False
                             coverage['source_snapshot_sha256'] = inventory['source_snapshot_sha256']
                             extras['ui_quality_review']['coverage_review'] = coverage
