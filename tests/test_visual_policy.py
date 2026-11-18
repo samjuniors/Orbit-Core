@@ -82,6 +82,19 @@ class VisualPolicyTests(unittest.TestCase):
         self.assertFalse(any(x["id"] == "vercel-ui-sdk" and x["status"] == "REVIEW_MATCH"
                              for x in vanilla["candidates"]))
 
+    def test_web_rendered_desktop_can_use_react_component_sources(self):
+        result = orbit_decisions.components(
+            "desktop-app", ["windows"], "Electron React 19 Tailwind", "reuse")
+        self.assertIn("web", result["platforms"])
+        self.assertIn("lucide", {x["id"] for x in result["candidates"]})
+        self.assertEqual(result["workflow_profile"], "native")
+
+    def test_malformed_observation_is_rejected(self):
+        with self.assertRaises(ValueError):
+            orbit_specialists.review_visual_coverage(
+                {"settings": ["default"]},
+                [{"screen": ["settings"], "state": "default"}], "abc123456789")
+
     def test_design_handoff_requires_complete_dependency_coverage(self):
         plan = orbit_specialists.plan(
             {"product_type": "web-app", "operation": "redesign"}, "Improve layout",
