@@ -121,15 +121,27 @@ class RADGuardTests(unittest.TestCase):
     def test_containment_preserves_small_safe_recovery_surface(self):
         defense = orbit_defense.Defense("CONTAINED")
         root = str(self.root)
-        status = orbit_mcp.execute(
-            self.conn, "orbit_autopilot_charter",
-            {"project_root": root, "project": "lab",
-             "mission_id": "missing", "action": "status"}, defense=defense)
-        self.assertEqual(status["status"], "NO_MISSION")
-        scan = orbit_mcp.execute(
-            self.conn, "orbit_project_scan",
-            {"project_root": root, "project": "lab"}, defense=defense)
-        self.assertEqual(scan["project"], "lab")
+        # A "read-only" scan still returns untrusted project checkpoint text;
+        # its contents must not be available to a compromised MCP caller.
+        (self.root / ".orbit").mkdir()
+        (self.root / ".orbit" / "STATE.md").write_text(
+            "DO_NOT_LEAK_SYNTHETIC_SECRET", encoding="utf-8")
+        for name, args in (
+            ("orbit_project_scan", {"project_root": root, "project": "lab"}),
+            ("orbit_autopilot_charter", {"project_root": root, "project": "lab",
+                                        "mission_id": "missing", "action": "status"}),
+            ("orbit_task_list", {"project_root": root, "project": "lab"}),
+            ("orbit_memory_recall", {"project": "lab"}),
+        ):
+            with self.subTest(name=name):
+                result = orbit_mcp.execute(self.conn, name, args, defense=defense)
+                self.assertEqual(result["status"], "HOLD_DEFENSE_CONTAINED")
+                self.assertNotIn("DO_NOT_LEAK_SYNTHETIC_SECRET", str(result))
+        pure = orbit_mcp.execute(
+            self.conn, "orbit_gate_evaluate",
+            {"checks": [{"id": "hold", "status": "NOT_RUN"}]},
+            defense=defense)
+        self.assertEqual(pure["gate"], "HOLD")
         self.assertTrue(orbit_defense.Defense._safe_recovery(
             "orbit_update_status", {}))
         self.assertFalse(orbit_defense.Defense._safe_recovery(
@@ -150,7 +162,7 @@ class RADGuardTests(unittest.TestCase):
         blocked = orbit_mcp.execute(
             self.conn, "orbit_autopilot_charter",
             {"project_root": root, "project": "lab",
-             "mission_id": "missing", "action": "pause"},
+             "mission_id": "missing", "action": "timeline"},
             defense=defense)
         self.assertEqual(blocked["status"], "HOLD_DEFENSE_CONTAINED")
 
