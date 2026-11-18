@@ -30,6 +30,15 @@ CATALOG=(
      'Unstyled accessible primitives useful for custom visual design.'),
     ('react-aria','UI primitives','web','react','https://react-aria.adobe.com/',
      'Accessible React interaction primitives; inspect actual package compatibility.'),
+    ('vercel-ui-sdk','UI primitives','web','react,vue,svelte,solid,web-components',
+     'https://github.com/vercel-labs/ui',
+     'Beta behavior primitives and framework adapters; not a visual design system. Explicit dependency approval and API compatibility checks required.'),
+    ('lucide','icons','web','react,vue,svelte,vanilla,web-components',
+     'https://lucide.dev/',
+     'Icon family reference; reuse the current project icon set first and check consistent sizes and licensing.'),
+    ('motion','animation','web','react',
+     'https://motion.dev/',
+     'Optional animation library for React; prefer existing CSS for simple motion and honor reduced-motion preferences.'),
     ('native-web','platform APIs','web','vanilla,html,typescript,javascript',
      'https://developer.mozilla.org/en-US/docs/Web/API',
      'Prefer semantic HTML and web platform APIs for appropriately simple web apps.'),
@@ -132,6 +141,14 @@ def components(product_type,platforms,stack,preference):
             status='INCOMPATIBLE_STACK' if re.search(r'\breact\s*(?:1[0-8]|[1-9])\b',lower) else 'REVIEW_MATCH' if flags['react'] else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
         elif ident in {'shadcn-ui','radix-primitives','react-aria'}:
             status='REVIEW_MATCH' if flags['react'] and (ident!='shadcn-ui' or flags['tailwind']) else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
+        elif ident=='vercel-ui-sdk':
+            supported=flags['react'] or any(x in lower for x in ('vue','svelte','solid','web component'))
+            status='REVIEW_MATCH' if supported else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
+        elif ident=='motion':
+            status='REVIEW_MATCH' if flags['react'] else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
+        elif ident=='lucide':
+            supported=flags['react'] or flags['vanilla'] or any(x in lower for x in ('vue','svelte','web component'))
+            status='REVIEW_MATCH' if supported else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
         elif ident=='native-web':
             status='REVIEW_MATCH' if flags['vanilla'] else 'REVIEW_COMPATIBILITY'
         elif ident=='expo':
@@ -161,6 +178,24 @@ def components(product_type,platforms,stack,preference):
     return {'product_type':product_type,'platforms':sorted(wants),'workflow_profile':profile,
             'recommended_stages':list(FLOWS[profile]),'initial_question':required_question,
             'component_preference':preference,
+            'reuse_policy': [
+                'Inspect the actual project component library, tokens, icons and design decisions first',
+                'Prefer existing tested components and already approved dependencies',
+                'Review compatible official registries and version-pinned sources when there is a real gap',
+                'Create a custom component when requested or justified, with interaction and accessibility tests',
+            ],
+            'source_review_requirements': ['project_fit', 'version_or_commit', 'license',
+                                           'maintenance', 'security', 'accessibility',
+                                           'integration_cost', 'owner_approval'],
+            'new_project_design_order': ([
+                'Clarify product goal, users, platform and consequential constraints',
+                'Approve a brief before imposing a design or component framework',
+                'Research and compare visual directions, source components and project conventions',
+                'Approve a design direction, then create or update a design contract if useful',
+                'Plan implementation and independently verify all relevant rendered screens and states',
+            ] if product_type in {'website','web-app','mobile-app','desktop-app','game'} else []),
+            'design_md_required_at_project_start': False,
+            'external_sources_installed': False,
             'candidates':result[:9],
             'custom_component_allowed':True,
             'warning':'Recommendations are read-only research pointers, not verified installed components or permission to install.'}
