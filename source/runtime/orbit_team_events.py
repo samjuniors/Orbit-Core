@@ -141,6 +141,8 @@ def _staff(conn, root, project, a, charter):
     if work_mode not in {"normal_task", "report_to_lead"}:
         return "HOLD_UNSUPPORTED_SPECIALIST_RETURN_MODE", None
     deliverable = a.get("expected_output_kind")
+    if work_mode == "normal_task" and deliverable is not None:
+        return "HOLD_SPECIALIST_RETURN_MODE_REQUIRED", None
     if work_mode == "report_to_lead" and deliverable not in {
             "implementation_evidence", "test_evidence", "design_review",
             "security_review", "research_summary"}:
