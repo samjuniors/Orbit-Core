@@ -4,7 +4,14 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 ## [Unreleased] - future development
 
-Proposed future changes require separate owner review.\n\n### v0.33 integrated development source — UNRELEASED (2026-11-18)\n\n- Consolidates bounded visual decisions, source-only UI inventory, design-token drift hints, source-bound UI QA coverage and project-scoped style preferences from draft PR #131. Independent browser/UI inspection is still required.\n- Adds revision-bound and replay-resistant Autopilot resume, typed specialist return-to-lead policies and local-only redacted mission/team event correlation from draft PR #132. Caller approval hashes and host delivery reports are not authenticated consent or native execution evidence.\n- Addresses official v0.31 Antigravity stock-agent compatibility issue #130 with exact, verified SHA-256 fingerprints and backup-first upgrade tests; unknown and customized file refusals remain intact.\n- Integration candidate is draft PR #133. VERSION remains the published v0.32.0 until the separate approved v0.33 release process. No merge, tag, release or v0.33 installation is implied.
+Proposed future changes require separate owner review.
+
+### v0.33 integrated development source — UNRELEASED (2026-11-18)
+
+- Consolidates bounded visual decisions, source-only UI inventory, design-token drift hints, source-bound UI QA coverage and project-scoped style preferences from draft PR #131. Independent browser/UI inspection is still required.
+- Adds revision-bound and replay-resistant Autopilot resume, typed specialist return-to-lead policies and local-only redacted mission/team event correlation from draft PR #132. Caller approval hashes and host delivery reports are not authenticated consent or native execution evidence.
+- Addresses official v0.31 Antigravity stock-agent compatibility issue #130 with exact, verified SHA-256 fingerprints and backup-first upgrade tests; unknown and customized file refusals remain intact.
+- Integration candidate is draft PR #133. VERSION remains the published v0.32.0 until the separate approved v0.33 release process. No merge, tag, release or v0.33 installation is implied.
 
 ### Funding (2026-11-08)
 
