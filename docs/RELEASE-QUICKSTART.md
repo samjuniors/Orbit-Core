@@ -1,6 +1,6 @@
 # Install, update and uninstall published Orbit Core releases
 
-**Choose your release from [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases).** Verified on 2026-11-07: **v0.30.0** is the newest stable-channel release, while **v0.31.0** is the newer published prerelease. GitHub `main`, an open PR or CI artifact is **not** an official published release. Neither channel certifies security or production readiness.
+**Choose your release from [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases).** Verified on 2026-11-18: **v0.30.0** is the newest stable-channel release, while **v0.32.0** is the latest published prerelease. GitHub `main`, an open PR or CI artifact is **not** an official published release. Neither channel certifies security or production readiness.
 
 ## 1. Windows — easiest setup
 
@@ -11,7 +11,7 @@
 
 **macOS/Linux:** From the verified, extracted ZIP, run `python3 orbit_setup.py install --scope machine --hosts codex` to preview and repeat with `--apply` after reviewing. Use a supported Python 3.10–3.13. For a single existing workspace add `--scope project --project /absolute/existing/project`.
 
-## 2. Windows PowerShell — from the verified ZIP
+**Published v0.32 upgrade note:** The stock installer may refuse two exact unmodified v0.31 Antigravity agents (see [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130)). Do not delete or force-overwrite a protected file; preserve the current installation and review the source-verified patch candidate separately. This issue does not mean the existing v0.31 files are unsafe.\n\n## 2. Windows PowerShell — from the verified ZIP
 
 If you prefer the terminal instead of the setup wizard, from the extracted Universal Setup folder:
 
@@ -20,11 +20,11 @@ py -3.12 .\orbit_setup.py install --scope machine --hosts antigravity codex
 py -3.12 .\orbit_setup.py install --scope machine --hosts antigravity codex --apply
 ```
 
-The **v0.31.0 ZIP** also includes `Orbit.ps1` and the release-aware `orbit_cli.py`. Its default channel is **stable**. To install the **exact v0.31.0 published prerelease**, specify both `--channel candidate` and `--version 0.31.0`:
+The **v0.32.0 ZIP** also includes `Orbit.ps1` and the release-aware `orbit_cli.py`. Its default channel is **stable**. To install the **exact v0.32.0 published prerelease**, specify both `--channel candidate` and `--version 0.32.0`:
 
 ```powershell
-.\Orbit.ps1 install --channel candidate --version 0.31.0 --hosts antigravity codex
-.\Orbit.ps1 install --channel candidate --version 0.31.0 --hosts antigravity codex --apply
+.\Orbit.ps1 install --channel candidate --version 0.32.0 --hosts antigravity codex
+.\Orbit.ps1 install --channel candidate --version 0.32.0 --hosts antigravity codex --apply
 ```
 
 If PowerShell policy blocks the local script, use `py -3.12 .\orbit_cli.py` with the same arguments instead. Do not weaken Windows execution policy.
@@ -52,7 +52,7 @@ The installer places launchers in `%USERPROFILE%\.orbit-universal\bin` for the c
 & "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex --apply
 ```
 
-Use `--channel stable` for published stable releases. **Stable is the CLI default; candidate requires an explicit opt-in.** If a newer prerelease is already installed, choosing the older stable channel does **not** silently downgrade it. **Published v0.31 limitation:** an older stable-channel `--check` can return a downgrade-block error even though no update is applied. Use `--channel candidate` to check the prerelease track; [PR #106](https://github.com/samjuniors/Orbit-Core/pull/106) proposes a friendlier read-only result for a future release. `--version X.Y.Z` selects an exact published release on its channel; `--expect-version X.Y.Z` pins an earlier approved check.
+Use `--channel stable` for published stable releases. **Stable is the CLI default; candidate requires an explicit opt-in.** If a newer prerelease is already installed, choosing the older stable channel does **not** silently downgrade it. **Historical v0.31 updater limitation:** an older stable-channel `--check` can return a downgrade-block error even though no update is applied. Use `--channel candidate` to check the prerelease track; [PR #106](https://github.com/samjuniors/Orbit-Core/pull/106) proposes a friendlier read-only result for a future release. `--version X.Y.Z` selects an exact published release on its channel; `--expect-version X.Y.Z` pins an earlier approved check.
 
 **CMD:** Call `"%USERPROFILE%\.orbit-universal\bin\orbit.cmd"` directly with the same subcommand options (omit PowerShell's `&`).
 
@@ -63,8 +63,8 @@ Use `--channel stable` for published stable releases. **Stable is the CLI defaul
 With the v0.31.0 release-aware CLI, preview before removing only selected Orbit host integrations:
 
 ```powershell
-& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --channel candidate --version 0.31.0 --hosts codex
-& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --channel candidate --version 0.31.0 --hosts codex --apply
+& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --channel candidate --version 0.32.0 --hosts codex
+& "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --channel candidate --version 0.32.0 --hosts codex --apply
 ```
 
 Use your **actual installed published release version and its channel**. For a previous v0.30.0 installation, extract its matching checksum-verified ZIP and use `py -3.12 .\orbit_setup.py uninstall --scope machine --hosts antigravity codex` to preview; repeat with `--apply` only after review.
