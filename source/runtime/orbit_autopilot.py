@@ -472,8 +472,9 @@ def timeline(conn, root, project, mission, a):
                    peer_task_key,content_sha256,payload_json,recorded_at
             FROM orbit_team_events WHERE project=? AND project_root=? AND mission_id=?
             ORDER BY recorded_at DESC,event_key DESC LIMIT ?""",
-            (project, str(root), mission, limit)).fetchall()
-        source = list(reversed(source))
+            (project, str(root), mission, limit + 1)).fetchall()
+        was_truncated = len(source) > limit
+        source = list(reversed(source[:limit]))
         ids = {row["event_key"]: _digest({
             "trace_key": trace_key, "team_event_key": row["event_key"]})[:24]
             for row in source}
@@ -516,7 +517,7 @@ def timeline(conn, root, project, mission, a):
         result["team_spans"] = spans
         result["team_event_count"] = len(spans)
         result["team_event_integrity_warnings"] = warnings
-        result["team_event_limit_applied"] = len(spans) >= limit
+        result["team_event_limit_applied"] = was_truncated
         if warnings:
             result["status"] = "LOCAL_TRACE_INTEGRITY_WARNING"
     return result
