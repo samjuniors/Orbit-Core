@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main, 'dev/**', 'feat/**', 'fix/**', 'docs/**', 'release/**']
+    branches: [main, 'dev/**', 'feat/**', 'fix/**', 'docs/**', 'security/**', 'release/**']
     tags: ['v*']
   pull_request:
     # Development branches already run the same matrix on push. Only main
