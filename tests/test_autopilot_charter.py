@@ -381,32 +381,33 @@ class AutopilotCharterTests(unittest.TestCase):
         """Two host DB connections cannot both consume the same review proposal."""
         self.activate()
         self.control("pause", 1, confirm_write=True)
-        with tempfile.TemporaryDirectory() as folder:
-            dbfile = Path(folder, "disposable-orbit.sqlite3")
-            left = sqlite3.connect(dbfile, timeout=5)
-            self.addCleanup(left.close)
-            left.row_factory = sqlite3.Row
-            self.conn.backup(left)
-            right = sqlite3.connect(dbfile, timeout=5)
-            self.addCleanup(right.close)
-            right.row_factory = sqlite3.Row
-            payload = {"action": "resume", "mission_id": self.mission,
-                       "expected_revision": 2,
-                       "reported_branch": "feat/test-autopilot",
-                       "approval_reference": "two-connections-reviewed-2026"}
-            preview = orbit_autopilot.charter(left, self.root, self.project, payload)
-            self.assertEqual(preview["status"], "PREVIEW_ONLY")
-            accepted = orbit_autopilot.charter(left, self.root, self.project, {
-                **payload, "expected_resume_digest": preview["resume_review_digest"],
-                "confirm_write": True})
-            self.assertEqual(accepted["status"], "ACTIVE")
-            replay = orbit_autopilot.charter(right, self.root, self.project, {
-                **payload, "expected_resume_digest": preview["resume_review_digest"],
-                "confirm_write": True})
-            self.assertEqual(replay["status"], "HOLD_STALE_REVISION")
-            self.assertEqual(right.execute("""SELECT COUNT(*) FROM orbit_autopilot_events
-                WHERE approval_sha256 IS NOT NULL""").fetchone()[0], 2)
-            self.assertFalse(replay["state_written"])
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        dbfile = Path(folder.name, "disposable-orbit.sqlite3")
+        left = sqlite3.connect(dbfile, timeout=5)
+        self.addCleanup(left.close)
+        left.row_factory = sqlite3.Row
+        self.conn.backup(left)
+        right = sqlite3.connect(dbfile, timeout=5)
+        self.addCleanup(right.close)
+        right.row_factory = sqlite3.Row
+        payload = {"action": "resume", "mission_id": self.mission,
+                   "expected_revision": 2,
+                   "reported_branch": "feat/test-autopilot",
+                   "approval_reference": "two-connections-reviewed-2026"}
+        preview = orbit_autopilot.charter(left, self.root, self.project, payload)
+        self.assertEqual(preview["status"], "PREVIEW_ONLY")
+        accepted = orbit_autopilot.charter(left, self.root, self.project, {
+            **payload, "expected_resume_digest": preview["resume_review_digest"],
+            "confirm_write": True})
+        self.assertEqual(accepted["status"], "ACTIVE")
+        replay = orbit_autopilot.charter(right, self.root, self.project, {
+            **payload, "expected_resume_digest": preview["resume_review_digest"],
+            "confirm_write": True})
+        self.assertEqual(replay["status"], "HOLD_STALE_REVISION")
+        self.assertEqual(right.execute("""SELECT COUNT(*) FROM orbit_autopilot_events
+            WHERE approval_sha256 IS NOT NULL""").fetchone()[0], 2)
+        self.assertFalse(replay["state_written"])
 
     def test_existing_event_journal_migrates_without_data_loss(self):
         fresh = sqlite3.connect(":memory:")
