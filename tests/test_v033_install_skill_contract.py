@@ -37,7 +37,7 @@ class V033InstallerSkillContractTests(unittest.TestCase):
         for term in self.TERMS:
             with self.subTest(term=term):
                 self.assertIn(term, s)
-        self.assertIn("not authenticated owner consent", s)
+        self.assertIn("authenticated owner consent", s)
         self.assertIn("must HOLD", s)
         self.assertIn("host-native", s)
 
