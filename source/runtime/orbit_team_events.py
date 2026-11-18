@@ -137,6 +137,16 @@ def _staff(conn, root, project, a, charter):
     kind = a.get("worker_kind")
     if kind not in {"agent", "bot"}:
         raise ValueError("worker_kind must be agent or bot")
+    work_mode = a.get("specialist_return_mode", "normal_task")
+    if work_mode not in {"normal_task", "report_to_lead"}:
+        return "HOLD_UNSUPPORTED_SPECIALIST_RETURN_MODE", None
+    deliverable = a.get("expected_output_kind")
+    if work_mode == "normal_task" and deliverable is not None:
+        return "HOLD_SPECIALIST_RETURN_MODE_REQUIRED", None
+    if work_mode == "report_to_lead" and deliverable not in {
+            "implementation_evidence", "test_evidence", "design_review",
+            "security_review", "research_summary"}:
+        return "HOLD_SPECIALIST_OUTPUT_CONTRACT_REQUIRED", None
     host = a.get("host")
     if host not in orbit_skill_plan.HOSTS or host == "unknown":
         raise ValueError("Choose a declared supported coding host")
@@ -182,6 +192,16 @@ def _staff(conn, root, project, a, charter):
         "profile_creation": "REUSE_EXISTING_PROFILE_FIRST",
         "charter_grants_spawn": False,
     }
+    if work_mode == "report_to_lead":
+        payload["specialist_return_contract"] = {
+            "mode": "report_to_lead",
+            "return_to": "orbit-lead",
+            "expected_output_kind": deliverable,
+            "independent_lead_review_required": True,
+            "host_result_authenticated": False,
+            "host_control_transferred": False,
+            "worker_execution_started": False,
+        }
     # Stronger confirmation on writes: must pin and revalidate the exact
     # tree/location snapshot returned by a previous preview.
     if a.get("confirm_write") is True and (
@@ -218,6 +238,18 @@ def _handoff(conn, root, project, a, charter):
         return "HOLD_DOWNSTREAM_NOT_READY", None
     summary = _text(a, "summary", 20, 280)
     evidence = _text(a, "evidence_ref", 8, 200)
+    # Distinguish a reviewed result returning to Orbit's coordinator from
+    # ordinary downstream dependency delivery. Neither transfers native control.
+    mode = a.get("handoff_mode", "dependency_delivery")
+    if mode not in {"dependency_delivery", "specialist_return_to_lead"}:
+        return "HOLD_UNSUPPORTED_HANDOFF_MODE", None
+    output_kind = a.get("expected_output_kind")
+    allowed_outputs = {"implementation_evidence", "test_evidence",
+                       "design_review", "security_review", "research_summary"}
+    if output_kind is not None and output_kind not in allowed_outputs:
+        return "HOLD_INVALID_SPECIALIST_OUTPUT_KIND", None
+    if mode == "specialist_return_to_lead" and output_kind is None:
+        return "HOLD_SPECIALIST_OUTPUT_CONTRACT_REQUIRED", None
     payload = {
         "event_type": "HANDOFF_RECORDED",
         "task_key": source["task_key"],
@@ -229,6 +261,15 @@ def _handoff(conn, root, project, a, charter):
         "review_evidence_present_unverified": True,
         "delivered_to_host": False, "native_peer_message_sent": False,
     }
+    if mode != "dependency_delivery" or output_kind is not None:
+        payload["handoff_contract"] = {
+            "mode": mode, "expected_output_kind": output_kind,
+            "return_to": "orbit-lead" if mode == "specialist_return_to_lead" else "downstream-task",
+            "lead_review_required": mode == "specialist_return_to_lead",
+            "lead_review_completed": False,
+            "native_control_transferred": False,
+            "host_result_authenticated": False,
+        }
     return "HANDOFF_REVIEW", payload
 
 
@@ -525,6 +566,13 @@ def _receipt(conn, root, project, a, charter):
         "host_delivery_verified": False, "peer_message_sent_by_orbit": False,
         "task_accepted": False,
     }
+    if handoff.get("handoff_contract", {}).get("mode") == "specialist_return_to_lead":
+        payload["lead_result_review"] = {
+            "required": True, "lead": "orbit-lead",
+            "expected_output_kind": handoff["handoff_contract"]["expected_output_kind"],
+            "completed": False, "host_evidence_verified": False,
+            "native_control_transferred": False,
+        }
     return "HANDOFF_RECEIPT_REVIEW", payload
 
 
@@ -724,6 +772,7 @@ def _dispatch(conn, root, project, a, charter):
         "skill_pins_not_activated": lease["skill_pins"],
         "capability_intent_expires_at": lease["lease_expires_at"],
         "reviewed_handoff_references": handoffs,
+        "specialist_return_contract": staff.get("specialist_return_contract"),
         "native_task_handoff": entry["handoff"],
         "prohibited_actions": orbit_delegation.NO_SIDE_EFFECTS,
         "host_permission_authenticated": False,

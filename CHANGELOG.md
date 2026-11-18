@@ -10,7 +10,38 @@ Proposed future changes require separate owner review.
 
 - Added a GitHub Sponsors funding configuration for `samjuniors` and an optional README support section. This documentation-only patch does not change runtime, package versions, tests or releases.
 
-## [0.32.0] - Proposed prerelease candidate (2026-11-17)
+## [0.33.0] - Prerelease candidate (2026-11-18)
+
+### Highlights
+
+- **More consistent product design decisions.** The existing Orbit decision tool can offer bounded source-based UI inventory, component reuse guidance, optional project design-token checks, and route/state QA review plans. Source heuristics and user-reported coverage cannot certify actual rendered screens.
+- **Safer Autopilot resume.** Resume now requires an explicit preview and matching revision-, scope-, branch-claim- and approval-reference-bound digest. Newly recorded local approval reference fingerprints cannot be reused across resume cycles within the same project SQLite database. The real host still authenticates the user and permissions.
+- **Better host-native specialist coordination.** The existing team event tool supports typed evidence results that return to the Orbit lead, while rejecting unsupported control transfers; host delivery, native worker execution and independent result review remain separate gates.
+- **Private and traceable handoffs.** Opt-in redacted, bounded mission/team event timeline with source-event digest integrity checks; no raw approval references, source payloads or cloud tracing.
+- **Official upgrade compatibility fix.** Recognizes exactly two hash-verified unmodified v0.31 Antigravity agent files previously rejected by the v0.32 installer (Issue #130). Customized and unknown files continue to block instead of being overwritten.
+
+### Install and upgrade
+
+- After a separately authorized public release, obtain the matching Universal Setup ZIP and `.sha256` sidecar from [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases). Verify integrity, extract, preview the specific Antigravity/Codex host changes, and explicitly approve apply. Python 3.10–3.13 supported; Windows Python 3.12 recommended; no admin privilege or new model/provider dependency required.
+- Existing installation and project SQLite memory must be backed up and preserved. Restart the selected IDE after upgrading, then actually call an Orbit MCP tool to verify the running server version; a local config entry alone is not proof.
+- The MCP inventory remains 57 tools. The official published v0.32 prerelease is a separate immutable package and must not be overwritten by candidate artifacts.
+
+### Compatibility
+
+- The new Autopilot resume API intentionally requires a separate read-only review and `expected_resume_digest` on confirmed resume; older custom host clients must update their call sequence rather than receiving an unsafe automatic bypass.
+- Local `orbit_autopilot_events` gains an additive `approval_sha256` column and unique hash index for new activate/resume events. Old rows are retained, but previously used legacy references cannot be retroactively authenticated or proven unique.
+- New optional specialist-output and visual-review arguments preserve default behavior of existing handoffs, UI decisions and timeline reads; the host remains in charge of models, agents, files, permissions, validation and deployment.
+- All installer changes must be previewed, with backup-before-replacement for known exact official old files. Unknown customizations, conflicting host MCP configurations and unsafe paths still refuse mutation.
+
+### Known limitations
+
+- The reviewed local approval digest and caller-provided references are **not** cryptographically authenticated founder consent. Native child-session receipt, actual host permission denial/revocation, pause/restart lifecycle and complete end-to-end worker delivery still require separate genuine Codex and Antigravity acceptance.
+- The bounded source UI scan is heuristic. Real rendered visual polish, dynamic routes, modal states, browser screenshot review and independent owner design acceptance remain unverified.
+- Codex CLI native file reads were blocked by Windows host policy in previous acceptance testing. An Antigravity headless probe did not complete an actual MCP invocation before timeout. No bypass is authorized.
+- SQLite project memory is local-first and is not automatically synchronized between machines or IDE profiles. Browser QA and release verification must not infer test PASS from a caller-reported status.
+- Green repository CI does not prove production readiness, publisher signing, successful host installation or a live IDE model session.
+
+## [0.32.0] - Published prerelease (2026-11-17)
 
 ### Highlights
 

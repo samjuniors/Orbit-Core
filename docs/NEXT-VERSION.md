@@ -1,3 +1,37 @@
+# Orbit Core — v0.33.0 release-candidate verification (2026-11-18)
+
+**Status: DRAFT RELEASE CANDIDATE / NOT MERGED / NOT PUBLISHED / NOT INSTALLED.** The published product remains [v0.32.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.32.0), installed on the authorized Windows machine for Codex and Antigravity configuration. The new version-specific source branch `release/v0.33.0-candidate` derives from the combined [draft integration PR #133](https://github.com/samjuniors/Orbit-Core/pull/133) at reviewed head `5eedd154dea0f203a23303236e4ee51d4cdf9088`, with `VERSION=0.33.0` and `NEXT_VERSION=0.34.0`. No model, hosted execution, cloud tracing or third-party SDK installation.
+
+**Automated evidence before version cut:** integrated exact-head [CI #1401](https://github.com/samjuniors/Orbit-Core/actions/runs/44289816258) PASS 5/5 Ubuntu/Windows after correcting a test-only canonical Windows path comparison. The exact **new candidate** metadata/package/CI must be checked on its own source head before acceptance; earlier CI does not cover newly versioned artifacts.
+
+**Candidate package intent:** generate a brand-new v0.33 desktop MCPB using `scripts/prepare_release_candidate.py`, verify the 57-tool runtime, official-v0.31/v0.32 stock upgrades, Windows/Linux regression, ZIP sidecars and `check_version.py --strict-bundle`. Never revise the immutable published v0.32 ZIP, tag or old runtime. The existing `CHANGELOG.md` provides the version-specific release-note section. A source-only candidate is not a public downloadable release.
+
+**Still BLOCKING publication:** independently attributable real native Codex/Antigravity worker handoff/return/receipt and host permission/denial/restart; independent rendered UI state and screenshot/design acceptance; installer GUI/rollback review; source-security review and founder release approval. Codex CLI v0.32 installed-MCP call passed; Antigravity CLI headless print-mode probe timed out without actual verified MCP call, not a pass. Founder retains final merge and release authority.
+
+**Next after source/CI and real-host gates:** owner reviews release PR and exact code, approve or reject; only then merge to main, re-run merge-commit CI, run the official publish workflow, inspect immutable v0.33 tag, all four asset + SHA pairs, release notes and available updater channel; only then consider updating the actual PC from verified published v0.32. No automatic version update.
+
+---
+
+# Orbit Core — current v0.33 integration and acceptance gate (2026-11-18)
+
+**Published source authority:** [v0.32.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.32.0) is the latest public **prerelease** (2026-11-17); [v0.30.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) remains the latest stable-channel release. The source `main` and the separately installed Windows release remain v0.32.0. This development branch retains `VERSION=0.32.0` / `NEXT_VERSION=0.33.0` until a separately approved release cut. It is not a published v0.33 installer.
+
+**Current single integration entry point:** [draft PR #133](https://github.com/samjuniors/Orbit-Core/pull/133), incorporating the two still-open independently reviewed draft lines: [visual policy PR #131](https://github.com/samjuniors/Orbit-Core/pull/131) and [Autopilot/security/handoff PR #132](https://github.com/samjuniors/Orbit-Core/pull/132). The shared skill-instruction conflict was reconciled without removing either domain. No second model runner, required LLM/API key, external Agents SDK, new SQLite event store, or new permanent specialist.
+
+**Implemented but unreleased source:** bounded visual component/source inventory, explicit design token contract and source-only UI coverage hints; project-scoped approved style preferences; preview+confirmed replay-resistant local Autopilot resume with caller-reported approval limitations; typed specialist return-to-lead/host handoff contracts; project-root/mission-scoped redacted local trace integrity hints. The original MCP inventory stays at 57. Real host authority, independent UI review and authenticated consent are not established by source heuristics or SHA digests.
+
+**Installer regression fixed in development (Issue #130):** two previously omitted SHA-256 hashes of official immutable v0.31.0 Antigravity `orbit.md` and `orbit-creative-director.md` were verified directly against the published tag, then added only to the next-source installer allowlist with frozen fixture regression tests. Unknown/owner-edited content remains protected. No published v0.32 asset or immutable tag was changed.
+
+**Windows device acceptance checkpoint:** the public v0.32.0 Universal Setup ZIP was downloaded from the official release, validated against its `.sha256`, and installed/updated in the current Windows user profile for Antigravity and Codex after exact 75-target inspection. The published installer hit Issue #130 and was applied with an in-memory allowlist of **only those two hash-verified official stock bytes**, preserving existing backups, runtime, SQLite and unrelated hosts. Re-preview was all SKIP; the permanent launcher reported `0.32.0`, and a real signed-in Codex MCP `orbit_update_status` returned `installed_version=0.32.0` and `UP_TO_DATE`. Antigravity **configuration** points to v0.32; its refreshed live IDE connection is not verified by config alone.
+
+**Integration tests and evidence:** disposable Windows Python 3.12 focused visual 36 run (1 skipped), Autopilot 31/31, team events 33/33, new official-v0.31 installer regression 3/3, previous stock-agent regression 2/2: all passed. Full integration [GitHub CI run #1395](https://github.com/samjuniors/Orbit-Core/actions/runs/44288442720) was in progress when this checkpoint was drafted; the final exact-head CI after documentation updates must be checked separately. Previous isolated draft CI for PRs #131/#132 passed 5/5 each. Keep verification statuses exact.
+
+**Blocking gates before main merge, release, or installation of v0.33:** combined exact-head Windows/Linux CI, release packaging/version metadata/rollback; independently attributable native Codex/Antigravity handoff+receipt/host denial+resume; real host visual screen/state QA and owner visual acceptance. Codex CLI source inspection under the host's filesystem policy remained BLOCKED, not bypassed; a reported child specialist result without trusted session receipt is not independently authenticated. Founder approval is required for merge, publication and user-machine installation of any future v0.33 release.
+
+**Continuity:** prior sections below are historical development decisions; this section supersedes their "current version" claims without discarding their implementation and testing history.
+
+---
+
 # Orbit Core — v0.32 draft development checkpoint (2026-11-08; NOT RELEASED)
 
 **Product direction:** Founder-delegated, roadmap-scoped autonomy, but **no unbounded unattended agent**. The [proposed Autopilot Phase 1](AUTOPILOT-PHASE1.md) is implemented only on `feat/v032-autopilot-charter-phase1-20261107`; there is no published update and no installed host execution. `VERSION=0.31.0` remains the previous publication metadata; `NEXT_VERSION=0.32.0` is an unapproved prospective release cutline.
