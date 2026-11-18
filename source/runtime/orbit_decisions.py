@@ -123,6 +123,8 @@ def components(product_type,platforms,stack,preference):
     if product_type in {'sdk-library','cli','api-service','plugin-mcp','os-platform','data-automation'}:
         wants= wants or {'server'}
     lower=stack.lower()
+    if product_type=='desktop-app' and re.search(r'\belectron\b|\btauri\b|\breact\b|\bwebview\b|\bvue\b|\bsvelte\b',lower):
+        wants.add('web')  # Web-rendered desktop UI; do not force native SwiftUI/Compose.
     flags={
         'react':bool(re.search(r'\breact\b|\bnext(?:\.js)?\b',lower)),
         'stylex':'stylex' in lower,
