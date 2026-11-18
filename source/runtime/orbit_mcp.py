@@ -36,6 +36,7 @@ import orbit_improvement
 import orbit_agent_factory
 import orbit_team_builder
 import orbit_team_events
+import orbit_defense
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -779,8 +780,15 @@ def validate(name, args):
     validate_value(args, TOOL_MAP[name])
 
 
-def execute(conn, name, a):
+def execute(conn, name, a, *, defense=None):
     validate(name,a)
+    if defense is not None:
+        # Project roots are revalidated *before* a denial contributes to an
+        # adaptive policy count. Arbitrary caller text cannot lock other roots.
+        root = project_root(a) if "project_root" in a else None
+        hold = defense.check(name, a, root=root)
+        if hold is not None:
+            return hold
     if name=='orbit_team_event':
         root=project_root(a)
         return orbit_team_events.record(conn,root,project_key(a),a)
@@ -1046,7 +1054,7 @@ def execute(conn, name, a):
     raise ValueError('Unsupported tool')
 
 
-def handle(conn, message):
+def handle(conn, message, *, defense=None):
     if not isinstance(message, dict):
         return {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Expected object'}}
     mid=message.get('id')
@@ -1073,7 +1081,7 @@ def handle(conn, message):
             p=message.get('params')
             if not isinstance(p,dict): raise ValueError('Expected params object')
             try:
-                out=execute(conn,p.get('name'),p.get('arguments',{}))
+                out=execute(conn,p.get('name'),p.get('arguments',{}), defense=defense)
                 return {'jsonrpc':'2.0','id':mid,'result':{'content':[{'type':'text','text':json.dumps(out,ensure_ascii=False)}],'isError':False}}
             except sqlite3.Error as exc:
                 # Another host may hold the shared database; report a retryable tool error, never die.
@@ -1098,6 +1106,8 @@ def write_frame(response):
 
 
 def main():
+    # Mode is a host-startup configuration, never a writable MCP option.
+    defense = orbit_defense.Defense()
     conn=db_connect()
     orbit_updates.start_background_check()  # metadata-only; never blocks MCP startup
     try:
@@ -1113,7 +1123,7 @@ def main():
             else:
                 try:
                     message=json.loads(raw)
-                    response=handle(conn,message) if isinstance(message,dict) else {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Expected object'}}
+                    response=handle(conn,message,defense=defense) if isinstance(message,dict) else {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Expected object'}}
                 except (UnicodeError,ValueError,RecursionError):
                     response={'jsonrpc':'2.0','id':None,'error':{'code':-32700,'message':'Parse error'}}
             if response is not None:
