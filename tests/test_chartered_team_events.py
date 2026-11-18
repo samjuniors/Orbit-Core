@@ -728,8 +728,11 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertNotIn("git:reviewed-synthetic-upstream-source", json.dumps(trace))
         self.assertNotIn("claimed-codex-native-session", json.dumps(trace))
         self.assertNotIn("api-to-qa", json.dumps(trace))
-        self.assertEqual(orbit_mcp.execute(self.conn, "orbit_autopilot_charter",
-                         {**args, "limit": 1})["team_event_count"], 1)
+        limited = orbit_mcp.execute(self.conn, "orbit_autopilot_charter",
+                                    {**args, "limit": 1})
+        self.assertEqual(limited["team_event_count"], 1)
+        self.assertTrue(limited["team_event_limit_applied"])
+        self.assertFalse(trace["team_event_limit_applied"])
         foreign = orbit_mcp.execute(self.conn, "orbit_autopilot_charter",
                          {**args, "project_root": str(self.other)})
         self.assertEqual(foreign["status"], "NO_MISSION")
