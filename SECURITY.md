@@ -9,6 +9,48 @@
 - Release packages require tests and content review; GitHub Actions are **not** proof of host-specific Gemini/Claude/Codex execution.
 - Report security issues privately to the repository owner. Do not open a public issue disclosing secrets or vulnerabilities.
 
+## RAD P0: process-local adaptive policy gate (draft, not released)
+
+The original `orbit_defense.py` module adds **host-startup** `ORBIT_DEFENSE_MODE`:
+`NORMAL` (default, preserves v0.32 behavior), `GUARDED` (blocks *both*
+`orbit_preview_start` and `orbit_browser_qa` before any handlers or subprocesses
+run), and `CONTAINED` (blocks other MCP operations except a small audited
+recovery list and explicit stopping of a session-owned preview). Unrecognized
+host modes **fail closed** as `CONTAINED`. A caller cannot set a mode or reset it
+through MCP arguments, SQLite state, project README, skills, or agent messages.
+
+In `GUARDED`, three denied code-execution requests against the *same validated
+canonical project root* also move that root into `CONTAINED` for the process
+lifetime. The number of tracked scopes is capped at 64; saturation never permits
+execution and cannot lock unrelated projects. A malicious request outside
+`ORBIT_TRUSTED_ROOTS` cannot escalate another project. Other roots can continue
+their normal guarded workflows; a read-only charter status, limited source/task
+metadata, and explicit stopping of a managed preview remain available in
+containment. Only a trusted host restart with a reviewed mode setting can
+reset the process-local guard. Do **not** let an MCP tool de-escalate itself.
+
+**What the gate does not prove:** A blocked attempt is a policy violation, not
+proof of a malicious actor, compromise, or independently verified host session.
+Three deliberately repeated calls could trigger scoped false-positive denial of
+service until a trusted restart; review host logs and operator procedures.
+This process-local policy is **not OS process isolation, a firewall, verified
+human consent, a signed rule, protection against malicious Python code running
+in the same interpreter, or persisted crash-proof incident response**. In
+particular, `NORMAL` does not automatically detect breaches; the host must
+opt into `GUARDED`, and wider incident signals require separate host-authorized
+integration. Do not claim that SHA hashes, caller-reported permission states,
+or a passed simulation make the software unhackable.
+
+When exercising RAD against untrusted projects, configure the selected MCP
+host's process environment with `ORBIT_TRUSTED_ROOTS` and
+`ORBIT_DEFENSE_MODE=GUARDED`, confirm actual OS sandbox/credential scope, and
+restart the host. Do not bypass a rejected host command via a different model
+or tool. The gate emits only coarse HOLD statuses, never raw source/commands,
+and creates no SQLite table, cloud log, background worker or network listener.
+See `tests/test_rad_defense.py` for adversarial negative tests. This is source
+development in a separate draft branch and needs independent Windows/Linux CI,
+real IDE/host enforcement and owner acceptance before release.
+
 ## v0.29 installed-skill discovery trust boundary
 
 - **Read-only by design:** `orbit_capability_select` can recommend and hash locally installed `SKILL.md` candidates. A shortlist or `orbit-skill-plan-v2` pin does **not** authenticate a publisher, verify a license, authorize a skill, install anything, execute helpers, or attest the host's capabilities.
