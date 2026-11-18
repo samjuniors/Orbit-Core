@@ -90,6 +90,23 @@ def _design_handoff(product_type, operation, denied):
             "If approved and needed: project-local DESIGN.md or equivalent tokens",
             "Source-bound frontend diff and independent QA report",
         ],
+        "new_project_order": [
+            "Verify approved product brief and material requirements before design documents",
+            "Inspect existing UI or research suitable design and component sources",
+            "Propose visual directions; obtain actual user approval or delegated choice",
+            "Create or update DESIGN.md only when needed, alongside actual tokens/components",
+            "Inventory screens, interactions, responsive states and dependent shared UI",
+            "Implement scoped changes; compare rendered results against approved design",
+        ],
+        "component_source_priority": [
+            "Existing tested project components",
+            "Already approved project component packages",
+            "Reviewed external registries, official libraries and design references",
+            "Custom components when requested or necessary, with accessibility QA",
+        ],
+        "change_policy": "Small icon/style fixes stay scoped; broad refactors require a source-bound screen/state inventory and independent UI coverage.",
+        "ui_coverage_review_available_in_python": True,
+        "ui_coverage_review_mcp_exposed": False,
         "external_design_tool_required": False,
         "tool_selection": "HOST_NATIVE_FIRST_APPROVED_EXTERNAL_ONLY",
         "owner_design_approval_authenticated": False,
@@ -100,6 +117,104 @@ def _design_handoff(product_type, operation, denied):
         "next": "Inspect existing product design and real host tools; the founder reviews "
                 "new design decisions before scoped implementation. Visual canvas, "
                 "MCP configuration and claimed screenshots never prove execution.",
+    }
+
+
+
+def visual_decision(product_type, operation, *, brief_approved=False,
+                    design_approved=False, change_scope_clear=False,
+                    permission_state="UNKNOWN"):
+    """Read-only new-project or visual-change decision; never grants permission."""
+    if product_type not in VISUAL:
+        return {"status": "SKIP_NONVISUAL_DESIGN", "next": "Use the product-type workflow; do not force DESIGN.md."}
+    if permission_state not in {"UNKNOWN", "APPROVED", "DENIED"}:
+        raise ValueError("Unknown permission state")
+    if permission_state == "DENIED":
+        return {"status": "HOLD_PERMISSION_DENIED", "next": "Respect the actual host denial."}
+    if operation not in DESIGN_OPERATIONS | {"fix", "debug", "test"}:
+        raise ValueError("Unsupported visual operation")
+    if operation == "build":
+        if not brief_approved:
+            status = "ASK_PROJECT_SCOPE_FIRST"
+            action = "Confirm goal, audience, platform, essential requirements and accepted defaults before files or DESIGN.md."
+        elif not design_approved:
+            status = "RESEARCH_AND_PROPOSE_DIRECTIONS"
+            action = "Review existing assets and relevant component sources, propose visual directions and seek a decision."
+        else:
+            status = "PLAN_APPROVED_DESIGN_IMPLEMENTATION"
+            action = "Use the accepted direction, scoped components and design contract for the build plan."
+    elif operation in {"fix", "debug", "test", "add-feature"} and change_scope_clear and design_approved:
+        status = "TARGETED_CHANGE_REVIEW"
+        action = "Preserve the approved system; touch only affected parts and check dependent screens."
+    elif not change_scope_clear:
+        status = "ASK_ONE_MATERIAL_SCOPE_QUESTION"
+        action = "Resolve the one ambiguity that changes scope; do not assume a site-wide redesign."
+    elif not design_approved:
+        status = "PROPOSE_VISUAL_DECISION"
+        action = "Compare approved project style and user request; offer options rather than invent approval."
+    else:
+        status = "REVIEW_AFFECTED_SCREENS"
+        action = "Inventory all affected routes/states and dependencies before any wide refactor."
+    return {"status": status, "next": action,
+            "owner_approval_authenticated": False,
+            "files_written": False, "external_source_installed": False}
+
+
+def review_visual_coverage(expected, observations, source_revision):
+    """Guard a caller-reported UI coverage packet, not independent visual QA.
+
+    expected: {screen: [state, ...]}; observations: [{screen, state, source_revision,
+    evidence_ref, status}, ...]. Missing, stale and failed cases never become ready.
+    """
+    if not isinstance(source_revision, str) or not 7 <= len(source_revision) <= 128:
+        raise ValueError("A bounded source revision is required")
+    if not isinstance(expected, dict) or not 1 <= len(expected) <= 40:
+        raise ValueError("Expected screens must be a nonempty bounded mapping")
+    if not isinstance(observations, list) or len(observations) > 200:
+        raise ValueError("Observations must be a bounded list")
+    needed = set()
+    for screen, states in expected.items():
+        if not isinstance(screen, str) or not 1 <= len(screen) <= 120:
+            raise ValueError("Invalid screen identifier")
+        if not isinstance(states, list) or not 1 <= len(states) <= 10:
+            raise ValueError("Expected states must be a nonempty bounded list")
+        for state in states:
+            if not isinstance(state, str) or not 1 <= len(state) <= 80:
+                raise ValueError("Invalid state identifier")
+            if (screen, state) in needed:
+                raise ValueError("Duplicate expected screen state")
+            needed.add((screen, state))
+    covered = set()
+    blocked = set()
+    stale = set()
+    for item in observations:
+        if not isinstance(item, dict):
+            raise ValueError("Invalid observation")
+        pair = (item.get("screen"), item.get("state"))
+        if pair not in needed:
+            raise ValueError("Observation is outside the expected UI scope")
+        if pair in covered or pair in blocked or pair in stale:
+            raise ValueError("Duplicate observation")
+        if item.get("source_revision") != source_revision:
+            stale.add(pair)
+        elif item.get("status") == "PASS" and isinstance(item.get("evidence_ref"), str) and 7 <= len(item["evidence_ref"]) <= 500:
+            covered.add(pair)
+        else:
+            blocked.add(pair)
+    missing = sorted(needed - covered - blocked - stale)
+    return {
+        "status": ("READY_FOR_INDEPENDENT_VISUAL_REVIEW"
+                   if not (missing or blocked or stale)
+                   else "HOLD_INCOMPLETE_UI_COVERAGE"),
+        "expected_count": len(needed),
+        "reported_count": len(covered),
+        "missing": [{"screen": s, "state": t} for s, t in missing],
+        "blocked": [{"screen": s, "state": t} for s, t in sorted(blocked)],
+        "stale": [{"screen": s, "state": t} for s, t in sorted(stale)],
+        "source_revision": source_revision,
+        "observation_independently_verified": False,
+        "rendered_visual_qa_passed": False,
+        "next": "Independent host browser/device observation and owner design acceptance are still required.",
     }
 
 
