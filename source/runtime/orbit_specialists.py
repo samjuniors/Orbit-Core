@@ -174,6 +174,16 @@ _UI_EXCLUDE = {".git", ".orbit", ".next", ".nuxt", ".svelte-kit",
 _UI_IMPORT = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)['"]([^'"]{1,160})['"]""")
 _UI_ROUTE = re.compile(r"""\b(?:path\s*=\s*|path\s*:\s*)['"](/[^'"<> ]{0,140})['"]""")
 _UI_TOKEN = re.compile(r"--([a-z][a-z0-9_-]{1,70})\s*:", re.I)
+# Source heuristics, not a CSS/JS parser; literal values can be intentional.
+_UI_DIRECT_VALUE = re.compile(
+    r"\b(font-size|font-family|gap|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?|"
+    r"border-radius|transition-duration|animation-duration)\s*:\s*"
+    r"([0-9]+(?:\.[0-9]+)?)(px|rem|ms|s)\b", re.I)
+_UI_ARBITRARY_VALUE = re.compile(
+    r"(?<![\w-])(text|gap|p[xytrbl]?|m[xytrbl]?|rounded|duration)-"
+    r"\[([0-9]+(?:\.[0-9]+)?)(px|rem|ms|s)\]", re.I)
+_UI_TOKEN_REF = re.compile(r"var\(\s*--([a-z][a-z0-9_-]{1,70})\b", re.I)
+_UI_MOTION_A11Y = re.compile(r"prefers-reduced-motion|useReducedMotion", re.I)
 _ICON_PACKAGES = {"lucide-react": "lucide", "lucide-vue-next": "lucide",
                   "react-icons": "react-icons", "@mui/icons-material": "mui",
                   "@heroicons/react": "heroicons", "phosphor-react": "phosphor"}
@@ -224,6 +234,9 @@ def scan_visual_project(root):
     icons = {}
     tokens = set()
     declared = {}
+    literal_hints = []
+    token_refs = set()
+    reduced_motion_sources = []
     reasons = set()
     examined = 0
     bytes_read = 0
@@ -289,6 +302,38 @@ def scan_visual_project(root):
                     reasons.add("INVALID_PACKAGE_MANIFEST")
                 continue
             data = raw.decode("utf-8", errors="replace")
+            token_refs.update(_UI_TOKEN_REF.findall(data))
+            if _UI_MOTION_A11Y.search(data):
+                reduced_motion_sources.append(namepath)
+            if file.suffix in {".css", ".scss", ".tsx", ".jsx", ".vue", ".svelte", ".html"}:
+                for line_number, line in enumerate(data.splitlines(), 1):
+                    if len(literal_hints) >= 60:
+                        reasons.add("MAX_STYLE_HINTS")
+                        break
+                    for match in _UI_DIRECT_VALUE.finditer(line):
+                        prop = match.group(1).lower()
+                        bucket = ("typography" if prop.startswith("font-") else
+                                  "motion" if "duration" in prop else
+                                  "shape" if prop == "border-radius" else "spacing")
+                        literal_hints.append({"file": namepath, "line": line_number,
+                                              "area": bucket, "rule": "RAW_CSS_LITERAL",
+                                              "source": "HEURISTIC"})
+                        if len(literal_hints) >= 60:
+                            break
+                    if len(literal_hints) >= 60:
+                        reasons.add("MAX_STYLE_HINTS")
+                        break
+                    for match in _UI_ARBITRARY_VALUE.finditer(line):
+                        prop = match.group(1).lower()
+                        bucket = ("typography" if prop == "text" else
+                                  "motion" if prop == "duration" else
+                                  "shape" if prop == "rounded" else "spacing")
+                        literal_hints.append({"file": namepath, "line": line_number,
+                                              "area": bucket, "rule": "ARBITRARY_UTILITY_LITERAL",
+                                              "source": "HEURISTIC"})
+                        if len(literal_hints) >= 60:
+                            reasons.add("MAX_STYLE_HINTS")
+                            break
             file_route = _ui_route_from_file(rel)
             if file_route is not None:
                 routes.setdefault(file_route, set()).add(namepath)
@@ -338,6 +383,9 @@ def scan_visual_project(root):
         "component_consumers_hint": {k: sorted(v)[:12] for k, v in sorted(impact.items())[:40]},
         "icon_families_imported_hint": icons,
         "css_custom_properties_hint": sorted(tokens)[:60],
+        "css_variable_references_hint": sorted(token_refs)[:60],
+        "style_literal_review_hints": literal_hints,
+        "reduced_motion_source_hints": sorted(reduced_motion_sources)[:20],
         "declared_ui_dependencies_hint": {k: v for k, v in sorted(declared.items())
                                            if any(part in k.lower() for part in
                                                   ("react", "vue", "svelte", "lucide",
@@ -538,4 +586,103 @@ def plan(project_profile, objective, available, skill_plan, host_tools, permissi
                  "host-native agent availability; only then authorize a role profile "
                  "write or actual delegation. Missing agent profiles do not authorize installation."),
         "trust": "UNTRUSTED_SKILL_METADATA_AND_CALLER_REPORTED_HOST_TOOLS",
+    }
+
+
+def audit_visual_contract(inventory, contract):
+    """Inspect heuristics against host-claimed approved project design rules.
+
+    Recommendations only. Neither a source grep nor a claimed token contract
+    establishes actual CSS cascade, framework behavior or UI fidelity.
+    """
+    if not isinstance(inventory, dict) or inventory.get("status") != "HEURISTIC_UI_INVENTORY_PARTIAL":
+        raise ValueError("Only a bounded Orbit UI inventory may be reviewed")
+    if not isinstance(contract, dict) or not contract:
+        return {"status": "NEEDS_PROJECT_DESIGN_CONTRACT", "findings": [],
+                "visual_qa_verified": False, "style_rules_applied": False,
+                "approved_contract_authenticated": False}
+    allowed = {"icon_family", "spacing_policy", "typography_policy",
+               "motion_policy", "shape_policy"}
+    if set(contract) - allowed:
+        raise ValueError("Unsupported visual contract fields")
+    for field in ("spacing_policy", "typography_policy", "motion_policy", "shape_policy"):
+        if field in contract and contract[field] not in {"token-first", "allow-literals"}:
+            raise ValueError("Unknown design-token policy")
+    icon = contract.get("icon_family")
+    if icon is not None and icon not in set(_ICON_PACKAGES.values()) | {"project-custom"}:
+        raise ValueError("Unknown icon family; use explicit vetted project-custom when needed")
+    if not icon and not any(contract.get(k) == "token-first" for k in allowed if k != "icon_family"):
+        raise ValueError("Contract must specify a reviewable rule")
+    findings = []
+    observed = inventory.get("icon_families_imported_hint", {})
+    if icon and icon != "project-custom":
+        for family, uses in sorted(observed.items()):
+            if family != icon:
+                findings.append({"area": "icons", "rule": "ICON_FAMILY_MISMATCH",
+                                 "observed_family": family, "expected_family": icon,
+                                 "import_count_hint": uses, "confidence": "SOURCE_HEURISTIC"})
+    if len(observed) > 1:
+        findings.append({"area": "icons", "rule": "MIXED_ICON_FAMILIES",
+                         "families": sorted(observed), "confidence": "SOURCE_HEURISTIC"})
+    for hint in inventory.get("style_literal_review_hints", [])[:60]:
+        if contract.get(hint["area"] + "_policy") == "token-first":
+            findings.append({**hint, "rule": "POTENTIAL_TOKEN_DRIFT_" + hint["rule"],
+                             "confidence": "SOURCE_HEURISTIC"})
+    defined = set(inventory.get("css_custom_properties_hint", []))
+    referenced = set(inventory.get("css_variable_references_hint", []))
+    if referenced - defined:
+        findings.append({"area": "tokens", "rule": "UNRESOLVED_TOKEN_REFERENCE_HINT",
+                         "token_names": sorted(referenced - defined)[:20],
+                         "confidence": "MAY_BE_DEFINED_OUTSIDE_SCAN"})
+    return {
+        "status": "STYLE_DRIFT_REVIEW_REQUIRED" if findings else "NO_STATIC_DRIFT_HINTS",
+        "findings": findings[:80],
+        "source_snapshot_sha256": inventory.get("source_snapshot_sha256"),
+        "reviewed_rules": dict(contract),
+        "approved_contract_authenticated": False,
+        "visual_qa_verified": False,
+        "browser_run_verified": False,
+        "state_written": False,
+        "warning": "Static regex hints can be false positives/negatives. Validate the accepted design, actual CSS cascade and rendered UI independently.",
+    }
+
+
+def plan_visual_qa(inventory, *, scope="full-product", target_routes=None):
+    """Create a host review checklist from incomplete static route evidence."""
+    if not isinstance(inventory, dict) or inventory.get("status") != "HEURISTIC_UI_INVENTORY_PARTIAL":
+        raise ValueError("Expected an Orbit static UI inventory")
+    if scope not in {"full-product", "changed-slice"}:
+        raise ValueError("Unsupported QA scope")
+    if target_routes is None:
+        target_routes = []
+    if (not isinstance(target_routes, list) or len(target_routes) > 25 or
+            any(not isinstance(x, str) or not x.startswith("/") or len(x) > 150
+                for x in target_routes) or len(set(target_routes)) != len(target_routes)):
+        raise ValueError("Invalid target route list")
+    if scope == "changed-slice" and not target_routes:
+        return {"status": "HOLD_TARGET_UI_SCOPE_REQUIRED",
+                "next": "Specify actual affected routes before a targeted UI refactor review.",
+                "rendered_visual_qa_verified": False}
+    discovered = [r["path"] for r in inventory.get("routes", [])[:40]]
+    routes = sorted(set(discovered) | set(target_routes)) if scope == "full-product" else sorted(target_routes)
+    if len(routes) > 40:
+        raise ValueError("Too many route candidates for one bounded visual QA packet")
+    states = ["default", "loading", "empty", "error", "partial", "focus", "reduced-motion"]
+    return {
+        "status": "NEEDS_RUNTIME_ROUTE_AND_STATE_RECONCILIATION",
+        "scope": scope,
+        "route_candidates": routes,
+        "static_route_candidates": discovered,
+        "unobserved_target_route_hints": sorted(set(target_routes) - set(discovered)),
+        "candidate_required_states": states,
+        "required_experience_checks": ["desktop_and_mobile_layout",
+                                       "spacing_and_typography_consistency",
+                                       "iconography", "keyboard_focus", "motion",
+                                       "responsive_and_zoom", "component_states"],
+        "source_snapshot_sha256": inventory.get("source_snapshot_sha256"),
+        "all_runtime_routes_discovered": False,
+        "all_reachable_states_discovered": False,
+        "source_git_revision_verified": False,
+        "rendered_visual_qa_verified": False,
+        "next": "Reconcile real runtime navigation/guarded routes; mark applicable states and viewports; then supply actual host-browser/device evidence.",
     }
