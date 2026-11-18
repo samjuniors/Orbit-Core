@@ -209,6 +209,12 @@ class RADGuardTests(unittest.TestCase):
 
     def test_mcp_wire_response_is_bounded_and_no_tool_is_added(self):
         self.assertEqual(len(orbit_mcp.TOOLS), 57)
+        # A future code-executing tool must not silently be absent from the
+        # independent denial policy when the MCP annotation set changes.
+        self.assertEqual(orbit_defense.EXECUTES_PROJECT_CODE,
+                         orbit_mcp.EXECUTES_PROJECT_CODE)
+        self.assertTrue(orbit_defense.EXECUTES_PROJECT_CODE <=
+                        set(orbit_mcp.TOOL_MAP))
         defense = orbit_defense.Defense("GUARDED")
         req = {
             "jsonrpc": "2.0", "id": 12, "method": "tools/call",
