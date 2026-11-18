@@ -4,6 +4,7 @@ These tests never launch any agent or assume saved approval is host consent.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 import tempfile
@@ -661,7 +662,6 @@ class CharteredTeamEventTests(unittest.TestCase):
                                "confirm_write": True})
         self.assertEqual(result["status"], "HANDOFF_RECEIPT_RECORDED")
         self.assertFalse(result["payload"]["lead_result_review"]["host_evidence_verified"])
-        return result
 
     def test_opt_in_correlated_trace_is_bounded_redacted_and_read_only(self):
         self._native_recipient_with_handoff({
