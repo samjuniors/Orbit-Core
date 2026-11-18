@@ -538,7 +538,32 @@ TOOLS += [
  {'name':'orbit_intake_approve','description':'Record selected options or explicitly delegated recommended defaults; user consent is host-attested.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'answers':{'type':'object'},'answer_source':{'type':'string','enum':['user_choices','user_delegated_defaults']},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','answers','answer_source','user_reference'])},
  {'name':'orbit_autonomy_review','description':'Recommend maturity-based guided/assisted/trusted mode; no automatic promotion.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'level':{'type':'string','enum':['guided','assisted','trusted']},'expected_revision':{'type':'integer','minimum':1},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project'])},
  {'name':'orbit_docs_audit','description':'Read-only, repeatable project documentation inventory and growth signals.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'signals':{'type':'array','maxItems':8,'items':{'type':'string'}}},['project_root','project'])},
-    {'name':'orbit_decision_route','description':'Read-only platform/component decisions. Optional v0.33 bounded static UI inventory, project-scoped preference claims and host-reported source review. No execution, network fetch, approval or installation.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']},'include_ui_inventory':{'type':'boolean'},'include_project_style_context':{'type':'boolean'},'source_snapshot':schema({'source_id':string(70),'url':string(300),'version_or_commit':string(180),'license':string(180),'compatibility':string(180),'source_evidence':string(180)},['source_id'])},['project_root','project'])},
+    {'name':'orbit_decision_route','description':'Read-only platform/component decisions. Optional v0.33 bounded static UI inventory, project-scoped preference claims and host-reported source review. No execution, network fetch, approval or installation.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']},'include_ui_inventory':{'type':'boolean'},
+        'include_project_style_context':{'type':'boolean'},
+        'include_visual_review':{'type':'boolean'},
+        'visual_contract':schema({
+            'icon_family':string(50),
+            'spacing_policy':{'type':'string','enum':['token-first','allow-literals']},
+            'typography_policy':{'type':'string','enum':['token-first','allow-literals']},
+            'motion_policy':{'type':'string','enum':['token-first','allow-literals']},
+            'shape_policy':{'type':'string','enum':['token-first','allow-literals']}
+        },[]),
+        'qa_plan_scope':{'type':'string','enum':['full-product','changed-slice']},
+        'qa_target_routes':{'type':'array','maxItems':25,'items':string(150)},
+        'ui_coverage_packet':schema({
+            'source_revision':string(128),
+            'scope':{'type':'string','enum':['full-product','changed-slice']},
+            'runtime_routes_reviewed':{'type':'boolean'},
+            'expected':{'type':'object'},
+            'observations':{'type':'array','maxItems':400,
+                            'items':schema({
+                                'screen':string(120),'state':string(80),
+                                'source_revision':string(128),
+                                'status':{'type':'string','enum':['PASS','FAIL','NOT_RUN','BLOCKED']},
+                                'evidence_ref':string(500)
+                            },['screen','state','source_revision','status'])}
+        },['source_revision','scope','expected','observations']),
+        'source_snapshot':schema({'source_id':string(70),'url':string(300),'version_or_commit':string(180),'license':string(180),'compatibility':string(180),'source_evidence':string(180)},['source_id'])},['project_root','project'])},
     {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
 ]
 TOOLS += [
@@ -808,11 +833,47 @@ def execute(conn, name, a):
             result=orbit_decisions.components(kind,a.get('platforms',[]),
                      a.get('existing_stack',profile.get('stack','')),a.get('component_preference','balanced'))
             extras={}
-            if a.get('include_ui_inventory') is True:
-                extras['ui_inventory'] = (
-                    orbit_specialists.scan_visual_project(root)
-                    if kind in orbit_specialists.VISUAL else
-                    {'status':'NOT_APPLICABLE_NONVISUAL','state_written':False})
+            wants_inventory = a.get('include_ui_inventory') is True
+            wants_review = (a.get('include_visual_review') is True or
+                            'visual_contract' in a or
+                            'qa_plan_scope' in a or
+                            'ui_coverage_packet' in a)
+            if wants_inventory or wants_review:
+                inventory = (orbit_specialists.scan_visual_project(root)
+                             if kind in orbit_specialists.VISUAL else None)
+                if wants_inventory:
+                    extras['ui_inventory'] = inventory if inventory is not None else {
+                        'status':'NOT_APPLICABLE_NONVISUAL','state_written':False}
+                if wants_review:
+                    if inventory is None:
+                        extras['ui_quality_review'] = {
+                            'status':'NOT_APPLICABLE_NONVISUAL',
+                            'rendered_visual_qa_verified':False}
+                    else:
+                        extras['ui_quality_review'] = {
+                            'status':'SOURCE_REVIEW_ONLY',
+                            'visual_contract':orbit_specialists.audit_visual_contract(
+                                inventory, a.get('visual_contract')),
+                            'qa_plan':orbit_specialists.plan_visual_qa(
+                                inventory, scope=a.get('qa_plan_scope','full-product'),
+                                target_routes=a.get('qa_target_routes')),
+                        }
+                        if a.get('ui_coverage_packet') is not None:
+                            packet = a['ui_coverage_packet']
+                            coverage = orbit_specialists.review_visual_coverage(
+                                packet['expected'], packet['observations'],
+                                packet['source_revision'])
+                            if packet['scope'] == 'full-product':
+                                discovered = {x['path'] for x in inventory['routes']}
+                                missing_routes = sorted(discovered - set(packet['expected']))
+                                coverage['unmapped_static_route_hints'] = missing_routes
+                                if missing_routes:
+                                    coverage['status'] = 'HOLD_UNMAPPED_STATIC_ROUTES'
+                            if packet.get('runtime_routes_reviewed') is not True:
+                                coverage['status'] = 'HOLD_RUNTIME_SCOPE_NOT_REVIEWED'
+                            coverage['runtime_route_review_independently_verified'] = False
+                            coverage['source_snapshot_sha256'] = inventory['source_snapshot_sha256']
+                            extras['ui_quality_review']['coverage_review'] = coverage
             if a.get('source_snapshot') is not None:
                 candidate_review = orbit_decisions.review_component_source(a['source_snapshot'])
                 source_key = a['source_snapshot']['source_id']
