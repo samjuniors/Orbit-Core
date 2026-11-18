@@ -230,7 +230,9 @@ def review_visual_coverage(expected, observations, source_revision):
     for item in observations:
         if not isinstance(item, dict):
             raise ValueError("Invalid observation")
-        pair = (item.get("screen"), item.get("state"))
+        if not isinstance(item.get("screen"), str) or not isinstance(item.get("state"), str):
+            raise ValueError("Observation identifiers must be strings")
+        pair = (item["screen"], item["state"])
         if pair not in needed:
             raise ValueError("Observation is outside the expected UI scope")
         if pair in covered or pair in blocked or pair in stale:
