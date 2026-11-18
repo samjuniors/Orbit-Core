@@ -225,6 +225,13 @@ class VisualInventoryTests(unittest.TestCase):
         other = orbit_mcp.execute(self.db, "orbit_decision_route", dict(a, project="app-b"))
         self.assertEqual(other["project_style_context"]["claims"], [])
 
+    def test_web_target_sdk_avoids_unrelated_ui_kit_dependencies(self):
+        result = orbit_decisions.components("sdk-library", ["web"], "TypeScript", "reuse")
+        forbidden = {"lucide", "motion", "shadcn-ui", "radix-primitives",
+                     "react-aria", "vercel-ui-sdk"}
+        self.assertFalse(forbidden.intersection(x["id"] for x in result["candidates"]))
+        self.assertEqual(result["new_project_design_order"], [])
+
     def test_nonvisual_decision_does_not_scan_ui(self):
         res = orbit_mcp.execute(self.db, "orbit_decision_route", {
             "project_root": str(self.root), "project": "sdk",
