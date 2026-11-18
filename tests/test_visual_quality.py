@@ -134,7 +134,9 @@ class VisualQualityTests(unittest.TestCase):
         self.assertFalse(result["selection_applied"])
 
     def test_full_product_coverage_rejects_missing_static_routes(self):
-        packet = {"source_revision": "rev1234567", "scope": "full-product",
+        packet = {"source_revision": "rev1234567",
+                  "source_snapshot_sha256": orbit_specialists.scan_visual_project(
+                      self.root)["source_snapshot_sha256"], "scope": "full-product",
                   "runtime_routes_reviewed": True,
                   "expected": {"/": ["default"]},
                   "observations": [{"screen": "/", "state": "default",
@@ -148,7 +150,9 @@ class VisualQualityTests(unittest.TestCase):
         self.assertFalse(report["runtime_route_review_independently_verified"])
 
     def test_complete_report_without_runtime_review_stays_hold(self):
-        packet = {"source_revision": "rev1234567", "scope": "full-product",
+        packet = {"source_revision": "rev1234567",
+                  "source_snapshot_sha256": orbit_specialists.scan_visual_project(
+                      self.root)["source_snapshot_sha256"], "scope": "full-product",
                   "expected": {"/": ["default"], "/settings": ["default"]},
                   "observations": [{"screen": route, "state": "default",
                                     "source_revision": "rev1234567",
@@ -163,7 +167,9 @@ class VisualQualityTests(unittest.TestCase):
         self.assertFalse(r["runtime_route_review_independently_verified"])
 
     def test_stale_evidence_never_passes(self):
-        packet = {"source_revision": "rev1234567", "scope": "changed-slice",
+        packet = {"source_revision": "rev1234567",
+                  "source_snapshot_sha256": orbit_specialists.scan_visual_project(
+                      self.root)["source_snapshot_sha256"], "scope": "changed-slice",
                   "runtime_routes_reviewed": True,
                   "expected": {"/settings": ["default"]},
                   "observations": [{"screen": "/settings", "state": "default",
@@ -173,6 +179,28 @@ class VisualQualityTests(unittest.TestCase):
         r = self.decision(ui_coverage_packet=packet)["ui_quality_review"]["coverage_review"]
         self.assertEqual(r["status"], "HOLD_INCOMPLETE_UI_COVERAGE")
         self.assertEqual(len(r["stale"]), 1)
+
+    def test_file_change_invalidates_reported_ui_coverage_snapshot(self):
+        inventory = orbit_specialists.scan_visual_project(self.root)
+        packet = {
+            "source_revision": "rev1234567", "scope": "changed-slice",
+            "source_snapshot_sha256": inventory["source_snapshot_sha256"],
+            "runtime_routes_reviewed": True,
+            "expected": {"/settings": ["default"]},
+            "observations": [{"screen": "/settings", "state": "default",
+                              "source_revision": "rev1234567",
+                              "evidence_ref": "host-session:settings-screenshot",
+                              "status": "PASS"}],
+        }
+        clean = self.decision(ui_coverage_packet=packet)["ui_quality_review"]["coverage_review"]
+        self.assertEqual(clean["status"], "READY_FOR_INDEPENDENT_VISUAL_REVIEW")
+        self.assertTrue(clean["source_snapshot_matches_inspected_files"])
+        (self.root / "src/styles/base.css").write_text(
+            ".body { gap: 19px; }", encoding="utf-8")
+        drift = self.decision(ui_coverage_packet=packet)["ui_quality_review"]["coverage_review"]
+        self.assertEqual(drift["status"], "HOLD_SOURCE_SNAPSHOT_MISMATCH")
+        self.assertFalse(drift["source_snapshot_matches_inspected_files"])
+        self.assertFalse(drift["rendered_visual_qa_passed"])
 
     def test_nonvisual_does_not_trigger_static_ui_audit(self):
         result = orbit_mcp.execute(self.conn, "orbit_decision_route", {
