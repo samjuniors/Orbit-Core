@@ -114,6 +114,8 @@ class UniversalSetupTests(unittest.TestCase):
         # The v0.29 selector runtime must be present in the installed
         # standalone package, not only available in the source checkout.
         self.assertTrue((self.home/installer.VERSION/'orbit_skill_plan.py').is_file())
+        self.assertEqual((self.home/installer.VERSION/'orbit_defense.py').read_bytes(),
+                         (ROOT/'source/runtime/orbit_defense.py').read_bytes())
         self.assertEqual(set(c.action for c in installer.plan(self.project,scope='project')),{'SKIP'})
 
     def test_existing_customization_refused(self):
@@ -184,6 +186,7 @@ class UniversalSetupTests(unittest.TestCase):
     def test_mcp_process_and_shared_db(self):
         ch=installer.plan(self.project,['codex'],scope='project');installer.install(ch)
         exe=installer.python_binary();server=installer.runtime_folder()/'orbit_mcp.py'
+        self.assertTrue((server.parent/'orbit_defense.py').is_file())
         db=Path(self.t.name)/'test-shared.sqlite'
         def rpc(msgs):
             lines=''.join(json.dumps(x)+'\n' for x in msgs)
@@ -221,6 +224,7 @@ class UniversalSetupTests(unittest.TestCase):
             self.assertIn('server/orbit_browser.py',z.namelist())
             self.assertIn('server/orbit_build.py',z.namelist())
             self.assertIn('server/orbit_intake.py',z.namelist())
+            self.assertIn('server/orbit_defense.py',z.namelist())
 
 
 
