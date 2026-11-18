@@ -10,7 +10,7 @@ Proposed future changes require separate owner review.
 
 - Added a GitHub Sponsors funding configuration for `samjuniors` and an optional README support section. This documentation-only patch does not change runtime, package versions, tests or releases.
 
-## [0.33.0] - Unpublished release candidate (2026-11-18)
+## [0.33.0] - Prepared release notes (2026-11-18)
 
 ### Highlights
 
