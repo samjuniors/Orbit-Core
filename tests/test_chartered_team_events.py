@@ -439,9 +439,9 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(len(orbit_mcp.TOOLS), 57)
 
 
-    def _reserved_native_dispatch(self):
+    def _reserved_native_dispatch(self, staff_options=None):
         """Create synthetic chartered staff+lease+reservation, no real host."""
-        self.approve_staff()
+        self.approve_staff(**(staff_options or {}))
         lease = self._synthetic_lease(host_workspace_mode="workspace-write")
         self.assertEqual(lease["status"], "CAPABILITY_INTENT_REVIEW")
         saved = self._synthetic_lease(
@@ -590,6 +590,48 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(self.event(**request)["status"],
                          "HOLD_MISSING_OR_AMBIGUOUS_REVIEWED_HANDOFF")
 
+
+    def test_pre_dispatch_staff_request_binds_specialist_return_contract(self):
+        self.assertEqual(self.staffing(
+            specialist_return_mode="transfer_control",
+            expected_output_kind="security_review")["status"],
+            "HOLD_UNSUPPORTED_SPECIALIST_RETURN_MODE")
+        self.assertEqual(self.staffing(specialist_return_mode="report_to_lead")[
+            "status"], "HOLD_SPECIALIST_OUTPUT_CONTRACT_REQUIRED")
+        preview = self.staffing(specialist_return_mode="report_to_lead",
+                                expected_output_kind="security_review")
+        self.assertEqual(preview["status"], "STAFFING_REQUEST_REVIEW")
+        contract = preview["payload"]["specialist_return_contract"]
+        self.assertEqual(contract["return_to"], "orbit-lead")
+        self.assertEqual(contract["expected_output_kind"], "security_review")
+        self.assertFalse(contract["host_control_transferred"])
+        self.assertFalse(contract["worker_execution_started"])
+        result = self.staffing(
+            specialist_return_mode="report_to_lead",
+            expected_output_kind="security_review",
+            expected_digest=preview["review_digest"],
+            review_manifest=preview["payload"]["skill_manifest"],
+            confirm_write=True)
+        self.assertEqual(result["status"], "STAFF_REQUEST_RECORDED")
+        self.assertFalse(result["worker_spawned"])
+        self.assertFalse(result["payload"]["specialist_return_contract"][
+            "host_result_authenticated"])
+
+    def test_pre_dispatch_packet_preserves_return_to_lead_without_host_invocation(self):
+        args = self._reserved_native_dispatch({
+            "specialist_return_mode": "report_to_lead",
+            "expected_output_kind": "implementation_evidence",
+        })
+        result = self.event(**args)
+        self.assertEqual(result["status"], "HOST_NATIVE_DISPATCH_REVIEW_REQUIRED")
+        packet = result["dispatch_packet"]
+        self.assertEqual(packet["specialist_return_contract"]["mode"],
+                         "report_to_lead")
+        self.assertEqual(packet["specialist_return_contract"]["expected_output_kind"],
+                         "implementation_evidence")
+        self.assertFalse(packet["specialist_return_contract"]["host_control_transferred"])
+        self.assertFalse(result["native_invoked"])
+        self.assertFalse(result["host_permission_verified"])
 
     def test_typed_specialist_return_keeps_orbit_authority_and_requires_review(self):
         self.conn.execute("""UPDATE orbit_agent_tasks
