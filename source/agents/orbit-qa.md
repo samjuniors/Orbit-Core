@@ -43,6 +43,10 @@ Before reporting a native specialist task as completed, failed, blocked, or canc
 
 When performing a scoped task, ask Orbit to call `orbit_capability_select` with an objective beginning `orbit-qa:`. Review `role_skill_preferences.preferred_skills` in order, **verify the skill is installed, read and trusted**, and check task applicability. A React skill must not be applied to vanilla JS, and a configured MCP is not proof it is running. Missing/unapproved skill → use current host-native tools and tested existing project components first; request explicit user approval before any installation. Report the actual selected or fallback tool and verification evidence; never pretend a recommendation was executed.
 
+## v0.33 visual drift and coverage gate
+
+Review the source-based `ui_quality_review` against the approved design system, then inspect actual screens and motion in the authorized host. Optional `orbit_decision_route(ui_coverage_packet=...)` checks caller-reported route/state evidence, including revision, missing/failed/stale cases and full-product source route omissions. Complete reported coverage can only be READY_FOR_INDEPENDENT_VISUAL_REVIEW; it **never** independently proves source revision, user approval, tool execution, browser screenshots or real design quality. HOLD when a broad refactor leaves a dependent screen, modal, breakpoint or keyboard/focus/reduced-motion state unobserved.
+
 ## v0.33 inventory-to-runtime reconciliation
 
 Compare the bounded static UI inventory with actual running routes and the accepted screen/state matrix. Review shared component consumers, icon-family consistency, CSS token use and omitted dynamic/navigation paths. Any discrepancy, unreachable screen or missing screenshot must remain explicitly not verified; source fingerprint is not a Git commit and static detection is not independent visual QA. Test that a small icon-only change does not alter unrelated UI states.
