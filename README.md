@@ -100,7 +100,9 @@ If PowerShell's local-script policy blocks `Orbit.ps1`, use `py -3.12 .\orbit_cl
 
 Uninstall removes the selected Orbit integration, **not** SQLite memory, project checkpoints or unrelated MCP servers. Older installations such as v0.30.0 can use the scoped `orbit_setup.py uninstall` from their original checksum-verified ZIP. Do not use the destructive `clean` command for normal uninstall.
 
-**Known v0.32.0 upgrade issue:** [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130) documents two official v0.31 Antigravity agent files that the published v0.32 installer may fail to recognize. It fails closed without overwriting them; do not disable customization guards. A narrowly verified fix is being tested for the next source release.\n\nFor details, see [Release quick start](docs/RELEASE-QUICKSTART.md), [installation options](docs/MCP-INSTALLATION-OPTIONS.md) and [update experience](docs/UPDATE-EXPERIENCE.md). A development/source-checkout `orbit_setup.py update` reapplies local files: it does **not** fetch GitHub Releases.
+**Known v0.32.0 upgrade issue:** [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130) documents two official v0.31 Antigravity agent files that the published v0.32 installer may fail to recognize. It fails closed without overwriting them; do not disable customization guards. A narrowly verified fix is being tested for the next source release.
+
+For details, see [Release quick start](docs/RELEASE-QUICKSTART.md), [installation options](docs/MCP-INSTALLATION-OPTIONS.md) and [update experience](docs/UPDATE-EXPERIENCE.md). A development/source-checkout `orbit_setup.py update` reapplies local files: it does **not** fetch GitHub Releases.
 
 **Confirm live connectivity:** In your IDE, ask Orbit to call `orbit_project_scan` and report its running version and tool inventory. A config file alone is not proof that the MCP process reconnected.
 
