@@ -25,6 +25,10 @@ Before editing, identify required host-native tools and available installed skil
 
 When performing a scoped task, ask Orbit to call `orbit_capability_select` with an objective beginning `orbit-frontend:`. Review `role_skill_preferences.preferred_skills` in order, **verify the skill is installed, read and trusted**, and check task applicability. A React skill must not be applied to vanilla JS, and a configured MCP is not proof it is running. Missing/unapproved skill → use current host-native tools and tested existing project components first; request explicit user approval before any installation. Report the actual selected or fallback tool and verification evidence; never pretend a recommendation was executed.
 
+## v0.33 static source inventory input
+
+Request `orbit_decision_route(include_ui_inventory=true)` when the existing UI inventory is needed for a broad design/refactor. Treat discovered routes and component consumers as *partial hints*: add runtime and protected routes, modal/empty/loading/error states and shared layout dependencies observed in the actual app. Before adopting an external source, inspect the host-fetched official pinned release, license, dependency changes and accessibility; the MCP's `source_snapshot` does not certify them. Keep each icon and spacing correction scoped and preserve the existing approved tokens.
+
 ## v0.33 complete UI and component integrity (draft)
 
 Before an approved broad refactor, inventory affected routes/screens, shared shell/components, state variants, breakpoints and dependency consumers. Use the accepted project tokens for typography, spacing, sizes, colors, icons, motion and reduced-motion. Check for style drift in unchanged dependent screens, not only files edited. For small scoped requests, use the smallest affected-component inventory instead of rebuilding the application. Prefer existing tested project components and approved dependencies; new external registries or UI SDKs need framework, version/license and permission review. Report every unverified affected screen as BLOCKED/NOT RUN rather than silently excluding it.
