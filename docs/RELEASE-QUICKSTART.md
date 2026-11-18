@@ -11,7 +11,9 @@
 
 **macOS/Linux:** From the verified, extracted ZIP, run `python3 orbit_setup.py install --scope machine --hosts codex` to preview and repeat with `--apply` after reviewing. Use a supported Python 3.10–3.13. For a single existing workspace add `--scope project --project /absolute/existing/project`.
 
-**Published v0.32 upgrade note:** The stock installer may refuse two exact unmodified v0.31 Antigravity agents (see [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130)). Do not delete or force-overwrite a protected file; preserve the current installation and review the source-verified patch candidate separately. This issue does not mean the existing v0.31 files are unsafe.\n\n## 2. Windows PowerShell — from the verified ZIP
+**Published v0.32 upgrade note:** The stock installer may refuse two exact unmodified v0.31 Antigravity agents (see [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130)). Do not delete or force-overwrite a protected file; preserve the current installation and review the source-verified patch candidate separately. This issue does not mean the existing v0.31 files are unsafe.
+
+## 2. Windows PowerShell — from the verified ZIP
 
 If you prefer the terminal instead of the setup wizard, from the extracted Universal Setup folder:
 
