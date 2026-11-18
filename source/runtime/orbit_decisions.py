@@ -233,6 +233,11 @@ def review_component_source(snapshot):
     if missing:
         return {**base, "status": "HOLD_MISSING_SOURCE_CLAIMS", "missing_fields": missing,
                 "official_url": known[4]}
+    if snapshot["version_or_commit"].strip().lower() in {
+            "latest", "main", "master", "head", "unknown", "unspecified", "current"}:
+        return {**base, "status": "HOLD_UNPINNED_SOURCE", "official_url": known[4]}
+    if snapshot["license"].strip().lower() in {"unknown", "unspecified", "tbd"}:
+        return {**base, "status": "HOLD_UNCLEAR_LICENSE", "official_url": known[4]}
     if snapshot["compatibility"] not in {"compatible", "incompatible", "unknown"}:
         raise ValueError("Unsupported compatibility claim")
     if snapshot["compatibility"] == "incompatible":
