@@ -201,3 +201,45 @@ def components(product_type,platforms,stack,preference):
             'candidates':result[:12],  # bounded, retains legacy candidates after optional sources
             'custom_component_allowed':True,
             'warning':'Recommendations are read-only research pointers, not verified installed components or permission to install.'}
+
+
+def review_component_source(snapshot):
+    """Validate a host-collected source claim; never fetch or attest registry data."""
+    if not isinstance(snapshot, dict) or len(snapshot) > 12:
+        raise ValueError("Source snapshot must be a bounded object")
+    if any(not isinstance(k, str) or len(k) > 80 for k in snapshot):
+        raise ValueError("Invalid source snapshot fields")
+    ident = snapshot.get("source_id")
+    if not isinstance(ident, str) or not 1 <= len(ident) <= 70:
+        raise ValueError("source_id is required")
+    known = next(((key, kind, platform, stacks, url) for
+                  key, kind, platform, stacks, url, why in CATALOG if key == ident), None)
+    base = {"source_id": ident, "source_data_untrusted": True,
+            "provenance_independently_verified": False,
+            "license_independently_verified": False, "registry_fetched_by_orbit": False,
+            "dependency_installed": False, "selection_applied": False,
+            "host_review_required": True}
+    if known is None:
+        return {**base, "status": "HOLD_UNCATALOGED_SOURCE",
+                "next": "Research source provenance, license and framework compatibility before proposing addition."}
+    url = snapshot.get("url")
+    if not isinstance(url, str) or url.rstrip("/") != known[4].rstrip("/"):
+        return {**base, "status": "HOLD_SOURCE_URL_MISMATCH",
+                "expected_official_url": known[4]}
+    fields = ("version_or_commit", "license", "compatibility", "source_evidence")
+    missing = [field for field in fields if
+               not isinstance(snapshot.get(field), str) or
+               not 3 <= len(snapshot[field].strip()) <= 180]
+    if missing:
+        return {**base, "status": "HOLD_MISSING_SOURCE_CLAIMS", "missing_fields": missing,
+                "official_url": known[4]}
+    if snapshot["compatibility"] not in {"compatible", "incompatible", "unknown"}:
+        raise ValueError("Unsupported compatibility claim")
+    if snapshot["compatibility"] == "incompatible":
+        return {**base, "status": "HOLD_INCOMPATIBLE_SOURCE", "official_url": known[4]}
+    if snapshot["compatibility"] == "unknown":
+        return {**base, "status": "HOLD_COMPATIBILITY_REVIEW", "official_url": known[4]}
+    return {**base, "status": "REVIEW_SOURCE_CLAIMS",
+            "official_url": known[4],
+            "claims": {k: snapshot[k] for k in fields},
+            "next": "Verify the pinned source, license, maintenance, security and accessibility against trusted official documentation; then request separate dependency approval."}
