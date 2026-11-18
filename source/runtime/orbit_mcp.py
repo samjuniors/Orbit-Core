@@ -814,7 +814,17 @@ def execute(conn, name, a):
                     if kind in orbit_specialists.VISUAL else
                     {'status':'NOT_APPLICABLE_NONVISUAL','state_written':False})
             if a.get('source_snapshot') is not None:
-                extras['component_source_review'] = orbit_decisions.review_component_source(a['source_snapshot'])
+                candidate_review = orbit_decisions.review_component_source(a['source_snapshot'])
+                source_key = a['source_snapshot']['source_id']
+                match = next((x for x in result['candidates'] if x['id'] == source_key), None)
+                if match is None:
+                    candidate_review = {**candidate_review,
+                        'status': 'HOLD_SOURCE_NOT_APPLICABLE_TO_PROJECT'}
+                elif match['status'] in {'INCOMPATIBLE_STACK', 'STACK_CHANGE_REQUIRED'}:
+                    candidate_review = {**candidate_review,
+                        'status': 'HOLD_PROJECT_STACK_MISMATCH',
+                        'project_candidate_status': match['status']}
+                extras['component_source_review'] = candidate_review
             if a.get('include_project_style_context') is True:
                 ctx = orbit_improvement.context(conn,root,project,{'limit':20})
                 extras['project_style_context'] = {
