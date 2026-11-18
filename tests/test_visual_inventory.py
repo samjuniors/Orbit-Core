@@ -120,6 +120,29 @@ class VisualInventoryTests(unittest.TestCase):
             {"source_id": "shadcn-ui", "url": "https://ui.shadcn.com/docs"})["status"],
             "HOLD_MISSING_SOURCE_CLAIMS")
 
+    def test_source_review_requires_pin_license_and_actual_stack_fit(self):
+        basic = {"source_id": "shadcn-ui", "url": "https://ui.shadcn.com/docs",
+                 "version_or_commit": "4.1.2", "license": "MIT",
+                 "compatibility": "compatible",
+                 "source_evidence": "reviewed-official-documentation"}
+        self.assertEqual(orbit_decisions.review_component_source(
+            dict(basic, version_or_commit="latest"))["status"],
+            "HOLD_UNPINNED_SOURCE")
+        self.assertEqual(orbit_decisions.review_component_source(
+            dict(basic, license="unknown"))["status"],
+            "HOLD_UNCLEAR_LICENSE")
+        res = orbit_mcp.execute(self.db, "orbit_decision_route", {
+            "project_root": str(self.root), "project": "sdk",
+            "product_type": "sdk-library", "source_snapshot": basic})
+        self.assertEqual(res["component_source_review"]["status"],
+                         "HOLD_SOURCE_NOT_APPLICABLE_TO_PROJECT")
+        wrong = orbit_mcp.execute(self.db, "orbit_decision_route", {
+            "project_root": str(self.root), "project": "web",
+            "product_type": "web-app", "platforms": ["web"],
+            "existing_stack": "Vue 3", "source_snapshot": basic})
+        self.assertEqual(wrong["component_source_review"]["status"],
+                         "HOLD_PROJECT_STACK_MISMATCH")
+
     def test_project_style_approval_and_isolation_and_archive(self):
         first = {
             "event_key": "icon-style-project-one", "action": "record",
