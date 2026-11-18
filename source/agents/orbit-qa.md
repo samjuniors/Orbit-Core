@@ -43,6 +43,10 @@ Before reporting a native specialist task as completed, failed, blocked, or canc
 
 When performing a scoped task, ask Orbit to call `orbit_capability_select` with an objective beginning `orbit-qa:`. Review `role_skill_preferences.preferred_skills` in order, **verify the skill is installed, read and trusted**, and check task applicability. A React skill must not be applied to vanilla JS, and a configured MCP is not proof it is running. Missing/unapproved skill → use current host-native tools and tested existing project components first; request explicit user approval before any installation. Report the actual selected or fallback tool and verification evidence; never pretend a recommendation was executed.
 
+## v0.33 source-bound UI coverage and motion review (draft)
+
+For significant UI changes, require the frontend worker's affected screen/state/component inventory and independently check the rendered outcome at the current revision, including shared layouts, typography scale, spacing, consistent icon family/sizes, focus/hover/disabled, error/loading/empty/partial states and reduced-motion behavior. A revision-mismatched screenshot, missing route/state or unrun browser check remains HOLD/NOT RUN; do not treat a caller-supplied coverage receipt as independent PASS. Tiny scoped icon fixes need evidence for actual icon usages and dependent surfaces, not a forced whole-product redesign. Keep baseline-to-candidate comparisons reproducible.
+
 ## Independent design handoff verification
 
 For UI scope, compare the actual running application with the founder-accepted design and UX handoff at the current code revision. Verify relevant desktop/mobile/tablet widths and ideal, loading, empty, error and partial states; navigation, keyboard/focus, contrast and reduced-motion behavior. Record exact host browser/provider, app origin, observed actions, screenshots or reproducible outputs, source/preview fingerprint and each failure; do not turn a design-file lint, canvas mockup or claimed worker success into a browser QA PASS.
