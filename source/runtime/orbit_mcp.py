@@ -606,6 +606,7 @@ TOOLS += [
          'task_key':string(80),'task_revision':{'type':'integer','minimum':1},
          'peer_task_key':string(80),'peer_revision':{'type':'integer','minimum':1},
          'worker_kind':{'type':'string','enum':['agent','bot']},
+         'specialist_return_mode':{'type':'string','enum':['normal_task','report_to_lead','transfer_control']},
          'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
          'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
          'requested_tool_names':{'type':'array','maxItems':6,'items':string(64)},
