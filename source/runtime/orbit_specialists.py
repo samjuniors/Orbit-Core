@@ -161,6 +161,199 @@ def guide_decision(request_kind, *, scope_clear=True, consequential=False,
     }
 
 
+
+# Read-only, bounded static inventory. This is not a browser crawl or a parser for
+# every framework: undiscovered dynamic routes must be verified by the host.
+_UI_SUFFIXES = {".tsx", ".jsx", ".ts", ".js", ".vue", ".svelte", ".html",
+                ".css", ".scss"}
+_UI_ROOTS = {"src", "app", "pages", "routes", "components", "ui", "frontend",
+             "renderer", "web", "client", "public", "styles"}
+_UI_EXCLUDE = {".git", ".orbit", ".next", ".nuxt", ".svelte-kit",
+               "node_modules", "dist", "build", "coverage", "vendor",
+               "__pycache__", ".venv", "venv", "out", "target", ".cache"}
+_UI_IMPORT = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)['"]([^'"]{1,160})['"]""")
+_UI_ROUTE = re.compile(r"""\b(?:path\s*=\s*|path\s*:\s*)['"](/[^'"<> ]{0,140})['"]""")
+_UI_TOKEN = re.compile(r"--([a-z][a-z0-9_-]{1,70})\s*:", re.I)
+_ICON_PACKAGES = {"lucide-react": "lucide", "lucide-vue-next": "lucide",
+                  "react-icons": "react-icons", "@mui/icons-material": "mui",
+                  "@heroicons/react": "heroicons", "phosphor-react": "phosphor"}
+
+
+def _ui_route_from_file(rel):
+    """File-convention hints; never claim a framework route is reachable."""
+    p = rel.as_posix()
+    parts = list(rel.parts)
+    if p.endswith(".html"):
+        return "/" if p in {"index.html", "public/index.html"} else "/" + p.removesuffix(".html")
+    if "app" in parts and rel.stem == "page":
+        i = parts.index("app")
+        segments = [x for x in parts[i + 1:-1] if not x.startswith("(") and not x.startswith("@")]
+        return "/" + "/".join(segments)
+    if "pages" in parts and rel.suffix in {".tsx", ".jsx", ".vue", ".js", ".ts"}:
+        i = parts.index("pages")
+        name = parts[-1].rsplit(".", 1)[0]
+        segments = parts[i + 1:-1] + ([] if name == "index" else [name])
+        return "/" + "/".join(segments)
+    if "routes" in parts and rel.name in {"+page.svelte", "+page.tsx", "+page.jsx"}:
+        i = parts.index("routes")
+        return "/" + "/".join(parts[i + 1:-1])
+    return None
+
+
+def scan_visual_project(root):
+    """Read source as untrusted bytes; return bounded heuristic UI inventory.
+
+    Does not execute project code, fetch registries, follow project symlinks,
+    authenticate a Git revision, or independently verify rendered screen states.
+    """
+    import hashlib
+    import json
+    import os
+    import posixpath
+    from pathlib import Path
+
+    base = Path(root)
+    if base.is_symlink() or not base.is_dir():
+        raise ValueError("Expected an existing non-symlink project root")
+    base = base.resolve(strict=True)
+    hashes = hashlib.sha256()
+    scanned = []
+    routes = {}
+    components = []
+    imports_by_file = {}
+    icons = {}
+    tokens = set()
+    declared = {}
+    reasons = set()
+    examined = 0
+    bytes_read = 0
+    candidate_count = 0
+    max_files, max_bytes, max_entries = 160, 4 * 1024 * 1024, 2400
+
+    for parent, dirs, names in os.walk(base, topdown=True, followlinks=False):
+        folder = Path(parent)
+        depth = len(folder.relative_to(base).parts)
+        if depth >= 9:
+            dirs[:] = []
+            reasons.add("MAX_DIRECTORY_DEPTH")
+            continue
+        examined += len(dirs) + len(names)
+        if examined > max_entries:
+            reasons.add("MAX_DIRECTORY_ENTRIES")
+            break
+        dirs[:] = sorted(d for d in dirs if d not in _UI_EXCLUDE and
+                         not d.startswith(".") and not (folder / d).is_symlink())
+        for name in sorted(names):
+            file = folder / name
+            rel = file.relative_to(base)
+            if (name.startswith(".") or file.is_symlink() or
+                    not (rel.parts[0] in _UI_ROOTS or name == "package.json"
+                         or (len(rel.parts) == 1 and file.suffix in _UI_SUFFIXES))):
+                continue
+            if file.suffix not in _UI_SUFFIXES and name != "package.json":
+                continue
+            candidate_count += 1
+            if len(scanned) >= max_files:
+                reasons.add("MAX_SOURCE_FILES")
+                break
+            try:
+                actual = file.resolve(strict=True)
+                if not actual.is_relative_to(base) or not actual.is_file():
+                    reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
+                    continue
+                size = actual.stat().st_size
+                if size > 128 * 1024 or bytes_read + size > max_bytes:
+                    reasons.add("MAX_FILE_OR_BYTE_LIMIT")
+                    continue
+                raw = actual.read_bytes()
+                if len(raw) > 128 * 1024 or bytes_read + len(raw) > max_bytes:
+                    reasons.add("MAX_FILE_OR_BYTE_LIMIT")
+                    continue
+            except (OSError, ValueError):
+                reasons.add("UNREADABLE_SOURCE_FILE")
+                continue
+            bytes_read += len(raw)
+            namepath = rel.as_posix()
+            scanned.append(namepath)
+            hashes.update(namepath.encode("utf-8") + b"\0" + hashlib.sha256(raw).digest())
+            if name == "package.json":
+                try:
+                    manifest = json.loads(raw)
+                    if isinstance(manifest, dict):
+                        for group in ("dependencies", "devDependencies"):
+                            deps = manifest.get(group, {})
+                            if isinstance(deps, dict):
+                                declared.update({k: str(v)[:50] for k, v in
+                                                 list(deps.items())[:80] if isinstance(k, str)})
+                except (ValueError, UnicodeError, TypeError):
+                    reasons.add("INVALID_PACKAGE_MANIFEST")
+                continue
+            data = raw.decode("utf-8", errors="replace")
+            file_route = _ui_route_from_file(rel)
+            if file_route is not None:
+                routes.setdefault(file_route, set()).add(namepath)
+            if file.suffix in {".tsx", ".jsx", ".ts", ".js", ".vue", ".svelte"}:
+                for path in _UI_ROUTE.findall(data):
+                    routes.setdefault(path, set()).add(namepath)
+                local_imports = []
+                for imp in _UI_IMPORT.findall(data):
+                    if imp.startswith("."):
+                        target = posixpath.normpath(posixpath.join(
+                            posixpath.dirname(namepath), imp))
+                        if target != ".." and not target.startswith("../"):
+                            local_imports.append(target)
+                    for package, family in _ICON_PACKAGES.items():
+                        if imp == package or imp.startswith(package + "/"):
+                            icons[family] = icons.get(family, 0) + 1
+                imports_by_file[namepath] = sorted(set(local_imports))[:40]
+            if ("components" in rel.parts or "ui" in rel.parts) and \
+                    file.suffix in {".tsx", ".jsx", ".vue", ".svelte"}:
+                components.append(namepath)
+            if file.suffix in {".css", ".scss", ".vue", ".svelte"}:
+                tokens.update(_UI_TOKEN.findall(data))
+        if len(scanned) >= max_files:
+            break
+    # Imported-component consumers are conservative heuristics; files can be
+    # aliased, barrel re-exported or dynamically loaded.
+    impact = {}
+    for component in sorted(components)[:60]:
+        no_ext = component.rsplit(".", 1)[0]
+        for consumer, targets in imports_by_file.items():
+            if no_ext in targets or no_ext + "/index" in targets:
+                impact.setdefault(component, []).append(consumer)
+    if candidate_count > len(scanned):
+        reasons.add("SOME_SOURCE_FILES_NOT_INSPECTED")
+    if not routes:
+        reasons.add("NO_STATIC_SCREEN_ROUTE_FOUND")
+    if any("[" in route or ":" in route or "*" in route for route in routes):
+        reasons.add("DYNAMIC_ROUTE_REQUIRES_HOST_INSPECTION")
+    return {
+        "status": "HEURISTIC_UI_INVENTORY_PARTIAL",
+        "scanned_file_count": len(scanned),
+        "candidate_file_count_seen": candidate_count,
+        "source_snapshot_sha256": hashes.hexdigest(),
+        "routes": [{"path": route, "source_files": sorted(files)[:5]}
+                   for route, files in sorted(routes.items())[:40]],
+        "component_files": sorted(components)[:60],
+        "component_consumers_hint": {k: sorted(v)[:12] for k, v in sorted(impact.items())[:40]},
+        "icon_families_imported_hint": icons,
+        "css_custom_properties_hint": sorted(tokens)[:60],
+        "declared_ui_dependencies_hint": {k: v for k, v in sorted(declared.items())
+                                           if any(part in k.lower() for part in
+                                                  ("react", "vue", "svelte", "lucide",
+                                                   "radix", "shadcn", "motion", "icon"))} ,
+        "partial_reasons": sorted(reasons),
+        "not_scanned_or_guaranteed": "Dynamic routes, runtime-rendered states, remote assets, native UI, and unrecognized code patterns.",
+        "expected_browser_qa_states": ["default", "loading", "empty", "error", "partial"],
+        "screen_inventory_complete": False,
+        "source_git_revision_verified": False,
+        "rendered_visual_qa_verified": False,
+        "state_written": False,
+        "network_accessed": False,
+        "project_code_executed": False,
+    }
+
+
 def visual_decision(product_type, operation, *, brief_approved=False,
                     design_approved=False, change_scope_clear=False,
                     permission_state="UNKNOWN"):
