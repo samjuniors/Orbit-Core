@@ -184,7 +184,7 @@ class VisualInventoryTests(unittest.TestCase):
     def test_decision_tool_exposes_bounded_audit_and_project_context(self):
         a = {"project_root": str(self.root), "project": "app-a",
              "product_type": "web-app", "platforms": ["web"],
-             "existing_stack": "React 19", "include_ui_inventory": True,
+             "existing_stack": "React 19 Tailwind", "include_ui_inventory": True,
              "include_project_style_context": True,
              "source_snapshot": {"source_id": "shadcn-ui",
                                  "url": "https://ui.shadcn.com/docs",
