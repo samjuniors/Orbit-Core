@@ -24,9 +24,10 @@ canonical project root* also move that root into `CONTAINED` for the process
 lifetime. The number of tracked scopes is capped at 64; saturation never permits
 execution and cannot lock unrelated projects. A malicious request outside
 `ORBIT_TRUSTED_ROOTS` cannot escalate another project. Other roots can continue
-their normal guarded workflows; a read-only charter status, limited source/task
-metadata, and explicit stopping of a managed preview remain available in
-containment. Only a trusted host restart with a reviewed mode setting can
+their normal guarded workflows. Containment allows only non-project metadata,
+a pure caller-supplied gate evaluation, and explicit stopping of a managed
+preview. Project scans, task history, charter content, local memory and research
+reads are denied even though they are normally read-only: they may expose data. Only a trusted host restart with a reviewed mode setting can
 reset the process-local guard. Do **not** let an MCP tool de-escalate itself.
 
 **What the gate does not prove:** A blocked attempt is a policy violation, not
