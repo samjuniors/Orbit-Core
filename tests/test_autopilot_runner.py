@@ -427,9 +427,18 @@ class AutopilotRunnerTests(unittest.TestCase):
                 "action": "pause", "mission_id": self.mission,
                 "expected_revision": 1, "confirm_write": True})
             self.assertEqual(paused["status"], "PAUSED")
+            # The real resume path requires a separate exact-state review
+            # digest and reported branch; neither authenticates host consent.
+            preview = orbit_autopilot.charter(self.db, self.root, self.project, {
+                "action": "resume", "mission_id": self.mission,
+                "expected_revision": 2, "reported_branch": "feat/test-autopilot",
+                "approval_reference": "new-operator-review-is-still-caller-claimed"})
+            self.assertEqual(preview["status"], "PREVIEW_ONLY")
             resumed = orbit_autopilot.charter(self.db, self.root, self.project, {
                 "action": "resume", "mission_id": self.mission,
-                "expected_revision": 2, "confirm_write": True,
+                "expected_revision": 2, "reported_branch": "feat/test-autopilot",
+                "expected_resume_digest": preview["resume_review_digest"],
+                "confirm_write": True,
                 "approval_reference": "new-operator-review-is-still-caller-claimed"})
             self.assertEqual(resumed["status"], "ACTIVE")
             self.assertEqual(resumed["revision"], 3)
@@ -452,9 +461,18 @@ class AutopilotRunnerTests(unittest.TestCase):
                 "action": "pause", "mission_id": self.mission,
                 "expected_revision": 1, "confirm_write": True})
             self.assertEqual(paused["status"], "PAUSED")
+            # The real resume path requires a separate exact-state review
+            # digest and reported branch; neither authenticates host consent.
+            preview = orbit_autopilot.charter(self.db, self.root, self.project, {
+                "action": "resume", "mission_id": self.mission,
+                "expected_revision": 2, "reported_branch": "feat/test-autopilot",
+                "approval_reference": "new-operator-review-is-still-caller-claimed"})
+            self.assertEqual(preview["status"], "PREVIEW_ONLY")
             resumed = orbit_autopilot.charter(self.db, self.root, self.project, {
                 "action": "resume", "mission_id": self.mission,
-                "expected_revision": 2, "confirm_write": True,
+                "expected_revision": 2, "reported_branch": "feat/test-autopilot",
+                "expected_resume_digest": preview["resume_review_digest"],
+                "confirm_write": True,
                 "approval_reference": "new-operator-review-is-still-caller-claimed"})
             self.assertEqual(resumed["status"], "ACTIVE")
             return process

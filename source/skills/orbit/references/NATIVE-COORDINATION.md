@@ -1,3 +1,9 @@
+# v0.33 draft: reviewed specialist return without lead transfer
+
+In the existing chartered team workflow, a completed source task may have a reviewed `HANDOFF_RECORDED` event with optional `handoff_mode="specialist_return_to_lead"` and `expected_output_kind` (one of implementation evidence, tests, design/security review or research summary). The event records expected return to Orbit's lead, not an actual native-control transfer. Source and downstream tasks must already be in the approved Mission Charter and linked by a dependency, with an independently accepted source revision. The optional contract is digest-bound and the existing host-send/receipt/review gates remain separate. Do not create an extra specialist or reassign the manager to a worker just because a handoff event was recorded.
+
+When diagnosing coordination gaps, inspect `orbit_autopilot_charter(action="timeline",include_team_events=true)` for local-only correlation of charter and team event headers. The projection is project/root/mission-scoped; it hashes task/event keys and excludes source payloads. A corrupted event surfaces an integrity warning and no event is represented as verified host execution or authenticated owner consent. The new contract is **unreleased draft work**, separate from actual signed-in host invocation and testing.
+
 # Orbit v0.30 — host-native coordination preview
 
 **Status:** development source only. The existing host invokes real coding
