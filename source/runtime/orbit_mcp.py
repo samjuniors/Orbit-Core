@@ -19,6 +19,7 @@ import orbit_browser
 import orbit_build
 import orbit_intake
 import orbit_decisions
+import orbit_specialists
 import orbit_updates
 import orbit_evidence
 import orbit_delegation
@@ -537,7 +538,7 @@ TOOLS += [
  {'name':'orbit_intake_approve','description':'Record selected options or explicitly delegated recommended defaults; user consent is host-attested.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'answers':{'type':'object'},'answer_source':{'type':'string','enum':['user_choices','user_delegated_defaults']},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','answers','answer_source','user_reference'])},
  {'name':'orbit_autonomy_review','description':'Recommend maturity-based guided/assisted/trusted mode; no automatic promotion.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'level':{'type':'string','enum':['guided','assisted','trusted']},'expected_revision':{'type':'integer','minimum':1},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project'])},
  {'name':'orbit_docs_audit','description':'Read-only, repeatable project documentation inventory and growth signals.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'signals':{'type':'array','maxItems':8,'items':{'type':'string'}}},['project_root','project'])},
-    {'name':'orbit_decision_route','description':'Read-only, platform-specific workflow and reviewed component/library research candidates; permits custom designs.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']}},['project_root','project'])},
+    {'name':'orbit_decision_route','description':'Read-only platform/component decisions. Optional v0.33 bounded static UI inventory, project-scoped preference claims and host-reported source review. No execution, network fetch, approval or installation.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']},'include_ui_inventory':{'type':'boolean'},'include_project_style_context':{'type':'boolean'},'source_snapshot':schema({'source_id':string(70),'url':string(300),'version_or_commit':string(180),'license':string(180),'compatibility':string(180),'source_evidence':string(180)},['source_id'])},['project_root','project'])},
     {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
 ]
 TOOLS += [
@@ -553,6 +554,7 @@ TOOLS += [
         'kind':{'type':'string','enum':sorted(orbit_improvement._KINDS)},
         'result':{'type':'string','enum':sorted(orbit_improvement._RESULTS)},
         'lesson':string(320),'evidence_ref':string(160),
+        'approval_reference':string(160),
         'score_before':{'type':'integer','minimum':0,'maximum':100},
         'score_after':{'type':'integer','minimum':0,'maximum':100},
         'expected_revision':{'type':'integer','minimum':1},
@@ -805,8 +807,25 @@ def execute(conn, name, a):
                 return {'status':'NEEDS_PROJECT_CLASSIFICATION','next':'Ask project type or propose an intake before choosing a framework.'}
             result=orbit_decisions.components(kind,a.get('platforms',[]),
                      a.get('existing_stack',profile.get('stack','')),a.get('component_preference','balanced'))
+            extras={}
+            if a.get('include_ui_inventory') is True:
+                extras['ui_inventory'] = (
+                    orbit_specialists.scan_visual_project(root)
+                    if kind in orbit_specialists.VISUAL else
+                    {'status':'NOT_APPLICABLE_NONVISUAL','state_written':False})
+            if a.get('source_snapshot') is not None:
+                extras['component_source_review'] = orbit_decisions.review_component_source(a['source_snapshot'])
+            if a.get('include_project_style_context') is True:
+                ctx = orbit_improvement.context(conn,root,project,{'limit':20})
+                extras['project_style_context'] = {
+                    'status':'PROJECT_ONLY_CALLER_REPORTED_PREFERENCES',
+                    'claims':ctx['project_style_preference_claims'],
+                    'source':'EXISTING_LOCAL_IMPROVEMENT_LEDGER',
+                    'approval_independently_verified':False,
+                    'preferences_auto_applied':False,
+                }
             return {'status':'RECOMMENDATION_ONLY','project':project,**result,
-                    'selection_applied':False,'host_validation_required':True}
+                    **extras,'selection_applied':False,'host_validation_required':True}
         complexity=a.get('complexity') or profile.get('complexity','moderate')
         return orbit_decisions.model_route(a['role'],a['task'],complexity,
                    a.get('available_models',[]),a['host'],a.get('budget','economy'))
