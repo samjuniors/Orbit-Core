@@ -1,6 +1,6 @@
 # Orbit Autopilot — Phase 1 mission and founder-delegated decisions
 
-**Status: v0.32 DEVELOPMENT CANDIDATE ONLY.** This is not yet an unattended coding agent, installed update, signed-in host acceptance or published release. The released Orbit Core v0.31.0 has no Autopilot MCP tools. The coding host retains control of the model, filesystem, permissions and native agents.
+**Status: v0.32 Phase 1 source; v0.33 security/coordination extensions are DRAFT in PR #132.** The published v0.32 source contains an advisory charter; v0.33 preview/resume and trace extensions are not released. Neither version's MCP charter is an unattended coding agent or independent approval authenticator. The coding host retains control of the model, filesystem, permissions and native agents.
 
 ## Product contract
 
@@ -24,7 +24,7 @@ Register and review tasks normally with `orbit_task_plan` (no automatic creation
 2. After actual owner/host review, call `orbit_autopilot_charter(action="activate", confirm_write=true, expected_digest=...)` with the **same** charter and an actual caller-reported approval reference. This records `CHARTER_RECORDED` and revision 1. Orbit cannot cryptographically authenticate the person who supplied the string.
 3. Call `orbit_autopilot_next` with the mission revision, **caller-reported** branch, actual available native tool names, host name and workspace mode. It rechecks expiry, exact task/paths fingerprint, DAG/dependencies, attempt budget, native tool availability, read-only workspace and competing active reservations. Its successful result is `NEXT_TASK_REVIEW_REQUIRED`, **not** a started native worker.
 4. Use `orbit_autopilot_decision` to classify proposed routine choices. Allowed charter categories return `DELEGATED_DECISION_REVIEW_REQUIRED`. Founder-only actions such as roadmap expansion, dependencies, credentials, spend, permissions, destructive changes, security-policy changes, merge, release and deploy return `HOLD_FOUNDER_REVIEW`. This tool never implements a decision.
-5. `orbit_autopilot_charter(action="pause" | "resume" | "stop")` requires the exact current mission revision and an explicit confirmed write; resume also requires a fresh caller-reported approval reference. Pause/stop update Orbit state **only**; they cannot terminate an external host worker. A stopped mission cannot be silently restarted.
+5. `orbit_autopilot_charter(action="pause" | "resume" | "stop")` requires the exact mission revision and a separate confirmed write. **In the v0.33 development branch**, resume first requires a read-only preview with `reported_branch`, a **fresh caller-reported** `approval_reference` and `expected_revision`. Only then can the caller supply the returned `resume_review_digest` as `expected_resume_digest` in a second, confirmed call. Orbit rechecks current task source/scope, branch claim, expiry, revision and unresolved reservations; it holds if these change. Pause/stop update Orbit state **only**; they cannot terminate external host workers. A stopped mission cannot silently restart.
 
 **Read-only calls:** `status`, `next`, `decision` and `preview` do not modify the mission or task database. A recorded ACTIVE charter does **not** authenticate approval: every tool response sets `approval_authenticated=false`, `host_permissions_verified=false` and `execution_allowed=false`, and never claims to have launched a background runner.
 
@@ -52,3 +52,35 @@ A future runner must enforce the charter as a true **execution precondition**, n
 ## Verification
 
 Unit tests must cover no implicit activation; preview digest mismatch; closed scopes, protected paths and feature branch; expiration and pauses; optimistic revisions, replay attempts, cross-project separation and same-root conflicts; stale task fingerprint; host/tool permissions; retry counts; founder-only HOLD; and proof that there are no background, Git or native model actions. Repository CI and independent signed-in real-host acceptance are separate. The published v0.31.0 release and existing local SQLite must not be modified or retroactively tagged.
+
+
+## v0.33 draft improvement — replay-safe resume and redacted local timeline
+
+**Status: source implemented in [draft PR #132](https://github.com/samjuniors/Orbit-Core/pull/132), NOT MERGED / NOT RELEASED.** Original security design informed by [OpenAI Agents SDK human-in-the-loop patterns](https://github.com/openai/openai-agents-python/tree/e7ce15a25b336bb3d0840ad16dee597f69a6e6d3), without importing the SDK.
+
+### Updated pause/resume usage (only when this branch is actually connected)
+
+1. The existing `pause` request must use the active mission's exact revision and `confirm_write=true`. Stop/terminate any live native worker through real host APIs separately; changing the local charter state **does not stop OS processes**.
+2. In the paused state, call `orbit_autopilot_charter(action="resume", expected_revision=N, reported_branch="feat/approved-branch", approval_reference="actual-new-review-ref", confirm_write=false)`. Inspect its `resume_review_digest` and exact task/branch/path/expiration evidence. The string is caller-reported, **not authenticated owner permission**.
+3. After the actual owner/host independently reviews and authorizes that exact continuation, call `action="resume", expected_revision=N, reported_branch=..., approval_reference=..., expected_resume_digest=<the-preview-digest>, confirm_write=true`.
+4. The existing SQLite transaction rechecks mission state/revision, registered task fingerprint, path scope, approved feature branch claim and absence of active or reserved tasks in the workspace. A unique index on the **existing** mission event journal holds previously recorded activation/resume approval hashes across all missions in the same project root; it does not store a second approval database.
+5. The resulting `ACTIVE` is still an **advisory recorded charter state**. The host remains the only authority for model selection, worker execution, filesystem access, permissions, true branch verification, user authentication and owner approval. Never infer consent from a hash/digest, copied approval reference or `ACTIVE` status.
+
+### Local timeline and safety limitations
+
+`orbit_autopilot_charter(action="timeline", mission_id=..., limit=20)` reads bounded, redacted activation/pause/resume/stop events from the **existing journal**. It returns a deterministic local `trace_id`, ordered `revision`, event type, timestamp and whether a one-use approval fingerprint is recorded. It never returns raw approval references, emits remote telemetry or proves that a worker executed. `host_execution_verified=false`, `owner_authenticated=false` and `state_written=false` are intentional.
+
+The new journal column `approval_sha256` migrates additively. **Legacy events did not retain reference fingerprints**; their historical uniqueness cannot be reconstructed or claimed. New activation/resume references are checked atomically under SQLite's `BEGIN IMMEDIATE` lock and a unique project-root index. SHA-256 provides duplicate detection/binding, **not cryptographic owner identity or signed authorization**. An authenticated owner-checked, single-use consent channel cannot be implemented by an MCP that only receives caller-provided strings; true host support remains future work.
+
+This is a **deliberate resume API contract change**. Older hosts and scripts must preview+commit and be tested before upgrade; no silent compatibility fallback may bypass the review digest. `action="timeline"` is read-only and adds no MCP tool. Tests and real-host gates: `tests/test_autopilot_charter.py`, `tests/test_autopilot_runner.py`, Windows/Linux CI, and actual signed-in Codex/Antigravity permission/stop/resume evidence. Do not release until verified and founder-approved.
+
+
+## v0.33 draft — typed specialist return and correlated team trace
+
+**Status: source implemented in [draft PR #132](https://github.com/samjuniors/Orbit-Core/pull/132), NOT MERGED / NOT RELEASED.** This extends the existing `orbit_team_event` and `orbit_autopilot_charter` tools; it does **not** add an Agents SDK runner or new event table.
+
+For an existing, reviewed task dependency, `orbit_team_event(action="handoff")` may take `handoff_mode="specialist_return_to_lead"` and `expected_output_kind` from `implementation_evidence`, `test_evidence`, `design_review`, `security_review`, or `research_summary`. The resulting reviewed digest binds the exact source/recipient task revisions, evidence pointer, delivery mode and typed output. It explicitly records `return_to=orbit-lead`, `lead_review_required=true`, `lead_review_completed=false`, `native_control_transferred=false`, `host_result_authenticated=false`. These are policy hints, not approval/authorization or an actual native control handoff. The existing default handoff without these arguments remains compatible. An attempted `handoff_mode=transfer_control` is rejected; a genuine change of lead/host authority requires an independently designed permission boundary. Even when a recipient's host send and receipt are recorded, the typed specialist return is **not** marked reviewed, accepted or delivered by Orbit. The existing independent task-review workflow remains authoritative.
+
+To inspect correlated context, use `orbit_autopilot_charter(action="timeline", include_team_events=true)` for the same project/root/mission; the local timeline reuses `orbit_autopilot_events` and `orbit_team_events`, returning a bounded set of deterministic trace spans and coarse labels. Each event has a stable span ID and local parent; `linked_span_id_hint` may correlate a caller-reported receipt or delivery to a stored event. The projection returns only hashes of event/task keys, no raw event payloads, approval tokens, code, prompts or host session IDs. It checks the stored payload against its digest and reports `LOCAL_TRACE_INTEGRITY_WARNING` on mismatch. Empty/partial histories and caller-reported evidence do not imply full execution trace coverage. The default `timeline` output remains unchanged without this opt-in flag.
+
+Neither recorded handoff nor trace spans prove host tool invocation or genuine owner permission. Only real Codex/Antigravity host session evidence can establish that, and real visual/security/implementation QA remains a separate gate. Tests: `tests/test_chartered_team_events.py`; verify Windows/Linux and signed-in host acceptance before a merge or version release.

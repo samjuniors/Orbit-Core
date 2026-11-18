@@ -4,6 +4,7 @@ These tests never launch any agent or assume saved approval is host consent.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 import tempfile
@@ -438,9 +439,9 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(len(orbit_mcp.TOOLS), 57)
 
 
-    def _reserved_native_dispatch(self):
+    def _reserved_native_dispatch(self, staff_options=None):
         """Create synthetic chartered staff+lease+reservation, no real host."""
-        self.approve_staff()
+        self.approve_staff(**(staff_options or {}))
         lease = self._synthetic_lease(host_workspace_mode="workspace-write")
         self.assertEqual(lease["status"], "CAPABILITY_INTENT_REVIEW")
         saved = self._synthetic_lease(
@@ -590,7 +591,187 @@ class CharteredTeamEventTests(unittest.TestCase):
                          "HOLD_MISSING_OR_AMBIGUOUS_REVIEWED_HANDOFF")
 
 
-    def _native_recipient_with_handoff(self):
+    def test_pre_dispatch_staff_request_binds_specialist_return_contract(self):
+        self.assertEqual(self.staffing(
+            specialist_return_mode="transfer_control",
+            expected_output_kind="security_review")["status"],
+            "HOLD_UNSUPPORTED_SPECIALIST_RETURN_MODE")
+        self.assertEqual(self.staffing(specialist_return_mode="report_to_lead")[
+            "status"], "HOLD_SPECIALIST_OUTPUT_CONTRACT_REQUIRED")
+        self.assertEqual(self.staffing(expected_output_kind="security_review")[
+            "status"], "HOLD_SPECIALIST_RETURN_MODE_REQUIRED")
+        preview = self.staffing(specialist_return_mode="report_to_lead",
+                                expected_output_kind="security_review")
+        self.assertEqual(preview["status"], "STAFFING_REQUEST_REVIEW")
+        contract = preview["payload"]["specialist_return_contract"]
+        self.assertEqual(contract["return_to"], "orbit-lead")
+        self.assertEqual(contract["expected_output_kind"], "security_review")
+        self.assertFalse(contract["host_control_transferred"])
+        self.assertFalse(contract["worker_execution_started"])
+        result = self.staffing(
+            specialist_return_mode="report_to_lead",
+            expected_output_kind="security_review",
+            expected_digest=preview["review_digest"],
+            review_manifest=preview["payload"]["skill_manifest"],
+            confirm_write=True)
+        self.assertEqual(result["status"], "STAFF_REQUEST_RECORDED")
+        self.assertFalse(result["worker_spawned"])
+        self.assertFalse(result["payload"]["specialist_return_contract"][
+            "host_result_authenticated"])
+
+    def test_pre_dispatch_packet_preserves_return_to_lead_without_host_invocation(self):
+        args = self._reserved_native_dispatch({
+            "specialist_return_mode": "report_to_lead",
+            "expected_output_kind": "implementation_evidence",
+        })
+        result = self.event(**args)
+        self.assertEqual(result["status"], "HOST_NATIVE_DISPATCH_REVIEW_REQUIRED")
+        packet = result["dispatch_packet"]
+        self.assertEqual(packet["specialist_return_contract"]["mode"],
+                         "report_to_lead")
+        self.assertEqual(packet["specialist_return_contract"]["expected_output_kind"],
+                         "implementation_evidence")
+        self.assertFalse(packet["specialist_return_contract"]["host_control_transferred"])
+        self.assertFalse(result["native_invoked"])
+        self.assertFalse(result["host_permission_verified"])
+
+    def test_typed_specialist_return_keeps_orbit_authority_and_requires_review(self):
+        self.conn.execute("""UPDATE orbit_agent_tasks
+            SET status='REVIEW_ACCEPTED', review_evidence='reviewed source'
+            WHERE task_key='api'""")
+        self.conn.commit()
+        request = {
+            "action": "handoff", "event_key": "specialist-return-api-qa",
+            "task_key": "api", "task_revision": 1,
+            "peer_task_key": "qa", "peer_revision": 1,
+            "summary": "Reviewed specialist results for Orbit lead inspection",
+            "evidence_ref": "git:synthetic-reviewed-implementation",
+            "handoff_mode": "specialist_return_to_lead",
+            "expected_output_kind": "test_evidence",
+        }
+        self.assertEqual(self.event(**{**request, "handoff_mode": "transfer_control"})[
+            "status"], "HOLD_UNSUPPORTED_HANDOFF_MODE")
+        without_kind = {k: v for k, v in request.items() if k != "expected_output_kind"}
+        self.assertEqual(self.event(**without_kind)["status"],
+                         "HOLD_SPECIALIST_OUTPUT_CONTRACT_REQUIRED")
+        plan = self.event(**request)
+        self.assertEqual(plan["status"], "HANDOFF_REVIEW")
+        self.assertEqual(plan["payload"]["handoff_contract"]["return_to"], "orbit-lead")
+        self.assertTrue(plan["payload"]["handoff_contract"]["lead_review_required"])
+        self.assertFalse(plan["payload"]["handoff_contract"]["native_control_transferred"])
+        self.assertFalse(plan["payload"]["delivered_to_host"])
+        wrong = self.event(**{**request, "expected_output_kind": "design_review",
+                              "expected_digest": plan["review_digest"],
+                              "confirm_write": True})
+        self.assertEqual(wrong["status"], "HOLD_DIGEST_MISMATCH")
+        accepted = self.event(**{**request, "expected_digest": plan["review_digest"],
+                                 "confirm_write": True})
+        self.assertEqual(accepted["status"], "HANDOFF_EVENT_RECORDED")
+        self.assertFalse(accepted["worker_spawned"])
+        self.assertFalse(accepted["payload"]["handoff_contract"]["lead_review_completed"])
+        self.assertEqual(len(orbit_mcp.TOOLS), 57)
+
+    def test_specialist_result_receipt_requires_independent_lead_review(self):
+        self._native_recipient_with_handoff({
+            "handoff_mode": "specialist_return_to_lead",
+            "expected_output_kind": "security_review",
+        })
+        report = {
+            "action": "send_report", "event_key": "sent-typed-result",
+            "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "handoff_event_key": "api-to-qa", "delivery_outcome": "SENT",
+            "summary": "Synthetic host reported handoff message, not verified",
+        }
+        preview = self.event(**report)
+        sent = self.event(**{**report, "expected_digest": preview["review_digest"],
+                            "confirm_write": True})
+        self.assertEqual(sent["status"], "HOST_DELIVERY_OBSERVATION_RECORDED")
+        ack = {
+            "action": "receipt", "event_key": "received-typed-result",
+            "task_key": "qa", "task_revision": 3,
+            "handoff_event_key": "api-to-qa",
+            "send_event_key": "sent-typed-result",
+            "observed_host_session": "claimed-codex-native-session",
+            "summary": "Recipient reported specialist result received locally",
+        }
+        receipt = self.event(**ack)
+        self.assertEqual(receipt["status"], "HANDOFF_RECEIPT_REVIEW")
+        self.assertTrue(receipt["payload"]["lead_result_review"]["required"])
+        self.assertEqual(receipt["payload"]["lead_result_review"]["expected_output_kind"],
+                         "security_review")
+        self.assertFalse(receipt["payload"]["lead_result_review"]["completed"])
+        self.assertFalse(receipt["payload"]["task_accepted"])
+        result = self.event(**{**ack, "expected_digest": receipt["review_digest"],
+                               "confirm_write": True})
+        self.assertEqual(result["status"], "HANDOFF_RECEIPT_RECORDED")
+        self.assertFalse(result["payload"]["lead_result_review"]["host_evidence_verified"])
+
+    def test_opt_in_correlated_trace_is_bounded_redacted_and_read_only(self):
+        self._native_recipient_with_handoff({
+            "handoff_mode": "specialist_return_to_lead",
+            "expected_output_kind": "test_evidence",
+        })
+        before = self.conn.total_changes
+        args = {"project_root": str(self.root), "project": self.project,
+                "mission_id": self.mission, "action": "timeline",
+                "include_team_events": True}
+        trace = orbit_mcp.execute(self.conn, "orbit_autopilot_charter", args)
+        self.assertEqual(trace["status"], "LOCAL_TRACE_CONTEXT")
+        self.assertEqual(trace["team_event_count"], 3)
+        self.assertTrue(all(x["parent_span_id"] == trace["mission_span_id"]
+                            for x in trace["team_spans"]))
+        self.assertEqual(len({x["span_id"] for x in trace["team_spans"]}), 3)
+        self.assertTrue(all(x["stored_payload_integrity_matches"]
+                            for x in trace["team_spans"]))
+        self.assertFalse(trace["host_execution_verified"])
+        self.assertFalse(trace["cloud_trace_exported"])
+        self.assertEqual(self.conn.total_changes, before)
+        self.assertNotIn("git:reviewed-synthetic-upstream-source", json.dumps(trace))
+        self.assertNotIn("claimed-codex-native-session", json.dumps(trace))
+        self.assertNotIn("api-to-qa", json.dumps(trace))
+        limited = orbit_mcp.execute(self.conn, "orbit_autopilot_charter",
+                                    {**args, "limit": 1})
+        self.assertEqual(limited["team_event_count"], 1)
+        self.assertTrue(limited["team_event_limit_applied"])
+        self.assertFalse(trace["team_event_limit_applied"])
+        foreign = orbit_mcp.execute(self.conn, "orbit_autopilot_charter",
+                         {**args, "project_root": str(self.other)})
+        self.assertEqual(foreign["status"], "NO_MISSION")
+        self.assertNotIn("team_spans", foreign)
+
+    def test_corrupt_team_event_does_not_appear_verified_in_trace(self):
+        self._native_recipient_with_handoff()
+        self.conn.execute("""UPDATE orbit_team_events SET payload_json='{}'
+            WHERE project=? AND project_root=? AND mission_id=?
+            AND event_key='api-to-qa'""",
+            (self.project, str(self.root), self.mission))
+        self.conn.commit()
+        result = orbit_mcp.execute(self.conn, "orbit_autopilot_charter", {
+            "project_root": str(self.root), "project": self.project,
+            "mission_id": self.mission, "action": "timeline",
+            "include_team_events": True,
+        })
+        self.assertEqual(result["status"], "LOCAL_TRACE_INTEGRITY_WARNING")
+        self.assertGreaterEqual(result["team_event_integrity_warnings"], 1)
+        self.assertFalse(all(s["stored_payload_integrity_matches"]
+                             for s in result["team_spans"]))
+        self.assertFalse(result["host_execution_verified"])
+
+    def test_default_handoff_contract_is_backward_compatible(self):
+        self.conn.execute("""UPDATE orbit_agent_tasks
+            SET status='REVIEW_ACCEPTED', review_evidence='reviewed source'
+            WHERE task_key='api'""")
+        self.conn.commit()
+        default = self.event(
+            action="handoff", event_key="legacy-handoff", task_key="api",
+            task_revision=1, peer_task_key="qa", peer_revision=1,
+            summary="Reviewed dependency passed to the next approved task",
+            evidence_ref="git:reviewed-source")
+        self.assertEqual(default["status"], "HANDOFF_REVIEW")
+        self.assertNotIn("handoff_contract", default["payload"])
+
+    def _native_recipient_with_handoff(self, handoff_options=None):
         """Synthetic native session and checked dependency, without model calls."""
         self.conn.execute(
             """UPDATE orbit_agent_tasks SET status='REVIEW_ACCEPTED',
@@ -625,6 +806,8 @@ class CharteredTeamEventTests(unittest.TestCase):
             "summary": "Synthetic reviewed API test evidence for downstream QA",
             "evidence_ref": "git:reviewed-synthetic-upstream-source",
         }
+        if handoff_options:
+            handoff.update(handoff_options)
         plan = self.event(**handoff)
         self.assertEqual(plan["status"], "HANDOFF_REVIEW")
         self.assertEqual(self.event(**{**handoff,
