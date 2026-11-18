@@ -1,3 +1,17 @@
+# Orbit Core — v0.33.0 release-candidate verification (2026-11-18)
+
+**Status: DRAFT RELEASE CANDIDATE / NOT MERGED / NOT PUBLISHED / NOT INSTALLED.** The published product remains [v0.32.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.32.0), installed on the authorized Windows machine for Codex and Antigravity configuration. The new version-specific source branch `release/v0.33.0-candidate` derives from the combined [draft integration PR #133](https://github.com/samjuniors/Orbit-Core/pull/133) at reviewed head `5eedd154dea0f203a23303236e4ee51d4cdf9088`, with `VERSION=0.33.0` and `NEXT_VERSION=0.34.0`. No model, hosted execution, cloud tracing or third-party SDK installation.
+
+**Automated evidence before version cut:** integrated exact-head [CI #1401](https://github.com/samjuniors/Orbit-Core/actions/runs/44289816258) PASS 5/5 Ubuntu/Windows after correcting a test-only canonical Windows path comparison. The exact **new candidate** metadata/package/CI must be checked on its own source head before acceptance; earlier CI does not cover newly versioned artifacts.
+
+**Candidate package intent:** generate a brand-new v0.33 desktop MCPB using `scripts/prepare_release_candidate.py`, verify the 57-tool runtime, official-v0.31/v0.32 stock upgrades, Windows/Linux regression, ZIP sidecars and `check_version.py --strict-bundle`. Never revise the immutable published v0.32 ZIP, tag or old runtime. The existing `CHANGELOG.md` provides the version-specific release-note section. A source-only candidate is not a public downloadable release.
+
+**Still BLOCKING publication:** independently attributable real native Codex/Antigravity worker handoff/return/receipt and host permission/denial/restart; independent rendered UI state and screenshot/design acceptance; installer GUI/rollback review; source-security review and founder release approval. Codex CLI v0.32 installed-MCP call passed; Antigravity CLI headless print-mode probe timed out without actual verified MCP call, not a pass. Founder retains final merge and release authority.
+
+**Next after source/CI and real-host gates:** owner reviews release PR and exact code, approve or reject; only then merge to main, re-run merge-commit CI, run the official publish workflow, inspect immutable v0.33 tag, all four asset + SHA pairs, release notes and available updater channel; only then consider updating the actual PC from verified published v0.32. No automatic version update.
+
+---
+
 # Orbit Core — current v0.33 integration and acceptance gate (2026-11-18)
 
 **Published source authority:** [v0.32.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.32.0) is the latest public **prerelease** (2026-11-17); [v0.30.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) remains the latest stable-channel release. The source `main` and the separately installed Windows release remain v0.32.0. This development branch retains `VERSION=0.32.0` / `NEXT_VERSION=0.33.0` until a separately approved release cut. It is not a published v0.33 installer.
