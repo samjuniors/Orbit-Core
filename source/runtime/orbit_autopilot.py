@@ -453,12 +453,73 @@ def timeline(conn, root, project, mission, a):
                        "occurred_at": item["occurred_at"],
                        "approval_reference_fingerprint_recorded": bool(item["approval_sha256"]),
                        "host_execution_verified": False, "owner_authenticated": False})
-    return {"status": "LOCAL_TRACE_CONTEXT", "trace_id": trace_key,
-            "events": events, "project": project, "mission_id": mission,
-            "local_only": True, "cloud_trace_exported": False,
-            "agent_executed": False, "state_written": False,
-            "host_execution_verified": False, "owner_authenticated": False,
-            "note": "Existing local Mission Charter events; no raw approval references or tool payloads."}
+    result = {"status": "LOCAL_TRACE_CONTEXT", "trace_id": trace_key,
+              "events": events, "project": project, "mission_id": mission,
+              "local_only": True, "cloud_trace_exported": False,
+              "agent_executed": False, "state_written": False,
+              "host_execution_verified": False, "owner_authenticated": False,
+              "note": "Existing local Mission Charter events; no raw approval references or tool payloads."}
+    if a.get("include_team_events") is True:
+        # Reuse the EXISTING chartered team event journal. The optional
+        # projection cannot authenticate caller-reported host execution.
+        exists = conn.execute("""SELECT 1 FROM sqlite_master
+            WHERE type='table' AND name='orbit_team_events'""").fetchone()
+        if not exists:
+            result.update(team_spans=[], team_event_count=0,
+                          team_event_integrity_warnings=0)
+            return result
+        source = conn.execute("""SELECT event_key,event_type,task_key,
+                   peer_task_key,content_sha256,payload_json,recorded_at
+            FROM orbit_team_events WHERE project=? AND project_root=? AND mission_id=?
+            ORDER BY recorded_at DESC,event_key DESC LIMIT ?""",
+            (project, str(root), mission, limit)).fetchall()
+        source = list(reversed(source))
+        ids = {row["event_key"]: _digest({
+            "trace_key": trace_key, "team_event_key": row["event_key"]})[:24]
+            for row in source}
+        root_span = _digest({"trace_key": trace_key, "parent": "mission"})[:24]
+        result["mission_span_id"] = root_span
+        spans = []
+        warnings = 0
+        for event in source:
+            try:
+                payload = json.loads(event["payload_json"])
+                good = (isinstance(payload, dict) and
+                        _digest(payload) == event["content_sha256"])
+            except (TypeError, ValueError):
+                good = False
+            if not good:
+                warnings += 1
+            name = event["event_type"]
+            if not isinstance(name, str) or not re.fullmatch(r"[A-Z_]{1,60}", name):
+                name = "UNTRUSTED_EVENT_LABEL"
+                warnings += 1
+            # Event keys and task names can contain user-defined data. Return
+            # only bounded, stable hashes and coarse event types; never payload.
+            peer = event["peer_task_key"]
+            linked = ids.get(peer)
+            spans.append({
+                "span_id": ids[event["event_key"]],
+                "parent_span_id": root_span,
+                "linked_span_id_hint": linked,
+                "event": name,
+                "event_key_sha256_prefix": hashlib.sha256(
+                    event["event_key"].encode("utf-8")).hexdigest()[:16],
+                "task_ref_sha256_prefix": hashlib.sha256(
+                    event["task_key"].encode("utf-8")).hexdigest()[:16],
+                "recorded_at": event["recorded_at"],
+                "stored_payload_integrity_matches": good,
+                "host_execution_verified": False,
+                "host_delivery_verified": False,
+                "owner_authenticated": False,
+            })
+        result["team_spans"] = spans
+        result["team_event_count"] = len(spans)
+        result["team_event_integrity_warnings"] = warnings
+        result["team_event_limit_applied"] = len(spans) >= limit
+        if warnings:
+            result["status"] = "LOCAL_TRACE_INTEGRITY_WARNING"
+    return result
 
 
 def _guard(conn, root, project, a):
