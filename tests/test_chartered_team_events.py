@@ -598,6 +598,8 @@ class CharteredTeamEventTests(unittest.TestCase):
             "HOLD_UNSUPPORTED_SPECIALIST_RETURN_MODE")
         self.assertEqual(self.staffing(specialist_return_mode="report_to_lead")[
             "status"], "HOLD_SPECIALIST_OUTPUT_CONTRACT_REQUIRED")
+        self.assertEqual(self.staffing(expected_output_kind="security_review")[
+            "status"], "HOLD_SPECIALIST_RETURN_MODE_REQUIRED")
         preview = self.staffing(specialist_return_mode="report_to_lead",
                                 expected_output_kind="security_review")
         self.assertEqual(preview["status"], "STAFFING_REQUEST_REVIEW")
