@@ -77,6 +77,44 @@ See `tests/test_rad_defense.py` for adversarial negative tests. This is source
 development in a separate draft branch and needs independent Windows/Linux CI,
 real IDE/host enforcement and owner acceptance before release.
 
+## RAD P1: Windows preview process-tree containment (draft, not released)
+
+The Windows preview manager now creates an anonymous native **Job Object**
+with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, attaches the launched interpreter
+process, and retains its private job handle for the lifetime of the session.
+On an explicit preview stop, it terminates the job (including descendant
+processes); if the Orbit MCP host unexpectedly exits, Windows closes its
+private handle and terminates the job's remaining members. A failed job
+creation or assignment returns `HOLD_HOST_PROCESS_BOUNDARY` and refuses to
+register the preview, instead of silently falling back to a parent-only stop.
+The installed runtime inventory includes `orbit_windows_job.py` so package
+installation cannot omit the imported module. Linux/macOS keep the existing
+process-group cleanup; this Windows-only module adds no dependency.
+
+**Security scope and limits:** this is OS-enforced **process lifecycle**
+containment, not an AppContainer, firewall, filesystem permission sandbox,
+restricted user token, memory secrecy mechanism, or authorization service.
+The interpreter starts briefly **before** `AssignProcessToJobObject` completes;
+this non-atomic creation-time window means the feature is **not a boundary
+against hostile child code**. A compromised process running under the owner's
+normal Windows account can still access files/network permitted to that
+account. Genuine Windows sandboxed creation, real host/user permission and
+separate scoped credentials are still required for untrusted project execution.
+An explicit host-side `ORBIT_PREVIEW_KEEP_ALIVE=1` preserves the older
+keep-alive behavior but **opts out** of Job Object containment; only use it for
+projects and processes the operator fully trusts. The MCP tool itself cannot
+change these host process environment settings. `GUARDED` still blocks
+`orbit_preview_start` and `orbit_browser_qa` before any process launch.
+
+**Acceptance and recovery:** Windows disposable tests check actual kernel
+`IsProcessInJob` membership, stopped child termination, abrupt controller
+exit cleanup, and failed-assignment HOLD. These are stronger than simulated
+Python-only controls, but do not certify real IDE policy dialogs, arbitrary
+child behavior, Windows AppContainer limits or independent permission checks.
+Do not merge/release without exact-head Windows/Linux CI, package parity,
+native Codex and Antigravity safe host checks where available, owner review,
+and explicit approval.
+
 ## v0.29 installed-skill discovery trust boundary
 
 - **Read-only by design:** `orbit_capability_select` can recommend and hash locally installed `SKILL.md` candidates. A shortlist or `orbit-skill-plan-v2` pin does **not** authenticate a publisher, verify a license, authorize a skill, install anything, execute helpers, or attest the host's capabilities.
