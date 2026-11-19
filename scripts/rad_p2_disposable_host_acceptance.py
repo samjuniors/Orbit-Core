@@ -72,7 +72,7 @@ def build_probe(destination):
     command = [
         str(compiler), "/nologo", "/std:c11", "/W4", "/WX", "/O1", "/GS-", "/Zl",
         "/Fe:" + str(executable), str(source), "/link", "/NODEFAULTLIB",
-        "/SUBSYSTEM:CONSOLE", "/ENTRY:probe_main", "kernel32.lib", "ws2_32.lib",
+        "/SUBSYSTEM:CONSOLE", "/ENTRY:probe_main", "kernel32.lib", "ws2_32.lib", "advapi32.lib",
     ]
     compiled = subprocess.run(command, cwd=destination, env=env, capture_output=True, timeout=30)
     if compiled.returncode != 0:
@@ -122,7 +122,69 @@ def stage_python(destination):
     return str(destination / "python.exe")
 
 
-def run_disposable(*, python_startup=False):
+def verify_controller_exit(app, runtime, root, launch_args, report):
+    """Verify automatic job close with a separate disposable controller."""
+    from ctypes import wintypes
+
+    handoff = root / "controller-child.handle"
+    controller_code = """
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from orbit_appcontainer import launch_suspended_verified
+from orbit_windows_job import WindowsJob
+handoff = Path(sys.argv[2])
+job = WindowsJob()
+child = launch_suspended_verified(job=job, **json.loads(sys.argv[3]))
+pending = handoff.with_suffix(".tmp")
+pending.write_text(str(child._handle), encoding="ascii")
+pending.replace(handoff)
+time.sleep(30)
+"""
+    controller = subprocess.Popen(
+        [sys.executable, "-I", "-B", "-c", controller_code, str(runtime),
+         str(handoff), json.dumps(launch_args)],
+        cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+    child = wintypes.HANDLE()
+    try:
+        deadline = time.monotonic() + 10
+        while not handoff.is_file():
+            if controller.poll() is not None or time.monotonic() >= deadline:
+                raise RuntimeError("Disposable controller did not report a live child")
+            time.sleep(0.05)
+        # Duplicate the exact process handle before interrupting the controller.
+        # Only retain wait and emergency termination rights in the test parent.
+        duplicate = app._k32.DuplicateHandle
+        duplicate.argtypes = (wintypes.HANDLE, wintypes.HANDLE, wintypes.HANDLE,
+                              ctypes.POINTER(wintypes.HANDLE), wintypes.DWORD,
+                              wintypes.BOOL, wintypes.DWORD)
+        duplicate.restype = wintypes.BOOL
+        app._k32.GetCurrentProcess.restype = wintypes.HANDLE
+        access = 0x00100000 | 0x0001  # SYNCHRONIZE, TERMINATE
+        if not duplicate(int(controller._handle), int(handoff.read_text(encoding="ascii")),
+                         app._k32.GetCurrentProcess(), ctypes.byref(child), access, False, 0):
+            raise app._error("DuplicateHandle (disposable LPAC child)")
+        if app._k32.WaitForSingleObject(child, 0) != app.WAIT_TIMEOUT:
+            raise RuntimeError("LPAC child exited before controller interruption")
+        controller.kill()
+        report["interrupted_controller_exit_code"] = controller.wait(timeout=5)
+        if app._k32.WaitForSingleObject(child, 5000) != app.WAIT_OBJECT_0:
+            raise RuntimeError("LPAC child did not exit after controller interruption")
+        report["interrupted_child_exit_verified"] = True
+    finally:
+        if controller.poll() is None:
+            controller.kill()
+            controller.wait(timeout=5)
+        if child:
+            try:
+                if app._k32.WaitForSingleObject(child, 0) == app.WAIT_TIMEOUT:
+                    app._k32.TerminateProcess(child, 1)
+                    app._k32.WaitForSingleObject(child, 5000)
+            finally:
+                app._k32.CloseHandle(child)
+
+
+def run_disposable(*, python_startup=False, diagnose_resources=False):
     if os.name != "nt":
         return {"status": "HOLD_WINDOWS_ONLY", "profile_created": False}
     if sys.version_info < (3, 12):
@@ -270,10 +332,12 @@ def run_disposable(*, python_startup=False):
             }
             report["external_endpoint"] = f"{EXTERNAL[0]}:{EXTERNAL[1]}"
 
-            def launch(job, mode):
-                return app.launch_suspended_verified(
-                    profile=profile, executable=executable, args=[executable, mode],
-                    cwd=str(project), env={**env, "PORT": str(loopback[1])}, job=job)
+            def launch_args(mode):
+                return dict(profile=profile, executable=executable, args=[executable, *mode],
+                            cwd=str(project), env={**env, "PORT": str(loopback[1])})
+
+            def launch(job, *mode):
+                return app.launch_suspended_verified(job=job, **launch_args(mode))
 
             def open_job(stack, check):
                 job = WindowsJob()
@@ -308,6 +372,32 @@ def run_disposable(*, python_startup=False):
                     report["recovery_exit_code"] = recovered.wait(timeout=5)
                     if (report["forced_failure_exit_code"], report["recovery_exit_code"]) != (23, 0):
                         raise RuntimeError("Unexpected forced failure or recovery exit")
+
+            if diagnose_resources:
+                modes = {
+                    "winsock_protocol_catalog": ["winsock-protocol-key"],
+                    "winsock_namespace_catalog": ["winsock-namespace-key"],
+                    "winsock_provider_load": ["winsock-provider"],
+                }
+                if python_startup:
+                    abi = f"{sys.version_info.major}{sys.version_info.minor}"
+                    modes["cpython_dll_open"] = ["python-file", abi]
+                    modes["cpython_dll_load"] = ["python-dll", abi]
+
+                resource_results = report["resource_controls"] = {}
+                with ExitStack() as diagnostics:
+                    job, processes, _ = open_job(diagnostics, "resource_job_cleanup")
+                    for label, mode in modes.items():
+                        outside = subprocess.run(
+                            [executable, *mode], cwd=project,
+                            env={**env, "LOCALAPPDATA": os.environ["LOCALAPPDATA"]},
+                            capture_output=True, timeout=10)
+                        child = launch(job, *mode)
+                        processes.append(child)
+                        resource_results[label] = {"host_exit": outside.returncode,
+                                                   "lpac_exit": child.wait(timeout=5)}
+                record_check(checks, "interrupted_controller_cleanup", lambda: verify_controller_exit(
+                    app, runtime, root, launch_args(("descendant",)), report))
 
             record_check(checks, "failure_recovery", verify_recovery)
 
@@ -425,11 +515,15 @@ def main(argv=None):
     parser.add_argument("--confirm", default="", help="Exact confirmation phrase")
     parser.add_argument("--python-startup", action="store_true",
                         help="Also check startup of the staged trusted base interpreter")
+    parser.add_argument("--diagnose-resources", action="store_true",
+                        help="Compare read-only dependency checks and test disposable controller interruption")
     args = parser.parse_args(argv)
     if not args.apply or args.confirm != CONFIRM:
         print(json.dumps(plan(), sort_keys=True))
         return 2
-    print(json.dumps(run_disposable(python_startup=args.python_startup), indent=2, sort_keys=True))
+    print(json.dumps(run_disposable(python_startup=args.python_startup,
+                                    diagnose_resources=args.diagnose_resources),
+                     indent=2, sort_keys=True))
     return 2  # HOLD pending review of the individual observations.
 
 

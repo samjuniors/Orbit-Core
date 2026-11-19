@@ -88,6 +88,23 @@ Release acceptance still requires an owner decision about RAD inclusion, a revie
 - **Readiness fix.** Isolated sessions retained after a cleanup failure are available for confirmed stop. Preview status, repeated start, and browser QA withhold readiness without probing the endpoint. The build ledger inherits the status restriction. Focused tests cover cleanup retry and the absence of an HTTP request.
 - **Windows 11 build 26200, CPython 3.12.10.** The synthetic run passed package identity, effective zero capabilities, native project I/O, denied sibling read/write and fake-credential read (Windows error 5), termination of two directly launched members, forced-exit/relaunch (23/0), profile deletion and absence of all fixture paths. Native Winsock started outside LPAC with the same binary, and both parent TCP controls passed. LPAC returned 10107 before connecting, so external and loopback remain **BLOCKED**. The staged Python control wrote its marker and exited 0. Its LPAC counterpart exited `0xC0000022` before the marker. Python web preview remains **BLOCKED**. A real LPAC descendant remains **BLOCKED** (Windows error 5). The specific denied resource for Winsock and Python remains **NOT VERIFIED**. Raw output was retained locally. [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138)
 
+### RAD dependency diagnostics and interrupted controller verification
+
+The owner authorized one fresh disposable LPAC profile and synthetic ACL fixtures. On Windows 11 build 26200, the manual harness ran with `--apply --confirm "CREATE DISPOSABLE ORBIT APPCONTAINER" --python-startup --diagnose-resources`. The harness exited 2 to preserve HOLD. It verified the same profile identity and zero capabilities for its isolated diagnostics.
+
+| Operation | Host exit | LPAC exit | Finding |
+| --- | --- | --- | --- |
+| Open Winsock protocol catalog | 0 | 5 | OS denied access to `Protocol_Catalog9` |
+| Open Winsock namespace catalog | 0 | 5 | OS denied access to `NameSpace_Catalog5` |
+| Load the system `mswsock.dll` provider | 0 | 0 | Provider DLL loaded in the native probe |
+| Open staged `python312.dll` for read and execute | 0 | 0 | Staged file access succeeded |
+| Load staged `python312.dll` with its dependencies | 0 | 5 | Windows denied the load |
+| Start staged CPython 3.12.10 | 0 | `0xC0000022` | Failed before the isolated startup marker |
+
+Both parent network controls passed. LPAC Winsock startup still returned `10107` before either connect, so loopback and outbound enforcement remain **BLOCKED**. The catalog access results identify denied resources and support a Winsock initialization diagnosis. The exact failing internal call and the denied Python transitive dependency remain **NOT VERIFIED**. Registry findings cover these catalog opens. Private-network enforcement, endpoint ownership, other registry scopes, and reparse-point policy remain open.
+
+The controller was interrupted with exit 1 while a directly launched LPAC child was live. A duplicated handle to that exact child signalled after interruption. A new isolated launch after forced failure also passed (23/0). LPAC descendant creation remained **BLOCKED** (error 5). All four fixture ACL commands returned 0. Job cleanup, profile deletion (`S_OK`), and profile storage and fixture removal passed. A separate lookup returned `0x80070002` and the fixture root was absent. The raw JSON and cleanup identifiers are retained locally. [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138)
+
 ## Evidence and continuity
 
 - GitHub engineering truth: [PR #133](https://github.com/samjuniors/Orbit-Core/pull/133), [CI #1401](https://github.com/samjuniors/Orbit-Core/actions/runs/44289816258), [issue #130](https://github.com/samjuniors/Orbit-Core/issues/130).

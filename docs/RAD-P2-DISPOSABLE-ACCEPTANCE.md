@@ -18,6 +18,8 @@ Inspect both source files and use the local session's native permission controls
 
 Add `--python-startup` to compare the same staged base CPython and synthetic startup marker under the host and LPAC. The diagnostic reads from the trusted local interpreter, copies only the base runtime and standard library into the disposable fixture, and records both process exit codes. This checks interpreter startup. Python web preview has separate socket and endpoint ownership gates.
 
+Add `--diagnose-resources` to compare read-only WinSock catalog opens and provider DLL loading. With `--python-startup`, it also compares opening and loading the exact staged CPython DLL. The report contains the native exit code for each operation both outside and inside LPAC. The same option interrupts a separate fixture controller and waits on the exact child process handle to verify cleanup. Catalog checks request access to fixed Windows keys without reading values or making registry changes.
+
 The script emits the generated root and profile name on stderr before provisioning. A separate line records successful creation. Keep both lines and the final JSON. Exit code 2 keeps the overall outcome on hold for review of the individual checks.
 
 ## Read the evidence

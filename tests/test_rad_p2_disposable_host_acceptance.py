@@ -39,7 +39,9 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         for args in (("--apply",),
                      ("--apply", "--confirm", "I AGREE"),
                      ("--confirm", "CREATE DISPOSABLE ORBIT APPCONTAINER"),
-                     ("--python-startup",)):
+                     ("--python-startup",),
+                     ("--diagnose-resources",),
+                     ("--apply", "--diagnose-resources")):
             with self.subTest(args=args):
                 process = self.run_cli(*args)
                 self.assertEqual(process.returncode, 2, process.stderr)
@@ -50,6 +52,7 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertIn("--apply", process.stdout)
         self.assertIn("--confirm", process.stdout)
+        self.assertIn("--diagnose-resources", process.stdout)
 
     def test_plan_contract_is_nonmutating(self):
         self.assertFalse(HARNESS.plan()["ci_auto_execution"])

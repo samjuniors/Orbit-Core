@@ -123,6 +123,54 @@ static const WCHAR *mode(void)
     return command;
 }
 
+static DWORD open_catalog(const WCHAR *path)
+{
+    HKEY catalog;
+    LSTATUS status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, path, 0, KEY_QUERY_VALUE, &catalog);
+    if (!status)
+        RegCloseKey(catalog);
+    return (DWORD)status;
+}
+
+static DWORD load_module(const WCHAR *path, DWORD flags)
+{
+    HMODULE module = LoadLibraryExW(path, NULL, flags);
+    if (!module)
+        return GetLastError();
+    FreeLibrary(module);
+    return ERROR_SUCCESS;
+}
+
+static DWORD python_module(const WCHAR *abi, BOOL load)
+{
+    DWORD digits = (DWORD)lstrlenW(abi);
+    if (digits < 2 || digits > 4)
+        return ERROR_INVALID_PARAMETER;
+    for (DWORD i = 0; i < digits; i++) {
+        if (abi[i] < L'0' || abi[i] > L'9')
+            return ERROR_INVALID_PARAMETER;
+    }
+    DWORD length = GetModuleFileNameW(NULL, image, ARRAYSIZE(image));
+    if (!length || length >= ARRAYSIZE(image) - 32)
+        return ERROR_BAD_PATHNAME;
+    while (length && image[length - 1] != L'\\')
+        --length;
+    if (!length)
+        return ERROR_BAD_PATHNAME;
+    image[length] = L'\0';
+    lstrcatW(image, L"python\\python");
+    lstrcatW(image, abi);
+    lstrcatW(image, L".dll");
+    if (load)
+        return load_module(image, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
+    HANDLE file = CreateFileW(image, GENERIC_READ | FILE_EXECUTE, FILE_SHARE_READ,
+                              NULL, OPEN_EXISTING, 0, NULL);
+    if (file == INVALID_HANDLE_VALUE)
+        return GetLastError();
+    CloseHandle(file);
+    return ERROR_SUCCESS;
+}
+
 void __cdecl probe_main(void)
 {
     const WCHAR *argument = mode();
@@ -141,6 +189,22 @@ void __cdecl probe_main(void)
             WSACleanup();
         ExitProcess((UINT)error);
     }
+    if (lstrcmpW(argument, L"winsock-protocol-key") == 0)
+        ExitProcess(open_catalog(L"SYSTEM\\CurrentControlSet\\Services\\WinSock2\\Parameters\\Protocol_Catalog9"));
+    if (lstrcmpW(argument, L"winsock-namespace-key") == 0)
+        ExitProcess(open_catalog(L"SYSTEM\\CurrentControlSet\\Services\\WinSock2\\Parameters\\NameSpace_Catalog5"));
+    if (lstrcmpW(argument, L"winsock-provider") == 0)
+        ExitProcess(load_module(L"mswsock.dll", LOAD_LIBRARY_SEARCH_SYSTEM32));
+    const WCHAR python_mode[] = L"python-dll ";
+    int prefix = ARRAYSIZE(python_mode) - 1;
+    if (lstrlenW(argument) > prefix &&
+        CompareStringOrdinal(argument, prefix, python_mode, prefix, FALSE) == CSTR_EQUAL)
+        ExitProcess(python_module(argument + prefix, TRUE));
+    const WCHAR python_file_mode[] = L"python-file ";
+    prefix = ARRAYSIZE(python_file_mode) - 1;
+    if (lstrlenW(argument) > prefix &&
+        CompareStringOrdinal(argument, prefix, python_file_mode, prefix, FALSE) == CSTR_EQUAL)
+        ExitProcess(python_module(argument + prefix, FALSE));
     if (lstrcmpW(argument, L"probe") != 0)
         ExitProcess(ERROR_INVALID_PARAMETER);
 
