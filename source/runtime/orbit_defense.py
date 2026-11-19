@@ -19,6 +19,12 @@ EXECUTES_PROJECT_CODE = frozenset({"orbit_preview_start", "orbit_browser_qa"})
 # Never expose project notes, tasks, memory, research pointers or trace
 # payloads after containment: "read-only" does not mean non-exfiltrating.
 RECOVERY_READS = frozenset({"orbit_gate_evaluate"})
+# Legacy SQLite memory tools have only a project slug, not a validated root.
+# In guarded mode they cannot be safely attributed to one host-approved root;
+# quarantine them until root-bound memory migration is separately reviewed.
+ROOTLESS_PROJECT_MEMORY = frozenset({
+    "orbit_memory_save", "orbit_memory_recall", "orbit_memory_archive",
+})
 VALID_MODES = frozenset({"NORMAL", "GUARDED", "CONTAINED"})
 
 
@@ -89,6 +95,10 @@ class Defense:
                 if self._safe_recovery(name, args):
                     return None
                 return self._hold("HOLD_DEFENSE_CONTAINED", mode)
+            if name in ROOTLESS_PROJECT_MEMORY:
+                # A slug supplied by the caller is not proof of workspace scope.
+                # Do not leak or mutate legacy SQLite data in GUARDED mode.
+                return self._hold("HOLD_DEFENSE_GUARDED", mode)
             if name not in EXECUTES_PROJECT_CODE:
                 return None
 

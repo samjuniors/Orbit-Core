@@ -219,6 +219,46 @@ class RADGuardTests(unittest.TestCase):
         self.assertEqual(defense.mode_for(self.other), "GUARDED")
         self.assertEqual(len(defense._denied_exec), 1)
 
+    def test_guarded_mode_quarantines_legacy_rootless_memory(self):
+        # Legacy records are keyed by caller-provided project slug alone.
+        # No verified project root exists to bind these calls to a contained
+        # workspace; a read or write must not bypass host-side root policy.
+        defense = orbit_defense.Defense("GUARDED")
+        legacy = (
+            ("orbit_memory_recall", {"project": "lab"}),
+            ("orbit_memory_save", {
+                "project": "lab", "key": "synthetic", "kind": sorted(orbit_mcp.KINDS)[0],
+                "summary": "Test only", "source": "synthetic-test", "confirm_write": True,
+            }),
+            ("orbit_memory_archive", {
+                "project": "lab", "key": "synthetic", "reason": "test",
+                "confirm_write": True,
+            }),
+        )
+        with patch.dict(os.environ, {"ORBIT_LOCAL_DB": str(self.root / "memory.sqlite3")}):
+            conn = orbit_mcp.db_connect()
+        self.addCleanup(conn.close)
+        orbit_mcp.memory_save(conn, {
+            "project": "lab", "key": "canary", "kind": sorted(orbit_mcp.KINDS)[0],
+            "summary": "SYNTHETIC_SECRET_NEVER_LEAK", "source": "test",
+            "confirm_write": True,
+        })
+        before = conn.total_changes
+        for name, args in legacy:
+            with self.subTest(name=name):
+                result = orbit_mcp.execute(conn, name, args, defense=defense)
+                self.assertEqual(result["status"], "HOLD_DEFENSE_GUARDED")
+                self.assertFalse(result["state_written"])
+                self.assertNotIn("SYNTHETIC_SECRET_NEVER_LEAK", str(result))
+        self.assertEqual(conn.total_changes, before)
+        self.assertEqual(defense.mode_for(self.root), "GUARDED")
+        rootless_projects = {
+            t["name"] for t in orbit_mcp.TOOLS
+            if "project" in t["inputSchema"]["required"]
+            and "project_root" not in t["inputSchema"]["properties"]
+        }
+        self.assertEqual(rootless_projects, orbit_defense.ROOTLESS_PROJECT_MEMORY)
+
     def test_mcp_wire_response_is_bounded_and_no_tool_is_added(self):
         self.assertEqual(len(orbit_mcp.TOOLS), 57)
         # A future code-executing tool must not silently be absent from the
