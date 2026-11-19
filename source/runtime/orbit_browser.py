@@ -146,10 +146,7 @@ def verify_request(root, a, preview):
         raise ValueError('viewport must be desktop or mobile')
     actions=validate_actions(a.get('actions', []))
     session=preview.SESSIONS.get(preview.preview_key(root,a['preview_id']))
-    if not session or session['proc'].poll() is not None:
-        return None, actions
-    health = preview.http_probe(session['port'],session['health_path'])
-    if not health['healthy']:
+    if not session or not preview.session_health(session)['healthy']:
         return None, actions
     return session, actions
 

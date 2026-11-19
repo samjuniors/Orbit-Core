@@ -16,13 +16,15 @@ Inspect both source files and use the local session's native permission controls
 
     py -3.12 scripts/rad_p2_disposable_host_acceptance.py --apply --confirm "CREATE DISPOSABLE ORBIT APPCONTAINER"
 
+Add `--python-startup` to compare the same staged base CPython and synthetic startup marker under the host and LPAC. The diagnostic reads from the trusted local interpreter, copies only the base runtime and standard library into the disposable fixture, and records both process exit codes. This checks interpreter startup. Python web preview has separate socket and endpoint ownership gates.
+
 The script emits the generated root and profile name on stderr before provisioning. A separate line records successful creation. Keep both lines and the final JSON. Exit code 2 keeps the overall outcome on hold for review of the individual checks.
 
 ## Read the evidence
 
 - The launcher checks the suspended process's AppContainer token, exact package SID, zero effective token capabilities, and membership in the private Job Object. An in-memory Windows access check on the child token must grant the right for restricted application packages while denying the right for all application packages. These checks all precede resume.
 - The child reads known project content and writes a marker verified by the parent. File denial requires Windows error 5 with a working positive control. A missing file or missing child output leaves the check unverified.
-- Each network check requires a successful parent connection and Winsock error 10013 from the LPAC child on the same endpoint. A Winsock startup failure blocks both endpoint tests. A timeout or unavailable endpoint leaves that check unverified. A successful LPAC connection fails the check.
+- Each network check requires successful Winsock startup in the same native binary outside LPAC, a successful parent connection, and Winsock error 10013 from the LPAC child on the same endpoint. A Winsock startup failure blocks both endpoint tests. A timeout or unavailable endpoint leaves that check unverified. A successful LPAC connection fails the check.
 - When the probe can start a descendant, the controller verifies its job membership by process handle and waits for the descendant to exit after job termination. The controller also verifies termination of two directly launched LPAC members. A separate job measures a forced child exit followed by a replacement launch using the same profile.
 
 ## Cleanup and recovery

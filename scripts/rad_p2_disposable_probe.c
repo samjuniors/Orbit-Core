@@ -134,6 +134,13 @@ void __cdecl probe_main(void)
         Sleep(30000);
         ExitProcess(0);
     }
+    if (lstrcmpW(argument, L"winsock-control") == 0) {
+        WSADATA data;
+        int error = WSAStartup(MAKEWORD(2, 2), &data);
+        if (!error)
+            WSACleanup();
+        ExitProcess((UINT)error);
+    }
     if (lstrcmpW(argument, L"probe") != 0)
         ExitProcess(ERROR_INVALID_PARAMETER);
 

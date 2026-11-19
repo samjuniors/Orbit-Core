@@ -47,7 +47,7 @@ def denial_result(observed, expected_error, control=True):
     return "NOT_VERIFIED"
 
 
-def record_network_checks(checks, samples, controls):
+def record_network_checks(checks, samples, controls, *, native_control):
     for key in ("loopback", "external"):
         if samples["winsock_startup"]:
             checks[key + "_denial"] = "BLOCKED"
@@ -55,7 +55,7 @@ def record_network_checks(checks, samples, controls):
         else:
             checks[key + "_denial"] = denial_result(
                 {"success": samples[key] == 0, "winerror": samples[key]}, WSAEACCES,
-                controls[key].get("success") is True)
+                native_control and controls[key].get("success") is True)
 
 
 def build_probe(destination):
@@ -108,7 +108,21 @@ def assert_absent(path):
     raise RuntimeError("Path still exists after cleanup")
 
 
-def run_disposable():
+def stage_python(destination):
+    """Stage only the trusted base interpreter and standard library in the fixture."""
+    base = Path(sys.base_prefix).resolve(strict=True)
+    abi = f"python{sys.version_info.major}{sys.version_info.minor}"
+    destination.mkdir()
+    for name in ("python.exe", "python3.dll", abi + ".dll", "vcruntime140.dll",
+                 "vcruntime140_1.dll"):
+        shutil.copyfile(base / name, destination / name)
+    shutil.copytree(base / "Lib", destination / "Lib",
+                    ignore=shutil.ignore_patterns("site-packages", "__pycache__", "test"))
+    (destination / (abi + "._pth")).write_text("Lib\n", encoding="ascii")
+    return str(destination / "python.exe")
+
+
+def run_disposable(*, python_startup=False):
     if os.name != "nt":
         return {"status": "HOLD_WINDOWS_ONLY", "profile_created": False}
     if sys.version_info < (3, 12):
@@ -185,6 +199,14 @@ def run_disposable():
             report["runtime_control_exit"] = baseline.returncode
             if baseline.returncode != 0:
                 raise RuntimeError("Native probe control did not start")
+            winsock_control = subprocess.run(
+                [executable, "winsock-control"], cwd=project,
+                env={**env, "LOCALAPPDATA": os.environ["LOCALAPPDATA"]},
+                capture_output=True, timeout=10)
+            report["native_winsock_control_exit"] = winsock_control.returncode
+            if python_startup:
+                checks["python_startup"] = "NOT_RUN"
+                python_exe = stage_python(staged_runtime / "python")
 
             hr = userenv.CreateAppContainerProfile(
                 profile, "Orbit disposable RAD P2", "Synthetic acceptance only",
@@ -289,6 +311,35 @@ def run_disposable():
 
             record_check(checks, "failure_recovery", verify_recovery)
 
+            if python_startup:
+                def python_command(marker):
+                    script = f"with open({marker!r}, 'xb') as out: out.write(b'CPYTHON_STARTED')"
+                    return [python_exe, "-I", "-S", "-B", "-c", script]
+
+                # Both runs use the same staged interpreter and minimal environment.
+                # The host control executes this fixed synthetic marker only.
+                control_args = python_command("python-control.txt")
+                control = subprocess.run(
+                    control_args, cwd=project, env={**env, "LOCALAPPDATA": os.environ["LOCALAPPDATA"]},
+                    capture_output=True, timeout=10)
+                report["python_control_exit"] = f"0x{control.returncode & 0xffffffff:08x}"
+                marker = project / "python-control.txt"
+                if control.returncode != 0 or not marker.is_file() or marker.read_bytes() != b"CPYTHON_STARTED":
+                    checks["python_startup"] = "NOT_VERIFIED"
+                else:
+                    with ExitStack() as python_cleanup:
+                        job, processes, _ = open_job(python_cleanup, "python_job_cleanup")
+                        proc = app.launch_suspended_verified(
+                            profile=profile, executable=python_exe,
+                            args=python_command("python-lpac.txt"), cwd=str(project), env=env, job=job)
+                        processes.append(proc)
+                        exit_code = proc.wait(timeout=10)
+                        report["python_lpac_exit"] = f"0x{exit_code & 0xffffffff:08x}"
+                        marker = project / "python-lpac.txt"
+                        checks["python_startup"] = (
+                            "PASS" if exit_code == 0 and marker.is_file()
+                            and marker.read_bytes() == b"CPYTHON_STARTED" else "BLOCKED")
+
             with ExitStack() as tree:
                 job, processes, handles = open_job(tree, "job_cleanup")
                 child = launch(job, "probe")
@@ -314,7 +365,8 @@ def run_disposable():
                         {"success": samples[key] == 0, "winerror": samples[key]}, ACCESS_DENIED)
                 if sibling_file.read_bytes() != b"SYNTHETIC_SIBLING":
                     checks["sibling_write_denial"] = "FAIL"
-                record_network_checks(checks, samples, report["network_controls"])
+                record_network_checks(checks, samples, report["network_controls"],
+                                      native_control=winsock_control.returncode == 0)
 
                 def verify_tree():
                     synchronize = 0x00100000
@@ -371,11 +423,13 @@ def main(argv=None):
     parser.add_argument("--apply", action="store_true",
                         help="Explicitly create the disposable profile and synthetic folders")
     parser.add_argument("--confirm", default="", help="Exact confirmation phrase")
+    parser.add_argument("--python-startup", action="store_true",
+                        help="Also check startup of the staged trusted base interpreter")
     args = parser.parse_args(argv)
     if not args.apply or args.confirm != CONFIRM:
         print(json.dumps(plan(), sort_keys=True))
         return 2
-    print(json.dumps(run_disposable(), indent=2, sort_keys=True))
+    print(json.dumps(run_disposable(python_startup=args.python_startup), indent=2, sort_keys=True))
     return 2  # HOLD pending review of the individual observations.
 
 

@@ -38,7 +38,8 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
     def test_apply_without_exact_phrase_is_rejected(self):
         for args in (("--apply",),
                      ("--apply", "--confirm", "I AGREE"),
-                     ("--confirm", "CREATE DISPOSABLE ORBIT APPCONTAINER")):
+                     ("--confirm", "CREATE DISPOSABLE ORBIT APPCONTAINER"),
+                     ("--python-startup",)):
             with self.subTest(args=args):
                 process = self.run_cli(*args)
                 self.assertEqual(process.returncode, 2, process.stderr)
@@ -91,10 +92,18 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         checks = {}
         samples = {"winsock_startup": 10107, "loopback": 0, "external": 0}
         controls = {"loopback": {"success": True}, "external": {"success": True}}
-        HARNESS.record_network_checks(checks, samples, controls)
+        HARNESS.record_network_checks(checks, samples, controls, native_control=True)
         self.assertEqual(checks, {"loopback_denial": "BLOCKED", "external_denial": "BLOCKED"})
         self.assertIsNone(samples["loopback"])
         self.assertIsNone(samples["external"])
+
+    def test_network_denial_requires_same_binary_winsock_control(self):
+        checks = {}
+        samples = {"winsock_startup": 0, "loopback": 10013, "external": 10013}
+        controls = {"loopback": {"success": True}, "external": {"success": True}}
+        HARNESS.record_network_checks(checks, samples, controls, native_control=False)
+        self.assertEqual(checks, {"loopback_denial": "NOT_VERIFIED",
+                                  "external_denial": "NOT_VERIFIED"})
 
     def test_harness_is_not_in_automatic_workflow(self):
         """Only allow manual script invocation, never auto-run from CI."""

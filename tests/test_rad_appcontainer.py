@@ -15,11 +15,12 @@ import socket
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "source" / "runtime"))
 import orbit_appcontainer
+import orbit_browser
 import orbit_defense
 import orbit_preview
 
@@ -329,7 +330,7 @@ class AppContainerGateTests(unittest.TestCase):
                            return_value=FakeProcess()) as launched,
               patch.object(orbit_preview, "http_probe",
                            return_value={"healthy": True, "reachable": True,
-                                         "http_status": 200}),
+                                         "http_status": 200}) as health,
               patch.object(orbit_preview, "occupied", return_value=False),
               patch.object(orbit_preview.subprocess, "Popen") as unrestricted):
             answer = orbit_preview.start(self.one, self.args())
@@ -338,8 +339,37 @@ class AppContainerGateTests(unittest.TestCase):
         self.assertNotIn((str(self.one), "p2-probe"), orbit_preview.SESSIONS)
         launched.assert_called_once()
         unrestricted.assert_not_called()
+        health.assert_not_called()
         fake_job.terminate.assert_called_once()
         fake_job.close.assert_called_once()
+
+    def test_isolated_cleanup_pending_session_is_only_available_for_stop(self):
+        # A recovery record is never a ready preview or a browser QA target.
+        key = orbit_preview.preview_key(self.one, "p2-probe")
+        proc = Mock(pid=123, returncode=1)
+        proc.poll.return_value = None
+        proc.wait.side_effect = [orbit_preview.subprocess.TimeoutExpired("fixture", 3), 1]
+        job = Mock()
+        orbit_preview.SESSIONS[key] = {
+            "proc": proc, "job": job, "preview_id": key[1],
+            "isolation": "APPCONTAINER_TOKEN_VERIFIED",
+        }
+        status_args = {"preview_id": key[1]}
+        stop_args = {**status_args, "confirm_stop": True}
+        with patch.object(orbit_preview, "http_probe") as http:
+            for action in (lambda: orbit_preview.status(self.one, status_args),
+                           lambda: orbit_preview.start(self.one, self.args()),
+                           lambda: orbit_preview.stop(self.one, status_args),
+                           lambda: orbit_preview.stop(self.one, stop_args)):
+                result = action()
+                self.assertEqual(result["status"], "HOLD_OS_ISOLATION_CLEANUP_UNVERIFIED")
+                self.assertNotIn("preview_url", result)
+            session, _ = orbit_browser.verify_request(self.one, status_args, orbit_preview)
+            self.assertIsNone(session)
+            self.assertEqual(orbit_preview.stop(self.one, stop_args)["status"], "STOPPED")
+        self.assertNotIn(key, orbit_preview.SESSIONS)
+        self.assertEqual(proc.wait.call_count, 2)
+        http.assert_not_called()
 
     @unittest.skipUnless(os.name == "nt", "Win32 only")
     def check_token_sid_buffer(self, malformed_reply):
