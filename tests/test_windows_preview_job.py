@@ -175,6 +175,54 @@ class WindowsPreviewJobTests(unittest.TestCase):
             if handle:
                 api.CloseHandle(handle)
 
+    def test_project_code_stays_suspended_until_job_assigned_and_resumed(self):
+        """Real Windows process never runs fixture code before job association."""
+        marker = self.root / "first-instruction.txt"
+        (self.root / "rad_process_fixture.py").write_text(
+            "from pathlib import Path\n"
+            "import os\n"
+            "from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler\n"
+            "Path('first-instruction.txt').write_text('RAN')\n"
+            "ThreadingHTTPServer(('127.0.0.1',int(os.environ['PORT'])),"
+            " SimpleHTTPRequestHandler).serve_forever()\n",
+            encoding="utf-8",
+        )
+        original_assign = orbit_preview.WindowsJob.assign
+        original_resume = orbit_preview.WindowsJob.resume
+        observed = []
+
+        def asserted_assign(job, proc):
+            self.assertFalse(marker.exists(), "Project code ran before job assignment")
+            observed.append("assign")
+            return original_assign(job, proc)
+
+        def asserted_resume(job, proc):
+            self.assertFalse(marker.exists(), "Project code ran before resume")
+            self.assertEqual(observed, ["assign"])
+            observed.append("resume")
+            return original_resume(job, proc)
+
+        with (patch.object(orbit_preview.WindowsJob, "assign", asserted_assign),
+              patch.object(orbit_preview.WindowsJob, "resume", asserted_resume)):
+            result = orbit_preview.start(self.root, self.args())
+        self.assertEqual(observed, ["assign", "resume"])
+        self.assertEqual(result["status"], "READY", result)
+        self.assertTrue(marker.exists(), "The suspended process never resumed")
+
+    def test_failed_resume_cannot_run_project_code(self):
+        marker = self.root / "NEVER_EXECUTED.txt"
+        (self.root / "rad_process_fixture.py").write_text(
+            "from pathlib import Path\n"
+            "Path('NEVER_EXECUTED.txt').write_text('FAIL')\n",
+            encoding="utf-8",
+        )
+        with patch.object(orbit_preview.WindowsJob, "resume",
+                          side_effect=OSError("TEST_RESUME_DENIED")):
+            result = orbit_preview.start(self.root, self.args())
+        self.assertEqual(result["status"], "HOLD_HOST_PROCESS_BOUNDARY", result)
+        self.assertFalse(marker.exists(), "Suspended child ran despite resume denial")
+        self.assertNotIn((str(self.root), self.preview_id), orbit_preview.SESSIONS)
+
     def test_job_creation_failure_does_not_spawn_process(self):
         (self.root / "rad_process_fixture.py").write_text(
             "import time; time.sleep(30)\n", encoding="utf-8")
@@ -188,12 +236,16 @@ class WindowsPreviewJobTests(unittest.TestCase):
 
     def test_assignment_failure_returns_hold_and_no_owned_session(self):
         # Safe synthetic failure; runtime must not claim success.
+        marker = self.root / "UNASSIGNED_EXECUTION.txt"
         (self.root / "rad_process_fixture.py").write_text(
-            "import time; time.sleep(50)\n", encoding="utf-8")
+            "from pathlib import Path\n"
+            "Path('UNASSIGNED_EXECUTION.txt').write_text('FAIL')\n",
+            encoding="utf-8")
         with patch.object(orbit_preview.WindowsJob, "assign",
                           side_effect=OSError("TEST_DENY_ASSIGN")):
             result = orbit_preview.start(self.root, self.args())
         self.assertEqual(result["status"], "HOLD_HOST_PROCESS_BOUNDARY", result)
+        self.assertFalse(marker.exists(), "Unassigned preview executed project code")
         self.assertNotIn((str(self.root), self.preview_id), orbit_preview.SESSIONS)
 
 

@@ -181,15 +181,22 @@ def start(root, a):
             except OSError:
                 return {'status':'HOLD_HOST_PROCESS_BOUNDARY',
                         'notice':'Windows Job Object creation failed; no preview was started.'}
+        # CREATE_SUSPENDED prevents the interpreter from executing even one
+        # instruction of project code until job assignment succeeds. Python's
+        # Popen closes the primary thread handle; WindowsJob.resume uses a
+        # documented thread snapshot and refuses ambiguous/missing handles.
+        if job is not None:
+            kwargs['creationflags'] |= 0x00000004  # Win32 CREATE_SUSPENDED
         proc = None
         try:
             proc = subprocess.Popen([resolved, *command[1:]], **kwargs)
             if job is not None:
                 job.assign(proc)
+                job.resume(proc)
         except (OSError, RuntimeError) as exc:
-            # If assignment failed, never leave an uncontrolled foreground
-            # preview running. This does not eliminate the Popen-to-assign
-            # race, which requires a separate creation-time host sandbox.
+            # A failed job assignment/resume cannot run project code; stop
+            # and reap the suspended or partially resumed child. This does
+            # not provide independent file, network or credential isolation.
             if proc is not None:
                 try:
                     proc.kill()

@@ -64,6 +64,37 @@ if os.name == "nt":
     _win.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
     _win.TerminateJobObject.restype = wintypes.BOOL
 
+    # Python 3.12 Popen closes the initial thread handle after CreateProcess.
+    # A CREATE_SUSPENDED process has only its initial thread; recover that
+    # thread's ID using the documented Tool Help snapshot API and resume it
+    # only after AssignProcessToJobObject succeeds.
+    CREATE_SUSPENDED = 0x00000004
+    SNAP_THREADS = 0x00000004
+    THREAD_SUSPEND_RESUME = 0x0002
+    INVALID_HANDLE = ctypes.c_void_p(-1).value
+
+    class THREADENTRY32(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ThreadID", wintypes.DWORD),
+            ("th32OwnerProcessID", wintypes.DWORD),
+            ("tpBasePri", wintypes.LONG),
+            ("tpDeltaPri", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+        ]
+
+    _win.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
+    _win.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    _win.Thread32First.argtypes = (wintypes.HANDLE, ctypes.POINTER(THREADENTRY32))
+    _win.Thread32First.restype = wintypes.BOOL
+    _win.Thread32Next.argtypes = (wintypes.HANDLE, ctypes.POINTER(THREADENTRY32))
+    _win.Thread32Next.restype = wintypes.BOOL
+    _win.OpenThread.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    _win.OpenThread.restype = wintypes.HANDLE
+    _win.ResumeThread.argtypes = (wintypes.HANDLE,)
+    _win.ResumeThread.restype = wintypes.DWORD
+
 
 def _win_error():
     return ctypes.WinError(ctypes.get_last_error())
@@ -72,9 +103,10 @@ def _win_error():
 class WindowsJob:
     """Own one handle; do not allow inherited or duplicated job handles.
 
-    The child is assigned immediately after Popen, but *not atomically at
-    creation*. A hostile child could run before assignment; this class alone
-    does not protect against malicious code or make host permissions real.
+    The preview launcher creates the process SUSPENDED, assigns it to this
+    job, and only then resumes its initial thread. This closes the earlier
+    user-code execution window before assignment. Job Objects still DO NOT
+    constrain filesystem, network, tokens, or host permissions.
     """
 
     def __init__(self):
@@ -98,6 +130,47 @@ class WindowsJob:
             raise RuntimeError("Job Object handle already closed")
         if not _win.AssignProcessToJobObject(self._handle, int(proc._handle)):
             raise _win_error()
+
+    def resume(self, proc):
+        """Resume only a single suspended initial thread after job assignment.
+
+        A fresh CREATE_SUSPENDED process must have exactly one thread: no
+        process code has run and no other thread can have been created by it.
+        Reject ambiguity or inaccessible threads rather than guessing.
+        """
+        if not self._handle:
+            raise RuntimeError("Cannot resume without an owned Job Object")
+        snapshot = _win.CreateToolhelp32Snapshot(SNAP_THREADS, 0)
+        if snapshot == INVALID_HANDLE or not snapshot:
+            raise _win_error()
+        try:
+            entry = THREADENTRY32()
+            entry.dwSize = ctypes.sizeof(entry)
+            if not _win.Thread32First(snapshot, ctypes.byref(entry)):
+                raise _win_error()
+            threads = []
+            while True:
+                if entry.th32OwnerProcessID == proc.pid:
+                    threads.append(entry.th32ThreadID)
+                entry.dwSize = ctypes.sizeof(entry)
+                if not _win.Thread32Next(snapshot, ctypes.byref(entry)):
+                    break
+            if len(threads) != 1:
+                raise RuntimeError(
+                    "A suspended new preview must have exactly one initial thread")
+            thread = _win.OpenThread(THREAD_SUSPEND_RESUME, False, threads[0])
+            if not thread:
+                raise _win_error()
+            try:
+                previous = _win.ResumeThread(thread)
+                if previous == 0xFFFFFFFF:
+                    raise _win_error()
+                if previous != 1:
+                    raise RuntimeError("Unexpected initial thread suspend count")
+            finally:
+                _win.CloseHandle(thread)
+        finally:
+            _win.CloseHandle(snapshot)
 
     def terminate(self):
         if self._handle and not _win.TerminateJobObject(self._handle, 1):
