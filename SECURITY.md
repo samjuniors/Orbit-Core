@@ -118,8 +118,8 @@ change these host process environment settings. `GUARDED` still blocks
 
 **Acceptance and recovery:** Windows disposable tests check actual kernel
 `IsProcessInJob` membership, stopped child termination, abrupt controller
-exit cleanup, project-code nonexecution before assignment, and failed
-assignment/resume HOLD. These are stronger than simulated
+exit cleanup, project-code nonexecution before assignment, failed
+assignment/resume HOLD, and fail-closed unexpected thread-snapshot errors. These are stronger than simulated
 Python-only controls, but do not certify real IDE policy dialogs, arbitrary
 child behavior, Windows AppContainer limits or independent permission checks.
 Do not merge/release without exact-head Windows/Linux CI, package parity,

@@ -154,6 +154,11 @@ class WindowsJob:
                     threads.append(entry.th32ThreadID)
                 entry.dwSize = ctypes.sizeof(entry)
                 if not _win.Thread32Next(snapshot, ctypes.byref(entry)):
+                    # Do not confuse snapshot enumeration failures with the
+                    # documented normal end-of-list (ERROR_NO_MORE_FILES).
+                    error = ctypes.get_last_error()
+                    if error != 18:  # ERROR_NO_MORE_FILES
+                        raise ctypes.WinError(error)
                     break
             if len(threads) != 1:
                 raise RuntimeError(

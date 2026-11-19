@@ -209,6 +209,35 @@ class WindowsPreviewJobTests(unittest.TestCase):
         self.assertEqual(result["status"], "READY", result)
         self.assertTrue(marker.exists(), "The suspended process never resumed")
 
+    def test_thread_enumeration_error_must_hold_before_resume(self):
+        """An API failure after one found thread is not end-of-snapshot."""
+        job = orbit_windows_job.WindowsJob()
+        self.addCleanup(job.close)
+        process = type("SyntheticPID", (), {"pid": 991337})()
+
+        def first_thread(_snapshot, pointer):
+            entry = ctypes.cast(
+                pointer, ctypes.POINTER(orbit_windows_job.THREADENTRY32)
+            ).contents
+            entry.th32OwnerProcessID = process.pid
+            entry.th32ThreadID = 777
+            return 1
+
+        def failed_next(_snapshot, _pointer):
+            ctypes.set_last_error(5)  # Win32 ERROR_ACCESS_DENIED
+            return 0
+
+        with (patch.object(orbit_windows_job._win, "Thread32First",
+                           side_effect=first_thread),
+              patch.object(orbit_windows_job._win, "Thread32Next",
+                           side_effect=failed_next),
+              patch.object(orbit_windows_job._win, "OpenThread") as opened,
+              patch.object(orbit_windows_job._win, "ResumeThread") as resumed):
+            with self.assertRaises(OSError):
+                job.resume(process)
+            opened.assert_not_called()
+            resumed.assert_not_called()
+
     def test_failed_resume_cannot_run_project_code(self):
         marker = self.root / "NEVER_EXECUTED.txt"
         (self.root / "rad_process_fixture.py").write_text(
