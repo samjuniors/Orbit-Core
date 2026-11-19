@@ -17,6 +17,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from orbit_windows_job import WindowsJob
+
 MAX_RUNNING = 3
 # Interpreter options that run inline code, preload arbitrary code, or open debug ports.
 NODE_BLOCKED = re.compile(r'^(?:-e|-p|-r|--eval|--print|--require|--import|--loader|--experimental-loader|--inspect(?:-brk|-wait)?(?:=.*)?|--input-type(?:=.*)?)$')
@@ -169,11 +171,44 @@ def start(root, a):
             kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             kwargs['start_new_session'] = True
+        # The kernel owns Windows child/grandchild lifetime; do not merely
+        # terminate the parent on stop or an MCP crash. KEEP_ALIVE is a
+        # deliberate host-side opt-out from job-owned lifecycle management.
+        job = None
+        if os.name == 'nt' and os.environ.get('ORBIT_PREVIEW_KEEP_ALIVE') != '1':
+            try:
+                job = WindowsJob()
+            except OSError:
+                return {'status':'HOLD_HOST_PROCESS_BOUNDARY',
+                        'notice':'Windows Job Object creation failed; no preview was started.'}
+        # CREATE_SUSPENDED prevents the interpreter from executing even one
+        # instruction of project code until job assignment succeeds. Python's
+        # Popen closes the primary thread handle; WindowsJob.resume uses a
+        # documented thread snapshot and refuses ambiguous/missing handles.
+        if job is not None:
+            kwargs['creationflags'] |= 0x00000004  # Win32 CREATE_SUSPENDED
+        proc = None
         try:
             proc = subprocess.Popen([resolved, *command[1:]], **kwargs)
-        except OSError as exc:
-            return {'status':'START_FAILED','error':str(exc)[:200]}
-    session = {'proc':proc,'root':str(root),'preview_id':key[1], 'port':port,'health_path':path,
+            if job is not None:
+                job.assign(proc)
+                job.resume(proc)
+        except (OSError, RuntimeError) as exc:
+            # A failed job assignment/resume cannot run project code; stop
+            # and reap the suspended or partially resumed child. This does
+            # not provide independent file, network or credential isolation.
+            if proc is not None:
+                try:
+                    proc.kill()
+                    proc.wait(timeout=3)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+            if job is not None:
+                job.close()
+            return {'status':'HOLD_HOST_PROCESS_BOUNDARY' if os.name == 'nt' else 'START_FAILED',
+                    'error':type(exc).__name__,
+                    'notice':'Preview was not accepted as managed; inspect the host process policy.'}
+    session = {'proc':proc,'job':job,'root':str(root),'preview_id':key[1], 'port':port,'health_path':path,
                'command':list(command), 'logfile':str(logfile),'started_at':time.time()}
     SESSIONS[key] = session
     for _ in range(16):
@@ -218,6 +253,29 @@ def status(root, a):
             else 'NOT_READY', **view(session)}
 
 
+def _terminate_session(session):
+    """Terminate the process tree actually owned by this session.
+
+    Windows kernel Job Objects track child processes, even if the parent has
+    exited. Closing the job handle also kills remaining members.
+    """
+    proc = session['proc']
+    job = session.get('job')
+    if job is not None:
+        try:
+            job.terminate()
+        finally:
+            job.close()
+        proc.wait(timeout=3)
+        return
+    if proc.poll() is None:
+        if os.name == 'nt':
+            proc.terminate()  # Explicit KEEP_ALIVE compatibility mode only.
+        else:
+            os.killpg(proc.pid, signal.SIGTERM)
+        proc.wait(timeout=3)
+
+
 def stop(root,a):
     key=preview_key(root,a['preview_id'])
     session=SESSIONS.get(key)
@@ -226,17 +284,11 @@ def stop(root,a):
     proc=session['proc']
     if a.get('confirm_stop') is not True:
         return {'status':'PREVIEW_ONLY',**view(session)}
-    if proc.poll() is None:
-        try:
-            if os.name == 'nt':
-                proc.terminate()
-            else:
-                os.killpg(proc.pid,signal.SIGTERM)
-            proc.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            return {'status':'STOP_TIMEOUT','notice':'Process did not exit. Check it manually.',**view(session)}
-        except ProcessLookupError:
-            pass
+    try:
+        _terminate_session(session)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {'status':'STOP_TIMEOUT','notice':'Process cleanup could not be fully verified.',
+                'error':type(exc).__name__,**view(session)}
     result={'status':'STOPPED','pid':proc.pid,'exit_code':proc.poll(),'preview_id':key[1]}
     del SESSIONS[key]
     return result
@@ -251,16 +303,15 @@ def shutdown_all():
     if os.environ.get('ORBIT_PREVIEW_KEEP_ALIVE') == '1':
         return
     for session in list(SESSIONS.values()):
-        proc = session['proc']
-        if proc.poll() is not None:
-            continue
         try:
-            if os.name == 'nt':
-                proc.terminate()
-            else:
-                os.killpg(proc.pid, signal.SIGTERM)
-            proc.wait(timeout=3)
+            _terminate_session(session)
         except (OSError, subprocess.TimeoutExpired):
-            try: proc.kill()
-            except OSError: pass
+            # Job handles are already closed in _terminate_session; fallback
+            # applies to legacy non-job processes only.
+            proc = session['proc']
+            if session.get('job') is None and proc.poll() is None:
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
     SESSIONS.clear()
