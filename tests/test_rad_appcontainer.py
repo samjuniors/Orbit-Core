@@ -79,7 +79,7 @@ class AppContainerGateTests(unittest.TestCase):
 
     def test_exact_project_profile_cannot_authorize_other_root(self):
         orbit_preview.PREVIEW_PROFILE_BINDINGS = json.dumps({
-            str(self.one): self.name_for(self.one)})
+            str(self.one.resolve(strict=True)): self.name_for(self.one)})
         first, error = orbit_preview.isolated_profile_for(self.one)
         if os.name == "nt":
             self.assertIsNone(error)
@@ -89,9 +89,19 @@ class AppContainerGateTests(unittest.TestCase):
         self.assertEqual(orbit_preview.isolated_profile_for(self.two)[1]["status"],
                          "HOLD_OS_ISOLATION_REQUIRED")
 
+    def test_noncanonical_profile_binding_does_not_bypass_exact_root(self):
+        canonical = str(self.one.resolve(strict=True))
+        alias = canonical + os.sep + "."
+        self.assertNotEqual(alias, canonical)
+        orbit_preview.PREVIEW_PROFILE_BINDINGS = json.dumps({
+            alias: self.name_for(self.one)})
+        profile, hold = orbit_preview.isolated_profile_for(self.one)
+        self.assertIsNone(profile)
+        self.assertEqual(hold["status"], "HOLD_OS_ISOLATION_REQUIRED")
+
     def test_host_opt_out_flags_are_rejected_for_isolated_process(self):
         orbit_preview.PREVIEW_PROFILE_BINDINGS = json.dumps({
-            str(self.one): self.name_for(self.one)})
+            str(self.one.resolve(strict=True)): self.name_for(self.one)})
         for flag in ("ORBIT_PREVIEW_KEEP_ALIVE", "ORBIT_PREVIEW_INHERIT_ENV"):
             with patch.dict(os.environ, {flag: "1"}):
                 self.assertEqual(orbit_preview.isolated_profile_for(self.one)[1]["status"],
@@ -109,7 +119,7 @@ class AppContainerGateTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "Win32 only")
     def test_native_launcher_error_does_not_fallback_to_regular_process(self):
         orbit_preview.PREVIEW_PROFILE_BINDINGS = json.dumps({
-            str(self.one): self.name_for(self.one)})
+            str(self.one.resolve(strict=True)): self.name_for(self.one)})
         with patch.object(orbit_appcontainer, "launch_suspended_verified",
                           side_effect=PermissionError("SYNTHETIC_UNVERIFIED_TOKEN")) as native, \
              patch.object(orbit_preview.subprocess, "Popen") as regular:
@@ -272,7 +282,7 @@ class AppContainerGateTests(unittest.TestCase):
         """Even HTTP 200 cannot certify a token-bound listening socket."""
         from unittest.mock import MagicMock
         orbit_preview.PREVIEW_PROFILE_BINDINGS = json.dumps({
-            str(self.one): self.name_for(self.one)})
+            str(self.one.resolve(strict=True)): self.name_for(self.one)})
 
         class FakeProcess:
             pid = 223344
