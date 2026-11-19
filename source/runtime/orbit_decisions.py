@@ -164,3 +164,89 @@ def components(product_type,platforms,stack,preference):
             'candidates':result[:9],
             'custom_component_allowed':True,
             'warning':'Recommendations are read-only research pointers, not verified installed components or permission to install.'}
+
+
+
+def adaptive_execution_preview(model_recommendation, complexity, evidence):
+    """Opt-in, deterministic routing *advice*; never a model or agent invocation.
+
+    The host may report hints, but its model list, validation claims, reviews
+    and permission status remain untrusted until the real host verifies them.
+    This function cannot approve or retry a denied tool, attest test results,
+    roll back workspace edits, or cross provider/account boundaries.
+    """
+    if not isinstance(evidence, dict):
+        raise ValueError('execution_review must be an object')
+    allowed = {'validation', 'host_permission_denied', 'side_effects_pending',
+               'reviewer_available'}
+    if set(evidence) - allowed:
+        raise ValueError('Unsupported execution_review field')
+    validation = evidence.get('validation', 'NOT_RUN')
+    if validation not in ('NOT_RUN', 'PASS', 'FAIL', 'BLOCKED'):
+        raise ValueError('Invalid execution_review validation')
+    for field in allowed - {'validation'}:
+        if field in evidence and type(evidence[field]) is not bool:
+            raise ValueError(field + ' must be boolean')
+    denied = evidence.get('host_permission_denied', False)
+    pending = evidence.get('side_effects_pending', False)
+    reviewer = evidence.get('reviewer_available', False)
+    task = model_recommendation['task']
+    high_risk = task in ('security', 'architecture') or complexity == 'high-assurance'
+
+    if denied:
+        status, pattern, next_step = (
+            'HOLD_HOST_PERMISSION_DENIED', 'none',
+            'Stop. A caller hint cannot reauthorize a denied host action; require a fresh owner-host decision.')
+    elif pending:
+        status, pattern, next_step = (
+            'HOLD_UNRECONCILED_WORKSPACE_EDITS', 'none',
+            'Inspect the actual diff, working tree and rollback/recovery before routing again.')
+    elif model_recommendation['selection_status'] == 'REQUIRES_MODEL_QUALITY_REVIEW':
+        status, pattern, next_step = (
+            'HOLD_MODEL_QUALITY_REVIEW', 'none',
+            'Inspect host-provided model capabilities and obtain an approved host-level choice.')
+    elif validation == 'BLOCKED':
+        status, pattern, next_step = (
+            'HOLD_VALIDATION_BLOCKED', 'none',
+            'Resolve the real test or host blocker; do not retry via a different provider.')
+    elif validation == 'FAIL':
+        status, pattern, next_step = (
+            'CASCADE_REWORK_CANDIDATE' if reviewer else 'REWORK_REQUIRED',
+            'cascade' if reviewer else 'none',
+            'Inspect failing tests and current edits; a possible reviewer escalation requires separately authorized host execution and a fresh test.')
+    elif high_risk:
+        status, pattern, next_step = (
+            ('CRITIQUE_REVIEW_CANDIDATE', 'critique',
+             'Request independent scoped critique through verified host tools, then verify the real diff and tests.')
+            if reviewer else
+            ('HOLD_INDEPENDENT_REVIEW_REQUIRED', 'none',
+             'High-risk work needs an independently available and authorized review path.'))
+    elif task in ('implementation', 'qa', 'review') and validation == 'NOT_RUN':
+        status, pattern, next_step = (
+            'HOLD_VALIDATION_REQUIRED', 'none',
+            'Run appropriate real host tests/review before accepting or escalating work.')
+    else:
+        status, pattern, next_step = (
+            'SINGLE_BASELINE_CANDIDATE', 'single',
+            'Continue with the existing approved host session; confirm actual test evidence and permission scope.')
+
+    return {
+        'status': status,
+        'suggested_pattern': pattern,
+        'next_step': next_step,
+        'model_suggestion': model_recommendation['recommended_model'],
+        'reviewer_available_caller_reported': reviewer,
+        'validation_caller_reported': validation,
+        'risk_requires_independent_review': high_risk,
+        'preview_only': True,
+        'host_approval_verified': False,
+        'test_evidence_verified': False,
+        'reviewer_independence_verified': False,
+        'cost_or_cache_verified': False,
+        'additional_model_calls_made': 0,
+        'model_switched': False,
+        'agent_spawned': False,
+        'provider_fallback_attempted': False,
+        'workspace_edits_reverted': False,
+        'source': 'Orbit original opt-in routing pilot; not GitHub Copilot Fusion',
+    }
