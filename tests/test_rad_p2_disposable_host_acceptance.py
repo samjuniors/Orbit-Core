@@ -69,8 +69,8 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
             raise OSError("synthetic cleanup error")
 
         result = {}
-        HARNESS.record_cleanup(result, "first", fail)
-        HARNESS.record_cleanup(result, "second", lambda: None)
+        HARNESS.record_check(result, "first", fail)
+        HARNESS.record_check(result, "second", lambda: None)
         self.assertEqual(result, {"first": "FAIL", "first_error": "synthetic cleanup error", "second": "PASS"})
 
     def test_probe_record_requires_all_fields_and_no_trailing_data(self):
@@ -86,6 +86,15 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
                 record.write_bytes(invalid)
                 with self.assertRaises(struct.error):
                     HARNESS.read_observations(record)
+
+    def test_network_startup_error_blocks_both_endpoints_without_a_connect_result(self):
+        checks = {}
+        samples = {"winsock_startup": 10107, "loopback": 0, "external": 0}
+        controls = {"loopback": {"success": True}, "external": {"success": True}}
+        HARNESS.record_network_checks(checks, samples, controls)
+        self.assertEqual(checks, {"loopback_denial": "BLOCKED", "external_denial": "BLOCKED"})
+        self.assertIsNone(samples["loopback"])
+        self.assertIsNone(samples["external"])
 
     def test_harness_is_not_in_automatic_workflow(self):
         """Only allow manual script invocation, never auto-run from CI."""

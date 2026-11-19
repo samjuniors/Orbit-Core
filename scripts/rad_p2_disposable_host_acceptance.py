@@ -47,6 +47,17 @@ def denial_result(observed, expected_error, control=True):
     return "NOT_VERIFIED"
 
 
+def record_network_checks(checks, samples, controls):
+    for key in ("loopback", "external"):
+        if samples["winsock_startup"]:
+            checks[key + "_denial"] = "BLOCKED"
+            samples[key] = None
+        else:
+            checks[key + "_denial"] = denial_result(
+                {"success": samples[key] == 0, "winerror": samples[key]}, WSAEACCES,
+                controls[key].get("success") is True)
+
+
 def build_probe(destination):
     """Build the reviewed fixture source with the configured local MSVC SDK."""
     toolchain = os.environ.get("VCToolsInstallDir")
@@ -79,7 +90,7 @@ def read_observations(path):
     return dict(zip(keys, values))
 
 
-def record_cleanup(report, key, action):
+def record_check(report, key, action):
     try:
         action()
     except Exception as exc:
@@ -122,7 +133,7 @@ def run_disposable():
     checks = dict.fromkeys((
         "lpac_token", "capabilities", "allowed_read", "allowed_write",
         "sibling_read_denial", "sibling_write_denial", "credential_denial",
-        "loopback_denial", "external_denial", "process_tree", "failure_recovery",
+        "loopback_denial", "external_denial", "process_tree", "lpac_job_termination", "failure_recovery",
         "job_cleanup", "recovery_job_cleanup", "profile_deletion",
         "profile_storage_absence", "acl_fixture_cleanup",
     ), "NOT_RUN")
@@ -142,7 +153,7 @@ def run_disposable():
         else:
             raise OSError(f"DeleteAppContainerProfile failed ({report['delete_hresult']})")
         if profile_path:
-            record_cleanup(checks, "profile_storage_absence",
+            record_check(checks, "profile_storage_absence",
                            lambda: assert_absent(profile_path))
 
     def remove_temp(root):
@@ -154,7 +165,7 @@ def run_disposable():
     try:
         with ExitStack() as cleanup:
             root = Path(tempfile.mkdtemp(prefix="orbit-rad-p2-approved-")).resolve(strict=True)
-            cleanup.callback(record_cleanup, checks, "acl_fixture_cleanup", lambda: remove_temp(root))
+            cleanup.callback(record_check, checks, "acl_fixture_cleanup", lambda: remove_temp(root))
             profile = "orbit-rad-" + secrets.token_hex(12)
             report.update(temporary_root=str(root), profile_name=profile)
             # Retain exact identifiers even if the controller is interrupted.
@@ -181,7 +192,7 @@ def run_disposable():
             report["create_hresult"] = f"0x{hr & 0xffffffff:08x}"
             if hr == 0:
                 report["profile_created"] = True
-                cleanup.callback(record_cleanup, checks, "profile_deletion", lambda: delete_profile(profile))
+                cleanup.callback(record_check, checks, "profile_deletion", lambda: delete_profile(profile))
                 print(json.dumps({"profile_created": profile}), file=sys.stderr, flush=True)
             if sid.value:
                 cleanup.callback(app._adv.FreeSid, sid)
@@ -261,8 +272,22 @@ def run_disposable():
                         for child in processes:
                             child.close()
 
-                stack.callback(record_cleanup, checks, check, stop_job)
+                stack.callback(record_check, checks, check, stop_job)
                 return job, processes, handles
+
+            def verify_recovery():
+                with ExitStack() as recovery:
+                    job, processes, _ = open_job(recovery, "recovery_job_cleanup")
+                    failed = launch(job, "crash")
+                    processes.append(failed)
+                    report["forced_failure_exit_code"] = failed.wait(timeout=5)
+                    recovered = launch(job, "recover")
+                    processes.append(recovered)
+                    report["recovery_exit_code"] = recovered.wait(timeout=5)
+                    if (report["forced_failure_exit_code"], report["recovery_exit_code"]) != (23, 0):
+                        raise RuntimeError("Unexpected forced failure or recovery exit")
+
+            record_check(checks, "failure_recovery", verify_recovery)
 
             with ExitStack() as tree:
                 job, processes, handles = open_job(tree, "job_cleanup")
@@ -289,50 +314,50 @@ def run_disposable():
                         {"success": samples[key] == 0, "winerror": samples[key]}, ACCESS_DENIED)
                 if sibling_file.read_bytes() != b"SYNTHETIC_SIBLING":
                     checks["sibling_write_denial"] = "FAIL"
-                for key in ("loopback", "external"):
-                    checks[key + "_denial"] = (
-                        "NOT_VERIFIED" if samples["winsock_startup"] else denial_result(
-                            {"success": samples[key] == 0, "winerror": samples[key]}, WSAEACCES,
-                            report["network_controls"][key].get("success") is True))
+                record_network_checks(checks, samples, report["network_controls"])
 
-                checks["process_tree"] = "FAIL"
-                if samples["descendant_error"] or not samples["descendant_pid"]:
-                    raise RuntimeError("LPAC descendant did not launch")
-                synchronize = 0x00100000
-                query_limited_information = 0x1000
-                descendant = app._k32.OpenProcess(
-                    synchronize | query_limited_information, False, samples["descendant_pid"])
-                if not descendant:
-                    raise app._error()
-                member = wintypes.BOOL()
-                try:
-                    if not app._k32.IsProcessInJob(descendant, job._handle, ctypes.byref(member)):
+                def verify_tree():
+                    synchronize = 0x00100000
+                    query_limited_information = 0x1000
+                    descendant = app._k32.OpenProcess(
+                        synchronize | query_limited_information, False, samples["descendant_pid"])
+                    if not descendant:
                         raise app._error()
-                    if not member.value:
-                        raise RuntimeError("Descendant is outside the private job")
-                    handles.append(descendant)
-                finally:
-                    if not handles:
-                        app._k32.CloseHandle(descendant)
-                if app._k32.WaitForSingleObject(descendant, 0) != app.WAIT_TIMEOUT:
-                    raise RuntimeError("No live descendant verified in the private job")
-                job.terminate()
-                report["terminated_child_exit_code"] = child.wait(timeout=5)
-                if app._k32.WaitForSingleObject(descendant, 5000) != app.WAIT_OBJECT_0:
-                    raise RuntimeError("Job descendant did not exit")
-                checks["process_tree"] = "PASS"
+                    member = wintypes.BOOL()
+                    try:
+                        if not app._k32.IsProcessInJob(descendant, job._handle, ctypes.byref(member)):
+                            raise app._error()
+                        if not member.value:
+                            raise RuntimeError("Descendant is outside the private job")
+                        handles.append(descendant)
+                    finally:
+                        if not handles:
+                            app._k32.CloseHandle(descendant)
+                    if app._k32.WaitForSingleObject(descendant, 0) != app.WAIT_TIMEOUT:
+                        raise RuntimeError("No live descendant verified in the private job")
 
-            checks["failure_recovery"] = "FAIL"
-            with ExitStack() as recovery:
-                job, processes, _ = open_job(recovery, "recovery_job_cleanup")
-                failed = launch(job, "crash")
-                processes.append(failed)
-                report["forced_failure_exit_code"] = failed.wait(timeout=5)
-                recovered = launch(job, "recover")
-                processes.append(recovered)
-                report["recovery_exit_code"] = recovered.wait(timeout=5)
-                if report["forced_failure_exit_code"] == 23 and report["recovery_exit_code"] == 0:
-                    checks["failure_recovery"] = "PASS"
+                if samples["descendant_error"] or not samples["descendant_pid"]:
+                    checks["process_tree"] = "BLOCKED"
+                else:
+                    record_check(checks, "process_tree", verify_tree)
+
+                def terminate_members():
+                    # Independent control when the isolated token cannot create
+                    # a descendant itself. The launcher verifies both members.
+                    peer = launch(job, "descendant")
+                    processes.append(peer)
+                    if child.poll() is not None or peer.poll() is not None:
+                        raise RuntimeError("The two LPAC job members were not both live")
+                    job.terminate()
+                    report["terminated_child_exit_codes"] = [member.wait(timeout=5) for member in processes]
+                    for handle in handles:
+                        if app._k32.WaitForSingleObject(handle, 5000) != app.WAIT_OBJECT_0:
+                            raise RuntimeError("The verified descendant did not exit")
+
+                record_check(checks, "lpac_job_termination", terminate_members)
+                if checks["process_tree"] == "PASS" and checks["lpac_job_termination"] != "PASS":
+                    checks["process_tree"] = "FAIL"
+
     except Exception as exc:
         report["exception_type"] = type(exc).__name__
         report["exception_summary"] = str(exc)[:240]

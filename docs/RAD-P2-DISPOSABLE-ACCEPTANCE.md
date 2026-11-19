@@ -22,8 +22,8 @@ The script emits the generated root and profile name on stderr before provisioni
 
 - The launcher checks the suspended process's AppContainer token, exact package SID, zero effective token capabilities, and membership in the private Job Object. An in-memory Windows access check on the child token must grant the right for restricted application packages while denying the right for all application packages. These checks all precede resume.
 - The child reads known project content and writes a marker verified by the parent. File denial requires Windows error 5 with a working positive control. A missing file or missing child output leaves the check unverified.
-- Each network check requires a successful parent connection and Winsock error 10013 from the LPAC child on the same endpoint. A timeout or unavailable endpoint leaves that check unverified. A successful LPAC connection fails the check.
-- The parent verifies a live descendant in the Job Object using its kernel process handle, then waits for both processes to exit after terminating the job. A second job measures a forced child exit followed by a successful replacement launch using the same profile.
+- Each network check requires a successful parent connection and Winsock error 10013 from the LPAC child on the same endpoint. A Winsock startup failure blocks both endpoint tests. A timeout or unavailable endpoint leaves that check unverified. A successful LPAC connection fails the check.
+- When the probe can start a descendant, the controller verifies its job membership by process handle and waits for the descendant to exit after job termination. The controller also verifies termination of two directly launched LPAC members. A separate job measures a forced child exit followed by a replacement launch using the same profile.
 
 ## Cleanup and recovery
 
