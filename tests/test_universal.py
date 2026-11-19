@@ -118,6 +118,8 @@ class UniversalSetupTests(unittest.TestCase):
                          (ROOT/'source/runtime/orbit_defense.py').read_bytes())
         self.assertEqual((self.home/installer.VERSION/'orbit_windows_job.py').read_bytes(),
                          (ROOT/'source/runtime/orbit_windows_job.py').read_bytes())
+        self.assertEqual((self.home/installer.VERSION/'orbit_appcontainer.py').read_bytes(),
+                         (ROOT/'source/runtime/orbit_appcontainer.py').read_bytes())
         self.assertEqual(set(c.action for c in installer.plan(self.project,scope='project')),{'SKIP'})
 
     def test_existing_customization_refused(self):
