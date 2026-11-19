@@ -9,6 +9,74 @@
 - Release packages require tests and content review; GitHub Actions are **not** proof of host-specific Gemini/Claude/Codex execution.
 - Report security issues privately to the repository owner. Do not open a public issue disclosing secrets or vulnerabilities.
 
+## RAD P0: process-local adaptive policy gate (draft, not released)
+
+The original `orbit_defense.py` module adds **host-startup** `ORBIT_DEFENSE_MODE`:
+`NORMAL` (default, preserves v0.32 behavior), `GUARDED` (blocks *both*
+`orbit_preview_start` and `orbit_browser_qa` before any handlers or subprocesses
+run), and `CONTAINED` (blocks other MCP operations except a small audited
+recovery list and explicit stopping of a session-owned preview). Unrecognized
+host modes **fail closed** as `CONTAINED`. A caller cannot set a mode or reset it
+through MCP arguments, SQLite state, project README, skills, or agent messages.
+
+In `GUARDED`, three denied code-execution requests against the *same validated
+canonical project root* also move that root into `CONTAINED` for the process
+lifetime. The number of tracked scopes is capped at 64; saturation never permits
+execution and cannot lock unrelated root-scoped project operations. A malicious request outside
+`ORBIT_TRUSTED_ROOTS` cannot escalate another project. Other roots can continue
+their normal guarded workflows. Containment allows only non-project metadata,
+a pure caller-supplied gate evaluation, and explicit stopping of a managed
+preview. Project scans, task history, charter content, local memory and research
+reads are denied even though they are normally read-only: they may expose data. Only a trusted host restart with a reviewed mode setting can
+reset the process-local guard. Do **not** let an MCP tool de-escalate itself.
+
+**Scoped SQLite memory (draft P0):** `orbit_memory_save`,
+`orbit_memory_recall`, and `orbit_memory_archive` now accept an **optional**
+`project_root` while keeping the 57-tool contract. Slug-only calls remain
+backwards-compatible in NORMAL; they are always refused in GUARDED. In GUARDED,
+the root must be an existing canonical directory **explicitly and exactly**
+listed by the trusted host's `ORBIT_TRUSTED_ROOTS`. A general parent directory
+allowlist does not authorize memory for arbitrary descendants. Each root/slug
+pair gets a distinct SHA-256-derived SQLite namespace, so equal project slugs
+cannot accidentally share records; responses retain the public slug. A
+CONTAINED root cannot access its scoped memory while unrelated listed roots
+can continue. These are deterministic MCP controls, **not authenticated
+caller identity or independent filesystem/OS access controls**.
+
+Legacy slug-only memories are **never automatically migrated or deleted**.
+An operator can run `python scripts/migrate_scoped_memory.py --database
+<absolute-db> --project <slug> --project-root <exact-root>` in an explicitly
+configured trusted-root environment for a counts-only dry run. Apply requires
+`--apply --confirm "MIGRATE SCOPED MEMORY"`, creates a consistent adjacent
+SQLite backup, copies records into the new namespace without replacing
+existing destination keys, and retains legacy records for older hosts. Run
+this only after reviewing which legacy slug belongs to which root and backing
+up owner data; a moved root requires deliberate remapping. Nothing migrates
+on installer upgrade, host startup, or an MCP tool call. Privileged migration
+and real host identity/permission enforcement remain operator/host duties.
+
+**What the gate does not prove:** A blocked attempt is a policy violation, not
+proof of a malicious actor, compromise, or independently verified host session.
+Three deliberately repeated calls could trigger scoped false-positive denial of
+service until a trusted restart; review host logs and operator procedures.
+This process-local policy is **not OS process isolation, a firewall, verified
+human consent, a signed rule, protection against malicious Python code running
+in the same interpreter, or persisted crash-proof incident response**. In
+particular, `NORMAL` does not automatically detect breaches; the host must
+opt into `GUARDED`, and wider incident signals require separate host-authorized
+integration. Do not claim that SHA hashes, caller-reported permission states,
+or a passed simulation make the software unhackable.
+
+When exercising RAD against untrusted projects, configure the selected MCP
+host's process environment with `ORBIT_TRUSTED_ROOTS` and
+`ORBIT_DEFENSE_MODE=GUARDED`, confirm actual OS sandbox/credential scope, and
+restart the host. Do not bypass a rejected host command via a different model
+or tool. The gate emits only coarse HOLD statuses, never raw source/commands,
+and creates no SQLite table, cloud log, background worker or network listener.
+See `tests/test_rad_defense.py` for adversarial negative tests. This is source
+development in a separate draft branch and needs independent Windows/Linux CI,
+real IDE/host enforcement and owner acceptance before release.
+
 ## v0.29 installed-skill discovery trust boundary
 
 - **Read-only by design:** `orbit_capability_select` can recommend and hash locally installed `SKILL.md` candidates. A shortlist or `orbit-skill-plan-v2` pin does **not** authenticate a publisher, verify a license, authorize a skill, install anything, execute helpers, or attest the host's capabilities.
