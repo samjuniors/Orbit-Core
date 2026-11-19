@@ -538,7 +538,7 @@ TOOLS += [
  {'name':'orbit_autonomy_review','description':'Recommend maturity-based guided/assisted/trusted mode; no automatic promotion.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'level':{'type':'string','enum':['guided','assisted','trusted']},'expected_revision':{'type':'integer','minimum':1},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project'])},
  {'name':'orbit_docs_audit','description':'Read-only, repeatable project documentation inventory and growth signals.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'signals':{'type':'array','maxItems':8,'items':{'type':'string'}}},['project_root','project'])},
     {'name':'orbit_decision_route','description':'Read-only, platform-specific workflow and reviewed component/library research candidates; permits custom designs.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']}},['project_root','project'])},
-    {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
+    {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation; optional execution_review offers evidence-gated single/cascade/critique advice without invoking agents, switching models or granting permissions.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']},'execution_review':{'type':'object','properties':{'validation':{'type':'string','enum':['NOT_RUN','PASS','FAIL','BLOCKED']},'host_permission_denied':{'type':'boolean'},'side_effects_pending':{'type':'boolean'},'reviewer_available':{'type':'boolean'}},'additionalProperties':False}},['project_root','project','role','task','host'])},
 ]
 TOOLS += [
     {'name':'orbit_practice_suggest','description':'Read-only opt-in M5 practice candidates from repeated, separately reviewer-accepted tasks in this exact project root/key; approvals and evidence remain caller-reported. Lists approved and optionally inactive practices without injecting instructions or running skills.','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':20},'include_inactive':{'type':'boolean'}},['project_root','project'])},
@@ -808,8 +808,12 @@ def execute(conn, name, a):
             return {'status':'RECOMMENDATION_ONLY','project':project,**result,
                     'selection_applied':False,'host_validation_required':True}
         complexity=a.get('complexity') or profile.get('complexity','moderate')
-        return orbit_decisions.model_route(a['role'],a['task'],complexity,
+        recommendation=orbit_decisions.model_route(a['role'],a['task'],complexity,
                    a.get('available_models',[]),a['host'],a.get('budget','economy'))
+        if 'execution_review' not in a:
+            return recommendation  # Original API response remains byte-shape compatible.
+        return {**recommendation,'adaptive_execution':orbit_decisions.adaptive_execution_preview(
+            recommendation,complexity,a['execution_review'])}
     if name in {'orbit_intake_status','orbit_intake_propose','orbit_intake_answer','orbit_intake_followup','orbit_intake_approve','orbit_autonomy_review','orbit_docs_audit'}:
         a={**a,'project':project_key(a)}
         root=project_root(a)
