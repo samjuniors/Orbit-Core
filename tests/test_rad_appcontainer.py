@@ -331,6 +331,16 @@ class AppContainerGateTests(unittest.TestCase):
                          app.TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER):
                 ctypes.cast(out_pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 1
                 return 1
+            if klass == app.TOKEN_CAPABILITIES:
+                if not out_pointer:
+                    length.value = 16
+                    ctypes.set_last_error(122)  # ERROR_INSUFFICIENT_BUFFER
+                    seen.append("cap-sized")
+                    return 0
+                self.assertEqual(out_size, 16)
+                ctypes.cast(out_pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 0
+                seen.append("cap-read")
+                return 1
             self.assertEqual(klass, app.TOKEN_APP_CONTAINER_SID)
             if not out_pointer:
                 self.assertEqual(out_size, 0)
@@ -352,7 +362,97 @@ class AppContainerGateTests(unittest.TestCase):
               patch.object(app._k32, "CloseHandle", return_value=1)):
             app._token_matches_appcontainer(999, ctypes.c_void_p(77))
             equal.assert_called_once()
-        self.assertEqual(seen, ["sized", "read"])
+        self.assertEqual(seen, ["cap-sized", "cap-read", "sized", "read"])
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_unexpected_child_token_capabilities_block_before_sid(self):
+        """Real token query must disallow capabilities not requested by Orbit."""
+        app = orbit_appcontainer
+        observed = []
+
+        def open_token(_process, _access, pointer):
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p)).contents.value = 23
+            return 1
+
+        def token_info(_token, klass, out_pointer, out_size, length_pointer):
+            length = ctypes.cast(length_pointer, ctypes.POINTER(ctypes.c_uint32)).contents
+            if klass in (app.TOKEN_IS_APP_CONTAINER,
+                         app.TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER):
+                ctypes.cast(out_pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 1
+                return 1
+            self.assertEqual(klass, app.TOKEN_CAPABILITIES)
+            if not out_pointer:
+                length.value = 16
+                ctypes.set_last_error(122)
+                observed.append("cap-sized")
+                return 0
+            self.assertEqual(out_size, 16)
+            ctypes.cast(out_pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 1
+            observed.append("cap-present")
+            return 1
+
+        with (patch.object(app._adv, "OpenProcessToken", side_effect=open_token),
+              patch.object(app._adv, "GetTokenInformation", side_effect=token_info),
+              patch.object(app._adv, "EqualSid") as equal,
+              patch.object(app._k32, "CloseHandle", return_value=1)):
+            with self.assertRaisesRegex(PermissionError, "token capabilities"):
+                app._token_matches_appcontainer(999, ctypes.c_void_p(77))
+            equal.assert_not_called()
+        self.assertEqual(observed, ["cap-sized", "cap-present"])
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_capability_query_api_error_fails_closed(self):
+        app = orbit_appcontainer
+
+        def open_token(_process, _access, pointer):
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p)).contents.value = 23
+            return 1
+
+        def token_info(_token, klass, out_pointer, out_size, _length_pointer):
+            if klass in (app.TOKEN_IS_APP_CONTAINER,
+                         app.TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER):
+                ctypes.cast(out_pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 1
+                return 1
+            self.assertEqual(klass, app.TOKEN_CAPABILITIES)
+            self.assertEqual(out_size, 0)
+            ctypes.set_last_error(5)  # ACCESS_DENIED, not ordinary size probe
+            return 0
+
+        with (patch.object(app._adv, "OpenProcessToken", side_effect=open_token),
+              patch.object(app._adv, "GetTokenInformation", side_effect=token_info),
+              patch.object(app._adv, "EqualSid") as equal,
+              patch.object(app._k32, "CloseHandle", return_value=1)):
+            with self.assertRaisesRegex(PermissionError, "Cannot verify"):
+                app._token_matches_appcontainer(999, ctypes.c_void_p(77))
+            equal.assert_not_called()
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_truncated_effective_capability_reply_is_rejected(self):
+        app = orbit_appcontainer
+        def open_token(_process, _access, ptr):
+            ctypes.cast(ptr, ctypes.POINTER(ctypes.c_void_p)).contents.value = 23
+            return 1
+        def token_info(_token, klass, pointer, size, length_ptr):
+            length = ctypes.cast(length_ptr, ctypes.POINTER(ctypes.c_uint32)).contents
+            if klass in (app.TOKEN_IS_APP_CONTAINER,
+                         app.TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER):
+                ctypes.cast(pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 1
+                return 1
+            self.assertEqual(klass, app.TOKEN_CAPABILITIES)
+            if not pointer:
+                length.value = 16
+                ctypes.set_last_error(122)
+                return 0
+            length.value = 0  # Malformed success: no actual TOKEN_GROUPS bytes
+            return 1
+        with (patch.object(app._adv, "OpenProcessToken", side_effect=open_token),
+              patch.object(app._adv, "GetTokenInformation",
+                           side_effect=token_info),
+              patch.object(app._adv, "EqualSid") as equal,
+              patch.object(app._k32, "CloseHandle", return_value=1)):
+            with self.assertRaisesRegex(PermissionError, "Malformed"):
+                app._token_matches_appcontainer(999, ctypes.c_void_p(77))
+            equal.assert_not_called()
 
     @unittest.skipUnless(os.name == "nt", "Win32 only")
     def test_read_only_appcontainer_sid_derivation_api_available(self):

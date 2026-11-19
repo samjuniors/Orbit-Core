@@ -67,6 +67,7 @@ if os.name == "nt":
     PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT = 1
     TOKEN_QUERY = 0x0008
     TOKEN_IS_APP_CONTAINER = 29
+    TOKEN_CAPABILITIES = 30
     TOKEN_APP_CONTAINER_SID = 31
     TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER = 46
     WAIT_TIMEOUT = 0x102
@@ -165,6 +166,24 @@ def _token_matches_appcontainer(process_handle, expected_sid):
             raise _error()
         if least_privileged.value != 1:
             raise PermissionError("Child token is AppContainer but not LPAC")
+        # Requesting zero security capabilities at creation is not a proof
+        # of the *effective* child token. Check the OS token before resume.
+        # TokenCapabilities returns TOKEN_GROUPS (DWORD GroupCount first).
+        cap_length = wintypes.DWORD()
+        cap_first = _adv.GetTokenInformation(
+            token, TOKEN_CAPABILITIES, None, 0, ctypes.byref(cap_length))
+        if cap_first or ctypes.get_last_error() != 122 or not 4 <= cap_length.value <= 65536:
+            raise PermissionError("Cannot verify child token capabilities")
+        cap_buffer = ctypes.create_string_buffer(cap_length.value)
+        if not _adv.GetTokenInformation(
+                token, TOKEN_CAPABILITIES, ctypes.cast(cap_buffer, ctypes.c_void_p),
+                ctypes.sizeof(cap_buffer), ctypes.byref(cap_length)):
+            raise _error()
+        if not 4 <= cap_length.value <= ctypes.sizeof(cap_buffer):
+            raise PermissionError("Malformed child token capability response")
+        cap_count = wintypes.DWORD.from_buffer_copy(cap_buffer.raw[:4]).value
+        if cap_count != 0:
+            raise PermissionError("Child unexpectedly has token capabilities")
         # TokenAppContainerSid returns TOKEN_APPCONTAINER_INFORMATION and
         # additional SID bytes, not merely one pointer-sized field.
         required = wintypes.DWORD()

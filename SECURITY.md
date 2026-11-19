@@ -159,9 +159,12 @@ derives its SID and checks the registered profile via the read-only
 **suspended** with no inherited handles and a minimal environment.
 Before executing project code, the parent calls `IsProcessInJob` and
 `OpenProcessToken` / `GetTokenInformation` to verify actual kernel Job
-membership, AppContainer and LPAC status, and matching SID. The SID
-information query uses a dynamically sized buffer, not a caller-reported
-identity. Only then does the initial thread resume. Any API or token
+membership, AppContainer and LPAC status, matching SID, and **zero
+unexpected effective token capabilities** via the OS `TokenCapabilities`
+query. A token with extra capabilities or an unverifiable capability list
+HOLDS before resumption; `SECURITY_CAPABILITIES` request data alone is not
+attestation. The SID information query uses a dynamically sized buffer,
+not a caller-reported identity. Only then does the initial thread resume. Any API or token
 verification failure refuses the launch, kills/reaps the child and never
 falls back to ordinary `Popen`.
 The original P0 `GUARDED` dispatcher still rejects all
@@ -193,6 +196,16 @@ and network negative tests must pass under a real configured profile before
 claiming OS isolation. On Linux this path HOLDS and does not impersonate a
 sandbox via environment variables. The default legacy mode remains
 unsandboxed and must never be advertised as production-secure execution.
+
+**Read-only operator preflight (does not create profiles):** From a trusted
+shell, run `py -3.12 scripts/rad_p2_preflight.py --project-root PATH_TO_DISPOSABLE_PROJECT`.
+The script checks the host-owned isolation mode and exact project profile
+mapping, probes registered-profile state read-only where available, and prints
+bounded JSON. It returns **exit code 2 (HOLD)** even when a registered profile
+directory was located, because a profile path does not establish actual LPAC
+child identity, OS file/network denial, or authenticated host approval.
+The script does not execute project code, create or delete Windows profiles,
+grant ACLs, edit registry/IDE settings, or access real owner credentials.
 
 Engineering acceptance / owner approval and durable implementation follow
 [Orbit RAD P2 issue #138](https://github.com/samjuniors/Orbit-Core/issues/138)
