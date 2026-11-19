@@ -255,9 +255,78 @@ class RADGuardTests(unittest.TestCase):
         rootless_projects = {
             t["name"] for t in orbit_mcp.TOOLS
             if "project" in t["inputSchema"]["required"]
-            and "project_root" not in t["inputSchema"]["properties"]
+            and "project_root" not in t["inputSchema"]["required"]
         }
         self.assertEqual(rootless_projects, orbit_defense.ROOTLESS_PROJECT_MEMORY)
+
+    def test_guarded_root_scoped_memory_isolated_from_legacy_and_other_root(self):
+        with patch.dict(os.environ, {
+            "ORBIT_LOCAL_DB": str(self.root / "memory.sqlite3"),
+            "ORBIT_TRUSTED_ROOTS": os.pathsep.join([str(self.root), str(self.other)]),
+        }):
+            conn = orbit_mcp.db_connect()
+            self.addCleanup(conn.close)
+            def save(root, summary):
+                args = {"project": "same-slug", "key": "same-key",
+                        "kind": sorted(orbit_mcp.KINDS)[0],
+                        "summary": summary, "source": "synthetic",
+                        "confirm_write": True}
+                if root is not None:
+                    args["project_root"] = str(root)
+                return orbit_mcp.execute(conn, "orbit_memory_save", args,
+                                         defense=guarded if root is not None else None)
+
+            guarded = orbit_defense.Defense("GUARDED")
+            save(None, "LEGACY_CANARY")
+            self.assertEqual(save(self.root, "ROOT_ONE_CANARY")["status"], "SAVED")
+            self.assertEqual(save(self.other, "ROOT_TWO_CANARY")["status"], "SAVED")
+
+            a = {"project_root": str(self.root), "project": "same-slug"}
+            b = {"project_root": str(self.other), "project": "same-slug"}
+            one = orbit_mcp.execute(conn, "orbit_memory_recall", a, defense=guarded)
+            two = orbit_mcp.execute(conn, "orbit_memory_recall", b, defense=guarded)
+            self.assertEqual([r["summary"] for r in one], ["ROOT_ONE_CANARY"])
+            self.assertEqual([r["summary"] for r in two], ["ROOT_TWO_CANARY"])
+            self.assertEqual(one[0]["project"], "same-slug")
+            self.assertEqual(two[0]["project"], "same-slug")
+            self.assertEqual(orbit_mcp.execute(
+                conn, "orbit_memory_recall", {"project": "same-slug"})[0]["summary"],
+                "LEGACY_CANARY")
+            self.assertEqual(orbit_mcp.execute(
+                conn, "orbit_memory_recall", {"project": "same-slug"},
+                defense=guarded)["status"], "HOLD_DEFENSE_GUARDED")
+
+            archive = orbit_mcp.execute(conn, "orbit_memory_archive",
+                {**a, "key": "same-key", "reason": "synthetic",
+                 "confirm_write": True}, defense=guarded)
+            self.assertEqual(archive["status"], "ARCHIVED")
+            self.assertEqual(orbit_mcp.execute(
+                conn, "orbit_memory_recall", a, defense=guarded), [])
+            self.assertEqual(len(orbit_mcp.execute(
+                conn, "orbit_memory_recall", b, defense=guarded)), 1)
+            for _ in range(3):
+                orbit_mcp.execute(conn, "orbit_preview_start",
+                    self.preview_args(self.root), defense=guarded)
+            self.assertEqual(orbit_mcp.execute(
+                conn, "orbit_memory_recall", a, defense=guarded)["status"],
+                "HOLD_DEFENSE_CONTAINED")
+            self.assertEqual(len(orbit_mcp.execute(
+                conn, "orbit_memory_recall", b, defense=guarded)), 1)
+
+    def test_guarded_scoped_memory_fails_closed_without_trusted_roots(self):
+        with patch.dict(os.environ, {"ORBIT_TRUSTED_ROOTS": str(self.root)}):
+            os.environ.pop("ORBIT_TRUSTED_ROOTS", None)
+            guarded = orbit_defense.Defense("GUARDED")
+            hold = orbit_mcp.execute(
+                self.conn, "orbit_memory_recall",
+                {"project": "lab", "project_root": str(self.root)},
+                defense=guarded)
+            self.assertEqual(hold["status"], "HOLD_DEFENSE_GUARDED")
+        with patch.dict(os.environ, {"ORBIT_TRUSTED_ROOTS": str(self.root)}):
+            with self.assertRaisesRegex(ValueError, "ORBIT_TRUSTED_ROOTS"):
+                orbit_mcp.execute(self.conn, "orbit_memory_recall",
+                    {"project": "lab", "project_root": str(self.other)},
+                    defense=orbit_defense.Defense("GUARDED"))
 
     def test_mcp_wire_response_is_bounded_and_no_tool_is_added(self):
         self.assertEqual(len(orbit_mcp.TOOLS), 57)

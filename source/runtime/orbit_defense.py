@@ -11,6 +11,7 @@ connected host and operating system.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import threading
 
 EXECUTES_PROJECT_CODE = frozenset({"orbit_preview_start", "orbit_browser_qa"})
@@ -19,13 +20,33 @@ EXECUTES_PROJECT_CODE = frozenset({"orbit_preview_start", "orbit_browser_qa"})
 # Never expose project notes, tasks, memory, research pointers or trace
 # payloads after containment: "read-only" does not mean non-exfiltrating.
 RECOVERY_READS = frozenset({"orbit_gate_evaluate"})
-# Legacy SQLite memory tools have only a project slug, not a validated root.
-# In guarded mode they cannot be safely attributed to one host-approved root;
-# quarantine them until root-bound memory migration is separately reviewed.
+# Legacy memory tools accept an optional validated project root. Guarded mode
+# requires both the root and a host-owned allowlist. Slug-only calls stay denied.
 ROOTLESS_PROJECT_MEMORY = frozenset({
     "orbit_memory_save", "orbit_memory_recall", "orbit_memory_archive",
 })
 VALID_MODES = frozenset({"NORMAL", "GUARDED", "CONTAINED"})
+
+
+def exact_trusted_root(root):
+    """Guarded memory requires a host-listed project root, not a parent tree.
+
+    A caller-provided root is not identity. This only prevents broad parent
+    allowlists from granting memory to arbitrary sibling directories.
+    """
+    if root is None:
+        return False
+    canonical = os.path.normcase(str(root))
+    for item in os.environ.get("ORBIT_TRUSTED_ROOTS", "").split(os.pathsep):
+        if not item.strip():
+            continue
+        try:
+            candidate = Path(item.strip()).expanduser().resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if os.path.normcase(str(candidate)) == canonical:
+            return True
+    return False
 
 
 class Defense:
@@ -96,9 +117,11 @@ class Defense:
                     return None
                 return self._hold("HOLD_DEFENSE_CONTAINED", mode)
             if name in ROOTLESS_PROJECT_MEMORY:
-                # A slug supplied by the caller is not proof of workspace scope.
-                # Do not leak or mutate legacy SQLite data in GUARDED mode.
-                return self._hold("HOLD_DEFENSE_GUARDED", mode)
+                # A slug is not project authorization. In GUARDED, require an
+                # existing validated root AND a host-owned root allowlist.
+                # Without both, never access any SQLite memory.
+                if not exact_trusted_root(scope):
+                    return self._hold("HOLD_DEFENSE_GUARDED", mode)
             if name not in EXECUTES_PROJECT_CODE:
                 return None
 

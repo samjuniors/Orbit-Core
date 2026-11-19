@@ -30,18 +30,30 @@ preview. Project scans, task history, charter content, local memory and research
 reads are denied even though they are normally read-only: they may expose data. Only a trusted host restart with a reviewed mode setting can
 reset the process-local guard. Do **not** let an MCP tool de-escalate itself.
 
-**Legacy memory availability tradeoff (P0):** The three rootless SQLite
-operations (`orbit_memory_save`, `orbit_memory_recall`,
-`orbit_memory_archive`) accept only a caller-provided project slug, with no
-validated project root or authenticated identity. **GUARDED always denies all
-three across every project**, including before an individual root is
-CONTAINED, to prevent scoped-policy bypass or memory exfiltration via a
-different slug. Normal mode preserves existing memory behavior; other
-root-scoped tools can continue for unrelated projects in GUARDED. This is a
-deliberate fail-closed limitation, **not** fine-grained memory isolation.
-The follow-up needs a reviewed root-bound memory namespace, backwards-compatible
-migration of existing data, and actual host identity and permission checks.
-Do not relax the host mode via an MCP request or claim complete isolation.
+**Scoped SQLite memory (draft P0):** `orbit_memory_save`,
+`orbit_memory_recall`, and `orbit_memory_archive` now accept an **optional**
+`project_root` while keeping the 57-tool contract. Slug-only calls remain
+backwards-compatible in NORMAL; they are always refused in GUARDED. In GUARDED,
+the root must be an existing canonical directory **explicitly and exactly**
+listed by the trusted host's `ORBIT_TRUSTED_ROOTS`. A general parent directory
+allowlist does not authorize memory for arbitrary descendants. Each root/slug
+pair gets a distinct SHA-256-derived SQLite namespace, so equal project slugs
+cannot accidentally share records; responses retain the public slug. A
+CONTAINED root cannot access its scoped memory while unrelated listed roots
+can continue. These are deterministic MCP controls, **not authenticated
+caller identity or independent filesystem/OS access controls**.
+
+Legacy slug-only memories are **never automatically migrated or deleted**.
+An operator can run `python scripts/migrate_scoped_memory.py --database
+<absolute-db> --project <slug> --project-root <exact-root>` in an explicitly
+configured trusted-root environment for a counts-only dry run. Apply requires
+`--apply --confirm "MIGRATE SCOPED MEMORY"`, creates a consistent adjacent
+SQLite backup, copies records into the new namespace without replacing
+existing destination keys, and retains legacy records for older hosts. Run
+this only after reviewing which legacy slug belongs to which root and backing
+up owner data; a moved root requires deliberate remapping. Nothing migrates
+on installer upgrade, host startup, or an MCP tool call. Privileged migration
+and real host identity/permission enforcement remain operator/host duties.
 
 **What the gate does not prove:** A blocked attempt is a policy violation, not
 proof of a malicious actor, compromise, or independently verified host session.

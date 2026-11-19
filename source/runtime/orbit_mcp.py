@@ -173,8 +173,29 @@ def get_one(conn, project, key):
     return dict(row) if row else None
 
 
+def memory_scope(a):
+    """Legacy slug or a root-derived internal memory namespace.
+
+    This partitions records by canonical workspace without rewriting legacy
+    memories. The optional project_root is validated by the existing host-side
+    root allowlist. It is not proof of caller identity or OS isolation.
+    """
+    slug = project_key(a)
+    if "project_root" not in a:
+        return slug, slug
+    root = project_root(a)
+    digest = hashlib.sha256(os.path.normcase(str(root)).encode("utf-8")).hexdigest()
+    return slug, "root-v1:" + digest + ":" + slug
+
+
+def public_memory(record, slug):
+    if record is None:
+        return None
+    return {**record, "project": slug}
+
+
 def memory_save(conn, a):
-    project = project_key(a)
+    slug, project = memory_scope(a)
     key = require_string(a, 'key', 160)
     kind = require_string(a, 'kind', 32)
     summary = require_string(a, 'summary', 4000)
@@ -186,7 +207,7 @@ def memory_save(conn, a):
     if not isinstance(evidence, str) or len(evidence) > 4000:
         raise ValueError('Invalid evidence')
     if a.get('confirm_write') is not True:
-        return {'status': 'PREVIEW_ONLY', 'project': project, 'key': key, 'kind': kind, 'summary': summary}
+        return {'status': 'PREVIEW_ONLY', 'project': slug, 'key': key, 'kind': kind, 'summary': summary}
     t = timestamp()
     with conn:
         conn.execute('''INSERT INTO memories(project,key,kind,summary,source,importance,evidence,created_at,updated_at)
@@ -195,11 +216,11 @@ def memory_save(conn, a):
           importance=excluded.importance,evidence=excluded.evidence,updated_at=excluded.updated_at,
           status='ACTIVE',archived_at=NULL,archive_reason=NULL''',
           (project, key, kind, summary, source, importance, evidence, t, t))
-    return {'status': 'SAVED', 'memory': get_one(conn, project, key)}
+    return {'status': 'SAVED', 'memory': public_memory(get_one(conn, project, key), slug)}
 
 
 def memory_recall(conn, a):
-    project = project_key(a)
+    slug, project = memory_scope(a)
     query = a.get('query', '')
     limit = a.get('limit', 5)
     if not isinstance(query, str) or len(query) > 300 or type(limit) is not int or not 1 <= limit <= 20:
@@ -222,21 +243,21 @@ def memory_recall(conn, a):
         if not terms or any(term in content for term in terms):
             matches.append((score, r['updated_at'], r))
     matches.sort(key=lambda x: (x[0],x[1]), reverse=True)
-    return matches[:0] if not matches else [x[2] for x in matches[:limit]]
+    return [public_memory(x[2], slug) for x in matches[:limit]]
 
 
 def memory_archive(conn, a):
-    project = project_key(a)
+    slug, project = memory_scope(a)
     key = require_string(a, 'key', 160)
     reason = require_string(a, 'reason', 500)
     if not get_one(conn, project, key):
         raise ValueError('Record not found in specified project')
     if a.get('confirm_write') is not True:
-        return {'status': 'PREVIEW_ONLY', 'project': project, 'key': key}
+        return {'status': 'PREVIEW_ONLY', 'project': slug, 'key': key}
     t = timestamp()
     with conn:
         conn.execute('UPDATE memories SET status=\'ARCHIVED\',archived_at=?,archive_reason=?,updated_at=? WHERE project=? AND key=?', (t,reason,t,project,key))
-    return {'status': 'ARCHIVED', 'memory': get_one(conn, project, key)}
+    return {'status': 'ARCHIVED', 'memory': public_memory(get_one(conn, project, key), slug)}
 
 
 def single_line(value):
@@ -456,9 +477,9 @@ TOOLS = [
     {'name':'orbit_update_status','description':'Read-only update notice; optional refresh fetches only published GitHub release metadata. It NEVER downloads code, executes an installer or changes a project. User opens Orbit Update Manager to approve installation.', 'inputSchema':schema({'refresh':{'type':'boolean'}},[])}, 
     {'name':'orbit_research_source_save','description':'Preview or save one reviewed external research pointer in folder+project-scoped SQLite; revision-guarded, no downloads, skills, Git writes or independent approval attestation.','inputSchema':schema({'project_root':string(2000),'project':string(80),'source_key':string(80),'url':string(500),'title':string(140),'tags':{'type':'array','minItems':1,'maxItems':8,'items':string(32)},'note':string(1100),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','source_key','url','title','tags','note'])},
     {'name':'orbit_research_context','description':'Read a tiny objective-relevant pack of saved source pointers from this exact project folder+key. No network calls, no execution, no bulk document retrieval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'objective':string(600),'limit':{'type':'integer','minimum':1,'maximum':6},'max_chars':{'type':'integer','minimum':600,'maximum':4500}},['project_root','project','objective'])},
-    {'name':'orbit_memory_save','description':'Preview/save one approved project-scoped memory; explicit confirm_write for persistence.', 'inputSchema':schema({'project':string(80),'key':string(160),'kind':{'type':'string','enum':sorted(KINDS)},'summary':string(4000),'source':string(1000),'evidence':{'type':'string','maxLength':4000},'importance':{'type':'integer','minimum':1,'maximum':5},'confirm_write':{'type':'boolean'}},['project','key','kind','summary','source'])},
-    {'name':'orbit_memory_recall','description':'Read project-scoped SQLite memories, no cross-project recall.', 'inputSchema':schema({'project':string(80),'query':{'type':'string','maxLength':300},'limit':{'type':'integer','minimum':1,'maximum':20},'include_archived':{'type':'boolean'}},['project'])},
-    {'name':'orbit_memory_archive','description':'Non-destructively archive a record on explicit approval.', 'inputSchema':schema({'project':string(80),'key':string(160),'reason':string(500),'confirm_write':{'type':'boolean'}},['project','key','reason'])},
+    {'name':'orbit_memory_save','description':'Preview/save one approved memory; optional root isolates new records from legacy project slugs.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'key':string(160),'kind':{'type':'string','enum':sorted(KINDS)},'summary':string(4000),'source':string(1000),'evidence':{'type':'string','maxLength':4000},'importance':{'type':'integer','minimum':1,'maximum':5},'confirm_write':{'type':'boolean'}},['project','key','kind','summary','source'])},
+    {'name':'orbit_memory_recall','description':'Read legacy or root-scoped SQLite memories; guarded mode requires trusted project_root.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'query':{'type':'string','maxLength':300},'limit':{'type':'integer','minimum':1,'maximum':20},'include_archived':{'type':'boolean'}},['project'])},
+    {'name':'orbit_memory_archive','description':'Non-destructively archive a legacy or root-scoped record on explicit approval.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'key':string(160),'reason':string(500),'confirm_write':{'type':'boolean'}},['project','key','reason'])},
     {'name':'orbit_project_checkpoint','description':'Preview or revision-guarded checkpoint update, without overwriting non-Orbit state.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'milestone':string(250),'gate':string(250),'last_step':string(350),'last_result':{'type':'string','enum':['PASS','FAIL','NOT_RUN','IN_PROGRESS','BLOCKED']},'evidence':string(1400),'next_step':string(350),'blockers':string(1000),'expected_revision':{'type':'string','maxLength':64},'confirm_write':{'type':'boolean'}},['project_root','project','milestone','gate','last_step','last_result','evidence','next_step'])},
     {'name':'orbit_gate_evaluate','description':'Evaluate caller-supplied criteria (not independent test verification).','inputSchema':schema({'checks':{'type':'array','minItems':1,'items':{'type':'object'}}},['checks'])},
     # Product Kit-inspired native task ledger; no Git actions, model spawning or implicit approvals.

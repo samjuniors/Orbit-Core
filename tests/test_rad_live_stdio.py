@@ -34,10 +34,10 @@ class RADLiveStdioTests(unittest.TestCase):
             "params": {"name": name, "arguments": arguments},
         }
 
-    def run_host(self, mode, requests):
+    def run_host(self, mode, requests, *, trusted_roots=None):
         env = {**os.environ,
                "ORBIT_DEFENSE_MODE": mode,
-               "ORBIT_TRUSTED_ROOTS": str(self.temp),
+               "ORBIT_TRUSTED_ROOTS": trusted_roots or str(self.temp),
                "ORBIT_LOCAL_DB": str(self.temp / "test.sqlite3")}
         raw = b"".join(
             (json.dumps(req, separators=(",", ":")) + "\n").encode("utf-8")
@@ -88,6 +88,34 @@ class RADLiveStdioTests(unittest.TestCase):
             "GUARDED", [self.request(8, "orbit_task_list", root_one)])
         self.assertNotIn("HOLD_DEFENSE", str(after_restart[0]))
         self.assertFalse(marker.exists())
+
+    def test_guarded_scoped_memory_over_real_stdio(self):
+        listed = os.pathsep.join((str(self.one), str(self.two)))
+        common = {"project": "same-slug", "key": "test-note",
+                  "kind": "decision", "source": "synthetic",
+                  "confirm_write": True}
+        res = self.run_host("GUARDED", [
+            self.request(1, "orbit_memory_save", {
+                **common, "project_root": str(self.one), "summary": "ONE_CANARY"}),
+            self.request(2, "orbit_memory_save", {
+                **common, "project_root": str(self.two), "summary": "TWO_CANARY"}),
+            self.request(3, "orbit_memory_recall", {
+                "project": "same-slug", "project_root": str(self.one)}),
+            self.request(4, "orbit_memory_recall", {
+                "project": "same-slug", "project_root": str(self.two)}),
+            self.request(5, "orbit_memory_recall", {"project": "same-slug"}),
+        ], trusted_roots=listed)
+        self.assertEqual(res[0]["status"], "SAVED")
+        self.assertEqual(res[1]["status"], "SAVED")
+        self.assertEqual([x["summary"] for x in res[2]], ["ONE_CANARY"])
+        self.assertEqual([x["summary"] for x in res[3]], ["TWO_CANARY"])
+        self.assertEqual(res[4]["status"], "HOLD_DEFENSE_GUARDED")
+        # Listing the parent only must not authorize either child workspace.
+        parent_only = self.run_host("GUARDED", [
+            self.request(6, "orbit_memory_recall", {
+                "project": "same-slug", "project_root": str(self.one)}),
+        ])
+        self.assertEqual(parent_only[0]["status"], "HOLD_DEFENSE_GUARDED")
 
     def test_invalid_host_mode_fails_closed_on_real_stdio(self):
         res = self.run_host("UNRECOGNIZED", [
