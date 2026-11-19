@@ -108,10 +108,14 @@ def run_disposable():
             profile, "Orbit disposable RAD P2", "Synthetic acceptance only",
             None, 0, ctypes.byref(sid))
         report["create_hresult"] = f"0x{hr & 0xffffffff:08x}"
+        # S_OK means this invocation created a profile even if the SID
+        # output is unexpectedly missing: still delete *our* new profile
+        # in finally instead of leaking per-user registration.
+        if hr == 0:
+            report["profile_created"] = True
         if hr != 0 or not sid.value:
-            report["blocker"] = "PROFILE_CREATION_FAILED_OR_ALREADY_EXISTS"
+            report["blocker"] = "PROFILE_CREATION_FAILED_OR_MISSING_SID"
             return report
-        report["profile_created"] = True
 
         ptr = ctypes.c_void_p()
         if not advapi.ConvertSidToStringSidW(sid, ctypes.byref(ptr)):
