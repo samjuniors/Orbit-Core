@@ -1,33 +1,32 @@
-# RAD P2 — disposable Windows LPAC acceptance (operator-only)
+# RAD P2 disposable Windows LPAC acceptance
 
-**Status: DRAFT. NOT EXECUTED ON THE CONNECTED PC. OS SECURITY ACCEPTANCE HOLD.**
+[Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) tracks OS isolation acceptance. Run this procedure manually in an authorized local Windows session with trusted CPython 3.12 or later and an existing x64 MSVC Developer Command Prompt with the Windows SDK. Each run provisions one disposable profile and limits ACL changes to newly created synthetic directories.
 
-Technical procedure for RAD P2 issue #138. The owner authorized one disposable Windows AppContainer profile, scoped synthetic-directory ACL changes, harmless tests and cleanup. The connected Desktop Commander service exhausted its monthly usage quota before any profile could be provisioned. Do not confuse GitHub CI with actual LPAC isolation.
+## Scope
 
-## Safety envelope
+The harness builds the reviewed `scripts/rad_p2_disposable_probe.c` using the installed compiler and SDK. The native probe uses Windows APIs directly and requires no C runtime DLL. The new profile SID gets traverse access on the generated root, read and execute access on the probe, and modify access on the synthetic project. Low integrity applies to the synthetic project only. Separate sibling-project and fake-credential files receive no grants. The only network targets are a private listener on 127.0.0.1 and an IPv4 TCP handshake to 1.1.1.1 port 443. The handshake carries no application data.
 
-The script at scripts/rad_p2_disposable_host_acceptance.py is manual-only, never an installation hook, MCP tool, automated CI action, or host policy update. It creates a fresh temporary synthetic project and a separate sibling folder containing only invented test text (including a FAKE credential fixture). It creates one unique per-user AppContainer profile bound to the canonical temporary project root, never adopts an existing profile, and grants its package SID access ONLY to the newly created project directory. It sets low integrity ONLY on that same temporary directory. No real project, user home, existing ACL, actual credential or system file is read or modified.
+## Run
 
-It attempts a bounded suspended native LPAC child, with kernel token, capability and Job Object checks before resume. A harmless Windows command script attempts to read an allowed synthetic file, rejects access to the sibling test file, and requests only a local 127.0.0.1 test server. No external network requests. The harness closes handles, stops its own Job Object, deletes only the newly created profile, and removes its temporary test folder in a finally block. The cleanup result is separately reported.
-
-## Command and confirmation
-
-Read-only non-mutating plan (exit code 2):
+The default command prints a non-mutating plan and exits 2.
 
     py -3.12 scripts/rad_p2_disposable_host_acceptance.py
 
-Only after inspecting the script and checking the exact authorized operator session, explicitly enable the disposable test:
+Inspect both source files and use the local session's native permission controls for the authorized run.
 
     py -3.12 scripts/rad_p2_disposable_host_acceptance.py --apply --confirm "CREATE DISPOSABLE ORBIT APPCONTAINER"
 
-Do not use a connector workaround to bypass exhausted Desktop Commander quota. The manual command must be executed only by an authorized host operator, not silently through an agent or CI.
+The script emits the generated root and profile name on stderr before provisioning. A separate line records successful creation. Keep both lines and the final JSON. Exit code 2 keeps the overall outcome on hold for review of the individual checks.
 
-## Evidence, safety and recovery
+## Read the evidence
 
-A successful native launcher return is conditional on real OS checks for LPAC AppContainer identity, exact profile SID, effective zero capabilities and Job Object membership. A working allowed synthetic read followed by denied sibling read is useful observational evidence. If child creation, runtime dependencies or the probe fail, label the result BLOCKED/INCONCLUSIVE, never PASS. Failed curl execution is not equivalent to denied network access, and network results remain NOT ATTESTED.
+- The launcher checks the suspended process's AppContainer token, exact package SID, zero effective token capabilities, and membership in the private Job Object. An in-memory Windows access check on the child token must grant the right for restricted application packages while denying the right for all application packages. These checks all precede resume.
+- The child reads known project content and writes a marker verified by the parent. File denial requires Windows error 5 with a working positive control. A missing file or missing child output leaves the check unverified.
+- Each network check requires a successful parent connection and Winsock error 10013 from the LPAC child on the same endpoint. A timeout or unavailable endpoint leaves that check unverified. A successful LPAC connection fails the check.
+- The parent verifies a live descendant in the Job Object using its kernel process handle, then waits for both processes to exit after terminating the job. A second job measures a forced child exit followed by a successful replacement launch using the same profile.
 
-All script results deliberately return exit code 2 and HOLD; none certifies production security. Check both profile_deleted and test_directory_deleted in each result. If either is false, **do not claim cleanup complete**. Reconcile only the exact generated test profile; never delete any pre-existing profile or change broad Windows ACLs. A forced host crash before cleanup can leave a profile; inspect the precise name and Microsoft DeleteAppContainerProfile API before restricted manual recovery. Never retry blindly.
+## Cleanup and recovery
 
-## Release blockers
+The result records the profile deletion HRESULT, absence of the Windows-reported profile storage path, and absence of the exact test root containing the ACL fixtures. Verify each result separately. A controller crash before cleanup can leave the profile or fixtures. Reconcile only the exact identifiers logged by this invocation. Delete a profile only if the run recorded successful creation of that profile. For profile removal, use the documented [DeleteAppContainerProfile API](https://learn.microsoft.com/en-us/windows/win32/api/userenv/nf-userenv-deleteappcontainerprofile) under the same user account after the job has exited.
 
-Independently verify real LPAC cross-project read/write denial, credential fixture denial, network egress denial, symlink/junction traversal, registry and token scope, restart/revocation and native Codex/Antigravity permissions. Implement Linux OS isolation separately. Maintain draft review of PR #139 and the acceptance issue #138; do not merge, install, tag or release as secure based on a synthetic probe alone.
+Host approval and denial, additional filesystem and registry boundaries, private-network scope, and independent security review remain tracked in issue #138. Keep this runner manual and outside CI and installer hooks.

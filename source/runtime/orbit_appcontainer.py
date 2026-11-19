@@ -57,6 +57,17 @@ if os.name == "nt":
                     ("CapabilityCount", wintypes.DWORD),
                     ("Reserved", wintypes.DWORD)]
 
+    class GENERIC_MAPPING(ctypes.Structure):
+        _fields_ = [(right, wintypes.DWORD) for right in (
+            "GenericRead", "GenericWrite", "GenericExecute", "GenericAll")]
+
+    class PRIVILEGE_SET(ctypes.Structure):
+        _fields_ = [
+            ("PrivilegeCount", wintypes.DWORD),
+            ("Control", wintypes.DWORD),
+            ("Privilege", wintypes.DWORD * 3),  # one LUID_AND_ATTRIBUTES
+        ]
+
     EXTENDED_STARTUPINFO_PRESENT = 0x00080000
     CREATE_SUSPENDED = 0x00000004
     CREATE_NO_WINDOW = 0x08000000
@@ -66,10 +77,14 @@ if os.name == "nt":
     PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY = 0x0002000F
     PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT = 1
     TOKEN_QUERY = 0x0008
+    TOKEN_DUPLICATE = 0x0002
     TOKEN_IS_APP_CONTAINER = 29
     TOKEN_CAPABILITIES = 30
     TOKEN_APP_CONTAINER_SID = 31
-    TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER = 46
+    ERROR_INSUFFICIENT_BUFFER = 122
+    SECURITY_IDENTIFICATION = 1
+    MAXIMUM_ALLOWED = 0x02000000
+    LPAC_ONLY_ACCESS = 2
     WAIT_TIMEOUT = 0x102
     WAIT_OBJECT_0 = 0
     INFINITE = 0xFFFFFFFF
@@ -110,14 +125,42 @@ if os.name == "nt":
                                     wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)),
          wintypes.BOOL),
         (_adv.EqualSid, (ctypes.c_void_p, ctypes.c_void_p), wintypes.BOOL),
+        (_adv.GetLengthSid, (ctypes.c_void_p,), wintypes.DWORD),
+        (_adv.DuplicateToken, (wintypes.HANDLE, ctypes.c_int,
+                               ctypes.POINTER(wintypes.HANDLE)), wintypes.BOOL),
+        (_adv.ConvertStringSecurityDescriptorToSecurityDescriptorW,
+         (wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p),
+          ctypes.POINTER(wintypes.DWORD)), wintypes.BOOL),
+        (_adv.AccessCheck, (ctypes.c_void_p, wintypes.HANDLE, wintypes.DWORD,
+                            ctypes.POINTER(GENERIC_MAPPING), ctypes.POINTER(PRIVILEGE_SET),
+                            ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD),
+                            ctypes.POINTER(wintypes.BOOL)), wintypes.BOOL),
     ]
     for _fn, _args, _restype in _apis:
         _fn.argtypes = _args
         _fn.restype = _restype
 
 
-def _error():
-    return ctypes.WinError(ctypes.get_last_error())
+def _error(api=None):
+    code = ctypes.get_last_error()
+    if api:
+        return ctypes.WinError(code, f"{api}: {ctypes.FormatError(code).strip()}")
+    return ctypes.WinError(code)
+
+
+def _environment_block(env):
+    allowed = {"SYSTEMROOT", "WINDIR", "PATH", "TEMP", "TMP", "PORT", "HOST"}
+    clean = {key.upper(): value for key, value in env.items() if key.upper() in allowed}
+    # Windows uses the host LocalAppData to locate the registered profile
+    # during process creation, then supplies the scoped value to the child.
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if not os.path.isabs(local_app_data):
+        raise PermissionError("Windows AppContainer launch requires host LOCALAPPDATA")
+    clean["LOCALAPPDATA"] = local_app_data
+    if any("\0" in value for value in clean.values()):
+        raise ValueError("Invalid sandbox environment")
+    return ctypes.create_unicode_buffer(
+        "\0".join(f"{key}={value}" for key, value in sorted(clean.items())) + "\0\0")
 
 
 def _require_registered_profile(sid):
@@ -130,55 +173,79 @@ def _require_registered_profile(sid):
     sid_string = ctypes.c_void_p()
     if not _adv.ConvertSidToStringSidW(sid, ctypes.byref(sid_string)):
         raise _error()
+    folder = ctypes.c_void_p()
     try:
-        folder = ctypes.c_void_p()
         hr = _userenv.GetAppContainerFolderPath(
             ctypes.wstring_at(sid_string), ctypes.byref(folder))
         if hr != 0 or not folder.value:
-            raise PermissionError("Host AppContainer profile not verifiably provisioned")
-        _ole.CoTaskMemFree(folder)
+            raise PermissionError(
+                f"Host AppContainer profile not verifiably provisioned (0x{hr & 0xffffffff:08x})")
+        return ctypes.wstring_at(folder)
     finally:
+        if folder.value:
+            _ole.CoTaskMemFree(folder)
         _k32.LocalFree(sid_string)
+
+
+def _require_lpac_access(primary_token):
+    """Require the kernel to grant only the restricted application package right."""
+    token = wintypes.HANDLE()
+    descriptor = ctypes.c_void_p()
+    # Everyone covers the normal identity pass. In the restricted pass,
+    # ALL APPLICATION PACKAGES grants bit 1, and the restricted package
+    # group grants bit 2. The only acceptable result is bit 2 by itself.
+    sddl = "O:SYG:SYD:(A;;0x3;;;WD)(A;;0x1;;;AC)(A;;0x2;;;S-1-15-2-2)"
+    if not _adv.DuplicateToken(primary_token, SECURITY_IDENTIFICATION, ctypes.byref(token)):
+        raise _error("DuplicateToken (LPAC access check)")
+    try:
+        if not _adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl, 1, ctypes.byref(descriptor), None):
+            raise _error("ConvertStringSecurityDescriptorToSecurityDescriptorW")
+        mapping = GENERIC_MAPPING()
+        privileges = PRIVILEGE_SET()
+        size = wintypes.DWORD(ctypes.sizeof(privileges))
+        granted, status = wintypes.DWORD(), wintypes.BOOL()
+        if not _adv.AccessCheck(
+                descriptor, token, MAXIMUM_ALLOWED, ctypes.byref(mapping),
+                ctypes.byref(privileges), ctypes.byref(size), ctypes.byref(granted),
+                ctypes.byref(status)):
+            raise _error("AccessCheck (LPAC)")
+        if not status.value or granted.value != LPAC_ONLY_ACCESS:
+            raise PermissionError("Child does not have the required LPAC access semantics")
+    finally:
+        if descriptor.value:
+            _k32.LocalFree(descriptor)
+        _k32.CloseHandle(token)
 
 
 def _token_matches_appcontainer(process_handle, expected_sid):
     """Read OS process token while suspended; do not trust a child response."""
     token = wintypes.HANDLE()
-    if not _adv.OpenProcessToken(process_handle, TOKEN_QUERY, ctypes.byref(token)):
-        raise _error()
+    if not _adv.OpenProcessToken(process_handle, TOKEN_QUERY | TOKEN_DUPLICATE, ctypes.byref(token)):
+        raise _error("OpenProcessToken (LPAC)")
     try:
         length = wintypes.DWORD()
         value = wintypes.DWORD()
         if not _adv.GetTokenInformation(token, TOKEN_IS_APP_CONTAINER,
                                         ctypes.byref(value), ctypes.sizeof(value),
                                         ctypes.byref(length)):
-            raise _error()
+            raise _error("GetTokenInformation (TokenIsAppContainer)")
         if value.value != 1:
             raise PermissionError("Child has no OS-verified AppContainer token")
-        # LPAC excludes broad ALL_APPLICATION_PACKAGES ACL access. If the
-        # installed OS does not support querying this, fail closed rather
-        # than claiming equivalence with a less-restricted AppContainer.
-        least_privileged = wintypes.DWORD()
-        if not _adv.GetTokenInformation(token, TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER,
-                                        ctypes.byref(least_privileged),
-                                        ctypes.sizeof(least_privileged),
-                                        ctypes.byref(length)):
-            raise _error()
-        if least_privileged.value != 1:
-            raise PermissionError("Child token is AppContainer but not LPAC")
         # Requesting zero security capabilities at creation is not a proof
         # of the *effective* child token. Check the OS token before resume.
         # TokenCapabilities returns TOKEN_GROUPS (DWORD GroupCount first).
         cap_length = wintypes.DWORD()
         cap_first = _adv.GetTokenInformation(
             token, TOKEN_CAPABILITIES, None, 0, ctypes.byref(cap_length))
-        if cap_first or ctypes.get_last_error() != 122 or not 4 <= cap_length.value <= 65536:
+        if (cap_first or ctypes.get_last_error() != ERROR_INSUFFICIENT_BUFFER
+                or not 4 <= cap_length.value <= 65536):
             raise PermissionError("Cannot verify child token capabilities")
         cap_buffer = ctypes.create_string_buffer(cap_length.value)
         if not _adv.GetTokenInformation(
                 token, TOKEN_CAPABILITIES, ctypes.cast(cap_buffer, ctypes.c_void_p),
                 ctypes.sizeof(cap_buffer), ctypes.byref(cap_length)):
-            raise _error()
+            raise _error("GetTokenInformation (TokenCapabilities)")
         if not 4 <= cap_length.value <= ctypes.sizeof(cap_buffer):
             raise PermissionError("Malformed child token capability response")
         cap_count = wintypes.DWORD.from_buffer_copy(cap_buffer.raw[:4]).value
@@ -187,18 +254,32 @@ def _token_matches_appcontainer(process_handle, expected_sid):
         # TokenAppContainerSid returns TOKEN_APPCONTAINER_INFORMATION and
         # additional SID bytes, not merely one pointer-sized field.
         required = wintypes.DWORD()
+        pointer_size = ctypes.sizeof(ctypes.c_void_p)
+        sid_size = _adv.GetLengthSid(expected_sid)
         first = _adv.GetTokenInformation(
             token, TOKEN_APP_CONTAINER_SID, None, 0, ctypes.byref(required))
-        if first or not ctypes.sizeof(ctypes.c_void_p) < required.value <= 65536:
+        if (first or ctypes.get_last_error() != ERROR_INSUFFICIENT_BUFFER
+                or not 8 <= sid_size <= 68
+                or not pointer_size + sid_size <= required.value <= 65536):
             raise PermissionError("Unverifiable AppContainer SID buffer length")
         sid_buffer = ctypes.create_string_buffer(required.value)
         if not _adv.GetTokenInformation(
                 token, TOKEN_APP_CONTAINER_SID, ctypes.cast(sid_buffer, ctypes.c_void_p),
                 ctypes.sizeof(sid_buffer), ctypes.byref(required)):
-            raise _error()
+            raise _error("GetTokenInformation (TokenAppContainerSid)")
         actual_sid = ctypes.cast(sid_buffer, ctypes.POINTER(ctypes.c_void_p)).contents.value
-        if not actual_sid or not _adv.EqualSid(actual_sid, expected_sid):
+        start = ctypes.addressof(sid_buffer)
+        if (not pointer_size + sid_size <= required.value <= ctypes.sizeof(sid_buffer)
+                or not actual_sid
+                or not start + pointer_size <= actual_sid <= start + required.value - sid_size):
+            raise PermissionError("Malformed child AppContainer SID response")
+        # A SID's second byte is the subauthority count. Check its encoded
+        # length before passing the returned pointer back to Win32.
+        if 8 + 4 * ctypes.c_ubyte.from_address(actual_sid + 1).value != sid_size:
+            raise PermissionError("Malformed child AppContainer SID length")
+        if not _adv.EqualSid(actual_sid, expected_sid):
             raise PermissionError("Child AppContainer SID does not match host profile")
+        _require_lpac_access(token)
     finally:
         _k32.CloseHandle(token)
 
@@ -206,6 +287,7 @@ def _token_matches_appcontainer(process_handle, expected_sid):
 class IsolatedProcess:
     """Minimal Popen-compatible, native-handle-owning Windows process."""
     def __init__(self, handle, pid):
+        self._handle = 0
         self._handle = int(handle)
         self.pid = int(pid)
         self.returncode = None
@@ -266,28 +348,21 @@ def launch_suspended_verified(*, profile, executable, args, cwd, env, job):
         raise ValueError("Command must begin with the checked absolute interpreter")
     if any(not isinstance(x, str) or not x or "\0" in x for x in args):
         raise ValueError("Invalid command arguments")
-    # This is an intentionally minimal environment. Never forward user profile
-    # paths, API keys, ordinary app data paths, or unreviewed host variables.
-    allowed = {"SYSTEMROOT", "WINDIR", "PATH", "TEMP", "TMP", "PORT", "HOST"}
-    clean = {k: v for k, v in env.items() if k.upper() in allowed}
-    if any("\0" in k or "\0" in v or "=" in k for k, v in clean.items()):
-        raise ValueError("Invalid sandbox environment")
-    block = ctypes.create_unicode_buffer(
-        "\0".join(f"{k}={v}" for k, v in sorted(clean.items())) + "\0\0")
+    block = _environment_block(env)
     command = ctypes.create_unicode_buffer(subprocess.list2cmdline(args))
     sid = ctypes.c_void_p()
-    result = _userenv.DeriveAppContainerSidFromAppContainerName(
-        profile, ctypes.byref(sid))
-    if result != 0 or not sid.value:
-        raise OSError("Could not derive host-provisioned AppContainer SID")
     size = ctypes.c_size_t()
     attributes = None
     initialized = False
     pi = PROCESS_INFORMATION()
     try:
+        result = _userenv.DeriveAppContainerSidFromAppContainerName(
+            profile, ctypes.byref(sid))
+        if result != 0 or not sid.value:
+            raise OSError("Could not derive host-provisioned AppContainer SID")
         _require_registered_profile(sid)
-        _k32.InitializeProcThreadAttributeList(None, 3, 0, ctypes.byref(size))
-        if size.value == 0:
+        probe = _k32.InitializeProcThreadAttributeList(None, 3, 0, ctypes.byref(size))
+        if probe or ctypes.get_last_error() != ERROR_INSUFFICIENT_BUFFER or not size.value:
             raise _error()
         attributes = ctypes.create_string_buffer(size.value)
         attr_addr = ctypes.cast(attributes, ctypes.c_void_p)
@@ -323,9 +398,10 @@ def launch_suspended_verified(*, profile, executable, args, cwd, env, job):
         if not _k32.CreateProcessW(executable, command, None, None, False,
                                     flags, ctypes.cast(block, ctypes.c_void_p),
                                     cwd, ctypes.byref(startup), ctypes.byref(pi)):
-            raise _error()
-        child = IsolatedProcess(pi.hProcess, pi.dwProcessId)
+            raise _error("CreateProcessW (LPAC)")
+        child = None
         try:
+            child = IsolatedProcess(pi.hProcess, pi.dwProcessId)
             # Job membership is assigned by the OS during CreateProcess.
             # Independently read it BEFORE ResumeThread, as well as the token.
             member = wintypes.BOOL()
@@ -335,16 +411,30 @@ def launch_suspended_verified(*, profile, executable, args, cwd, env, job):
                 raise PermissionError("Sandbox child is outside its private Job Object")
             _token_matches_appcontainer(pi.hProcess, sid)
             previous = _k32.ResumeThread(pi.hThread)
+            if previous == 0xFFFFFFFF:
+                raise _error()
             if previous != 1:
                 raise RuntimeError("Unexpected sandbox primary-thread suspend count")
             return child
-        except BaseException:
+        except BaseException as exc:
             try:
-                child.kill()
-                child.wait(timeout=3)
+                if child:
+                    child.kill()
+                    child.wait(timeout=3)
+                else:
+                    job.terminate()
             except (OSError, subprocess.TimeoutExpired):
-                pass
-            child.close()
+                try:
+                    job.terminate()
+                    if child:
+                        child.wait(timeout=3)
+                except (OSError, subprocess.TimeoutExpired):
+                    raise RuntimeError("Could not confirm sandbox child exit; close its private Job Object") from exc
+            finally:
+                if child:
+                    child.close()
+                elif pi.hProcess:
+                    _k32.CloseHandle(pi.hProcess)
             raise
     finally:
         if pi.hThread:

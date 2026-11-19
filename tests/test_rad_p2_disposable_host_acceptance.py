@@ -8,11 +8,16 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import struct
 import subprocess
 import sys
+import tempfile
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "rad_p2_disposable_host_acceptance.py"
+SPEC = importlib.util.spec_from_file_location("rad_p2_manual_host", SCRIPT)
+HARNESS = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(HARNESS)
 
 
 class DisposableHostAcceptanceTests(unittest.TestCase):
@@ -46,12 +51,41 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         self.assertIn("--confirm", process.stdout)
 
     def test_plan_contract_is_nonmutating(self):
-        spec = importlib.util.spec_from_file_location("rad_p2_manual_host", SCRIPT)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        self.assertFalse(module.plan()["ci_auto_execution"])
-        self.assertFalse(module.plan()["external_network"])
-        self.assertFalse(module.plan()["reads_real_credentials"])
+        self.assertFalse(HARNESS.plan()["ci_auto_execution"])
+        self.assertFalse(HARNESS.plan()["external_network"])
+        self.assertFalse(HARNESS.plan()["reads_real_credentials"])
+
+    def test_denial_requires_native_error_and_working_control(self):
+        for expected, inconclusive in ((5, 2), (10013, 10060)):
+            with self.subTest(expected=expected):
+                self.assertEqual(HARNESS.denial_result({"winerror": expected}, expected), "PASS")
+                self.assertEqual(HARNESS.denial_result({"winerror": inconclusive}, expected), "NOT_VERIFIED")
+                self.assertEqual(HARNESS.denial_result({"errno": expected}, expected), "NOT_VERIFIED")
+                self.assertEqual(HARNESS.denial_result({"winerror": expected}, expected, False), "NOT_VERIFIED")
+                self.assertEqual(HARNESS.denial_result({"success": True}, expected, False), "FAIL")
+
+    def test_cleanup_records_a_failure_and_allows_remaining_steps(self):
+        def fail():
+            raise OSError("synthetic cleanup error")
+
+        result = {}
+        HARNESS.record_cleanup(result, "first", fail)
+        HARNESS.record_cleanup(result, "second", lambda: None)
+        self.assertEqual(result, {"first": "FAIL", "first_error": "synthetic cleanup error", "second": "PASS"})
+
+    def test_probe_record_requires_all_fields_and_no_trailing_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            record = Path(tmp) / "result.bin"
+            payload = struct.pack("<10I", 0, 0, 5, 5, 5, 0, 10013, 10013, 1234, 0)
+            record.write_bytes(payload)
+            observations = HARNESS.read_observations(record)
+            self.assertEqual(observations["credential_read"], 5)
+            self.assertEqual(observations["loopback"], 10013)
+            self.assertEqual(observations["descendant_pid"], 1234)
+            for invalid in (payload[:-1], payload + b"x"):
+                record.write_bytes(invalid)
+                with self.assertRaises(struct.error):
+                    HARNESS.read_observations(record)
 
     def test_harness_is_not_in_automatic_workflow(self):
         """Only allow manual script invocation, never auto-run from CI."""

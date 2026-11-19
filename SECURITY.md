@@ -159,14 +159,13 @@ derives its SID and checks the registered profile via the read-only
 **suspended** with no inherited handles and a minimal environment.
 Before executing project code, the parent calls `IsProcessInJob` and
 `OpenProcessToken` / `GetTokenInformation` to verify actual kernel Job
-membership, AppContainer and LPAC status, matching SID, and **zero
+membership, AppContainer status, matching SID, and **zero
 unexpected effective token capabilities** via the OS `TokenCapabilities`
-query. A token with extra capabilities or an unverifiable capability list
-HOLDS before resumption; `SECURITY_CAPABILITIES` request data alone is not
-attestation. The SID information query uses a dynamically sized buffer,
-not a caller-reported identity. Only then does the initial thread resume. Any API or token
-verification failure refuses the launch, kills/reaps the child and never
-falls back to ordinary `Popen`.
+query. To verify LPAC semantics, Windows `AccessCheck` evaluates the
+child's token against an in-memory descriptor. The token must receive the
+right granted to restricted application packages and be denied the right
+granted to all application packages. If any check fails, the launcher
+terminates the child without resuming project code.
 The original P0 `GUARDED` dispatcher still rejects all
 `orbit_preview_start` requests first; the sandbox opt-in cannot override it.
 
@@ -180,22 +179,20 @@ returns HTTP 200. It does not advertise READY or leave an unsupported preview
 running. A separately reviewed loopback capability AND OS-bound endpoint
 ownership check are required before useful isolated browser previews can
 be enabled. An operator should not grant broad network capabilities merely
-to make previews pass. Secret environment variables and owner home paths
-are not forwarded to the native child by default. The optional native
+to make previews pass. The allowlisted launch environment excludes secret
+variables. It supplies host `LOCALAPPDATA` so Windows can locate the
+registered profile and set the child's scoped AppContainer environment.
+The optional native
 module is loaded only when required so missing APIs on older Windows hosts
 do not break legacy Orbit startup.
 
-**Verification limits:** The Win32 SID derivation capability probe and
-synthetic token/denial tests verify the implementation's fail-closed paths
-only. **No host-specific AppContainer profile was created, no real isolated
-child token was independently inspected, and no actual project file/network
-deny fixture has yet passed.** Windows AppContainer export presence or
-deterministic SID derivation is not proof of a registered and working
-sandbox. Cross-project filesystem, junction/symlink, credential, registry
-and network negative tests must pass under a real configured profile before
-claiming OS isolation. On Linux this path HOLDS and does not impersonate a
-sandbox via environment variables. The default legacy mode remains
-unsandboxed and must never be advertised as production-secure execution.
+**Acceptance scope:** The [manual Windows runbook](docs/RAD-P2-DISPOSABLE-ACCEPTANCE.md)
+and [issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) track
+native token, file, network and cleanup results. The disposable harness
+exercises fixed synthetic fixtures. Production acceptance also requires
+junction/symlink, registry, private-network and genuine host-permission
+verification. AppContainer-required mode holds on Linux. Default legacy
+execution remains unsandboxed.
 
 **Read-only operator preflight (does not create profiles):** From a trusted
 shell, run `py -3.12 scripts/rad_p2_preflight.py --project-root PATH_TO_DISPOSABLE_PROJECT`.
