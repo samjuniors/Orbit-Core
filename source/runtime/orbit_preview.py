@@ -6,6 +6,8 @@ Persistent cross-session supervision and browser QA are separate milestones.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -32,6 +34,10 @@ SAFE_ENV_NAMES = {'PATH','HOME','USER','USERNAME','SYSTEMROOT','WINDIR','TEMP','
 ALLOWED_EXES = {'python', 'python3', 'python.exe', 'python3.exe', 'node', 'node.exe',
                 'npm', 'npm.cmd', 'pnpm', 'pnpm.cmd', 'yarn', 'yarn.cmd', 'bun', 'bun.exe'}
 SESSIONS = {}
+# Both values are captured at host startup: no MCP argument or project file
+# can switch off isolation or supply a different AppContainer profile.
+PREVIEW_ISOLATION_MODE = os.environ.get('ORBIT_PREVIEW_ISOLATION', 'legacy').strip().lower()
+PREVIEW_PROFILE_BINDINGS = os.environ.get('ORBIT_APPCONTAINER_PROFILES', '')
 
 
 class RejectRedirect(urllib.request.HTTPRedirectHandler):
@@ -128,6 +134,33 @@ def safe_log_folder(root):
     return directory
 
 
+def isolated_profile_for(root):
+    mode = PREVIEW_ISOLATION_MODE
+    if mode == 'legacy':
+        return None, None
+    hold = {'status': 'HOLD_OS_ISOLATION_REQUIRED',
+            'execution_started': False, 'state_written': False,
+            'owner_authenticated': False, 'host_permission_verified': False}
+    if mode != 'appcontainer-required' or os.name != 'nt':
+        return None, hold
+    # Preserve the OS sandbox boundary independently of MCP confirmation.
+    if os.environ.get('ORBIT_PREVIEW_INHERIT_ENV') == '1' or os.environ.get('ORBIT_PREVIEW_KEEP_ALIVE') == '1':
+        return None, hold
+    try:
+        configured = json.loads(PREVIEW_PROFILE_BINDINGS)
+        if not isinstance(configured, dict) or len(configured) > 64:
+            return None, hold
+        canonical = str(Path(root).resolve(strict=True))
+        expected = 'orbit-rad-' + hashlib.sha256(
+            os.path.normcase(canonical).encode('utf-8')).hexdigest()[:24]
+        profile = configured.get(canonical)
+        if profile != expected:
+            return None, hold
+    except (ValueError, OSError, RuntimeError, TypeError):
+        return None, hold
+    return profile, None
+
+
 def start(root, a):
     key = preview_key(root, a['preview_id'])
     port = check_port(a['port'])
@@ -140,6 +173,9 @@ def start(root, a):
         return {'status':'PREVIEW_ONLY', 'project_root':str(root), 'preview_id':key[1],
                 'command':command, 'url':f'http://127.0.0.1:{port}{path}',
                 'notice':'Starting this command executes project code. Review it and explicitly approve first.'}
+    isolated_profile, isolation_hold = isolated_profile_for(root)
+    if isolation_hold is not None:
+        return isolation_hold
     resolved = command[0] if Path(command[0]).is_absolute() else shutil.which(command[0])
     if not resolved:
         raise ValueError('Runtime not found on PATH: '+command[0])
@@ -185,15 +221,30 @@ def start(root, a):
         # instruction of project code until job assignment succeeds. Python's
         # Popen closes the primary thread handle; WindowsJob.resume uses a
         # documented thread snapshot and refuses ambiguous/missing handles.
-        if job is not None:
+        if job is not None and isolated_profile is None:
             kwargs['creationflags'] |= 0x00000004  # Win32 CREATE_SUSPENDED
         proc = None
         try:
-            proc = subprocess.Popen([resolved, *command[1:]], **kwargs)
-            if job is not None:
-                job.assign(proc)
-                job.resume(proc)
-        except (OSError, RuntimeError) as exc:
+            if isolated_profile is not None:
+                # Older Windows may lack the LPAC/profile APIs. Do not fail
+                # ordinary legacy MCP initialization merely by importing the
+                # optional adapter; required mode holds on missing APIs.
+                try:
+                    import orbit_appcontainer
+                except (OSError, ImportError, AttributeError) as unavailable:
+                    raise OSError('Host AppContainer APIs unavailable') from unavailable
+                # Native Win32 path: pre-existing profile, zero capabilities,
+                # verified token and atomic creation-time Job Object.
+                proc = orbit_appcontainer.launch_suspended_verified(
+                    profile=isolated_profile, executable=str(inside),
+                    args=[str(inside), *command[1:]], cwd=str(root),
+                    env=env, job=job)
+            else:
+                proc = subprocess.Popen([resolved, *command[1:]], **kwargs)
+                if job is not None:
+                    job.assign(proc)
+                    job.resume(proc)
+        except (OSError, RuntimeError, ValueError) as exc:
             # A failed job assignment/resume cannot run project code; stop
             # and reap the suspended or partially resumed child. This does
             # not provide independent file, network or credential isolation.
@@ -205,10 +256,14 @@ def start(root, a):
                     pass
             if job is not None:
                 job.close()
-            return {'status':'HOLD_HOST_PROCESS_BOUNDARY' if os.name == 'nt' else 'START_FAILED',
-                    'error':type(exc).__name__,
-                    'notice':'Preview was not accepted as managed; inspect the host process policy.'}
-    session = {'proc':proc,'job':job,'root':str(root),'preview_id':key[1], 'port':port,'health_path':path,
+            return {'status': ('HOLD_OS_ISOLATION_REQUIRED' if isolated_profile is not None
+                               else 'HOLD_HOST_PROCESS_BOUNDARY' if os.name == 'nt'
+                               else 'START_FAILED'),
+                    'error':type(exc).__name__, 'execution_started':False,
+                    'notice':'Preview was not accepted as managed; inspect host process policy.'}
+    session = {'proc':proc,'job':job,'isolation':('APPCONTAINER_TOKEN_VERIFIED'
+               if isolated_profile is not None else None),
+               'root':str(root),'preview_id':key[1], 'port':port,'health_path':path,
                'command':list(command), 'logfile':str(logfile),'started_at':time.time()}
     SESSIONS[key] = session
     for _ in range(16):
@@ -216,8 +271,26 @@ def start(root, a):
             break
         probe=http_probe(port, path)
         if probe['healthy']:
-            return {'status':'READY', **view(session)}
+            if isolated_profile is None:
+                return {'status':'READY', **view(session)}
+            # A 200 response cannot attest that this child owns the port;
+            # until an approved OS-bound endpoint check exists, stop it.
+            break
         time.sleep(0.2)
+    if isolated_profile is not None:
+        # No network capability (including loopback) is silently granted to
+        # an AppContainer. A preview without a reachable health endpoint is
+        # not accepted or left running under a misleading READY claim.
+        try:
+            _terminate_session(session)
+            SESSIONS.pop(key, None)
+        except (OSError, subprocess.TimeoutExpired):
+            return {'status':'HOLD_OS_ISOLATION_CLEANUP_UNVERIFIED',
+                    'preview_id':key[1], 'execution_started':True}
+        return {'status':'HOLD_OS_ISOLATION_ENDPOINT_UNVERIFIED',
+                'preview_id':key[1], 'isolation':'APPCONTAINER_TOKEN_VERIFIED',
+                'execution_started':True, 'running':False,
+                'notice':'Child LPAC token was checked, but loopback capability and endpoint ownership have not been accepted.'}
     return {'status':'STARTED_NOT_READY' if proc.poll() is None else 'EXITED',**view(session)}
 
 
@@ -237,6 +310,7 @@ def view(session):
     running = proc.poll() is None
     probe = http_probe(session['port'],session['health_path']) if running else {'reachable':False,'healthy':False}
     return {'project_root':session['root'],'preview_id':session['preview_id'],
+            'isolation':session.get('isolation') or 'NOT_OS_SANDBOXED',
             'pid':proc.pid, 'running':running, 'exit_code':None if running else proc.returncode,
             'port':session['port'], 'preview_url':f"http://127.0.0.1:{session['port']}/",
             'readiness':probe, 'logs':log_tail(session['logfile']),

@@ -126,6 +126,79 @@ Do not merge/release without exact-head Windows/Linux CI, package parity,
 native Codex and Antigravity safe host checks where available, owner review,
 and explicit approval.
 
+## RAD P2: opt-in Windows AppContainer launch adapter (draft / NOT ACCEPTED)
+
+Orbit's local preview manager now has a host-startup-only
+`ORBIT_PREVIEW_ISOLATION=appcontainer-required` mode, backed by
+`orbit_appcontainer.py`. Its default remains `legacy` for existing host
+compatibility. Unknown policy values **HOLD**; no MCP argument, project file,
+model instruction or project-provided manifest can enable or disable the
+process isolation mode.
+
+In required mode the host must supply a JSON object in
+`ORBIT_APPCONTAINER_PROFILES` mapping a **canonical absolute project root** to
+the exact Windows profile name
+`orbit-rad-<first 24 hex SHA256 of os.path.normcase(root)>`.
+The runtime accepts neither sibling directories nor the same profile for
+another root. The host must **pre-provision** this profile and review its
+project-specific filesystem ACLs and capabilities separately. Orbit never
+calls `CreateAppContainerProfile`, changes filesystem ACLs, installs a
+sandbox feature, enables elevation, changes the system registry, modifies
+global IDE configurations or implicitly transfers SQLite records. If no
+binding exists, the mode is unsupported, or `ORBIT_PREVIEW_KEEP_ALIVE=1` /
+`ORBIT_PREVIEW_INHERIT_ENV=1` is set, **HOLD before process launch**.
+
+For a configured Windows profile, the optional native path first
+derives its SID and checks the registered profile via the read-only
+`GetAppContainerFolderPath` API. Failure HOLDS; SID derivation alone is
+**not** profile-registration proof. It builds `STARTUPINFOEX` with
+`PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES`, zero capabilities, an
+`ALL_APPLICATION_PACKAGES` opt-out (LPAC), **and
+`PROC_THREAD_ATTRIBUTE_JOB_LIST`**, assigning the private Job Object
+**atomically during process creation**. The interpreter is created
+**suspended** with no inherited handles and a minimal environment.
+Before executing project code, the parent calls `IsProcessInJob` and
+`OpenProcessToken` / `GetTokenInformation` to verify actual kernel Job
+membership, AppContainer and LPAC status, and matching SID. The SID
+information query uses a dynamically sized buffer, not a caller-reported
+identity. Only then does the initial thread resume. Any API or token
+verification failure refuses the launch, kills/reaps the child and never
+falls back to ordinary `Popen`.
+The original P0 `GUARDED` dispatcher still rejects all
+`orbit_preview_start` requests first; the sandbox opt-in cannot override it.
+
+**Preview networking is NOT accepted yet:** No internetClient or
+internetClientServer capability is automatically granted. A healthy HTTP
+response by itself cannot establish that the **isolated child** owns the
+loopback endpoint. Therefore an AppContainer-required preview is always
+terminated after the bounded health probe and returns
+`HOLD_OS_ISOLATION_ENDPOINT_UNVERIFIED`, even when an unrelated process
+returns HTTP 200. It does not advertise READY or leave an unsupported preview
+running. A separately reviewed loopback capability AND OS-bound endpoint
+ownership check are required before useful isolated browser previews can
+be enabled. An operator should not grant broad network capabilities merely
+to make previews pass. Secret environment variables and owner home paths
+are not forwarded to the native child by default. The optional native
+module is loaded only when required so missing APIs on older Windows hosts
+do not break legacy Orbit startup.
+
+**Verification limits:** The Win32 SID derivation capability probe and
+synthetic token/denial tests verify the implementation's fail-closed paths
+only. **No host-specific AppContainer profile was created, no real isolated
+child token was independently inspected, and no actual project file/network
+deny fixture has yet passed.** Windows AppContainer export presence or
+deterministic SID derivation is not proof of a registered and working
+sandbox. Cross-project filesystem, junction/symlink, credential, registry
+and network negative tests must pass under a real configured profile before
+claiming OS isolation. On Linux this path HOLDS and does not impersonate a
+sandbox via environment variables. The default legacy mode remains
+unsandboxed and must never be advertised as production-secure execution.
+
+Engineering acceptance / owner approval and durable implementation follow
+[Orbit RAD P2 issue #138](https://github.com/samjuniors/Orbit-Core/issues/138)
+and the existing Notion security research hub. Keep this branch draft;
+no auto-merge, release, install or owner-data migration.
+
 ## v0.29 installed-skill discovery trust boundary
 
 - **Read-only by design:** `orbit_capability_select` can recommend and hash locally installed `SKILL.md` candidates. A shortlist or `orbit-skill-plan-v2` pin does **not** authenticate a publisher, verify a license, authorize a skill, install anything, execute helpers, or attest the host's capabilities.
