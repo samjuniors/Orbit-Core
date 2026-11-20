@@ -44,7 +44,7 @@ def disposable_child_hello(pipe_name, *, expected_server_pid, timeout_seconds=3)
     # Do not request GENERIC_WRITE: its mapped rights include
     # FILE_CREATE_PIPE_INSTANCE (0x0004), deliberately absent from our DACL.
     # Request only the exact client mask granted by the SID-scoped pipe.
-    PIPE_CLIENT_ACCESS = 0x00120083
+    PIPE_CLIENT_ACCESS = winpipe.CLIENT_GRANTED_ACCESS
     OPEN_EXISTING = 3
     FILE_FLAG_OVERLAPPED = 0x40000000
     SECURITY_SQOS_PRESENT = 0x00100000
