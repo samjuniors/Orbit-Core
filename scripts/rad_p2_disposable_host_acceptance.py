@@ -181,8 +181,8 @@ def _neutralize_pe_manifest(dll_path):
             return True
     return False
 
-def stage_python(destination):
-    """Stage only the trusted base interpreter and standard library in the fixture."""
+def stage_python(destination, *, ipc=False):
+    """Stage only trusted CPython files in a disposable, bounded fixture."""
     base = Path(sys.base_prefix).resolve(strict=True)
     abi = f"python{sys.version_info.major}{sys.version_info.minor}"
     destination.mkdir(parents=True, exist_ok=True)
@@ -191,7 +191,13 @@ def stage_python(destination):
         shutil.copyfile(base / name, destination / name)
     shutil.copytree(base / "Lib", destination / "Lib",
                     ignore=shutil.ignore_patterns("site-packages", "__pycache__", "test"))
-    (destination / (abi + "._pth")).write_text("Lib\n", encoding="ascii")
+    if ipc:
+        # ctypes uses native stdlib .pyd/.dll dependencies on Windows. These
+        # are copied into the disposable tree, not installed or published.
+        shutil.copytree(base / "DLLs", destination / "DLLs",
+                        ignore=shutil.ignore_patterns("__pycache__", "test"))
+    (destination / (abi + "._pth")).write_text(
+        "Lib\nDLLs\n" if ipc else "Lib\n", encoding="ascii")
     _neutralize_pe_manifest(destination / (abi + ".dll"))
     return str(destination / "python.exe")
 
@@ -263,6 +269,8 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
     # A pipe test is never an implicit privilege or preview-mode switch.
     if ipc_handshake and not python_startup:
         return {"status": "HOLD_IPC_REQUIRES_STAGED_PYTHON", "profile_created": False}
+    if ipc_handshake and capability_registry_read:
+        return {"status": "HOLD_IPC_ZERO_CAPABILITY_ONLY", "profile_created": False}
     if os.name != "nt":
         return {"status": "HOLD_WINDOWS_ONLY", "profile_created": False}
     if sys.version_info < (3, 12):
@@ -355,7 +363,7 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
             report["native_winsock_control_exit"] = winsock_control.returncode
             if python_startup:
                 checks["python_startup"] = "NOT_RUN"
-                python_exe = stage_python(staged_runtime / "python")
+                python_exe = stage_python(staged_runtime / "python", ipc=ipc_handshake)
                 if ipc_handshake:
                     # Source-scoped package, never copied to host Python or install artifacts.
                     shutil.copytree(Path(__file__).with_name("rad_p2_preview_ipc"),
