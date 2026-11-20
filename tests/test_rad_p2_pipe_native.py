@@ -10,9 +10,9 @@ from pathlib import Path
 import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source" / "runtime"))
-import orbit_lpac_ipc as ipc
-import orbit_lpac_pipe_native as native
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from rad_p2_preview_ipc import protocol as ipc
+from rad_p2_preview_ipc import winpipe as native
 
 
 class TestLPACPipeFailClosed(unittest.TestCase):
