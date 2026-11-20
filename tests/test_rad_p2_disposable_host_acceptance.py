@@ -43,6 +43,8 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
                      ("--diagnose-resources",),
                      ("--capability-registry-read",),
                      ("--ipc-handshake",),
+                     ("--ipc-wsgi",),
+                     ("--apply", "--ipc-wsgi"),
                      ("--apply", "--ipc-handshake"),
                      ("--apply", "--diagnose-resources")):
             with self.subTest(args=args):
@@ -58,6 +60,7 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         self.assertIn("--diagnose-resources", process.stdout)
         self.assertIn("--capability-registry-read", process.stdout)
         self.assertIn("--ipc-handshake", process.stdout)
+        self.assertIn("--ipc-wsgi", process.stdout)
 
     def test_plan_contract_is_nonmutating(self):
         self.assertFalse(HARNESS.plan()["ci_auto_execution"])
@@ -122,6 +125,20 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
             ipc_handshake=True, python_startup=True, capability_registry_read=True)
         self.assertEqual(without_network["status"], "HOLD_IPC_ZERO_CAPABILITY_ONLY")
         self.assertIs(without_network["profile_created"], False)
+        http_without_handshake = HARNESS.run_disposable(
+            ipc_wsgi=True, python_startup=True)
+        self.assertEqual(http_without_handshake["status"],
+                         "HOLD_IPC_WSGI_REQUIRES_HANDSHAKE")
+        self.assertIs(http_without_handshake["profile_created"], False)
+        http_without_python = HARNESS.run_disposable(
+            ipc_wsgi=True, ipc_handshake=True)
+        self.assertEqual(http_without_python["status"], "HOLD_IPC_REQUIRES_STAGED_PYTHON")
+        self.assertIs(http_without_python["profile_created"], False)
+        http_with_network = HARNESS.run_disposable(
+            ipc_wsgi=True, ipc_handshake=True,
+            python_startup=True, capability_registry_read=True)
+        self.assertEqual(http_with_network["status"], "HOLD_IPC_ZERO_CAPABILITY_ONLY")
+        self.assertIs(http_with_network["profile_created"], False)
 
     def test_harness_is_not_in_automatic_workflow(self):
         """Only allow manual script invocation, never auto-run from CI."""
