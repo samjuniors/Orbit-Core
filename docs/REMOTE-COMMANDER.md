@@ -8,8 +8,8 @@ Keep Orbit Core local-first. A remote PC connector is optional and must not enta
 
 ## Code and tests
 
-- `source/runtime/orbit_remote_commander.py`: dependency-free local stdio MCP prototype. Requires `ORBIT_RC_ROOT` pointing to a specific existing project folder. Default read-only tools: `orbit_rc_status`, `orbit_rc_list` and `orbit_rc_read`. Opt-in existing-file, SHA-guarded `orbit_rc_write` and fixed Git diagnostics `orbit_rc_check` are disabled by default. No arbitrary shell, networking, UI control, background process, installer or shared credential service.
-- `source/runtime/orbit_remote_fallback.py`: deterministic selector that works only on **actual, verified** host state and independent permission observations. It does not install, authenticate, or invoke tools.
+- `extras/remote-commander/orbit_remote_commander.py`: dependency-free local stdio MCP prototype. Requires `ORBIT_RC_ROOT` pointing to a specific existing project folder. Default read-only tools: `orbit_rc_status`, `orbit_rc_list` and `orbit_rc_read`. Opt-in existing-file, SHA-guarded `orbit_rc_write` and fixed Git diagnostics `orbit_rc_check` are disabled by default. No arbitrary shell, networking, UI control, background process, installer or shared credential service.
+- `extras/remote-commander/orbit_remote_fallback.py`: deterministic selector that works only on **actual, verified** host state and independent permission observations. It does not install, authenticate, or invoke tools.
 - `tests/test_remote_commander.py` and `tests/test_remote_fallback.py`: local source, MCP framing and fallback safety regression tests.
 
 Test using Python 3.10+:
@@ -22,7 +22,7 @@ python -m unittest discover -s tests -p 'test_remote_*.py' -v
 An MCP **stdio-capable local desktop client** can explicitly start:
 
 ```bash
-python /absolute/path/to/Orbit-Core/source/runtime/orbit_remote_commander.py
+python /absolute/path/to/Orbit-Core/extras/remote-commander/orbit_remote_commander.py
 ```
 
 Supply an environment limited to one disposable project, e.g. `ORBIT_RC_ROOT=D:\\Projects\\orbit-rc-lab`, `ORBIT_RC_ALLOW_WRITE=0`, and `ORBIT_RC_ALLOW_CHECKS=0`. A host's MCP config syntax varies; adding this process to one IDE does not automatically register it in ChatGPT web or other hosts. Run `orbit_rc_status` and verify `READY_LOCAL_STDIO`, then test harmless text reads and denial of traversal/secret paths.
