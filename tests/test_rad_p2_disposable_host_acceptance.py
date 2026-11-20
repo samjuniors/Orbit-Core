@@ -42,6 +42,8 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
                      ("--python-startup",),
                      ("--diagnose-resources",),
                      ("--capability-registry-read",),
+                     ("--ipc-handshake",),
+                     ("--apply", "--ipc-handshake"),
                      ("--apply", "--diagnose-resources")):
             with self.subTest(args=args):
                 process = self.run_cli(*args)
@@ -55,6 +57,7 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         self.assertIn("--confirm", process.stdout)
         self.assertIn("--diagnose-resources", process.stdout)
         self.assertIn("--capability-registry-read", process.stdout)
+        self.assertIn("--ipc-handshake", process.stdout)
 
     def test_plan_contract_is_nonmutating(self):
         self.assertFalse(HARNESS.plan()["ci_auto_execution"])
@@ -109,6 +112,12 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         HARNESS.record_network_checks(checks, samples, controls, native_control=False)
         self.assertEqual(checks, {"loopback_denial": "NOT_VERIFIED",
                                   "external_denial": "NOT_VERIFIED"})
+
+    def test_ipc_requires_staged_python_even_before_touching_windows(self):
+        # This is a pure preflight test; neither profile nor ACL is created.
+        outcome = HARNESS.run_disposable(ipc_handshake=True, python_startup=False)
+        self.assertEqual(outcome["status"], "HOLD_IPC_REQUIRES_STAGED_PYTHON")
+        self.assertIs(outcome["profile_created"], False)
 
     def test_harness_is_not_in_automatic_workflow(self):
         """Only allow manual script invocation, never auto-run from CI."""
