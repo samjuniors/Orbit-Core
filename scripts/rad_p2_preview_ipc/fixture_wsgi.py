@@ -87,15 +87,20 @@ def dispatch_fixture_request(data):
         raise IPCSecurityHold("WSGI did not provide an HTTP response")
     status, headers = captured[0]
     codes = {"200 OK": 200, "404 Not Found": 404}
-    if status not in codes or type(headers) is not list:
+    if type(status) is not str or status not in codes or type(headers) is not list:
         raise IPCSecurityHold("Unexpected WSGI status or headers")
     if len(headers) != 2 or headers[0][0] != "Content-Type" or headers[1][0] != "Content-Length":
         raise IPCSecurityHold("Unexpected WSGI metadata")
     content_type = headers[0][1]
-    if content_type not in CONTENT_TYPES:
+    if type(content_type) is not str or content_type not in CONTENT_TYPES:
         raise IPCSecurityHold("Unsupported WSGI content type")
     if type(headers[1][1]) is not str or not headers[1][1].isdigit():
         raise IPCSecurityHold("Malformed WSGI content length")
+    declared = int(headers[1][1])
+    if (declared > MAX_BODY or
+            (msg["method"] == "GET" and declared != len(buffer)) or
+            (msg["method"] == "HEAD" and buffer)):
+        raise IPCSecurityHold("WSGI content length or HEAD response mismatch")
     return encode_envelope({
         "v": 1, "type": "response", "seq": msg["seq"],
         "status": codes[status], "content_type": content_type,
