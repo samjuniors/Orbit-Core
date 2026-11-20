@@ -41,14 +41,16 @@ def disposable_child_hello(pipe_name, *, expected_server_pid, timeout_seconds=3)
 
     if not kernel.WaitNamedPipeW(pipe_name, int(timeout_seconds * 1000)):
         raise IPCSecurityHold("Expected host named pipe unavailable")
-    GENERIC_READ = 0x80000000
-    GENERIC_WRITE = 0x40000000
+    # Do not request GENERIC_WRITE: its mapped rights include
+    # FILE_CREATE_PIPE_INSTANCE (0x0004), deliberately absent from our DACL.
+    # Request only the exact client mask granted by the SID-scoped pipe.
+    PIPE_CLIENT_ACCESS = 0x00120083
     OPEN_EXISTING = 3
     FILE_FLAG_OVERLAPPED = 0x40000000
     SECURITY_SQOS_PRESENT = 0x00100000
     SECURITY_IDENTIFICATION = 0x00010000
     pipe = kernel.CreateFileW(
-        pipe_name, GENERIC_READ | GENERIC_WRITE, 0, None, OPEN_EXISTING,
+        pipe_name, PIPE_CLIENT_ACCESS, 0, None, OPEN_EXISTING,
         FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
         None)
     if not pipe or pipe == winpipe.INVALID_HANDLE:
