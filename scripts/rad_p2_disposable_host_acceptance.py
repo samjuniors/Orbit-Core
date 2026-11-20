@@ -62,10 +62,10 @@ def build_probe(destination):
     """Build the reviewed fixture source with the configured local MSVC SDK."""
     destination.mkdir()
     executable = destination / "probe.exe"
-    override = os.environ.get("ORBIT_PROBE_EXECUTABLE")
-    if override and Path(override).is_file():
-        shutil.copyfile(override, executable)
-        return executable
+    # Never substitute a caller-selected binary for the reviewed native probe.
+    # Such a file can report fabricated denials and invalidate OS acceptance.
+    if "ORBIT_PROBE_EXECUTABLE" in os.environ:
+        raise PermissionError("ORBIT_PROBE_EXECUTABLE override is forbidden; compile the reviewed source")
     toolchain = os.environ.get("VCToolsInstallDir")
     if not toolchain:
         raise RuntimeError("Start from an x64 MSVC Developer Command Prompt")
@@ -113,53 +113,73 @@ def assert_absent(path):
 
 
 def _neutralize_pe_manifest(dll_path):
-    """Neutralize embedded RT_MANIFEST in staged DLLs to allow LPAC loading.
+    """Patch only a structurally valid manifest entry in a *staged* DLL copy.
 
-    Under Windows LPAC, CSRSS SxS activation context creation from DLLs is
-    blocked by container security policy (STATUS_ACCESS_DENIED, 0xC0000022).
-    Neutralizing the manifest entry in the staged copy allows the NT Loader
-    to skip activation context creation and load the DLL with status 0,
-    without granting additional OS capabilities or modifying host files.
+    This is a disposable diagnostic, not a production runtime preparation
+    method. The original Python installation and signed release binaries are
+    never modified. A malformed PE must be rejected without writing anything.
     """
-    if not dll_path.is_file():
+    if not dll_path.is_file() or dll_path.is_symlink():
+        return False
+    if dll_path.stat().st_size > 128 * 1024 * 1024:
         return False
     data = bytearray(dll_path.read_bytes())
     if len(data) < 0x40 or data[:2] != b"MZ":
         return False
     e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
-    if len(data) < e_lfanew + 0x108 or data[e_lfanew:e_lfanew + 4] != b"PE\0\0":
+    if e_lfanew < 0x40 or e_lfanew + 24 > len(data):
         return False
-    opt_header = e_lfanew + 24
-    magic = struct.unpack_from("<H", data, opt_header)[0]
-    rsrc_dir_offset = opt_header + (128 if magic == 0x20B else 112)
-    rsrc_rva, rsrc_size = struct.unpack_from("<II", data, rsrc_dir_offset)
-    if not rsrc_rva or not rsrc_size:
+    if data[e_lfanew:e_lfanew + 4] != b"PE\x00\x00":
         return False
     num_sections = struct.unpack_from("<H", data, e_lfanew + 6)[0]
     opt_size = struct.unpack_from("<H", data, e_lfanew + 20)[0]
+    opt_header = e_lfanew + 24
+    if not 1 <= num_sections <= 96 or opt_header + opt_size > len(data):
+        return False
+    if opt_size < 2:
+        return False
+    magic = struct.unpack_from("<H", data, opt_header)[0]
+    if magic == 0x20B:
+        rsrc_dir_offset = 128  # PE32+ resource entry in data directory
+    elif magic == 0x10B:
+        rsrc_dir_offset = 112  # PE32 resource entry
+    else:
+        return False
+    if opt_size < rsrc_dir_offset + 8:
+        return False
+    rsrc_rva, rsrc_size = struct.unpack_from("<II", data, opt_header + rsrc_dir_offset)
+    if not rsrc_rva or rsrc_size < 16:
+        return False
     sec_offset = opt_header + opt_size
-    rsrc_raw = 0
+    if sec_offset + num_sections * 40 > len(data):
+        return False
+    rsrc_raw = None
+    rsrc_limit = None
     for i in range(num_sections):
-        sec = data[sec_offset + i * 40 : sec_offset + (i + 1) * 40]
-        vrva, vsize, rraw = struct.unpack_from("<III", sec, 12)
-        if vrva <= rsrc_rva < vrva + vsize:
-            rsrc_raw = rraw + (rsrc_rva - vrva)
+        off = sec_offset + i * 40
+        virtual_size, virtual_addr, raw_size, raw_ptr = struct.unpack_from("<4I", data, off + 8)
+        if virtual_addr <= rsrc_rva < virtual_addr + max(virtual_size, raw_size):
+            relative = rsrc_rva - virtual_addr
+            if relative + rsrc_size > raw_size or raw_ptr + raw_size > len(data):
+                return False
+            rsrc_raw = raw_ptr + relative
+            rsrc_limit = rsrc_raw + rsrc_size
             break
-    if not rsrc_raw or rsrc_raw + 16 > len(data):
+    if rsrc_raw is None or rsrc_limit > len(data):
         return False
     num_named, num_id = struct.unpack_from("<HH", data, rsrc_raw + 12)
-    entries_offset = rsrc_raw + 16
-    for i in range(num_named, num_named + num_id):
-        entry_offset = entries_offset + i * 8
-        if entry_offset + 8 > len(data):
-            break
-        type_id, _ = struct.unpack_from("<II", data, entry_offset)
-        if type_id == 24:  # RT_MANIFEST
-            struct.pack_into("<I", data, entry_offset, 0x7FFF)
+    count = num_named + num_id
+    entries = rsrc_raw + 16
+    if count > 4096 or entries + count * 8 > rsrc_limit:
+        return False
+    for i in range(num_named, count):
+        offset = entries + i * 8
+        type_id, _ = struct.unpack_from("<II", data, offset)
+        if type_id == 24:  # Embedded RT_MANIFEST resource ID
+            struct.pack_into("<I", data, offset, 0x7FFF)
             dll_path.write_bytes(data)
             return True
     return False
-
 
 def stage_python(destination):
     """Stage only the trusted base interpreter and standard library in the fixture."""
@@ -307,6 +327,13 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
                 folder.mkdir()
             staged_runtime = root / "runtime"
             executable = str(build_probe(staged_runtime))
+            # Record provenance for independent acceptance: the reviewed C
+            # input and actual built executable bytes are different evidence.
+            import hashlib
+            report["probe_source_sha256"] = hashlib.sha256(
+                Path(__file__).with_name("rad_p2_disposable_probe.c").read_bytes()).hexdigest()
+            report["probe_executable_sha256"] = hashlib.sha256(
+                Path(executable).read_bytes()).hexdigest()
             system_root = Path(os.environ["SystemRoot"]).resolve(strict=True)
             env = {"SystemRoot": str(system_root), "WINDIR": str(system_root),
                    "PATH": str(system_root / "System32"), "TEMP": str(project), "TMP": str(project)}

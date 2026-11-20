@@ -4,7 +4,7 @@
 
 ## Scope
 
-The harness builds the reviewed `scripts/rad_p2_disposable_probe.c` using the installed compiler and SDK. The native probe uses Windows APIs directly and requires no C runtime DLL. The new profile SID gets traverse access on the generated root, read and execute access on the probe, and modify access on the synthetic project. Low integrity applies to the synthetic project only. Separate sibling-project and fake-credential files receive no grants. The only network targets are a private listener on 127.0.0.1 and an IPv4 TCP handshake to 1.1.1.1 port 443. The handshake carries no application data.
+The harness builds the reviewed `scripts/rad_p2_disposable_probe.c` using the installed compiler and SDK. An environment-supplied `ORBIT_PROBE_EXECUTABLE` is explicitly rejected: an arbitrary binary could forge native denial results. The acceptance JSON records independent SHA-256 values for the C source and compiled probe. If the exact reviewed source cannot be built with the trusted MSVC SDK, record BLOCKED rather than silently selecting another executable. The native probe uses Windows APIs directly and requires no C runtime DLL. The new profile SID gets traverse access on the generated root, read and execute access on the probe, and modify access on the synthetic project. Low integrity applies to the synthetic project only. Separate sibling-project and fake-credential files receive no grants. The only network targets are a private listener on 127.0.0.1 and an IPv4 TCP handshake to 1.1.1.1 port 443. The handshake carries no application data.
 
 ## Run
 
