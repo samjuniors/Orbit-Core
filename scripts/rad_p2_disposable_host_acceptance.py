@@ -259,7 +259,10 @@ time.sleep(30)
 
 
 def run_disposable(*, python_startup=False, diagnose_resources=False,
-                   capability_registry_read=False):
+                   capability_registry_read=False, ipc_handshake=False):
+    # A pipe test is never an implicit privilege or preview-mode switch.
+    if ipc_handshake and not python_startup:
+        return {"status": "HOLD_IPC_REQUIRES_STAGED_PYTHON", "profile_created": False}
     if os.name != "nt":
         return {"status": "HOLD_WINDOWS_ONLY", "profile_created": False}
     if sys.version_info < (3, 12):
@@ -287,6 +290,7 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
         "loopback_denial", "external_denial", "process_tree", "lpac_job_termination", "failure_recovery",
         "job_cleanup", "recovery_job_cleanup", "profile_deletion",
         "profile_storage_absence", "acl_fixture_cleanup",
+        "ipc_handshake",
     ), "NOT_RUN")
     report = {"status": "HOLD_REQUIRES_INDEPENDENT_OS_ACCEPTANCE",
               "checks": checks, "profile_created": False,
@@ -352,6 +356,11 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
             if python_startup:
                 checks["python_startup"] = "NOT_RUN"
                 python_exe = stage_python(staged_runtime / "python")
+                if ipc_handshake:
+                    # Source-scoped package, never copied to host Python or install artifacts.
+                    shutil.copytree(Path(__file__).with_name("rad_p2_preview_ipc"),
+                                    Path(python_exe).parent / "Lib" / "rad_p2_preview_ipc",
+                                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 
             hr = userenv.CreateAppContainerProfile(
                 profile, "Orbit disposable RAD P2", "Synthetic acceptance only",
@@ -517,6 +526,42 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
                             "PASS" if exit_code == 0 and marker.is_file()
                             and marker.read_bytes() == b"CPYTHON_STARTED" else "BLOCKED")
 
+            if ipc_handshake:
+                checks["ipc_handshake"] = "BLOCKED"
+                if checks["python_startup"] == "PASS":
+                    # The browser HTTP preview is deliberately NOT part of this test.
+                    sys.path.insert(0, str(Path(__file__).resolve().parent))
+                    from rad_p2_preview_ipc.protocol import PreviewIPCSession
+                    from rad_p2_preview_ipc.winpipe import DisposableLPACPipe
+                    with ExitStack() as pipe_cleanup:
+                        job, processes, _ = open_job(pipe_cleanup, "ipc_job_cleanup")
+                        pipe = pipe_cleanup.enter_context(DisposableLPACPipe(profile=profile))
+                        child_args = [python_exe, "-I", "-B", "-m",
+                                      "rad_p2_preview_ipc.client", pipe.name, str(os.getpid())]
+                        proc = app.launch_suspended_verified(
+                            profile=profile, executable=python_exe,
+                            args=child_args, cwd=str(project), env=env, job=job,
+                            capabilities=caps_requested)
+                        processes.append(proc)
+                        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+                        kernel.ProcessIdToSessionId.argtypes = (
+                            wintypes.DWORD, ctypes.POINTER(wintypes.DWORD))
+                        kernel.ProcessIdToSessionId.restype = wintypes.BOOL
+                        sid_session = wintypes.DWORD()
+                        if not kernel.ProcessIdToSessionId(proc.pid, ctypes.byref(sid_session)):
+                            raise RuntimeError("Cannot bind LPAC IPC to real Windows session")
+                        transcript = PreviewIPCSession(
+                            profile=profile, child_pid=proc.pid, session_id=sid_session.value,
+                            project_root=project)
+                        result = pipe.accept_handshake(
+                            child=proc, job=job, session=transcript, timeout_seconds=3)
+                        exit_code = proc.wait(timeout=3)
+                        report["ipc_child_exit"] = exit_code
+                        report["ipc_handshake_status"] = result["status"]
+                        checks["ipc_handshake"] = ("PASS" if exit_code == 0
+                            and result["status"] == "HANDSHAKE_VERIFIED_NOT_READY"
+                            else "BLOCKED")
+
             with ExitStack() as tree:
                 job, processes, handles = open_job(tree, "job_cleanup")
                 child = launch(job, "probe")
@@ -606,13 +651,16 @@ def main(argv=None):
                         help="Compare read-only dependency checks and test disposable controller interruption")
     parser.add_argument("--capability-registry-read", action="store_true",
                         help="Allow Microsoft LPAC registryRead capability to query Winsock catalog")
+    parser.add_argument("--ipc-handshake", action="store_true",
+                        help="Opt-in disposable LPAC named-pipe hello (NOT an HTTP preview)")
     args = parser.parse_args(argv)
     if not args.apply or args.confirm != CONFIRM:
         print(json.dumps(plan(), sort_keys=True))
         return 2
     print(json.dumps(run_disposable(python_startup=args.python_startup,
                                     diagnose_resources=args.diagnose_resources,
-                                    capability_registry_read=args.capability_registry_read),
+                                    capability_registry_read=args.capability_registry_read,
+                                    ipc_handshake=args.ipc_handshake),
                      indent=2, sort_keys=True))
     return 2  # HOLD pending review of the individual observations.
 
