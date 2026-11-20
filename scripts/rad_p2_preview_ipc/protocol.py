@@ -189,6 +189,7 @@ class PreviewIPCSession:
         self._clock = now if now is not None else time.monotonic
         self.expires = self._clock() + SESSION_SECONDS
         self.nonce = secrets.token_hex(32)
+        self._challenge_issued = False
         self._established = False
         self._next_sequence = 1
         self._pending = None
@@ -204,15 +205,17 @@ class PreviewIPCSession:
             raise IPCSecurityHold("IPC preview session expired or closed")
 
     def challenge(self):
-        if self._closed or self._established:
-            raise IPCSecurityHold("IPC challenge already consumed")
+        if (self._closed or self._established or self._challenge_issued
+                or self._clock() >= self.expires):
+            raise IPCSecurityHold("IPC challenge expired or already issued")
+        self._challenge_issued = True
         return encode_envelope({"v": PROTOCOL_VERSION, "type": "challenge",
                                 "nonce": self.nonce})
 
     def accept_hello(self, data, peer):
         self._valid_peer(peer)
-        if self._established:
-            raise IPCSecurityHold("IPC hello cannot be replayed")
+        if not self._challenge_issued or self._established:
+            raise IPCSecurityHold("IPC hello without one fresh challenge")
         msg = parse_envelope(data)
         if (set(msg) != {"v", "type", "nonce"}
                 or msg["type"] != "hello" or type(msg["nonce"]) is not str
