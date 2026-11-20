@@ -167,8 +167,11 @@ def start(root, a):
     path = check_health(a.get('health_path','/'))
     command = check_command(a['command'])
     existing = SESSIONS.get(key)
-    if existing and existing['proc'].poll() is None:
-        return {'status':'ALREADY_RUNNING', **view(existing)}
+    if existing:
+        if existing.get('isolation'):
+            return _isolation_cleanup_hold(existing)
+        if existing['proc'].poll() is None:
+            return {'status':'ALREADY_RUNNING', **view(existing)}
     if a.get('confirm_run') is not True:
         return {'status':'PREVIEW_ONLY', 'project_root':str(root), 'preview_id':key[1],
                 'command':command, 'url':f'http://127.0.0.1:{port}{path}',
@@ -182,9 +185,10 @@ def start(root, a):
     inside = Path(resolved).resolve()
     if inside == Path(root).resolve() or Path(root).resolve() in inside.parents:
         raise ValueError('Runtime resolves inside the project folder; refusing project-local executable')
-    if occupied(port):
+    if isolated_profile is None and occupied(port):
         return {'status':'PORT_IN_USE', 'port':port, 'notice':'Orbit will not adopt or terminate another process.'}
-    active = sum(row['proc'].poll() is None for row in SESSIONS.values())
+    active = sum(bool(row.get('isolation')) or row['proc'].poll() is None
+                 for row in SESSIONS.values())
     if active >= MAX_RUNNING:
         raise ValueError('Maximum active previews reached; stop an Orbit preview first')
     folder = safe_log_folder(root)
@@ -266,32 +270,36 @@ def start(root, a):
                'root':str(root),'preview_id':key[1], 'port':port,'health_path':path,
                'command':list(command), 'logfile':str(logfile),'started_at':time.time()}
     SESSIONS[key] = session
+    if isolated_profile is not None:
+        # Endpoint ownership is unavailable. Keep this session only for
+        # cleanup, and do not send a health request to an unverified listener.
+        try:
+            _terminate_session(session)
+        except (OSError, subprocess.TimeoutExpired):
+            return _isolation_cleanup_hold(session)
+        del SESSIONS[key]
+        return {'status':'HOLD_OS_ISOLATION_ENDPOINT_UNVERIFIED',
+                'preview_id':key[1], 'isolation':'APPCONTAINER_TOKEN_VERIFIED',
+                'execution_started':True, 'running':False,
+                'notice':'Child LPAC token was checked, but loopback capability and endpoint ownership have not been accepted.'}
     for _ in range(16):
         if proc.poll() is not None:
             break
         probe=http_probe(port, path)
         if probe['healthy']:
-            if isolated_profile is None:
-                return {'status':'READY', **view(session)}
-            # A 200 response cannot attest that this child owns the port;
-            # until an approved OS-bound endpoint check exists, stop it.
-            break
+            return {'status':'READY', **view(session)}
         time.sleep(0.2)
-    if isolated_profile is not None:
-        # No network capability (including loopback) is silently granted to
-        # an AppContainer. A preview without a reachable health endpoint is
-        # not accepted or left running under a misleading READY claim.
-        try:
-            _terminate_session(session)
-            SESSIONS.pop(key, None)
-        except (OSError, subprocess.TimeoutExpired):
-            return {'status':'HOLD_OS_ISOLATION_CLEANUP_UNVERIFIED',
-                    'preview_id':key[1], 'execution_started':True}
-        return {'status':'HOLD_OS_ISOLATION_ENDPOINT_UNVERIFIED',
-                'preview_id':key[1], 'isolation':'APPCONTAINER_TOKEN_VERIFIED',
-                'execution_started':True, 'running':False,
-                'notice':'Child LPAC token was checked, but loopback capability and endpoint ownership have not been accepted.'}
     return {'status':'STARTED_NOT_READY' if proc.poll() is None else 'EXITED',**view(session)}
+
+
+def _isolation_cleanup_hold(session):
+    return {
+        'status': 'HOLD_OS_ISOLATION_CLEANUP_UNVERIFIED',
+        'preview_id': session['preview_id'],
+        'isolation': session['isolation'],
+        'execution_started': True,
+        'notice': 'Retry stopping this preview to confirm process cleanup.',
+    }
 
 
 def log_tail(logfile, max_bytes=3000):
@@ -305,15 +313,20 @@ def log_tail(logfile, max_bytes=3000):
         return f.read(max_bytes).decode('utf-8','replace')
 
 
+def session_health(session):
+    if session.get('isolation') or session['proc'].poll() is not None:
+        return {'reachable': False, 'healthy': False}
+    return http_probe(session['port'], session['health_path'])
+
+
 def view(session):
     proc = session['proc']
     running = proc.poll() is None
-    probe = http_probe(session['port'],session['health_path']) if running else {'reachable':False,'healthy':False}
     return {'project_root':session['root'],'preview_id':session['preview_id'],
             'isolation':session.get('isolation') or 'NOT_OS_SANDBOXED',
             'pid':proc.pid, 'running':running, 'exit_code':None if running else proc.returncode,
             'port':session['port'], 'preview_url':f"http://127.0.0.1:{session['port']}/",
-            'readiness':probe, 'logs':log_tail(session['logfile']),
+            'readiness':session_health(session), 'logs':log_tail(session['logfile']),
             'notice':'Local-only URL. Host browser testing is separate. Process controls require the same MCP session.'}
 
 
@@ -323,8 +336,10 @@ def status(root, a):
     if not session:
         return {'status':'NOT_MANAGED_BY_THIS_SESSION', 'project_root':str(root),'preview_id':key[1],
                 'notice':'MCP restarted or preview was started outside Orbit. No process adopted or terminated.'}
-    return {'status':'READY' if session['proc'].poll() is None and http_probe(session['port'],session['health_path'])['healthy']
-            else 'NOT_READY', **view(session)}
+    if session.get('isolation'):
+        return _isolation_cleanup_hold(session)
+    details = view(session)
+    return {'status': 'READY' if details['readiness']['healthy'] else 'NOT_READY', **details}
 
 
 def _terminate_session(session):
@@ -357,10 +372,14 @@ def stop(root,a):
         return {'status':'NOT_MANAGED_BY_THIS_SESSION','notice':'Cannot stop an unverified process.'}
     proc=session['proc']
     if a.get('confirm_stop') is not True:
+        if session.get('isolation'):
+            return _isolation_cleanup_hold(session)
         return {'status':'PREVIEW_ONLY',**view(session)}
     try:
         _terminate_session(session)
     except (OSError, subprocess.TimeoutExpired) as exc:
+        if session.get('isolation'):
+            return _isolation_cleanup_hold(session)
         return {'status':'STOP_TIMEOUT','notice':'Process cleanup could not be fully verified.',
                 'error':type(exc).__name__,**view(session)}
     result={'status':'STOPPED','pid':proc.pid,'exit_code':proc.poll(),'preview_id':key[1]}

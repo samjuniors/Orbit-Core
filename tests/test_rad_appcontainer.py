@@ -15,11 +15,12 @@ import socket
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "source" / "runtime"))
 import orbit_appcontainer
+import orbit_browser
 import orbit_defense
 import orbit_preview
 
@@ -149,27 +150,39 @@ class AppContainerGateTests(unittest.TestCase):
             equal.assert_not_called()
 
     @unittest.skipUnless(os.name == "nt", "Win32 only")
-    def test_ordinary_appcontainer_without_lpac_is_rejected(self):
+    def test_lpac_access_rejects_ordinary_denied_or_malformed_results(self):
         app = orbit_appcontainer
 
-        def open_token(_process, _access, pointer):
-            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p)).contents.value = 11
+        def duplicate(_primary, level, pointer):
+            self.assertEqual(level, app.SECURITY_IDENTIFICATION)
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p)).contents.value = 23
             return 1
 
-        def token_value(_token, klass, pointer, _size, _length):
-            self.assertIn(klass, (app.TOKEN_IS_APP_CONTAINER,
-                                  app.TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER))
-            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = (
-                1 if klass == app.TOKEN_IS_APP_CONTAINER else 0)
+        def descriptor(_sddl, _revision, pointer, _size):
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p)).contents.value = 111
             return 1
 
-        with (patch.object(app._adv, "OpenProcessToken", side_effect=open_token),
-              patch.object(app._adv, "GetTokenInformation",
-                           side_effect=token_value),
-              patch.object(app._adv, "EqualSid") as equal):
-            with self.assertRaisesRegex(PermissionError, "not LPAC"):
-                app._token_matches_appcontainer(999, ctypes.c_void_p(111))
-            equal.assert_not_called()
+        for succeeded, allowed, mask in ((1, 1, 1), (1, 1, 3), (1, 0, 2), (0, 1, 2), (1, 1, 2)):
+            with self.subTest(succeeded=succeeded, allowed=allowed, mask=mask):
+                def access(_descriptor, _token, desired, _mapping, _privs, _size, granted, status):
+                    self.assertEqual(desired, app.MAXIMUM_ALLOWED)
+                    ctypes.cast(granted, ctypes.POINTER(app.wintypes.DWORD)).contents.value = mask
+                    ctypes.cast(status, ctypes.POINTER(app.wintypes.BOOL)).contents.value = allowed
+                    return succeeded
+
+                with (patch.object(app._adv, "DuplicateToken", side_effect=duplicate),
+                      patch.object(app._adv, "ConvertStringSecurityDescriptorToSecurityDescriptorW",
+                                   side_effect=descriptor),
+                      patch.object(app._adv, "AccessCheck", side_effect=access),
+                      patch.object(app._k32, "LocalFree") as free,
+                      patch.object(app._k32, "CloseHandle") as close):
+                    if (succeeded, allowed, mask) == (1, 1, 2):
+                        app._require_lpac_access(999)
+                    else:
+                        with self.assertRaises(OSError):
+                            app._require_lpac_access(999)
+                    free.assert_called_once()
+                    close.assert_called_once()
 
     @unittest.skipUnless(os.name == "nt", "Win32 only")
     def test_unregistered_profile_refused_before_createprocess(self):
@@ -187,6 +200,21 @@ class AppContainerGateTests(unittest.TestCase):
                     env={"SystemRoot": os.environ.get("SystemRoot", "C:\\Windows")},
                     job=job)
             create.assert_not_called()
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_lpac_environment_seeds_host_localappdata_and_filters_other_variables(self):
+        app = orbit_appcontainer
+        with patch.dict(os.environ, {"LOCALAPPDATA": r"C:\Host\Local", "SECRET": "host-secret"}, clear=True):
+            block = app._environment_block({
+                "SystemRoot": r"C:\Windows", "Port": "8765", "localappdata": r"C:\wrong",
+                "USERPROFILE": r"C:\Host", "SECRET": "project-value",
+            })
+            self.assertEqual(block[:].rstrip("\0").split("\0"), [
+                r"LOCALAPPDATA=C:\Host\Local", "PORT=8765", r"SYSTEMROOT=C:\Windows",
+            ])
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(PermissionError, "LOCALAPPDATA"):
+                app._environment_block({})
 
     @unittest.skipUnless(os.name == "nt", "Win32 only")
     def test_native_attribute_list_contains_atomic_job_security_capabilities(self):
@@ -302,7 +330,7 @@ class AppContainerGateTests(unittest.TestCase):
                            return_value=FakeProcess()) as launched,
               patch.object(orbit_preview, "http_probe",
                            return_value={"healthy": True, "reachable": True,
-                                         "http_status": 200}),
+                                         "http_status": 200}) as health,
               patch.object(orbit_preview, "occupied", return_value=False),
               patch.object(orbit_preview.subprocess, "Popen") as unrestricted):
             answer = orbit_preview.start(self.one, self.args())
@@ -311,11 +339,40 @@ class AppContainerGateTests(unittest.TestCase):
         self.assertNotIn((str(self.one), "p2-probe"), orbit_preview.SESSIONS)
         launched.assert_called_once()
         unrestricted.assert_not_called()
+        health.assert_not_called()
         fake_job.terminate.assert_called_once()
         fake_job.close.assert_called_once()
 
+    def test_isolated_cleanup_pending_session_is_only_available_for_stop(self):
+        # A recovery record is never a ready preview or a browser QA target.
+        key = orbit_preview.preview_key(self.one, "p2-probe")
+        proc = Mock(pid=123, returncode=1)
+        proc.poll.return_value = None
+        proc.wait.side_effect = [orbit_preview.subprocess.TimeoutExpired("fixture", 3), 1]
+        job = Mock()
+        orbit_preview.SESSIONS[key] = {
+            "proc": proc, "job": job, "preview_id": key[1],
+            "isolation": "APPCONTAINER_TOKEN_VERIFIED",
+        }
+        status_args = {"preview_id": key[1]}
+        stop_args = {**status_args, "confirm_stop": True}
+        with patch.object(orbit_preview, "http_probe") as http:
+            for action in (lambda: orbit_preview.status(self.one, status_args),
+                           lambda: orbit_preview.start(self.one, self.args()),
+                           lambda: orbit_preview.stop(self.one, status_args),
+                           lambda: orbit_preview.stop(self.one, stop_args)):
+                result = action()
+                self.assertEqual(result["status"], "HOLD_OS_ISOLATION_CLEANUP_UNVERIFIED")
+                self.assertNotIn("preview_url", result)
+            session, _ = orbit_browser.verify_request(self.one, status_args, orbit_preview)
+            self.assertIsNone(session)
+            self.assertEqual(orbit_preview.stop(self.one, stop_args)["status"], "STOPPED")
+        self.assertNotIn(key, orbit_preview.SESSIONS)
+        self.assertEqual(proc.wait.call_count, 2)
+        http.assert_not_called()
+
     @unittest.skipUnless(os.name == "nt", "Win32 only")
-    def test_token_sid_query_requires_full_buffer_then_compares(self):
+    def check_token_sid_buffer(self, malformed_reply):
         app = orbit_appcontainer
         seen = []
         pointer_size = ctypes.sizeof(ctypes.c_void_p)
@@ -327,8 +384,7 @@ class AppContainerGateTests(unittest.TestCase):
         def token_info(_token, klass, out_pointer, out_size, length_pointer):
             length = ctypes.cast(
                 length_pointer, ctypes.POINTER(ctypes.c_uint32)).contents
-            if klass in (app.TOKEN_IS_APP_CONTAINER,
-                         app.TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER):
+            if klass == app.TOKEN_IS_APP_CONTAINER:
                 ctypes.cast(out_pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 1
                 return 1
             if klass == app.TOKEN_CAPABILITIES:
@@ -345,24 +401,47 @@ class AppContainerGateTests(unittest.TestCase):
             if not out_pointer:
                 self.assertEqual(out_size, 0)
                 length.value = pointer_size + 24
+                ctypes.set_last_error(122)
                 seen.append("sized")
                 return 0
             self.assertEqual(out_size, pointer_size + 24)
             addr = ctypes.cast(out_pointer, ctypes.c_void_p).value
+            offset = pointer_size if malformed_reply != "outside" else out_size
             ctypes.cast(out_pointer, ctypes.POINTER(ctypes.c_void_p)).contents.value = (
-                addr + pointer_size)
-            length.value = pointer_size + 24
+                addr + offset)
+            ctypes.c_ubyte.from_address(addr + pointer_size + 1).value = (
+                48 if malformed_reply == "oversized_sid" else 4)
+            length.value = pointer_size if malformed_reply == "truncated" else out_size
             seen.append("read")
             return 1
 
         with (patch.object(app._adv, "OpenProcessToken", side_effect=open_token),
               patch.object(app._adv, "GetTokenInformation",
                            side_effect=token_info),
+              patch.object(app._adv, "GetLengthSid", return_value=24),
               patch.object(app._adv, "EqualSid", return_value=1) as equal,
+              patch.object(app, "_require_lpac_access") as lpac,
               patch.object(app._k32, "CloseHandle", return_value=1)):
-            app._token_matches_appcontainer(999, ctypes.c_void_p(77))
-            equal.assert_called_once()
+            if malformed_reply:
+                with self.assertRaisesRegex(PermissionError, "Malformed child AppContainer SID"):
+                    app._token_matches_appcontainer(999, ctypes.c_void_p(77))
+                equal.assert_not_called()
+                lpac.assert_not_called()
+            else:
+                app._token_matches_appcontainer(999, ctypes.c_void_p(77))
+                equal.assert_called_once()
+                lpac.assert_called_once()
         self.assertEqual(seen, ["cap-sized", "cap-read", "sized", "read"])
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_token_sid_query_requires_full_buffer_then_compares(self):
+        self.check_token_sid_buffer(None)
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_malformed_token_sid_rejected_before_win32_comparison(self):
+        for reply in ("outside", "truncated", "oversized_sid"):
+            with self.subTest(reply=reply):
+                self.check_token_sid_buffer(reply)
 
     @unittest.skipUnless(os.name == "nt", "Win32 only")
     def test_unexpected_child_token_capabilities_block_before_sid(self):
@@ -376,8 +455,7 @@ class AppContainerGateTests(unittest.TestCase):
 
         def token_info(_token, klass, out_pointer, out_size, length_pointer):
             length = ctypes.cast(length_pointer, ctypes.POINTER(ctypes.c_uint32)).contents
-            if klass in (app.TOKEN_IS_APP_CONTAINER,
-                         app.TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER):
+            if klass == app.TOKEN_IS_APP_CONTAINER:
                 ctypes.cast(out_pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 1
                 return 1
             self.assertEqual(klass, app.TOKEN_CAPABILITIES)
@@ -409,8 +487,7 @@ class AppContainerGateTests(unittest.TestCase):
             return 1
 
         def token_info(_token, klass, out_pointer, out_size, _length_pointer):
-            if klass in (app.TOKEN_IS_APP_CONTAINER,
-                         app.TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER):
+            if klass == app.TOKEN_IS_APP_CONTAINER:
                 ctypes.cast(out_pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 1
                 return 1
             self.assertEqual(klass, app.TOKEN_CAPABILITIES)
@@ -434,8 +511,7 @@ class AppContainerGateTests(unittest.TestCase):
             return 1
         def token_info(_token, klass, pointer, size, length_ptr):
             length = ctypes.cast(length_ptr, ctypes.POINTER(ctypes.c_uint32)).contents
-            if klass in (app.TOKEN_IS_APP_CONTAINER,
-                         app.TOKEN_IS_LESS_PRIVILEGED_APP_CONTAINER):
+            if klass == app.TOKEN_IS_APP_CONTAINER:
                 ctypes.cast(pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value = 1
                 return 1
             self.assertEqual(klass, app.TOKEN_CAPABILITIES)
@@ -453,6 +529,38 @@ class AppContainerGateTests(unittest.TestCase):
             with self.assertRaisesRegex(PermissionError, "Malformed"):
                 app._token_matches_appcontainer(999, ctypes.c_void_p(77))
             equal.assert_not_called()
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_forbidden_capability_raises_permission_error(self):
+        import orbit_windows_job
+        app = orbit_appcontainer
+        job = orbit_windows_job.WindowsJob()
+        self.addCleanup(job.close)
+        with self.assertRaisesRegex(PermissionError, "not permitted"):
+            app.launch_suspended_verified(
+                profile=self.name_for(self.one),
+                executable=sys.executable,
+                args=[sys.executable, "-c", "pass"],
+                cwd=str(self.one),
+                env={"SystemRoot": os.environ.get("SystemRoot", "C:\\Windows")},
+                job=job,
+                capabilities=["S-1-15-3-1"])  # internetClient is strictly forbidden
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_invalid_capabilities_type_raises_value_error(self):
+        import orbit_windows_job
+        app = orbit_appcontainer
+        job = orbit_windows_job.WindowsJob()
+        self.addCleanup(job.close)
+        with self.assertRaisesRegex(ValueError, "capabilities must be a collection"):
+            app.launch_suspended_verified(
+                profile=self.name_for(self.one),
+                executable=sys.executable,
+                args=[sys.executable, "-c", "pass"],
+                cwd=str(self.one),
+                env={"SystemRoot": os.environ.get("SystemRoot", "C:\\Windows")},
+                job=job,
+                capabilities="not-a-list")
 
     @unittest.skipUnless(os.name == "nt", "Win32 only")
     def test_read_only_appcontainer_sid_derivation_api_available(self):
