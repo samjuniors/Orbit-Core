@@ -129,7 +129,7 @@ def _neutralize_pe_manifest(dll_path):
     e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
     if e_lfanew < 0x40 or e_lfanew + 24 > len(data):
         return False
-    if data[e_lfanew:e_lfanew + 4] != b"PE\\0\\0":
+    if data[e_lfanew:e_lfanew + 4] != b"PE\x00\x00":
         return False
     num_sections = struct.unpack_from("<H", data, e_lfanew + 6)[0]
     opt_size = struct.unpack_from("<H", data, e_lfanew + 20)[0]
