@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 
-SOURCE = Path(__file__).resolve().parents[1] / 'source' / 'runtime' / 'orbit_remote_commander.py'
+SOURCE = Path(__file__).resolve().parents[1] / 'extras' / 'remote-commander' / 'orbit_remote_commander.py'
 spec = importlib.util.spec_from_file_location('orbit_rc', SOURCE)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
