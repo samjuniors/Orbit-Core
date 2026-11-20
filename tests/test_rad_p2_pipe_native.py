@@ -17,6 +17,11 @@ from rad_p2_preview_ipc import client
 
 
 class TestLPACPipeFailClosed(unittest.TestCase):
+    def test_pipe_client_access_excludes_new_server_instance_privilege(self):
+        self.assertEqual(native.CLIENT_GRANTED_ACCESS & 0x0004, 0)
+        self.assertTrue(native.CLIENT_GRANTED_ACCESS & 0x0001)  # read
+        self.assertTrue(native.CLIENT_GRANTED_ACCESS & 0x0002)  # write
+
     def test_only_expected_sid_syntax_accepted(self):
         for bad in (
             "S-1-15-2-123)(A;;GA;;;WD)",
