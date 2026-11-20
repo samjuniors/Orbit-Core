@@ -18,8 +18,9 @@ from . import winpipe
 _PIPE_NAME = re.compile(r"^\\\\\.\\pipe\\LOCAL\\orbit-rad-p2-[0-9a-f]{32}$")
 
 
-def disposable_child_hello(pipe_name, *, expected_server_pid, timeout_seconds=3):
-    """Proof-only handshake; never mark HTTP preview or host authorization READY."""
+def disposable_child_hello(pipe_name, *, expected_server_pid, timeout_seconds=3,
+                           fixture_wsgi=False):
+    """Proof-only handshake and optional synthetic WSGI round trip, never READY."""
     if os.name != "nt":
         raise IPCSecurityHold("LPAC IPC client requires Windows")
     if (type(pipe_name) is not str or not _PIPE_NAME.fullmatch(pipe_name)
@@ -74,6 +75,12 @@ def disposable_child_hello(pipe_name, *, expected_server_pid, timeout_seconds=3)
             raise IPCSecurityHold("Untrusted pipe challenge")
         io._write_message(encode_envelope(
             {"v": 1, "type": "hello", "nonce": challenge["nonce"]}), deadline)
+        if fixture_wsgi:
+            from .fixture_wsgi import dispatch_fixture_request
+            reply = dispatch_fixture_request(io._read_message(deadline))
+            io._write_message(reply, deadline)
+            return {"status": "CHILD_WSGI_FIXTURE_SENT_NOT_READY",
+                    "preview_ready": False}
         return {"status": "CHILD_HANDSHAKE_SENT_NOT_READY",
                 "preview_ready": False}
     finally:
@@ -84,10 +91,12 @@ def disposable_child_hello(pipe_name, *, expected_server_pid, timeout_seconds=3)
 
 def main(argv=None):
     args = list(sys.argv[1:] if argv is None else argv)
-    if len(args) != 2:
+    if len(args) not in (2, 3) or (len(args) == 3 and args[2] != "--wsgi-fixture"):
         return 2
     try:
-        disposable_child_hello(args[0], expected_server_pid=int(args[1]))
+        disposable_child_hello(
+            args[0], expected_server_pid=int(args[1]),
+            fixture_wsgi=len(args) == 3)
     except (IPCSecurityHold, ValueError):
         return 2
     return 0
