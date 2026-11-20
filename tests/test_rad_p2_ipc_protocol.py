@@ -25,7 +25,12 @@ class TestBoundedPreviewIPC(unittest.TestCase):
         self.gate = ipc.PreviewIPCSession(
             profile="orbit-rad-example", child_pid=123, session_id=7,
             project_root=self.root, max_requests=2, now=lambda: self.t[0])
-        self.peer = ipc.OSVerifiedPeer(123, 7, "orbit-rad-example")
+        self.peer = self.proof(123, 7, "orbit-rad-example")
+
+    def proof(self, pid, session, profile):
+        # Test-only minting; production creates this only after Win32 API checks.
+        return ipc.OSVerifiedPeer(pid, session, profile,
+                                  _native_origin=ipc._OS_ATTESTATION)
 
     def msg(self, **fields):
         return ipc.encode_envelope({"v": 1, **fields})
@@ -55,11 +60,17 @@ class TestBoundedPreviewIPC(unittest.TestCase):
         with self.assertRaises(ipc.IPCSecurityHold):
             self.gate.accept_hello(self.msg(type="hello", nonce=gate2.nonce), self.peer)
 
+    def test_public_peer_receipt_cannot_be_constructed_from_claims(self):
+        with self.assertRaises(ipc.IPCSecurityHold):
+            ipc.OSVerifiedPeer(123, 7, "orbit-rad-example")
+        with self.assertRaises(ipc.IPCSecurityHold):
+            ipc.OSVerifiedPeer(123, 7, "orbit-rad-example", _native_origin="yes")
+
     def test_wrong_peer_profile_pid_session_holds(self):
         msg = self.msg(type="hello", nonce=self.gate.nonce)
-        for peer in (None, {}, ipc.OSVerifiedPeer(124, 7, "orbit-rad-example"),
-                     ipc.OSVerifiedPeer(123, 8, "orbit-rad-example"),
-                     ipc.OSVerifiedPeer(123, 7, "orbit-rad-other")):
+        for peer in (None, {}, self.proof(124, 7, "orbit-rad-example"),
+                     self.proof(123, 8, "orbit-rad-example"),
+                     self.proof(123, 7, "orbit-rad-other")):
             with self.subTest(peer=peer), self.assertRaises(ipc.IPCSecurityHold):
                 self.gate.accept_hello(msg, peer)
 
