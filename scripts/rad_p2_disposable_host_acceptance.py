@@ -265,8 +265,11 @@ time.sleep(30)
 
 
 def run_disposable(*, python_startup=False, diagnose_resources=False,
-                   capability_registry_read=False, ipc_handshake=False):
+                   capability_registry_read=False, ipc_handshake=False,
+                   ipc_wsgi=False):
     # A pipe test is never an implicit privilege or preview-mode switch.
+    if ipc_wsgi and not ipc_handshake:
+        return {"status": "HOLD_IPC_WSGI_REQUIRES_HANDSHAKE", "profile_created": False}
     if ipc_handshake and not python_startup:
         return {"status": "HOLD_IPC_REQUIRES_STAGED_PYTHON", "profile_created": False}
     if ipc_handshake and capability_registry_read:
@@ -298,7 +301,7 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
         "loopback_denial", "external_denial", "process_tree", "lpac_job_termination", "failure_recovery",
         "job_cleanup", "recovery_job_cleanup", "profile_deletion",
         "profile_storage_absence", "acl_fixture_cleanup",
-        "ipc_handshake",
+        "ipc_handshake", "ipc_wsgi",
     ), "NOT_RUN")
     report = {"status": "HOLD_REQUIRES_INDEPENDENT_OS_ACCEPTANCE",
               "checks": checks, "profile_created": False,
@@ -546,6 +549,8 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
                         pipe = pipe_cleanup.enter_context(DisposableLPACPipe(profile=profile))
                         child_args = [python_exe, "-I", "-B", "-m",
                                       "rad_p2_preview_ipc.client", pipe.name, str(os.getpid())]
+                        if ipc_wsgi:
+                            child_args.append("--wsgi-fixture")
                         proc = app.launch_suspended_verified(
                             profile=profile, executable=python_exe,
                             args=child_args, cwd=str(project), env=env, job=job,
@@ -562,13 +567,18 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
                             profile=profile, child_pid=proc.pid, session_id=sid_session.value,
                             project_root=project)
                         result = pipe.accept_handshake(
-                            child=proc, job=job, session=transcript, timeout_seconds=3)
+                            child=proc, job=job, session=transcript, timeout_seconds=3,
+                            fixture_wsgi=ipc_wsgi)
                         exit_code = proc.wait(timeout=3)
                         report["ipc_child_exit"] = exit_code
                         report["ipc_handshake_status"] = result["status"]
-                        checks["ipc_handshake"] = ("PASS" if exit_code == 0
-                            and result["status"] == "HANDSHAKE_VERIFIED_NOT_READY"
-                            else "BLOCKED")
+                        expected = ("WSGI_IPC_ROUNDTRIP_VERIFIED_NOT_READY" if ipc_wsgi
+                                    else "HANDSHAKE_VERIFIED_NOT_READY")
+                        accepted = exit_code == 0 and result["status"] == expected
+                        checks["ipc_handshake"] = "PASS" if accepted else "BLOCKED"
+                        if ipc_wsgi:
+                            report["ipc_wsgi_response_bytes"] = result.get("body_length")
+                            checks["ipc_wsgi"] = "PASS" if accepted else "BLOCKED"
 
             with ExitStack() as tree:
                 job, processes, handles = open_job(tree, "job_cleanup")
@@ -661,6 +671,8 @@ def main(argv=None):
                         help="Allow Microsoft LPAC registryRead capability to query Winsock catalog")
     parser.add_argument("--ipc-handshake", action="store_true",
                         help="Opt-in disposable LPAC named-pipe hello (NOT an HTTP preview)")
+    parser.add_argument("--ipc-wsgi", action="store_true",
+                        help="One synthetic in-memory WSGI request over disposable LPAC IPC; no HTTP listener")
     args = parser.parse_args(argv)
     if not args.apply or args.confirm != CONFIRM:
         print(json.dumps(plan(), sort_keys=True))
@@ -668,7 +680,8 @@ def main(argv=None):
     print(json.dumps(run_disposable(python_startup=args.python_startup,
                                     diagnose_resources=args.diagnose_resources,
                                     capability_registry_read=args.capability_registry_read,
-                                    ipc_handshake=args.ipc_handshake),
+                                    ipc_handshake=args.ipc_handshake,
+                                    ipc_wsgi=args.ipc_wsgi),
                      indent=2, sort_keys=True))
     return 2  # HOLD pending review of the individual observations.
 
