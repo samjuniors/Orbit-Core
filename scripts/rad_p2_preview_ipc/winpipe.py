@@ -17,6 +17,8 @@ import time
 
 from .protocol import IPCSecurityHold, MAX_ENVELOPE, verify_connected_pipe_peer
 
+CLIENT_GRANTED_ACCESS = 0x00120083  # excludes FILE_CREATE_PIPE_INSTANCE (0x4)
+
 if os.name == "nt":
     from ctypes import wintypes
 
@@ -151,8 +153,9 @@ def _pipe_descriptor(user_sid, package_sid):
         raise IPCSecurityHold("Invalid exact pipe principal")
     # The client access mask deliberately excludes FILE_CREATE_PIPE_INSTANCE.
     # A session-random name and FIRST_PIPE_INSTANCE further reduce spoofing.
-    sddl = ("D:P(A;;GA;;;SY)(A;;0x00120083;;;" + user_sid
-            + ")(A;;0x00120083;;;" + package_sid + ")S:(ML;;NW;;;LW)")
+    mask = f"0x{CLIENT_GRANTED_ACCESS:08x}"
+    sddl = ("D:P(A;;GA;;;SY)(A;;" + mask + ";;;" + user_sid
+            + ")(A;;" + mask + ";;;" + package_sid + ")S:(ML;;NW;;;LW)")
     descriptor = ctypes.c_void_p()
     import orbit_appcontainer as app
     if not app._adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(
