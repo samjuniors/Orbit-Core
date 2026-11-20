@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re
 import secrets
 import struct
 import time
@@ -65,6 +66,8 @@ if os.name == "nt":
     for function, args, output in _procedures:
         function.argtypes, function.restype = args, output
 
+    _win.LocalFree.argtypes = (ctypes.c_void_p,)
+    _win.LocalFree.restype = ctypes.c_void_p
     INVALID_HANDLE = ctypes.c_void_p(-1).value
     PIPE_ACCESS_DUPLEX = 3
     FILE_FLAG_OVERLAPPED = 0x40000000
@@ -140,8 +143,8 @@ def _pipe_descriptor(user_sid, package_sid):
     in which case pipe creation MUST HOLD. Do not substitute a default ACL.
     """
     if (not isinstance(user_sid, str) or not isinstance(package_sid, str)
-            or not all(s.startswith("S-1-") and len(s) < 200 for s in
-                       (user_sid, package_sid))):
+            or not all(re.fullmatch(r"S-1-[0-9]+(?:-[0-9]+)+", s)
+                       and len(s) < 200 for s in (user_sid, package_sid))):
         raise IPCSecurityHold("Invalid exact pipe principal")
     # The client access mask deliberately excludes FILE_CREATE_PIPE_INSTANCE.
     # A session-random name and FIRST_PIPE_INSTANCE further reduce spoofing.
