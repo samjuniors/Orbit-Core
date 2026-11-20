@@ -105,3 +105,55 @@ future source-setup archive if this branch is merged. Before *any*
 release-bearing merge, decide whether to exclude this directory from all
 distributed archives or complete acceptance and conduct package-content
 review. This draft does not alter published artifacts.
+
+## 2026-11-20 — Synthetic WSGI-over-IPC milestone (DRAFT, no HTTP listener)
+
+The next [stacked draft](https://github.com/samjuniors/Orbit-Core/pulls) adds a
+*deliberately non-production* WSGI transport fixture. All code remains under
+`scripts/rad_p2_preview_ipc/`; the normal `orbit_preview` MCP tool is unchanged.
+
+- `fixture_wsgi.py` is a **real Python WSGI callable**, with only fixed
+  synthetic routes `/health`, `/` and `/index.html`. No project-supplied
+  code, filesystem reads, arbitrary imports, network access or URL forwarding.
+  Responses are validated, bounded and encoded in the existing IPC envelope.
+- The host's `PreviewIPCSession.begin_host_request` issues exactly one
+  GET/HEAD transaction after the internal Win32 peer attestation and one-shot
+  handshake. The child decodes and executes the WSGI callable in-process and
+  sends a response on the **same** pipe. Native `winpipe.accept_handshake`
+  checks the response's sequence, type, body and fixed `/health` marker.
+- `--ipc-wsgi` opts the manual disposable harness into this extra request.
+  It requires **all** of `--ipc-handshake`, `--python-startup` and the
+  existing explicit `--apply --confirm` approval. The fixture requests
+  zero added LPAC capabilities and continues to leave `READY` unavailable.
+  No shell command, source import or externally supplied HTTP endpoint is run.
+- Nonprivileged tests cover successful health/index/HEAD/404 responses,
+  request replay/sequence mismatch, header/URL/path/method injection, invalid
+  JSON and response size limits, and no socket or project-data side effects.
+
+Safe read-only plan (returns HOLD; changes no Windows profiles or ACLs):
+
+```powershell
+py -3.12 scripts/rad_p2_disposable_host_acceptance.py --ipc-handshake --ipc-wsgi
+```
+
+For a separately **owner- and host-approved** disposable native test
+(the following is documentation, **not** a test that was run from ChatGPT):
+
+```powershell
+py -3.12 scripts/rad_p2_disposable_host_acceptance.py --apply --confirm "CREATE DISPOSABLE ORBIT APPCONTAINER" --python-startup --ipc-handshake --ipc-wsgi
+```
+
+Read `checks.ipc_handshake`, `checks.ipc_wsgi`, `ipc_child_exit`,
+`ipc_wsgi_response_bytes`, exact profile deletion/fixture removal, and
+redacted Win32 errors. An exception, missing response or failed cleanup must
+not be accepted as PASS. The manual harness retains its overall HOLD exit code.
+
+**Not yet completed:** actual LPAC pipe compatibility, independent per-message
+handle ownership (the Windows API identifies the opener, not necessarily a
+later writer with a delegated handle), an authenticated **browser-facing**
+host-owned HTTP server, an arbitrary user Python web app, job descendant
+containment, denied synthetic registry/reparse attacks and sensitive
+Antigravity host permissions. Neither GitHub CI nor this synthetic WSGI
+round trip proves those properties. Do not label this "production HTTP
+preview", enable a global loopback exemption or change the normal fail-closed
+`HOLD_OS_ISOLATION_ENDPOINT_UNVERIFIED` behavior.

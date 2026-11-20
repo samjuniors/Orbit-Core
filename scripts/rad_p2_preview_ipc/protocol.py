@@ -225,6 +225,28 @@ class PreviewIPCSession:
         return {"status": "HANDSHAKE_VERIFIED_NOT_READY",
                 "preview_ready": False, "host_approval_verified": False}
 
+    def begin_host_request(self, *, method, path, peer):
+        """Prepare one bounded host-to-LPAC request; no execution or web URL.
+
+        Requires a verified, live, previously handshaken pipe peer. Responses
+        are checked separately against the outstanding sequence number.
+        """
+        self._valid_peer(peer)
+        if not self._established or self._pending is not None:
+            raise IPCSecurityHold("Host request requires an idle verified transcript")
+        if self._next_sequence > self.max_requests:
+            raise IPCSecurityHold("IPC host request budget exhausted")
+        if type(method) is not str or method not in ("GET", "HEAD"):
+            raise IPCSecurityHold("Unsupported host preview method")
+        safe_path = validate_local_path(path)
+        sequence = self._next_sequence
+        message = encode_envelope({
+            "v": PROTOCOL_VERSION, "type": "request", "seq": sequence,
+            "method": method, "path": safe_path,
+        })
+        self._pending = sequence
+        return message
+
     def accept_request(self, data, peer):
         self._valid_peer(peer)
         if not self._established or self._pending is not None:
