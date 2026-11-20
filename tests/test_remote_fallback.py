@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 import unittest
 
-SOURCE = Path(__file__).resolve().parents[1] / "source" / "runtime" / "orbit_remote_fallback.py"
+SOURCE = Path(__file__).resolve().parents[1] / "extras" / "remote-commander" / "orbit_remote_fallback.py"
 spec = importlib.util.spec_from_file_location("orbit_remote_fallback", SOURCE)
 m = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = m
