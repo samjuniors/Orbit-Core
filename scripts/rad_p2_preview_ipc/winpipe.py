@@ -123,7 +123,10 @@ def _trusted_profile_sid(profile):
             profile, ctypes.byref(pointer))
         if result != 0 or not pointer.value:
             raise IPCSecurityHold("Could not derive LPAC pipe package SID")
-        app._require_registered_profile(pointer)
+        try:
+            app._require_registered_profile(pointer)
+        except (PermissionError, OSError) as exc:
+            raise IPCSecurityHold("No verified registered LPAC profile for pipe") from exc
         rendered = ctypes.c_void_p()
         if not app._adv.ConvertSidToStringSidW(pointer, ctypes.byref(rendered)):
             raise IPCSecurityHold("Cannot render verified LPAC package SID")
