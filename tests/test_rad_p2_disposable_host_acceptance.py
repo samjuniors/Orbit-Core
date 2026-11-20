@@ -118,6 +118,10 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         outcome = HARNESS.run_disposable(ipc_handshake=True, python_startup=False)
         self.assertEqual(outcome["status"], "HOLD_IPC_REQUIRES_STAGED_PYTHON")
         self.assertIs(outcome["profile_created"], False)
+        without_network = HARNESS.run_disposable(
+            ipc_handshake=True, python_startup=True, capability_registry_read=True)
+        self.assertEqual(without_network["status"], "HOLD_IPC_ZERO_CAPABILITY_ONLY")
+        self.assertIs(without_network["profile_created"], False)
 
     def test_harness_is_not_in_automatic_workflow(self):
         """Only allow manual script invocation, never auto-run from CI."""
