@@ -308,7 +308,7 @@ class DisposableLPACPipe:
             response = session.accept_response(self._read_message(deadline), peer)
             if (response["status"] != 200
                     or response["content_type"] != "text/plain; charset=utf-8"
-                    or response["body"] != b"ORBIT_ISOLATED_WSGI_OK\\n"):
+                    or response["body"] != b"ORBIT_ISOLATED_WSGI_OK\n"):
                 raise IPCSecurityHold("Unexpected disposable WSGI fixture response")
             return {"status": "WSGI_IPC_ROUNDTRIP_VERIFIED_NOT_READY",
                     "preview_ready": False, "host_approval_verified": False,
