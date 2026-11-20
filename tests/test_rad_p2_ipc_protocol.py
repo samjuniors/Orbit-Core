@@ -12,8 +12,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source" / "runtime"))
-import orbit_lpac_ipc as ipc
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from rad_p2_preview_ipc import protocol as ipc
 
 
 class TestBoundedPreviewIPC(unittest.TestCase):
@@ -169,8 +169,9 @@ class TestBoundedPreviewIPC(unittest.TestCase):
                 ipc.verify_connected_pipe_peer(1, child=object(), job=object(), profile="orbit-rad-test")
 
     def test_protocol_not_wired_to_production_preview(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source" / "runtime"))
         import orbit_preview
-        self.assertNotIn("orbit_lpac_ipc", orbit_preview.start.__code__.co_names)
+        self.assertNotIn("rad_p2_preview_ipc", orbit_preview.start.__code__.co_names)
         self.assertIn("HOLD_OS_ISOLATION_ENDPOINT_UNVERIFIED",
                       orbit_preview.start.__code__.co_consts)
 
