@@ -137,6 +137,26 @@ class SyntheticWSGIOverIPC(unittest.TestCase):
         self.assertFalse((source / "fixture_wsgi.py").exists())
         self.assertFalse((source / "rad_p2_preview_ipc").exists())
 
+    def test_wsgi_declared_length_and_bad_headers_fail_closed(self):
+        raw = protocol.encode_envelope({
+            "v": 1, "type": "request", "seq": 1,
+            "method": "GET", "path": "/health",
+        })
+        def mismatch(environ, start_response):
+            start_response("200 OK", [
+                ("Content-Type", "text/plain; charset=utf-8"),
+                ("Content-Length", "999"),
+            ])
+            return [b"short"]
+        def invalid_type(environ, start_response):
+            start_response("200 OK", [
+                ("Content-Type", []), ("Content-Length", "0")])
+            return [b""]
+        for fake in (mismatch, invalid_type):
+            with patch.object(fixture_wsgi, "application", fake):
+                with self.assertRaises(protocol.IPCSecurityHold):
+                    fixture_wsgi.dispatch_fixture_request(raw)
+
     def test_no_socket_or_external_file_activity_in_fixture(self):
         with patch("socket.socket", side_effect=AssertionError("network used")):
             self.assertEqual(self.roundtrip("GET", "/health")["status"], 200)
