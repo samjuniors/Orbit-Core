@@ -125,6 +125,18 @@ class SyntheticWSGIOverIPC(unittest.TestCase):
             with self.assertRaises(protocol.IPCSecurityHold):
                 fixture_wsgi.dispatch_fixture_request(raw)
 
+    def test_disposable_ipc_never_imported_by_installed_runtime(self):
+        source = Path(__file__).resolve().parents[1] / "source" / "runtime"
+        modules = list(source.glob("*.py"))
+        self.assertTrue(modules)
+        for module in modules:
+            with self.subTest(module=module.name):
+                self.assertNotIn("rad_p2_preview_ipc",
+                                 module.read_text(encoding="utf-8"))
+        # No prototype file may appear in installer-managed shared runtime.
+        self.assertFalse((source / "fixture_wsgi.py").exists())
+        self.assertFalse((source / "rad_p2_preview_ipc").exists())
+
     def test_no_socket_or_external_file_activity_in_fixture(self):
         with patch("socket.socket", side_effect=AssertionError("network used")):
             self.assertEqual(self.roundtrip("GET", "/health")["status"], 200)
