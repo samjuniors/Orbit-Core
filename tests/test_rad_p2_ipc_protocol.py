@@ -26,6 +26,7 @@ class TestBoundedPreviewIPC(unittest.TestCase):
             profile="orbit-rad-example", child_pid=123, session_id=7,
             project_root=self.root, max_requests=2, now=lambda: self.t[0])
         self.peer = self.proof(123, 7, "orbit-rad-example")
+        self.challenge = self.gate.challenge()
 
     def proof(self, pid, session, profile):
         # Test-only minting; production creates this only after Win32 API checks.
@@ -46,6 +47,13 @@ class TestBoundedPreviewIPC(unittest.TestCase):
         self.assertIs(result["host_approval_verified"], False)
         self.assertNotIn("url", result)
 
+    def test_client_cannot_echo_nonce_before_host_issues_challenge(self):
+        other = ipc.PreviewIPCSession(
+            profile="orbit-rad-example", child_pid=123, session_id=7,
+            project_root=self.root)
+        with self.assertRaises(ipc.IPCSecurityHold):
+            other.accept_hello(self.msg(type="hello", nonce=other.nonce), self.peer)
+
     def test_one_shot_handshake_replay_rejected(self):
         self.hello()
         with self.assertRaises(ipc.IPCSecurityHold):
@@ -56,7 +64,9 @@ class TestBoundedPreviewIPC(unittest.TestCase):
             profile="orbit-rad-example", child_pid=123, session_id=7,
             project_root=self.root)
         self.assertNotEqual(self.gate.nonce, gate2.nonce)
-        self.assertEqual(ipc.parse_envelope(self.gate.challenge())["type"], "challenge")
+        self.assertEqual(ipc.parse_envelope(self.challenge)["type"], "challenge")
+        with self.assertRaises(ipc.IPCSecurityHold):
+            self.gate.challenge()
         with self.assertRaises(ipc.IPCSecurityHold):
             self.gate.accept_hello(self.msg(type="hello", nonce=gate2.nonce), self.peer)
 
