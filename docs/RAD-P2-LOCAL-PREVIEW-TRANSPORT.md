@@ -96,3 +96,12 @@ Automated Windows/Linux tests on the prototype check **pure protocol and
 fail-closed behavior**. They do not provision an AppContainer or certify
 native LPAC IPC. Independent OS testing and owner acceptance are still
 required before the proposed broker could be integrated into Orbit.
+
+**Release inventory note:** The current `scripts/build_release.py` source-setup
+ZIP deliberately includes the repository's `scripts/` tree. Thus
+scripts-only placement prevents installation into the shared MCP runtime
+but does **not** automatically exclude these experimental files from a
+future source-setup archive if this branch is merged. Before *any*
+release-bearing merge, decide whether to exclude this directory from all
+distributed archives or complete acceptance and conduct package-content
+review. This draft does not alter published artifacts.
