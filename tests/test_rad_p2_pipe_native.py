@@ -13,6 +13,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from rad_p2_preview_ipc import protocol as ipc
 from rad_p2_preview_ipc import winpipe as native
+from rad_p2_preview_ipc import client
 
 
 class TestLPACPipeFailClosed(unittest.TestCase):
@@ -38,6 +39,15 @@ class TestLPACPipeFailClosed(unittest.TestCase):
             native.DisposableLPACPipe(profile="orbit-rad-fake")
         with self.assertRaises(ipc.IPCSecurityHold):
             native._current_user_sid()
+
+    def test_bounded_child_client_never_accepts_injected_pipe_name(self):
+        self.assertEqual(client.main([]), 2)
+        valid = "\\\\.\\pipe\\LOCAL\\orbit-rad-p2-" + "a" * 32
+        self.assertTrue(client._PIPE_NAME.fullmatch(valid))
+        for path in ("", "http://127.0.0.1/", "\\\\evil\\pipe\\PWN",
+                     valid + "..", "\\\\.\\pipe\\LOCAL\\another"):
+            with self.subTest(path=path), self.assertRaises(ipc.IPCSecurityHold):
+                client.disposable_child_hello(path, expected_server_pid=1)
 
     @unittest.skipUnless(os.name == "nt", "Windows only")
     def test_unregistered_profile_does_not_create_pipe(self):
