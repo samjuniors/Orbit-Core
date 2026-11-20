@@ -10,7 +10,7 @@ from __future__ import annotations
 import base64
 import binascii
 import ctypes
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
@@ -18,6 +18,7 @@ import re
 import secrets
 import time
 
+_OS_ATTESTATION = object()  # Private minting sentinel for native Win32 observations.
 PROTOCOL_VERSION = 1
 MAX_ENVELOPE = 65536
 MAX_BODY = 32768
@@ -88,6 +89,11 @@ class OSVerifiedPeer:
     pid: int
     session_id: int
     appcontainer_profile: str
+    _native_origin: object = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self):
+        if self._native_origin is not _OS_ATTESTATION:
+            raise IPCSecurityHold("Client claims are not a kernel peer attestation")
 
 
 def verify_connected_pipe_peer(pipe_handle, *, child, job, profile,
@@ -152,7 +158,8 @@ def verify_connected_pipe_peer(pipe_handle, *, child, job, profile,
     finally:
         if sid.value:
             app._adv.FreeSid(sid)
-    return OSVerifiedPeer(pinned_pid, pipe_session.value, profile)
+    return OSVerifiedPeer(pinned_pid, pipe_session.value, profile,
+                          _native_origin=_OS_ATTESTATION)
 
 
 class PreviewIPCSession:
