@@ -256,8 +256,13 @@ class DisposableLPACPipe:
         self._overlapped("write", struct.pack(">I", len(data)), deadline)
         self._overlapped("write", data, deadline)
 
-    def accept_handshake(self, *, child, job, session, timeout_seconds=3):
-        """Verify kernel peer and one-shot nonce; NEVER mark preview READY."""
+    def accept_handshake(self, *, child, job, session, timeout_seconds=3,
+                         fixture_wsgi=False):
+        """Verify a kernel-authenticated hello; optionally exchange one WSGI fixture.
+
+        This is NOT a browser endpoint, permission grant, or production READY.
+        The fixture path is a fixed /health request, never project-provided.
+        """
         if (type(timeout_seconds) not in (int, float)
                 or not 0 < timeout_seconds <= 10 or self.handle is None):
             raise IPCSecurityHold("Invalid bounded LPAC pipe handshake")
@@ -292,7 +297,22 @@ class DisposableLPACPipe:
             if peer.session_id != session.session_id:
                 raise IPCSecurityHold("Native Windows session mismatch")
             self._write_message(session.challenge(), deadline)
-            return session.accept_hello(self._read_message(deadline), peer)
+            handshake = session.accept_hello(self._read_message(deadline), peer)
+            if not fixture_wsgi:
+                return handshake
+            # Host-to-child WSGI request after the exact native peer check.
+            # The response is checked against the outstanding sequence.
+            request = session.begin_host_request(
+                method="GET", path="/health", peer=peer)
+            self._write_message(request, deadline)
+            response = session.accept_response(self._read_message(deadline), peer)
+            if (response["status"] != 200
+                    or response["content_type"] != "text/plain; charset=utf-8"
+                    or response["body"] != b"ORBIT_ISOLATED_WSGI_OK\\n"):
+                raise IPCSecurityHold("Unexpected disposable WSGI fixture response")
+            return {"status": "WSGI_IPC_ROUNDTRIP_VERIFIED_NOT_READY",
+                    "preview_ready": False, "host_approval_verified": False,
+                    "body_length": len(response["body"])}
         finally:
             _win.CloseHandle(event)
             self.close()
