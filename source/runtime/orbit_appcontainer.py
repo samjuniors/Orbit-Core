@@ -61,6 +61,9 @@ if os.name == "nt":
         _fields_ = [(right, wintypes.DWORD) for right in (
             "GenericRead", "GenericWrite", "GenericExecute", "GenericAll")]
 
+    class SID_AND_ATTRIBUTES(ctypes.Structure):
+        _fields_ = [("Sid", ctypes.c_void_p), ("Attributes", wintypes.DWORD)]
+
     class PRIVILEGE_SET(ctypes.Structure):
         _fields_ = [
             ("PrivilegeCount", wintypes.DWORD),
@@ -88,6 +91,9 @@ if os.name == "nt":
     WAIT_TIMEOUT = 0x102
     WAIT_OBJECT_0 = 0
     INFINITE = 0xFFFFFFFF
+    SE_GROUP_ENABLED = 0x00000004
+    LPAC_REGISTRY_READ_CAPABILITY = "S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4053264122-3456934681"
+    PERMITTED_CAPABILITIES = frozenset({LPAC_REGISTRY_READ_CAPABILITY})
 
     _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
     _adv = ctypes.WinDLL("advapi32", use_last_error=True)
@@ -115,6 +121,7 @@ if os.name == "nt":
         (_k32.LocalFree, (ctypes.c_void_p,), ctypes.c_void_p),
         (_adv.FreeSid, (ctypes.c_void_p,), ctypes.c_void_p),
         (_adv.ConvertSidToStringSidW, (ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)), wintypes.BOOL),
+        (_adv.ConvertStringSidToSidW, (wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p)), wintypes.BOOL),
         (_userenv.GetAppContainerFolderPath, (wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p)), ctypes.c_long),
         (_ole.CoTaskMemFree, (ctypes.c_void_p,), None),
         (_userenv.DeriveAppContainerSidFromAppContainerName,
@@ -218,7 +225,7 @@ def _require_lpac_access(primary_token):
         _k32.CloseHandle(token)
 
 
-def _token_matches_appcontainer(process_handle, expected_sid):
+def _token_matches_appcontainer(process_handle, expected_sid, expected_capabilities=None):
     """Read OS process token while suspended; do not trust a child response."""
     token = wintypes.HANDLE()
     if not _adv.OpenProcessToken(process_handle, TOKEN_QUERY | TOKEN_DUPLICATE, ctypes.byref(token)):
@@ -232,7 +239,7 @@ def _token_matches_appcontainer(process_handle, expected_sid):
             raise _error("GetTokenInformation (TokenIsAppContainer)")
         if value.value != 1:
             raise PermissionError("Child has no OS-verified AppContainer token")
-        # Requesting zero security capabilities at creation is not a proof
+        # Requesting zero or whitelisted security capabilities at creation is not a proof
         # of the *effective* child token. Check the OS token before resume.
         # TokenCapabilities returns TOKEN_GROUPS (DWORD GroupCount first).
         cap_length = wintypes.DWORD()
@@ -249,8 +256,30 @@ def _token_matches_appcontainer(process_handle, expected_sid):
         if not 4 <= cap_length.value <= ctypes.sizeof(cap_buffer):
             raise PermissionError("Malformed child token capability response")
         cap_count = wintypes.DWORD.from_buffer_copy(cap_buffer.raw[:4]).value
-        if cap_count != 0:
-            raise PermissionError("Child unexpectedly has token capabilities")
+        expected = set(expected_capabilities or ())
+        if cap_count != len(expected):
+            if not expected:
+                raise PermissionError("Child unexpectedly has token capabilities")
+            raise PermissionError("Child token capability count does not match requested capabilities")
+        if expected:
+            ptr_size = ctypes.sizeof(ctypes.c_void_p)
+            sa_size = 16 if ptr_size == 8 else 8
+            actual_sids = set()
+            for idx in range(cap_count):
+                offset = 8 if ptr_size == 8 else 4
+                entry_offset = offset + idx * sa_size
+                sid_ptr = ctypes.c_void_p.from_buffer_copy(cap_buffer.raw[entry_offset:entry_offset + ptr_size]).value
+                if not sid_ptr:
+                    raise PermissionError("Malformed child token capability SID")
+                sid_str = ctypes.c_void_p()
+                if not _adv.ConvertSidToStringSidW(sid_ptr, ctypes.byref(sid_str)):
+                    raise _error("ConvertSidToStringSidW")
+                try:
+                    actual_sids.add(ctypes.wstring_at(sid_str))
+                finally:
+                    _k32.LocalFree(sid_str)
+            if actual_sids != expected:
+                raise PermissionError("Child token has unexpected capability")
         # TokenAppContainerSid returns TOKEN_APPCONTAINER_INFORMATION and
         # additional SID bytes, not merely one pointer-sized field.
         required = wintypes.DWORD()
@@ -329,7 +358,7 @@ class IsolatedProcess:
             self.close()
 
 
-def launch_suspended_verified(*, profile, executable, args, cwd, env, job):
+def launch_suspended_verified(*, profile, executable, args, cwd, env, job, capabilities=None):
     """Launch only through OS AppContainer token and explicit bound Job Object.
 
     Host must pre-provision profile and ACLs outside Orbit. No capability SID,
@@ -348,6 +377,14 @@ def launch_suspended_verified(*, profile, executable, args, cwd, env, job):
         raise ValueError("Command must begin with the checked absolute interpreter")
     if any(not isinstance(x, str) or not x or "\0" in x for x in args):
         raise ValueError("Invalid command arguments")
+    cap_sids = []
+    if capabilities is not None:
+        if not isinstance(capabilities, (list, tuple, set, frozenset)):
+            raise ValueError("capabilities must be a collection of capability SID strings")
+        for cap in capabilities:
+            if cap not in PERMITTED_CAPABILITIES:
+                raise PermissionError(f"AppContainer capability not permitted: {cap}")
+    expected_caps = list(capabilities) if capabilities else []
     block = _environment_block(env)
     command = ctypes.create_unicode_buffer(subprocess.list2cmdline(args))
     sid = ctypes.c_void_p()
@@ -370,7 +407,18 @@ def launch_suspended_verified(*, profile, executable, args, cwd, env, job):
                                                        ctypes.byref(size)):
             raise _error()
         initialized = True
-        caps = SECURITY_CAPABILITIES(sid, None, 0, 0)
+        if expected_caps:
+            cap_array = (SID_AND_ATTRIBUTES * len(expected_caps))()
+            for idx, cap_str in enumerate(expected_caps):
+                cap_sid = ctypes.c_void_p()
+                if not _adv.ConvertStringSidToSidW(cap_str, ctypes.byref(cap_sid)):
+                    raise _error("ConvertStringSidToSidW")
+                cap_sids.append(cap_sid)
+                cap_array[idx].Sid = cap_sid.value
+                cap_array[idx].Attributes = SE_GROUP_ENABLED
+            caps = SECURITY_CAPABILITIES(sid, ctypes.cast(cap_array, ctypes.c_void_p), len(expected_caps), 0)
+        else:
+            caps = SECURITY_CAPABILITIES(sid, None, 0, 0)
         if not _k32.UpdateProcThreadAttribute(
                 attr_addr, 0, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
                 ctypes.cast(ctypes.byref(caps), ctypes.c_void_p),
@@ -409,7 +457,7 @@ def launch_suspended_verified(*, profile, executable, args, cwd, env, job):
                 raise _error()
             if member.value != 1:
                 raise PermissionError("Sandbox child is outside its private Job Object")
-            _token_matches_appcontainer(pi.hProcess, sid)
+            _token_matches_appcontainer(pi.hProcess, sid, expected_caps)
             previous = _k32.ResumeThread(pi.hThread)
             if previous == 0xFFFFFFFF:
                 raise _error()
@@ -437,6 +485,9 @@ def launch_suspended_verified(*, profile, executable, args, cwd, env, job):
                     _k32.CloseHandle(pi.hProcess)
             raise
     finally:
+        for cap_sid in cap_sids:
+            if cap_sid.value:
+                _adv.FreeSid(cap_sid)
         if pi.hThread:
             _k32.CloseHandle(pi.hThread)
         if initialized:

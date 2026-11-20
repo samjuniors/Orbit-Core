@@ -41,6 +41,7 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
                      ("--confirm", "CREATE DISPOSABLE ORBIT APPCONTAINER"),
                      ("--python-startup",),
                      ("--diagnose-resources",),
+                     ("--capability-registry-read",),
                      ("--apply", "--diagnose-resources")):
             with self.subTest(args=args):
                 process = self.run_cli(*args)
@@ -53,6 +54,7 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         self.assertIn("--apply", process.stdout)
         self.assertIn("--confirm", process.stdout)
         self.assertIn("--diagnose-resources", process.stdout)
+        self.assertIn("--capability-registry-read", process.stdout)
 
     def test_plan_contract_is_nonmutating(self):
         self.assertFalse(HARNESS.plan()["ci_auto_execution"])
@@ -114,6 +116,14 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         if workflow.exists():
             content = workflow.read_text(encoding="utf-8")
             self.assertNotIn("rad_p2_disposable_host_acceptance.py", content)
+
+    def test_neutralize_pe_manifest_safe_on_invalid_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            not_pe = Path(tmp) / "test.dll"
+            not_pe.write_bytes(b"NOT_A_PE_FILE")
+            self.assertFalse(HARNESS._neutralize_pe_manifest(not_pe))
+            nonexistent = Path(tmp) / "absent.dll"
+            self.assertFalse(HARNESS._neutralize_pe_manifest(nonexistent))
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ static DWORD connect_endpoint(unsigned long address, unsigned short port)
 {
     SOCKET client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (client == INVALID_SOCKET)
-        return ERROR_NOT_READY;
+        return (DWORD)WSAGetLastError();
     struct sockaddr_in endpoint = {0};
     endpoint.sin_family = AF_INET;
     endpoint.sin_addr.s_addr = htonl(address);

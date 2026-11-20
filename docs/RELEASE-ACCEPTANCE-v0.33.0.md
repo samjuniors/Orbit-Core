@@ -105,6 +105,21 @@ Both parent network controls passed. LPAC Winsock startup still returned `10107`
 
 The controller was interrupted with exit 1 while a directly launched LPAC child was live. A duplicated handle to that exact child signalled after interruption. A new isolated launch after forced failure also passed (23/0). LPAC descendant creation remained **BLOCKED** (error 5). All four fixture ACL commands returned 0. Job cleanup, profile deletion (`S_OK`), and profile storage and fixture removal passed. A separate lookup returned `0x80070002` and the fixture root was absent. The raw JSON and cleanup identifiers are retained locally. [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138)
 
+### Root-cause verification and isolated runtime remediation
+
+1. **LPAC Winsock error 10107 diagnosis:**
+   - **Internal call and denied resource:** `WSAStartup` calls `RegOpenKeyExW` on `HKLM\SYSTEM\CurrentControlSet\Services\WinSock2\Parameters\Protocol_Catalog9` and `NameSpace_Catalog5`.
+   - **Mechanism:** In Windows LPAC (`PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT = 1`), `ALL APPLICATION PACKAGES` (`S-1-15-2-1`) is opted out. Registry DACLs on both catalog keys grant read access only to `ALL APPLICATION PACKAGES` and the dedicated Microsoft LPAC capability `registryRead` (`S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4053264122-3456934681`). They contain no ACE for `ALL RESTRICTED APPLICATION PACKAGES` (`S-1-15-2-2`). Consequently, when zero capabilities are configured, the OS denies catalog reads (`ERROR_ACCESS_DENIED`, 5), causing `WSAStartup` to fail with `10107` (`WSASYSCALLFAILURE`).
+   - **Remediation & verification:** `orbit_appcontainer` now supports explicit, whitelisted LPAC capabilities (`LPAC_REGISTRY_READ_CAPABILITY`) while strictly rejecting network capabilities (`internetClient`, `privateNetworkClientServer`). With `registryRead`, `WSAStartup` succeeds (0), and Windows Filtering Platform (WFP) enforces network isolation by denying socket/connect calls with `10013` (`WSAEACCES`).
+
+2. **Isolated Python startup error 0xC0000022 diagnosis:**
+   - **Internal call and denied resource:** Windows NT Loader calls `LdrpFindDllActivationContext` -> `BasepCreateActCtx` -> `BasepSxsCreateStreams` when loading `python312.dll`. The DLL contains an embedded Win32 `RT_MANIFEST` resource for Common-Controls 6.0. Inside an LPAC token, CSRSS denies activation context stream creation (`0xC0000022` / `STATUS_ACCESS_DENIED`).
+   - **Mechanism:** The NT Loader fails to load `python312.dll`, returning status `0xC0000022` to `python.exe` before any Python bytecode can execute.
+   - **Remediation & verification:** `stage_python` now neutralizes the `RT_MANIFEST` resource entry in the *staged* copy of `pythonXY.dll` inside the disposable fixture (`_neutralize_pe_manifest`). The NT Loader skips activation context creation (`STATUS_RESOURCE_DATA_NOT_FOUND`, `0xC000008A`), `python312.dll` loads with status 0, and staged Python starts with exit code 0 (`PASS`) and verified marker write `CPYTHON_STARTED`, without modifying host files or granting additional OS privileges.
+
+3. **Disposable probe error preservation:**
+   - Fixed `rad_p2_disposable_probe.c` `connect_endpoint` to return `(DWORD)WSAGetLastError()` when `socket()` returns `INVALID_SOCKET`, preserving `10013` (`WSAEACCES`) instead of masking it as `ERROR_NOT_READY`.
+
 ## Evidence and continuity
 
 - GitHub engineering truth: [PR #133](https://github.com/samjuniors/Orbit-Core/pull/133), [CI #1401](https://github.com/samjuniors/Orbit-Core/actions/runs/44289816258), [issue #130](https://github.com/samjuniors/Orbit-Core/issues/130).

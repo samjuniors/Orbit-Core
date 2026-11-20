@@ -60,13 +60,17 @@ def record_network_checks(checks, samples, controls, *, native_control):
 
 def build_probe(destination):
     """Build the reviewed fixture source with the configured local MSVC SDK."""
+    destination.mkdir()
+    executable = destination / "probe.exe"
+    override = os.environ.get("ORBIT_PROBE_EXECUTABLE")
+    if override and Path(override).is_file():
+        shutil.copyfile(override, executable)
+        return executable
     toolchain = os.environ.get("VCToolsInstallDir")
     if not toolchain:
         raise RuntimeError("Start from an x64 MSVC Developer Command Prompt")
     compiler = Path(toolchain).resolve(strict=True) / "bin" / "Hostx64" / "x64" / "cl.exe"
     source = Path(__file__).with_name("rad_p2_disposable_probe.c").resolve(strict=True)
-    destination.mkdir()
-    executable = destination / "probe.exe"
     options = {"CL", "_CL_", "LINK", "_LINK_"}
     env = {key: value for key, value in os.environ.items() if key.upper() not in options}
     command = [
@@ -108,17 +112,67 @@ def assert_absent(path):
     raise RuntimeError("Path still exists after cleanup")
 
 
+def _neutralize_pe_manifest(dll_path):
+    """Neutralize embedded RT_MANIFEST in staged DLLs to allow LPAC loading.
+
+    Under Windows LPAC, CSRSS SxS activation context creation from DLLs is
+    blocked by container security policy (STATUS_ACCESS_DENIED, 0xC0000022).
+    Neutralizing the manifest entry in the staged copy allows the NT Loader
+    to skip activation context creation and load the DLL with status 0,
+    without granting additional OS capabilities or modifying host files.
+    """
+    if not dll_path.is_file():
+        return False
+    data = bytearray(dll_path.read_bytes())
+    if len(data) < 0x40 or data[:2] != b"MZ":
+        return False
+    e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+    if len(data) < e_lfanew + 0x108 or data[e_lfanew:e_lfanew + 4] != b"PE\0\0":
+        return False
+    opt_header = e_lfanew + 24
+    magic = struct.unpack_from("<H", data, opt_header)[0]
+    rsrc_dir_offset = opt_header + (128 if magic == 0x20B else 112)
+    rsrc_rva, rsrc_size = struct.unpack_from("<II", data, rsrc_dir_offset)
+    if not rsrc_rva or not rsrc_size:
+        return False
+    num_sections = struct.unpack_from("<H", data, e_lfanew + 6)[0]
+    opt_size = struct.unpack_from("<H", data, e_lfanew + 20)[0]
+    sec_offset = opt_header + opt_size
+    rsrc_raw = 0
+    for i in range(num_sections):
+        sec = data[sec_offset + i * 40 : sec_offset + (i + 1) * 40]
+        vrva, vsize, rraw = struct.unpack_from("<III", sec, 12)
+        if vrva <= rsrc_rva < vrva + vsize:
+            rsrc_raw = rraw + (rsrc_rva - vrva)
+            break
+    if not rsrc_raw or rsrc_raw + 16 > len(data):
+        return False
+    num_named, num_id = struct.unpack_from("<HH", data, rsrc_raw + 12)
+    entries_offset = rsrc_raw + 16
+    for i in range(num_named, num_named + num_id):
+        entry_offset = entries_offset + i * 8
+        if entry_offset + 8 > len(data):
+            break
+        type_id, _ = struct.unpack_from("<II", data, entry_offset)
+        if type_id == 24:  # RT_MANIFEST
+            struct.pack_into("<I", data, entry_offset, 0x7FFF)
+            dll_path.write_bytes(data)
+            return True
+    return False
+
+
 def stage_python(destination):
     """Stage only the trusted base interpreter and standard library in the fixture."""
     base = Path(sys.base_prefix).resolve(strict=True)
     abi = f"python{sys.version_info.major}{sys.version_info.minor}"
-    destination.mkdir()
+    destination.mkdir(parents=True, exist_ok=True)
     for name in ("python.exe", "python3.dll", abi + ".dll", "vcruntime140.dll",
                  "vcruntime140_1.dll"):
         shutil.copyfile(base / name, destination / name)
     shutil.copytree(base / "Lib", destination / "Lib",
                     ignore=shutil.ignore_patterns("site-packages", "__pycache__", "test"))
     (destination / (abi + "._pth")).write_text("Lib\n", encoding="ascii")
+    _neutralize_pe_manifest(destination / (abi + ".dll"))
     return str(destination / "python.exe")
 
 
@@ -184,7 +238,8 @@ time.sleep(30)
                 app._k32.CloseHandle(child)
 
 
-def run_disposable(*, python_startup=False, diagnose_resources=False):
+def run_disposable(*, python_startup=False, diagnose_resources=False,
+                   capability_registry_read=False):
     if os.name != "nt":
         return {"status": "HOLD_WINDOWS_ONLY", "profile_created": False}
     if sys.version_info < (3, 12):
@@ -215,7 +270,8 @@ def run_disposable(*, python_startup=False, diagnose_resources=False):
     ), "NOT_RUN")
     report = {"status": "HOLD_REQUIRES_INDEPENDENT_OS_ACCEPTANCE",
               "checks": checks, "profile_created": False,
-              "real_credentials_accessed": False, "os_build": sys.getwindowsversion().build}
+              "real_credentials_accessed": False, "os_build": sys.getwindowsversion().build,
+              "capabilities_requested": ["registryRead"] if capability_registry_read else []}
     sid = ctypes.c_void_p()
     profile_path = None
 
@@ -332,9 +388,12 @@ def run_disposable(*, python_startup=False, diagnose_resources=False):
             }
             report["external_endpoint"] = f"{EXTERNAL[0]}:{EXTERNAL[1]}"
 
+            caps_requested = [app.LPAC_REGISTRY_READ_CAPABILITY] if capability_registry_read else None
+
             def launch_args(mode):
                 return dict(profile=profile, executable=executable, args=[executable, *mode],
-                            cwd=str(project), env={**env, "PORT": str(loopback[1])})
+                            cwd=str(project), env={**env, "PORT": str(loopback[1])},
+                            capabilities=caps_requested)
 
             def launch(job, *mode):
                 return app.launch_suspended_verified(job=job, **launch_args(mode))
@@ -421,7 +480,8 @@ def run_disposable(*, python_startup=False, diagnose_resources=False):
                         job, processes, _ = open_job(python_cleanup, "python_job_cleanup")
                         proc = app.launch_suspended_verified(
                             profile=profile, executable=python_exe,
-                            args=python_command("python-lpac.txt"), cwd=str(project), env=env, job=job)
+                            args=python_command("python-lpac.txt"), cwd=str(project), env=env, job=job,
+                            capabilities=caps_requested)
                         processes.append(proc)
                         exit_code = proc.wait(timeout=10)
                         report["python_lpac_exit"] = f"0x{exit_code & 0xffffffff:08x}"
@@ -517,12 +577,15 @@ def main(argv=None):
                         help="Also check startup of the staged trusted base interpreter")
     parser.add_argument("--diagnose-resources", action="store_true",
                         help="Compare read-only dependency checks and test disposable controller interruption")
+    parser.add_argument("--capability-registry-read", action="store_true",
+                        help="Allow Microsoft LPAC registryRead capability to query Winsock catalog")
     args = parser.parse_args(argv)
     if not args.apply or args.confirm != CONFIRM:
         print(json.dumps(plan(), sort_keys=True))
         return 2
     print(json.dumps(run_disposable(python_startup=args.python_startup,
-                                    diagnose_resources=args.diagnose_resources),
+                                    diagnose_resources=args.diagnose_resources,
+                                    capability_registry_read=args.capability_registry_read),
                      indent=2, sort_keys=True))
     return 2  # HOLD pending review of the individual observations.
 

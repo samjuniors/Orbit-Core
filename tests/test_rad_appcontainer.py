@@ -531,6 +531,38 @@ class AppContainerGateTests(unittest.TestCase):
             equal.assert_not_called()
 
     @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_forbidden_capability_raises_permission_error(self):
+        import orbit_windows_job
+        app = orbit_appcontainer
+        job = orbit_windows_job.WindowsJob()
+        self.addCleanup(job.close)
+        with self.assertRaisesRegex(PermissionError, "not permitted"):
+            app.launch_suspended_verified(
+                profile=self.name_for(self.one),
+                executable=sys.executable,
+                args=[sys.executable, "-c", "pass"],
+                cwd=str(self.one),
+                env={"SystemRoot": os.environ.get("SystemRoot", "C:\\Windows")},
+                job=job,
+                capabilities=["S-1-15-3-1"])  # internetClient is strictly forbidden
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
+    def test_invalid_capabilities_type_raises_value_error(self):
+        import orbit_windows_job
+        app = orbit_appcontainer
+        job = orbit_windows_job.WindowsJob()
+        self.addCleanup(job.close)
+        with self.assertRaisesRegex(ValueError, "capabilities must be a collection"):
+            app.launch_suspended_verified(
+                profile=self.name_for(self.one),
+                executable=sys.executable,
+                args=[sys.executable, "-c", "pass"],
+                cwd=str(self.one),
+                env={"SystemRoot": os.environ.get("SystemRoot", "C:\\Windows")},
+                job=job,
+                capabilities="not-a-list")
+
+    @unittest.skipUnless(os.name == "nt", "Win32 only")
     def test_read_only_appcontainer_sid_derivation_api_available(self):
         # This does not establish that the named profile exists.
         sid = ctypes.c_void_p()
