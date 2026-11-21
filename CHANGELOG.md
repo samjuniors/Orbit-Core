@@ -21,7 +21,7 @@ Proposed future changes require separate owner review.
 
 ### Install and upgrade
 
-- Download versioned assets **only after publication** from [official GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases), alongside their matching published SHA-256 sidecars. This draft candidate is for independent testing and must not replace the currently installed published package.
+- Download only **published, owner-approved release assets** from [official GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases), together with their matching published SHA-256 sidecars. An unpublished CI acceptance artifact is not a released installer and must not replace an existing installation.
 - Review the proposed CREATE / UPGRADE / SKIP / MERGE / PRESERVE actions before confirming installation. Preserve SQLite databases, checkpoints, previous versioned runtime, and custom host configurations.
 - Supports Windows and Linux source tests with Python 3.10–3.13 (Windows release acceptance uses Python 3.12). Reopen Codex/Antigravity and actually call the MCP after an owner-approved install; a configured path alone is not connection evidence.
 
@@ -33,9 +33,9 @@ Proposed future changes require separate owner review.
 
 ### Known limitations
 
-- CI and local protocol tests do not independently verify owner authentication, real IDE permission dialogs, native worker delivery/receipt, child-session identity, crash/stop recovery or production-grade security.
-- Windows host policy blocked some real Codex file reads; no sandbox or host-policy bypass is part of this candidate. Live Antigravity v0.33 acceptance and real product visual/screenshot review remain required.
-- UI source inventories can miss dynamic/native views; caller-reported screenshot/QA packets and trace references are **not** verified visual or host-execution evidence.
+- Automated CI and local protocol tests alone cannot authenticate the owner or prove production-grade host security. Scoped signed-in Codex and disposable Antigravity native-child/lead-review tests passed, along with observed one-time consent/denial and interruption handling; these are not unrestricted native-permission guarantees.
+- Host restrictions and denied operations remain authoritative; no sandbox or host-policy bypass is part of this release. The temporary inherited Antigravity v0.33 registration scan, checkpoint, resume and denial passed, but inherited native-child result delivery did not complete in its bounded window. The later disposable-profile specialist delivery passed; the historical owner-settings change cannot be reconstructed. Timed native grant expiry and active revocation, and complete real-product visual/screenshot review, remain unverified.
+- UI source inventories can miss dynamic/native views; caller-reported screenshot/QA packets and trace references are **not** verified visual or host-execution evidence. Preview commands still execute with the launching OS account's privileges; native OS isolation remains a separate, unmerged security effort.
 - This source candidate is not a production-readiness certificate. See [the v0.33 acceptance record](docs/RELEASE-ACCEPTANCE-v0.33.0.md) and the established release process for remaining gates.
 
 ## [0.32.0] - Published prerelease (2026-11-17)
