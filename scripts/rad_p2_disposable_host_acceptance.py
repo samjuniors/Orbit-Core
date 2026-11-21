@@ -616,7 +616,7 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
                                     thread.join(timeout=4)
                                 if thread.is_alive() or not observations:
                                     raise RuntimeError("Disposable HTTP snapshot server did not stop")
-                                if (code != 200 or payload != b"ORBIT_ISOLATED_WSGI_OK\\n"
+                                if (code != 200 or payload != b"ORBIT_ISOLATED_WSGI_OK\n"
                                         or content_type != "text/plain; charset=utf-8"
                                         or no_referrer != "no-referrer"
                                         or observations[0]["preview_ready"] is not False):
