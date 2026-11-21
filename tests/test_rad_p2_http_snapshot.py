@@ -107,6 +107,24 @@ class TestDisposableBrowserSnapshot(unittest.TestCase):
                 self.assertEqual(actual["body"], b"")
                 self.assertNotIn(b"ORBIT_ISOLATED_WSGI_OK", actual["body"])
 
+    def test_duplicate_host_header_is_rejected_as_dns_rebinding_attempt(self):
+        with http_snapshot.DisposableBrowserSnapshot(self.snapshot()) as viewer:
+            worker = threading.Thread(target=viewer.serve_once, daemon=True)
+            worker.start()
+            conn = http.client.HTTPConnection("127.0.0.1", viewer.port, timeout=3)
+            try:
+                conn.putrequest("GET", viewer._path, skip_host=True)
+                conn.putheader("Host", f"127.0.0.1:{viewer.port}")
+                conn.putheader("Host", "attacker.test")
+                conn.endheaders()
+                response = conn.getresponse()
+                self.assertEqual(response.status, 403)
+                self.assertEqual(response.read(), b"")
+            finally:
+                conn.close()
+                worker.join(timeout=4)
+            self.assertFalse(worker.is_alive())
+
     def test_bearer_url_exact_path_no_queries_or_fake_routes(self):
         for path in (
             "/orbit-rad-preview/wrong", "/", "/health",
@@ -135,6 +153,16 @@ class TestDisposableBrowserSnapshot(unittest.TestCase):
         self.assertEqual(response["body"], b"")
         self.assertEqual(int(response["headers"]["Content-Length"]),
                          len(b"ORBIT_ISOLATED_WSGI_OK\n"))
+
+    def test_direct_snapshot_object_cannot_bypass_bounded_validation(self):
+        for args in (
+            (True, "text/plain; charset=utf-8", b"ok"),
+            (200, "text/plain; charset=utf-8\\r\\nX-Evil: 1", b"ok"),
+            (200, "text/plain; charset=utf-8", b"x" * (protocol.MAX_BODY + 1)),
+        ):
+            with self.subTest(args=str(args)[:50]):
+                with self.assertRaises(protocol.IPCSecurityHold):
+                    http_snapshot.BrowserSnapshot(*args)
 
     def test_invalid_snapshot_cannot_be_served(self):
         good = {
