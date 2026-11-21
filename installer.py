@@ -57,6 +57,14 @@ OLD_STOCK_SHA256 = {
     # remain unrecognized and must still block before any file modification.
     'cb22cb9021995e7814fdf82da38539065b759ec885c21ffb0e392d3dd4bbe600',  # v0.31.0 native orbit-creative-director.md, LF
     '7ffa5061f3192ee8156ef4bee44ed65bbf72e5219363034b4338816216bb59e4',  # v0.31.0 native orbit.md, LF
+    # Unmodified v0.32.0 Antigravity templates replaced in v0.33.0. Verified
+    # against the published Universal Setup ZIP and its checksum.
+    '1e7c35791fc861969caefcc6ef5976f89e4a459c930f816fd64350cdf0c8a55b',  # creative-director, LF
+    '3747cc7e7676bf4ef705a37e9b6f7fc0a890f2c5875e4593f98f842cd941eee9',  # creative-director, CRLF
+    '98fc649d1747e7d4dff04697ec82d1b061a83ab1b1ce3bd300dcf190e8357b2e',  # frontend, LF
+    'bdc655181cab355f3269f1691b2c492b124dd42261c19dce53413b10c091483f',  # frontend, CRLF
+    '08c46fda5443aa0a8a92c334bc8a3ca2fa23ad618f3c55391f86aa2905f8a3c9',  # qa, LF
+    '5c0295bb6ed7c7ec33ce2d352323d2d4133a20e71568be30e2dc635b09379403',  # qa, CRLF
     # Published v0.26.0-v0.30.0 immutable release updater/GUI stock bytes.
     # Include official ZIP LF and exact Windows CRLF forms. Only full SHA256
     # matches permit backup-first replacement; any owner edit still blocks.

@@ -128,7 +128,7 @@ jobs:
           path: previous-0.31.0
       - name: Rehearse v0.31.0 to candidate preserving prior user state
         if: matrix.python-version == '3.12'
-        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.31.0
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.31.0 --hosts codex antigravity
       - name: Check out immutable published v0.32.0 prerelease for upgrade rehearsal
         if: matrix.python-version == '3.12'
         uses: actions/checkout@v4
@@ -137,14 +137,21 @@ jobs:
           path: previous-0.32.0
       - name: Rehearse v0.32.0 to candidate preserving prior user state
         if: matrix.python-version == '3.12'
-        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.32.0
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.32.0 --hosts codex antigravity
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle
-      - name: Select current candidate version for test artifacts
+      - name: Verify checksums for unpublished candidate artifacts
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12' && (github.event_name == 'pull_request' || startsWith(github.ref_name, 'release/'))
         shell: bash
-        run: echo "ORBIT_CANDIDATE_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION)"
+          bundle="ORBIT-Claude-Desktop-v${version}.mcpb"
+          sha256sum "$bundle" > "$bundle.sha256"
+          sha256sum --check "$bundle.sha256"
+          (cd dist && sha256sum --check ./*.zip.sha256)
+          echo "ORBIT_CANDIDATE_VERSION=$version" >> "$GITHUB_ENV"
       - name: Upload non-published candidate installers for host acceptance
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12' && (github.event_name == 'pull_request' || startsWith(github.ref_name, 'release/'))
         uses: actions/upload-artifact@v4
@@ -152,6 +159,7 @@ jobs:
           name: orbit-v${{ env.ORBIT_CANDIDATE_VERSION }}-host-acceptance
           path: |
             ORBIT-Claude-Desktop-v${{ env.ORBIT_CANDIDATE_VERSION }}.mcpb
+            ORBIT-Claude-Desktop-v${{ env.ORBIT_CANDIDATE_VERSION }}.mcpb.sha256
             dist/ORBIT-Universal-Setup-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip
             dist/ORBIT-Universal-Setup-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip.sha256
             dist/Orbit-Antigravity-Plugin-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip

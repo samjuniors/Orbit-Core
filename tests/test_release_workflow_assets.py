@@ -9,6 +9,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleaseAssetManifestTests(unittest.TestCase):
+    def test_candidate_artifact_upload_contains_four_verified_checksum_pairs(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        checks, upload = workflow.split("Upload non-published candidate installers for host acceptance", 1)
+        checks = checks.split("Verify checksums for unpublished candidate artifacts", 1)[1]
+        self.assertIn('sha256sum "$bundle" > "$bundle.sha256"', checks)
+        self.assertIn('sha256sum --check "$bundle.sha256"', checks)
+        self.assertIn("sha256sum --check ./*.zip.sha256", checks)
+        assets = {line.strip() for line in upload.splitlines()}
+        version = "${{ env.ORBIT_CANDIDATE_VERSION }}"
+        for path in (
+            f"ORBIT-Claude-Desktop-v{version}.mcpb",
+            f"dist/ORBIT-Universal-Setup-v{version}.zip",
+            f"dist/Orbit-Antigravity-Plugin-v{version}.zip",
+            f"dist/Orbit-Core-Plugin-Suite-v{version}.zip",
+        ):
+            with self.subTest(asset=path):
+                self.assertIn(path, assets)
+                self.assertIn(path + ".sha256", assets)
+
     def test_built_plugin_suite_is_in_release_upload_inventory(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         build_step = workflow.split("Build and verify reproducible release artifacts", 1)[1]

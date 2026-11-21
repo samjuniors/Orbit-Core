@@ -17,7 +17,7 @@ Proposed future changes require separate owner review.
 - **Review the complete UI, not only the first screen.** Optional, read-only route/component inventories, project design-contract hints, token/literal drift warnings and source-bound screen/state QA coverage help a coding host plan consistent UI review. They remain heuristics until an actual host renders and inspects the product.
 - **Keep approved Autopilot continuation safer.** Local pause/resume now requires a fresh, exact-revision and source-scope-bound reviewed digest. Reused approval-reference fingerprints are rejected in the existing project SQLite journal; a digest cannot authenticate a person or grant native permissions.
 - **Coordinate specialist results without handing away control.** Typed return-to-lead contracts and redacted local mission/team traces reuse Orbit's existing agents, tools and event journals. Recipient delivery reports and independent lead reviews remain distinct from real host agent execution.
-- **Preserve official prior stock agent files during upgrade.** Exact SHA-256 recognition of two immutable v0.31 Antigravity agents resolves the known source upgrade mismatch while preserving backup-first behavior and refusal of unknown owner customizations ([issue #130](https://github.com/samjuniors/Orbit-Core/issues/130)).
+- **Upgrade official Antigravity templates safely.** Exact SHA-256 recognition covers the affected v0.31.0 and v0.32.0 stock agents. The installer backs up recognized files and stops for review when it encounters a customized file. ([v0.31 upgrade issue](https://github.com/samjuniors/Orbit-Core/issues/130))
 
 ### Install and upgrade
 
