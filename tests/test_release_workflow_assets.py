@@ -50,12 +50,13 @@ class ReleaseAssetManifestTests(unittest.TestCase):
         self.assertIn("missing expected asset $asset", workflow)
         self.assertIn("grep -Fxq -- \"$asset\"", workflow)
 
-    def test_manual_dispatch_and_tag_push_share_release_concurrency_group(self):
+    def test_publication_requires_explicit_manual_dispatch_from_main(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("on:\\n  workflow_dispatch:", workflow)
+        self.assertNotIn("  push:\\n    tags:", workflow)
         self.assertIn("format('v{0}', github.event.inputs.version)", workflow)
-        self.assertIn("|| github.ref_name", workflow)
         self.assertIn("Run manual releases from the main branch only", workflow)
-        self.assertIn("Tagged commit is not present on main", workflow)
+        self.assertIn('if [[ "$GITHUB_REF" != \'refs/heads/main\' ]]', workflow)
 
 
 
