@@ -57,6 +57,14 @@ class BrowserSnapshot:
 class _LoopbackHTTPServer(HTTPServer):
     allow_reuse_address = False
     request_queue_size = 1
+    client_timeout = 2.0
+
+    def get_request(self):
+        client, address = super().get_request()
+        # HTTPServer.timeout bounds accept(), not a slow client's request
+        # headers. Do not let a half-open localhost socket pin the worker.
+        client.settimeout(self.client_timeout)
+        return client, address
 
 
 class DisposableBrowserSnapshot:
@@ -159,6 +167,7 @@ class DisposableBrowserSnapshot:
         # Python's HTTPServer is a convenience protocol parser, not a
         # production-hardened web front end. We do not expose arbitrary apps.
         self._server = _LoopbackHTTPServer(("127.0.0.1", 0), Handler)
+        self._server.client_timeout = min(2.0, self._lifetime)
         self._server.timeout = 0.1
         self.port = self._server.server_address[1]
         self._path = "/orbit-rad-preview/" + self._token
