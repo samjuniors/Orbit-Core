@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 import secrets
 import time
 
@@ -27,6 +26,13 @@ class BrowserSnapshot:
     status: int
     content_type: str
     body: bytes
+
+    def __post_init__(self):
+        if (type(self.status) is not int or self.status not in (200, 404, 500)
+                or type(self.content_type) is not str
+                or self.content_type not in CONTENT_TYPES
+                or type(self.body) is not bytes or len(self.body) > MAX_BODY):
+            raise IPCSecurityHold("Invalid bounded HTTP snapshot content")
 
     @classmethod
     def from_ipc_response(cls, result):
@@ -116,7 +122,9 @@ class DisposableBrowserSnapshot:
                 raw_headers = headers.items()
                 if (self.client_address[0] != "127.0.0.1"
                         or self.path != owner._path
-                        or headers.get("Host") != expected_host
+                        or headers.get_all("Host", []) != [expected_host]
+                        or headers.get_all("Sec-Fetch-Site", []) not in (
+                            [], ["none"], ["same-origin"])
                         or len(self.raw_requestline) > 512
                         or len(raw_headers) > MAX_HEADER_FIELDS
                         or sum(len(k) + len(v) for k, v in raw_headers) > MAX_HEADER_BYTES
@@ -124,8 +132,7 @@ class DisposableBrowserSnapshot:
                             "Origin", "Referer", "Cookie", "Authorization",
                             "Proxy-Authorization", "Content-Length",
                             "Transfer-Encoding", "Upgrade", "Forwarded"))
-                        or any(k.lower().startswith("x-forwarded-") for k, _ in raw_headers)
-                        or headers.get("Sec-Fetch-Site", "none") not in ("none", "same-origin")):
+                        or any(k.lower().startswith("x-forwarded-") for k, _ in raw_headers)):
                     self._reject()
                     return
                 snapshot = owner._snapshot
