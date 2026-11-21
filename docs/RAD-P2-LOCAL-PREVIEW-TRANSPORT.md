@@ -157,3 +157,65 @@ Antigravity host permissions. Neither GitHub CI nor this synthetic WSGI
 round trip proves those properties. Do not label this "production HTTP
 preview", enable a global loopback exemption or change the normal fail-closed
 `HOLD_OS_ISOLATION_ENDPOINT_UNVERIFIED` behavior.
+
+
+## 2026-11-21 — Host-owned one-shot HTTP snapshot (experimental, inactive)
+
+A new scripts-only `rad_p2_preview_ipc/http_snapshot.py` implements the
+**next narrow boundary**: an owner-activated, one-use local HTTP viewer for
+already-validated, bounded **synthetic** WSGI response bytes. This is an
+**in-memory snapshot**, not a live dynamic app or an arbitrary HTTP proxy.
+
+- Binds **IPv4 127.0.0.1 only**, on a random OS-assigned port. Never opens
+  a listener at import time or through the production MCP runtime.
+- Uses a fresh 192-bit bearer token in an exact, single-use path; any wrong
+  path, query, method, foreign/duplicate `Host`, `Origin`, `Referer`,
+  `Cookie`, `Authorization`, forwarded header or cross-site fetch holds.
+  A rejected first request consumes the one-request budget.
+- Expires after a short deadline and shuts down the listener. Never logs
+  the URL/token, response body or sensitive browser headers.
+- Responds with a strict content-type allowlist, bounded bytes, CSP
+  `sandbox; default-src 'none'`, no referrers, no cache, no framing, no
+  CORS, no cookie and `nosniff`. The user-provided project web app is
+  **not** loaded or allowed to execute scripts.
+- The existing manual disposable Windows fixture may opt into
+  `--http-snapshot`, **only after** `--ipc-wsgi --ipc-handshake
+  --python-startup` and the existing `--apply --confirm` gate, with
+  zero added LPAC capabilities. Once the verified native pipe returns the
+  fixed WSGI health marker, the host replays those **same checked bytes**
+  to a local HTTP client. No browser QA is claimed; the child has already
+  exited. The harness retains its overall HOLD exit code.
+
+Read-only preflight (no profiles/ACLs/listener):
+
+```powershell
+py -3.12 scripts/rad_p2_disposable_host_acceptance.py --http-snapshot
+```
+
+**Operator/host approval required before running the native disposable
+experiment:** `py -3.12 scripts/rad_p2_disposable_host_acceptance.py
+--apply --confirm "CREATE DISPOSABLE ORBIT APPCONTAINER"
+--python-startup --ipc-handshake --ipc-wsgi --http-snapshot`.
+This command is documented but was **NOT run through ChatGPT**.
+No Windows profile, ACL or host credential was touched by this work.
+
+GitHub CI tests the synthetic in-process WSGI → IPC frame → host snapshot →
+real loopback HTTP response, plus source/runtime separation, Host/origin
+rejection (including DNS rebinding/duplicate Host), method and path denial,
+token isolation, response headers, timeout and listener cleanup. Passing
+these tests does **not** prove an actual LPAC pipe works, that each message
+has OS-bound authorship after handle delegation, or that the browser can
+safely preview general user code.
+
+**Explicit security limitations:** `http.server` is suitable only for this
+disposable, local, bounded smoke test and is not approved as production
+web infrastructure. A bearer token in a URL can appear in browser history;
+its very short lifetime, one-use limit and no-referrer header reduce but do
+not eliminate exposure. A genuine dynamic browser-facing preview requires
+a separately reviewed transport and native, adversarial Windows tests.
+All production `READY` transitions remain fail-closed. Before merging into
+release branches, review or exclude this scripts directory from source
+package archives (the current build includes scripts recursively).
+
+External review references: [Python HTTP server security notes](https://docs.python.org/3.12/library/http.server.html) and
+[OWASP DNS rebinding test guidance](https://wstg.owasp.org/latest/4-Web_Application_Security_Testing/11-Client-side/21-DNS_Rebinding/).
