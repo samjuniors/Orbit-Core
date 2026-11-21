@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import http.client
 from pathlib import Path
+import socket
 import sys
 import tempfile
 import threading
+import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -205,6 +207,30 @@ class TestDisposableBrowserSnapshot(unittest.TestCase):
             self.assertFalse(state["request_consumed"])
             self.assertFalse(state["preview_ready"])
             self.assertTrue(viewer._closed)
+
+    def test_slow_trickle_client_cannot_hold_listener_past_absolute_deadline(self):
+        with http_snapshot.DisposableBrowserSnapshot(
+                self.snapshot(), lifetime_seconds=0.35) as viewer:
+            worker = threading.Thread(target=viewer.serve_once, daemon=True)
+            worker.start()
+            sock = socket.create_connection(("127.0.0.1", viewer.port), timeout=1)
+            try:
+                sock.sendall(b"GET /orbit-rad-preview/")
+                # Keep the client non-idle: the watchdog must close the socket
+                # even if recv timeouts would otherwise keep resetting.
+                deadline = time.monotonic() + 1.0
+                while time.monotonic() < deadline and worker.is_alive():
+                    try:
+                        sock.sendall(b"a")
+                    except OSError:
+                        break
+                    time.sleep(0.04)
+                worker.join(timeout=2)
+                self.assertFalse(worker.is_alive(),
+                                 "Slow-trickle client pinned a short-lived server")
+                self.assertTrue(viewer._closed)
+            finally:
+                sock.close()
 
     def test_prototype_remains_absent_from_installed_runtime(self):
         source = Path(__file__).resolve().parents[1] / "source" / "runtime"
