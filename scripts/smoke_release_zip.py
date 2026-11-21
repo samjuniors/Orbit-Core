@@ -13,6 +13,7 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
+from release_source_inventory import excluded_from_setup_source_archive
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,6 +37,8 @@ def smoke(root=ROOT):
             if any(not n.startswith(prefix + "/") or ".." in Path(n).parts
                    or "\\" in n or n.startswith("/") for n in names):
                 raise RuntimeError("Candidate archive has an unsafe member path")
+            if any(excluded_from_setup_source_archive(n[len(prefix) + 1:]) for n in names):
+                raise RuntimeError("Experimental RAD P2 prototype leaked into release ZIP")
             z.extractall(temporary)
         pkg = temporary / prefix
         if (pkg / "VERSION").read_text(encoding="utf-8").strip() != version:
