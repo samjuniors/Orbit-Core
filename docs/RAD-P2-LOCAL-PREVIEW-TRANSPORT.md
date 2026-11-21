@@ -219,3 +219,20 @@ package archives (the current build includes scripts recursively).
 
 External review references: [Python HTTP server security notes](https://docs.python.org/3.12/library/http.server.html) and
 [OWASP DNS rebinding test guidance](https://wstg.owasp.org/latest/4-Web_Application_Security_Testing/11-Client-side/21-DNS_Rebinding/).
+
+## 2026-11-21 — Source-setup archive containment (DRAFT)
+
+The follow-on stacked draft branch `security/rad-p2-exclude-experimental-source-20261121`
+adds an explicit **source-setup ZIP** exclusion policy for unaccepted
+`scripts/rad_p2_*` and their matching `tests/test_rad_p2_*` test modules.
+The read-only `rad_p2_preflight.py` script and its test are preserved.
+The complete experimental source and tests remain in GitHub for independent
+review and CI; this is an archive-inventory restriction, **not a deletion**
+or a change to the installed 57-tool MCP runtime.
+
+Both ZIP construction and the existing extracted-ZIP smoke check reject an
+accidental prototype inclusion. New focused tests enforce the allowlist and
+safe relative paths. This is a defense-in-depth packaging precaution, **not**
+LPAC security acceptance or approval to merge/release. The previous statement
+that every `scripts/` file is shipped describes the pre-change behavior;
+no published archive has been updated by this draft.
