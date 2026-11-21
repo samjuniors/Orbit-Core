@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import secrets
+import socket
+import threading
 import time
 
 from .protocol import CONTENT_TYPES, IPCSecurityHold, MAX_BODY
@@ -59,12 +61,36 @@ class _LoopbackHTTPServer(HTTPServer):
     request_queue_size = 1
     client_timeout = 2.0
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._active_lock = threading.Lock()
+        self._active_client = None
+
     def get_request(self):
         client, address = super().get_request()
-        # HTTPServer.timeout bounds accept(), not a slow client's request
-        # headers. Do not let a half-open localhost socket pin the worker.
+        # An idle timeout alone does not stop a client trickling one byte
+        # at a time. The serve_once deadline additionally cancels the socket.
         client.settimeout(self.client_timeout)
+        with self._active_lock:
+            self._active_client = client
         return client, address
+
+    def process_request(self, request, client_address):
+        try:
+            return super().process_request(request, client_address)
+        finally:
+            with self._active_lock:
+                if self._active_client is request:
+                    self._active_client = None
+
+    def force_disconnect(self):
+        with self._active_lock:
+            client = self._active_client
+        if client is not None:
+            try:
+                client.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
 
 
 class DisposableBrowserSnapshot:
@@ -179,10 +205,15 @@ class DisposableBrowserSnapshot:
             raise IPCSecurityHold("Browser fixture not active or already consumed")
         self._started = True
         deadline = time.monotonic() + self._lifetime
+        watchdog = threading.Timer(self._lifetime, self._server.force_disconnect)
+        watchdog.daemon = True
+        watchdog.start()
         try:
             while not self._used and time.monotonic() < deadline:
                 self._server.handle_request()
         finally:
+            watchdog.cancel()
+            self._server.force_disconnect()
             self.close()
         return {"status": "BROWSER_SNAPSHOT_EXPIRED_NOT_READY",
                 "request_consumed": self._used, "preview_ready": False}
