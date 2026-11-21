@@ -26,7 +26,7 @@ concurrency:
 jobs:
   publish:
     name: Test, tag and publish
-    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out full history and tags
@@ -50,35 +50,18 @@ jobs:
             exit 1
           fi
           tag="v${version}"
-          # Tag pushes are always prerelease by default. The only way to
-          # publish a stable 0.x GitHub Release is an explicit manual dispatch.
+          # Explicit owner-reviewed manual dispatch is the only publication entry point.
           if [[ "$RELEASE_TYPE" != 'prerelease' && "$RELEASE_TYPE" != 'stable' ]]; then
             echo 'Release type must be prerelease or stable' >&2
             exit 1
           fi
-          if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' && "$RELEASE_TYPE" != 'prerelease' ]]; then
-            echo 'A stable release requires an explicit manual main-branch run' >&2
+          if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' || "$GITHUB_REF" != 'refs/heads/main' ]]; then
+            echo 'Run manual releases from the main branch only' >&2
             exit 1
           fi
-          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
-            if [[ "$GITHUB_REF" != 'refs/heads/main' ]]; then
-              echo 'Run manual releases from the main branch only' >&2
-              exit 1
-            fi
-            if [[ "$REQUESTED_VERSION" != "$version" ]]; then
-              echo "Requested version $REQUESTED_VERSION differs from VERSION $version" >&2
-              exit 1
-            fi
-          else
-            if [[ "$GITHUB_REF" != "refs/tags/$tag" ]]; then
-              echo "Tag $GITHUB_REF does not match VERSION $version" >&2
-              exit 1
-            fi
-            git fetch --no-tags origin main
-            if ! git merge-base --is-ancestor HEAD origin/main; then
-              echo 'Tagged commit is not present on main' >&2
-              exit 1
-            fi
+          if [[ "$REQUESTED_VERSION" != "$version" ]]; then
+            echo "Requested version $REQUESTED_VERSION differs from VERSION $version" >&2
+            exit 1
           fi
           echo "ORBIT_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
           echo "ORBIT_RELEASE_TAG=$tag" >> "$GITHUB_ENV"
@@ -101,6 +84,8 @@ jobs:
           (cd dist && sha256sum --check "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256")
           (cd dist && sha256sum --check "Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256")
           (cd dist && sha256sum --check "Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256")
+      - name: Smoke-test extracted release ZIP and disposable installed MCP
+        run: python scripts/smoke_release_zip.py
       - name: Generate version-specific release notes
         shell: bash
         run: |
@@ -117,7 +102,6 @@ jobs:
           Path(os.environ['RUNNER_TEMP'], 'release-notes.md').write_text(content, encoding='utf-8')
           PY
       - name: Confirm tag is immutable or create it
-        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
@@ -217,7 +201,7 @@ jobs:
           flags=()
           # "stable" describes the approved GitHub distribution channel,
           # not an assurance of SemVer API compatibility for version 0.x.
-          # Never infer a stable publication from a tag push or version number.
+          # Never infer stable publication from the version number.
           if [[ "$ORBIT_RELEASE_TYPE" == 'prerelease' ]]; then flags+=(--prerelease); fi
           gh release create "$ORBIT_RELEASE_TAG" \
             "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip" \
