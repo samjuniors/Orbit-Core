@@ -52,8 +52,8 @@ class ReleaseAssetManifestTests(unittest.TestCase):
 
     def test_publication_requires_explicit_manual_dispatch_from_main(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertIn("on:\\n  workflow_dispatch:", workflow)
-        self.assertNotIn("  push:\\n    tags:", workflow)
+        self.assertIn("on:\n  workflow_dispatch:", workflow)
+        self.assertNotIn("  push:\n    tags:", workflow)
         self.assertIn("format('v{0}', github.event.inputs.version)", workflow)
         self.assertIn("Run manual releases from the main branch only", workflow)
         self.assertIn('if [[ "$GITHUB_REF" != \'refs/heads/main\' ]]', workflow)
