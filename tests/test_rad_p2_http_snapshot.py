@@ -147,7 +147,11 @@ class TestDisposableBrowserSnapshot(unittest.TestCase):
             self.assertFalse(worker.is_alive())
 
     def test_post_denied_and_head_has_no_body(self):
-        self.assertEqual(self.request_once(self.snapshot(), method="POST")["status"], 403)
+        for method in ("POST", "PUT", "DELETE", "TRACE", "PATCH", "OPTIONS"):
+            with self.subTest(method=method):
+                response = self.request_once(self.snapshot(), method=method)
+                self.assertEqual(response["status"], 403)
+                self.assertEqual(response["body"], b"")
         response = self.request_once(self.snapshot(), method="HEAD")
         self.assertEqual(response["status"], 200)
         self.assertEqual(response["body"], b"")
