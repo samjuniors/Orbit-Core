@@ -46,9 +46,10 @@ class ReleaseAssetManifestTests(unittest.TestCase):
         self.assertIn("expected_prerelease=true", workflow)
         self.assertIn("if [[ \"$ORBIT_RELEASE_TYPE\" == 'stable' ]]; then expected_prerelease=false; fi", workflow)
         self.assertIn("incompatible draft/channel state; refusing success", workflow)
-        self.assertIn("--json assets --jq '.assets[].name'", workflow)
-        self.assertIn("missing expected asset $asset", workflow)
-        self.assertIn("grep -Fxq -- \"$asset\"", workflow)
+        self.assertIn('gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > "$existing_assets"', workflow)
+        self.assertIn('verified="$(python scripts/verify_release_draft_assets.py --version "$ORBIT_RELEASE_VERSION" --assets-json "$existing_assets")"', workflow)
+        self.assertIn("Existing published release assets do not match the reviewed source; refusing success", workflow)
+        self.assertNotIn("missing expected asset $asset", workflow)
 
     def test_publication_requires_explicit_manual_dispatch_from_main(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
@@ -66,8 +67,11 @@ class ReleaseAssetManifestTests(unittest.TestCase):
         smoke = workflow.index("Smoke-test extracted release ZIP and disposable installed MCP")
         tag = workflow.index("Confirm tag is immutable or create it")
         self.assertLess(build, smoke)
+        checksum = workflow.index("Add checksum for desktop extension")
         self.assertLess(smoke, tag)
+        self.assertLess(checksum, tag)
         self.assertIn("run: python scripts/smoke_release_zip.py", workflow)
+        self.assertIn('sha256sum "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb"', workflow)
 
 
 
