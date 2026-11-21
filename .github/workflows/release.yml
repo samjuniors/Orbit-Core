@@ -15,9 +15,6 @@ on:
         options:
           - prerelease
           - stable
-  push:
-    tags:
-      - 'v[0-9]*'
 
 permissions:
   contents: write
