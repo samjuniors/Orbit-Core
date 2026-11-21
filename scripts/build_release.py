@@ -1,10 +1,11 @@
 from __future__ import annotations
 import hashlib, zipfile, argparse
 from pathlib import Path
+from release_source_inventory import excluded_from_setup_source_archive
 ROOT=Path(__file__).resolve().parents[1]
 VERSION=(ROOT/'VERSION').read_text().strip()
 FILES=['Orbit Setup.cmd','Orbit.ps1','orbit_setup.py','orbit_priority.py','orbit_compact_gui.py','orbit_setup_ui_model.py','orbit_cli.py','orbit_update_gui.py','installer.py','install_orbit_gui.pyw','README.md','VERSION','NEXT_VERSION','CHANGELOG.md','SECURITY.md','TODO-LAB-TEST.md','CAPABILITY-TEST.md',f'ORBIT-Claude-Desktop-v{VERSION}.mcpb']
-FILES += sorted(p.relative_to(ROOT).as_posix() for d in ['source','tests','docs','scripts'] for p in (ROOT/d).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ['.pyc','.pyo'])
+FILES += sorted(p.relative_to(ROOT).as_posix() for d in ['source','tests','docs','scripts'] for p in (ROOT/d).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ['.pyc','.pyo'] and not excluded_from_setup_source_archive(p.relative_to(ROOT).as_posix()))
 parser=argparse.ArgumentParser();parser.add_argument('--verify',action='store_true');args=parser.parse_args()
 missing=[p for p in FILES if not (ROOT/p).is_file()]
 if missing:raise SystemExit(f'Missing: {missing}')
@@ -21,6 +22,7 @@ with zipfile.ZipFile(archive) as z:
  assert len(names)==len(set(names))
  assert all(n.startswith(f'orbit-universal-{VERSION}/') and '..' not in Path(n).parts for n in names)
  assert len([n for n in names if n.endswith('source/runtime/orbit_mcp.py')])==1
+ assert not any(excluded_from_setup_source_archive(n.split('/', 1)[1]) for n in names)
 print(f'{archive.name}: {len(names)} files; sha256={digest}')
 
 # Host-native Antigravity package is a separate, deterministic local plugin.
