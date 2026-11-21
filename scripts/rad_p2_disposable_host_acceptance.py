@@ -266,8 +266,10 @@ time.sleep(30)
 
 def run_disposable(*, python_startup=False, diagnose_resources=False,
                    capability_registry_read=False, ipc_handshake=False,
-                   ipc_wsgi=False):
+                   ipc_wsgi=False, http_snapshot=False):
     # A pipe test is never an implicit privilege or preview-mode switch.
+    if http_snapshot and not ipc_wsgi:
+        return {"status": "HOLD_HTTP_SNAPSHOT_REQUIRES_IPC_WSGI", "profile_created": False}
     if ipc_wsgi and not ipc_handshake:
         return {"status": "HOLD_IPC_WSGI_REQUIRES_HANDSHAKE", "profile_created": False}
     if ipc_handshake and not python_startup:
@@ -301,7 +303,7 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
         "loopback_denial", "external_denial", "process_tree", "lpac_job_termination", "failure_recovery",
         "job_cleanup", "recovery_job_cleanup", "profile_deletion",
         "profile_storage_absence", "acl_fixture_cleanup",
-        "ipc_handshake", "ipc_wsgi",
+        "ipc_handshake", "ipc_wsgi", "host_http_snapshot",
     ), "NOT_RUN")
     report = {"status": "HOLD_REQUIRES_INDEPENDENT_OS_ACCEPTANCE",
               "checks": checks, "profile_created": False,
@@ -568,7 +570,8 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
                             project_root=project)
                         result = pipe.accept_handshake(
                             child=proc, job=job, session=transcript, timeout_seconds=3,
-                            fixture_wsgi=ipc_wsgi)
+                            fixture_wsgi=ipc_wsgi,
+                            browser_snapshot=http_snapshot)
                         exit_code = proc.wait(timeout=3)
                         report["ipc_child_exit"] = exit_code
                         report["ipc_handshake_status"] = result["status"]
@@ -579,6 +582,48 @@ def run_disposable(*, python_startup=False, diagnose_resources=False,
                         if ipc_wsgi:
                             report["ipc_wsgi_response_bytes"] = result.get("body_length")
                             checks["ipc_wsgi"] = "PASS" if accepted else "BLOCKED"
+                        if http_snapshot:
+                            # The LPAC child has exited: this verifies a static
+                            # host-owned replay of validated bytes, NOT live HTTP
+                            # IPC routing or a real browser QA session.
+                            checks["host_http_snapshot"] = "BLOCKED"
+                            if not accepted:
+                                raise RuntimeError("No valid LPAC WSGI response to replay")
+                            from rad_p2_preview_ipc.http_snapshot import (
+                                BrowserSnapshot, DisposableBrowserSnapshot)
+                            import http.client
+                            import threading
+                            snapshot = BrowserSnapshot.from_ipc_response(
+                                result.pop("http_fixture_response"))
+                            with DisposableBrowserSnapshot(snapshot) as viewer:
+                                observations = []
+                                def run_viewer():
+                                    observations.append(viewer.serve_once())
+                                thread = threading.Thread(
+                                    target=run_viewer, daemon=True)
+                                thread.start()
+                                conn = http.client.HTTPConnection(
+                                    "127.0.0.1", viewer.port, timeout=3)
+                                try:
+                                    conn.request("GET", viewer._path)
+                                    response = conn.getresponse()
+                                    payload = response.read(32769)
+                                    code = response.status
+                                    content_type = response.getheader("Content-Type")
+                                    no_referrer = response.getheader("Referrer-Policy")
+                                finally:
+                                    conn.close()
+                                    thread.join(timeout=4)
+                                if thread.is_alive() or not observations:
+                                    raise RuntimeError("Disposable HTTP snapshot server did not stop")
+                                if (code != 200 or payload != b"ORBIT_ISOLATED_WSGI_OK\\n"
+                                        or content_type != "text/plain; charset=utf-8"
+                                        or no_referrer != "no-referrer"
+                                        or observations[0]["preview_ready"] is not False):
+                                    raise RuntimeError("Disposable HTTP snapshot mismatch")
+                                report["host_http_snapshot_status"] = code
+                                report["host_http_snapshot_bytes"] = len(payload)
+                                checks["host_http_snapshot"] = "PASS"
 
             with ExitStack() as tree:
                 job, processes, handles = open_job(tree, "job_cleanup")
@@ -673,6 +718,8 @@ def main(argv=None):
                         help="Opt-in disposable LPAC named-pipe hello (NOT an HTTP preview)")
     parser.add_argument("--ipc-wsgi", action="store_true",
                         help="One synthetic in-memory WSGI request over disposable LPAC IPC; no HTTP listener")
+    parser.add_argument("--http-snapshot", action="store_true",
+                        help="Replay checked WSGI bytes once over host 127.0.0.1 HTTP; NOT a live browser preview")
     args = parser.parse_args(argv)
     if not args.apply or args.confirm != CONFIRM:
         print(json.dumps(plan(), sort_keys=True))
@@ -681,7 +728,8 @@ def main(argv=None):
                                     diagnose_resources=args.diagnose_resources,
                                     capability_registry_read=args.capability_registry_read,
                                     ipc_handshake=args.ipc_handshake,
-                                    ipc_wsgi=args.ipc_wsgi),
+                                    ipc_wsgi=args.ipc_wsgi,
+                                    http_snapshot=args.http_snapshot),
                      indent=2, sort_keys=True))
     return 2  # HOLD pending review of the individual observations.
 
