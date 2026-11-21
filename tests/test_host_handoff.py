@@ -372,6 +372,61 @@ class HostHandoffTests(unittest.TestCase):
         self.assertFalse(resumed['agent_spawned'])
         self.assertEqual(resumed['task']['revision'],4)
 
+    def test_retry_rejects_any_recorded_approval_after_restart(self):
+        self.register()
+        approvals = ("host-approved-plan-123", "fresh-actual-host-approval-456")
+        for approval in approvals:
+            reservation = self.reserve(approval_reference=approval)
+            released = self.call(
+                "orbit_task_release", task_key="frontend",
+                expected_revision=reservation["task"]["revision"],
+                reason_code="HOST_PERMISSION_DENIED",
+                host_invocation_outcome="DENIED_BEFORE_SESSION",
+                reason="Host denied this disposable invocation",
+                confirm_write=True,
+            )
+            self.assertEqual(released["status"], "BLOCKED")
+
+        db_path = Path(self.tmp.name) / "approval-restart.sqlite"
+        with sqlite3.connect(db_path) as durable:
+            self.db.backup(durable)
+        durable.close()
+        reopened = sqlite3.connect(db_path)
+        reopened.row_factory = sqlite3.Row
+        self.addCleanup(reopened.close)
+        orbit_tasks.setup(reopened)
+        root = orbit_mcp.project_root({"project_root": str(self.root)})
+        retry = {"project": "todo", "task_key": "frontend",
+                 "expected_revision": released["task"]["revision"], "confirm_write": True}
+        for approval in approvals:
+            with self.subTest(approval=approval), self.assertRaisesRegex(ValueError, "fresh host/user approval"):
+                orbit_tasks.reserve(reopened, {**retry, "approval_reference": approval}, root)
+        self.assertEqual(reopened.execute("SELECT COUNT(*) FROM orbit_task_attempts").fetchone()[0], 2)
+        accepted = orbit_tasks.reserve(reopened, {
+            **retry, "approval_reference": "fresh-actual-host-approval-789",
+        }, root)
+        self.assertEqual(accepted["status"], "RESERVED")
+        self.assertEqual(accepted["attempt_number"], 3)
+
+    def test_upgrade_preserves_last_known_approval_on_retry(self):
+        self.register()
+        reservation = self.reserve()
+        refusal = {
+            "task_key": "frontend", "reason_code": "HOST_PERMISSION_DENIED",
+            "host_invocation_outcome": "DENIED_BEFORE_SESSION",
+            "reason": "Host denied this disposable invocation", "confirm_write": True,
+        }
+        self.call("orbit_task_release", expected_revision=reservation["task"]["revision"], **refusal)
+
+        # Model an existing database created before approval history was recorded.
+        self.db.execute("DROP TABLE orbit_task_approval_refs")
+        orbit_tasks.setup(self.db)
+        retried = self.reserve(approval_reference="fresh-actual-host-approval-456")
+        self.assertEqual(retried["attempt_number"], 2)
+        self.call("orbit_task_release", expected_revision=retried["task"]["revision"], **refusal)
+        with self.assertRaisesRegex(ValueError, "fresh host/user approval"):
+            self.reserve()
+
     def test_m3_unavailable_and_failed_invocation_remain_blocked(self):
         for key,code in (('native-tool','HOST_TOOL_UNAVAILABLE'),
                          ('invocation','HOST_INVOCATION_FAILED')):
