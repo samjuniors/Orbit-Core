@@ -15,9 +15,6 @@ on:
         options:
           - prerelease
           - stable
-  push:
-    tags:
-      - 'v[0-9]*'
 
 permissions:
   contents: write
@@ -29,7 +26,7 @@ concurrency:
 jobs:
   publish:
     name: Test, tag and publish
-    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out full history and tags
@@ -53,35 +50,18 @@ jobs:
             exit 1
           fi
           tag="v${version}"
-          # Tag pushes are always prerelease by default. The only way to
-          # publish a stable 0.x GitHub Release is an explicit manual dispatch.
+          # Explicit owner-reviewed manual dispatch is the only publication entry point.
           if [[ "$RELEASE_TYPE" != 'prerelease' && "$RELEASE_TYPE" != 'stable' ]]; then
             echo 'Release type must be prerelease or stable' >&2
             exit 1
           fi
-          if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' && "$RELEASE_TYPE" != 'prerelease' ]]; then
-            echo 'A stable release requires an explicit manual main-branch run' >&2
+          if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' || "$GITHUB_REF" != 'refs/heads/main' ]]; then
+            echo 'Run manual releases from the main branch only' >&2
             exit 1
           fi
-          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
-            if [[ "$GITHUB_REF" != 'refs/heads/main' ]]; then
-              echo 'Run manual releases from the main branch only' >&2
-              exit 1
-            fi
-            if [[ "$REQUESTED_VERSION" != "$version" ]]; then
-              echo "Requested version $REQUESTED_VERSION differs from VERSION $version" >&2
-              exit 1
-            fi
-          else
-            if [[ "$GITHUB_REF" != "refs/tags/$tag" ]]; then
-              echo "Tag $GITHUB_REF does not match VERSION $version" >&2
-              exit 1
-            fi
-            git fetch --no-tags origin main
-            if ! git merge-base --is-ancestor HEAD origin/main; then
-              echo 'Tagged commit is not present on main' >&2
-              exit 1
-            fi
+          if [[ "$REQUESTED_VERSION" != "$version" ]]; then
+            echo "Requested version $REQUESTED_VERSION differs from VERSION $version" >&2
+            exit 1
           fi
           echo "ORBIT_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
           echo "ORBIT_RELEASE_TAG=$tag" >> "$GITHUB_ENV"
@@ -104,6 +84,8 @@ jobs:
           (cd dist && sha256sum --check "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256")
           (cd dist && sha256sum --check "Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256")
           (cd dist && sha256sum --check "Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256")
+      - name: Smoke-test extracted release ZIP and disposable installed MCP
+        run: python scripts/smoke_release_zip.py
       - name: Generate version-specific release notes
         shell: bash
         run: |
@@ -119,8 +101,11 @@ jobs:
           content += 'Built from a tested commit on the `main` branch. Read `SECURITY.md` and `README.md` before installing. Local MCP and agent integrations require host-specific setup.\n'
           Path(os.environ['RUNNER_TEMP'], 'release-notes.md').write_text(content, encoding='utf-8')
           PY
+      - name: Add checksum for desktop extension
+        shell: bash
+        run: |
+          sha256sum "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb" > "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256"
       - name: Confirm tag is immutable or create it
-        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
@@ -137,10 +122,6 @@ jobs:
             git tag -a "$ORBIT_RELEASE_TAG" -m "ORBIT Core MCP $ORBIT_RELEASE_TAG"
             git push origin "refs/tags/$ORBIT_RELEASE_TAG"
           fi
-      - name: Add checksum for desktop extension
-        shell: bash
-        run: |
-          sha256sum "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb" > "dist/ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256"
       - name: Publish GitHub Release with installation assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -205,22 +186,22 @@ jobs:
               echo "Existing release $ORBIT_RELEASE_TAG has incompatible draft/channel state; refusing success" >&2
               exit 1
             fi
-            # Reusing a same-channel release is idempotent only when the
-            # complete eight-asset inventory is still present.
-            existing_assets="$(gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
-            for asset in               "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip"               "ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip.sha256"               "Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip"               "Orbit-Antigravity-Plugin-v${ORBIT_RELEASE_VERSION}.zip.sha256"               "Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip"               "Orbit-Core-Plugin-Suite-v${ORBIT_RELEASE_VERSION}.zip.sha256"               "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb"               "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb.sha256"; do
-              if ! grep -Fxq -- "$asset" <<< "$existing_assets"; then
-                echo "Existing release $ORBIT_RELEASE_TAG is missing expected asset $asset" >&2
-                exit 1
-              fi
-            done
-            echo "Existing release $ORBIT_RELEASE_TAG matches channel and eight assets; leaving unchanged"
+            # Reuse is allowed only for a byte-for-byte complete, immutable
+            # release matching the exact rebuilt candidate and channel.
+            existing_assets="$RUNNER_TEMP/orbit-published-assets.json"
+            gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > "$existing_assets"
+            verified="$(python scripts/verify_release_draft_assets.py --version "$ORBIT_RELEASE_VERSION" --assets-json "$existing_assets")"
+            if [[ "$verified" != 'COMPLETE' ]]; then
+              echo "Existing published release assets do not match the reviewed source; refusing success" >&2
+              exit 1
+            fi
+            echo "Existing release $ORBIT_RELEASE_TAG matches channel and exact eight asset digests; leaving unchanged"
             exit 0
           fi
           flags=()
           # "stable" describes the approved GitHub distribution channel,
           # not an assurance of SemVer API compatibility for version 0.x.
-          # Never infer a stable publication from a tag push or version number.
+          # Never infer stable publication from the version number.
           if [[ "$ORBIT_RELEASE_TYPE" == 'prerelease' ]]; then flags+=(--prerelease); fi
           gh release create "$ORBIT_RELEASE_TAG" \
             "dist/ORBIT-Universal-Setup-v${ORBIT_RELEASE_VERSION}.zip" \
