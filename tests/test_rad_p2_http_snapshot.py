@@ -198,6 +198,8 @@ class TestDisposableBrowserSnapshot(unittest.TestCase):
     def test_timeout_closes_listener_without_request(self):
         with http_snapshot.DisposableBrowserSnapshot(
                 self.snapshot(), lifetime_seconds=0.2) as viewer:
+            self.assertGreater(viewer._server.client_timeout, 0)
+            self.assertLessEqual(viewer._server.client_timeout, 0.2)
             state = viewer.serve_once()
             self.assertEqual(state["status"], "BROWSER_SNAPSHOT_EXPIRED_NOT_READY")
             self.assertFalse(state["request_consumed"])
