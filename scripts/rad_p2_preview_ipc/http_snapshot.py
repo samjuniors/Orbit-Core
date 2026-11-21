@@ -94,6 +94,11 @@ class DisposableBrowserSnapshot:
                 # Never log a bearer path, token, source HTML or browser header.
                 return None
 
+            def send_error(self, code, message=None, explain=None):
+                # Include unknown/invalid HTTP methods and malformed request
+                # lines in the one-use budget; never emit default HTML errors.
+                self._reject()
+
             def do_GET(self):
                 self._respond(send_body=True)
 
