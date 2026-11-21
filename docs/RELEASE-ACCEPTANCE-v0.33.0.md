@@ -150,3 +150,22 @@
 | Non-registration settings preservation | **FAIL — aggregate integrity comparison** | The aggregate check differed. A separate Antigravity settings file had a write timestamp during the first host startup. Per-file before hashes were not retained, so the exact field or complete file diff could not be established. Both witnessed Orbit host launches used separate disposable SQLite databases. Further active-profile testing was halted. |
 
 **Commands and scope.** The test used `agy acp --stdio --sandbox --app-data-dir <disposable-host-state>` with normal configuration discovery. The subprocess environment explicitly bound `ORBIT_LOCAL_DB` and `ORBIT_TRUSTED_ROOTS` to the fixture. Candidate identity used direct MCP `initialize` and `tools/list`, the inherited subprocess command line and package parity. Native ACP evidence and backups are retained privately. Timed permission expiry and active grant revocation remain blocked. Permanent registration and release approval are separate owner decisions. [Draft PR #135](https://github.com/samjuniors/Orbit-Core/pull/135) remains stacked on #133, and [RAD issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) remains open.
+
+## 2026-11-21 — Remote Arc disposable native specialist delivery (independent verification)
+
+**PASS in a fresh disposable Antigravity profile, not an inherited owner-profile acceptance.** A read-only follow-up through the connected Windows Remote Arc Agent ran an isolated signed-in Antigravity ACP fixture against the exact staged v0.33.0 runtime from `3fe57f23690267848730f18cdff49fad625a499a`. No active MCP registration, installed v0.32.0 package or owner database was changed.
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| MCP connection and synthetic scan | **PASS** | Direct process-local MCP trace identified v0.33.0, discovered 57 tools and recorded a successful scan using explicitly bound disposable SQLite and trusted root. |
+| Native child delivery | **PASS in disposable profile** | One host-native child was created, its typed finding reached the lead through an authentic child-to-lead message, and the message was marked read. |
+| Independent lead review | **PASS in disposable profile** | The saved lead transcript independently checked both criteria and correctly rejected the synthetic UI: label present, keyboard activation absent. |
+| Owner-profile preservation | **PASS for two tracked files** | Post-test SHA-256 hashes of the active `mcp_config.json` and `config.json` matched their respective recorded pre-run values. Other owner state was not exhaustively audited. |
+| Disposable-profile settings | **OBSERVED, not a preservation failure** | Host startup created disposable `config.json` and `.migrated`; the explicitly staged `mcp_config.json` retained its original digest. Changes were confined to the isolated host profile. |
+| Historical owner-profile settings delta | **NOT VERIFIED** | The former startup integrity mismatch cannot be reconstructed because no corresponding pre-test per-file baseline exists. This run does not retroactively establish that earlier contents were preserved. |
+| Inherited owner-profile native delivery | **NOT VERIFIED** | The earlier authorized inherited-profile child was created but did not deliver within its test window. This fresh disposable-profile PASS does not replace that specific gate. |
+| Host-enforced timed permission expiry and active revocation | **BLOCKED** | No verified native host events for these capabilities; retain explicit release HOLD. |
+
+**Checker limitation and resolution.** The disposable execution recorded child delivery and a completed lead review, but its first local verifier incorrectly treated a host event content value as an object and returned `BLOCKED` with `AttributeError`. A separate read-only verifier validated the persisted MCP trace, child-to-lead receipt identity, read acknowledgment, independent lead verdict and owner-registration hashes; all its asserted acceptance checks passed. The original checker result remains in the private evidence as a harness defect, not rewritten to PASS. The private fixture stores the separate `arc-independent-verification.json` receipt. No Orbit runtime or test-suite code was changed.
+
+**Release decision: HOLD.** Merge, tag, publish, install and active registration changes remain unauthorized. [Draft PR #135](https://github.com/samjuniors/Orbit-Core/pull/135), stacked on #133, remains open. [RAD issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) remains separate.
