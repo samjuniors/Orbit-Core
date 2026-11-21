@@ -33,7 +33,7 @@ class ReleaseAssetManifestTests(unittest.TestCase):
         self.assertIn("default: prerelease", workflow)
         self.assertIn("          - stable", workflow)
         self.assertIn("RELEASE_TYPE: ${{ inputs.release_type || 'prerelease' }}", workflow)
-        self.assertIn('if [[ "$GITHUB_EVENT_NAME" != \'workflow_dispatch\' && "$RELEASE_TYPE" != \'prerelease\' ]]', workflow)
+        self.assertIn('if [[ "$GITHUB_EVENT_NAME" != \'workflow_dispatch\' || "$GITHUB_REF" != \'refs/heads/main\' ]]', workflow)
         self.assertIn('if [[ "$ORBIT_RELEASE_TYPE" == \'prerelease\' ]]; then flags+=(--prerelease); fi', workflow)
         self.assertNotIn("ORBIT_RELEASE_VERSION%%.*", workflow)
         self.assertIn('gh release view "$ORBIT_RELEASE_TAG"', workflow)
@@ -56,7 +56,18 @@ class ReleaseAssetManifestTests(unittest.TestCase):
         self.assertNotIn("  push:\n    tags:", workflow)
         self.assertIn("format('v{0}', github.event.inputs.version)", workflow)
         self.assertIn("Run manual releases from the main branch only", workflow)
-        self.assertIn('if [[ "$GITHUB_REF" != \'refs/heads/main\' ]]', workflow)
+        self.assertIn("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'", workflow)
+        self.assertNotIn("github.event_name == 'push'", workflow)
+        self.assertIn('if [[ "$GITHUB_EVENT_NAME" != \'workflow_dispatch\' || "$GITHUB_REF" != \'refs/heads/main\' ]]', workflow)
+
+    def test_publishing_requires_extracted_candidate_smoke_before_tag(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        build = workflow.index("Build and verify reproducible release artifacts")
+        smoke = workflow.index("Smoke-test extracted release ZIP and disposable installed MCP")
+        tag = workflow.index("Confirm tag is immutable or create it")
+        self.assertLess(build, smoke)
+        self.assertLess(smoke, tag)
+        self.assertIn("run: python scripts/smoke_release_zip.py", workflow)
 
 
 
