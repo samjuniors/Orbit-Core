@@ -44,6 +44,8 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
                      ("--capability-registry-read",),
                      ("--ipc-handshake",),
                      ("--ipc-wsgi",),
+                     ("--http-snapshot",),
+                     ("--apply", "--http-snapshot"),
                      ("--apply", "--ipc-wsgi"),
                      ("--apply", "--ipc-handshake"),
                      ("--apply", "--diagnose-resources")):
@@ -61,6 +63,7 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
         self.assertIn("--capability-registry-read", process.stdout)
         self.assertIn("--ipc-handshake", process.stdout)
         self.assertIn("--ipc-wsgi", process.stdout)
+        self.assertIn("--http-snapshot", process.stdout)
 
     def test_plan_contract_is_nonmutating(self):
         self.assertFalse(HARNESS.plan()["ci_auto_execution"])
@@ -139,6 +142,21 @@ class DisposableHostAcceptanceTests(unittest.TestCase):
             python_startup=True, capability_registry_read=True)
         self.assertEqual(http_with_network["status"], "HOLD_IPC_ZERO_CAPABILITY_ONLY")
         self.assertIs(http_with_network["profile_created"], False)
+        snapshot_without_wsgi = HARNESS.run_disposable(
+            http_snapshot=True, ipc_handshake=True, python_startup=True)
+        self.assertEqual(snapshot_without_wsgi["status"],
+                         "HOLD_HTTP_SNAPSHOT_REQUIRES_IPC_WSGI")
+        self.assertIs(snapshot_without_wsgi["profile_created"], False)
+        snapshot_without_handshake = HARNESS.run_disposable(http_snapshot=True)
+        self.assertEqual(snapshot_without_handshake["status"],
+                         "HOLD_HTTP_SNAPSHOT_REQUIRES_IPC_WSGI")
+        self.assertIs(snapshot_without_handshake["profile_created"], False)
+        snapshot_with_network = HARNESS.run_disposable(
+            http_snapshot=True, ipc_wsgi=True, ipc_handshake=True,
+            python_startup=True, capability_registry_read=True)
+        self.assertEqual(snapshot_with_network["status"],
+                         "HOLD_IPC_ZERO_CAPABILITY_ONLY")
+        self.assertIs(snapshot_with_network["profile_created"], False)
 
     def test_harness_is_not_in_automatic_workflow(self):
         """Only allow manual script invocation, never auto-run from CI."""
