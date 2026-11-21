@@ -532,7 +532,17 @@ TOOLS += [
 ]
 TOOLS += [
  {'name':'orbit_intake_status','description':'Read guided product intake and progressive autonomy.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
- {'name':'orbit_intake_propose','description':'Save proposed product classification and interview questions, not user acceptance.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'profile':{'type':'object'},'questions':{'type':'array','maxItems':6},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','profile','questions'])},
+ {'name':'orbit_intake_propose','description':'Save proposed product classification and interview questions, not user acceptance.',
+  'inputSchema':schema({
+      'project_root':string(2000),'project':string(80),'profile':{'type':'object'},
+      'questions':{'type':'array','minItems':1,'maxItems':6,'items':schema({
+          'id':{'type':'string','minLength':2,'maxLength':40},
+          'prompt':{'type':'string','minLength':5,'maxLength':250},
+          'options':{'type':'array','minItems':2,'maxItems':5,'items':string(120)},
+          'recommended':string(120),
+      },['id','prompt','options','recommended'])},
+      'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'},
+  },['project_root','project','profile','questions'])},
  {'name':'orbit_intake_answer','description':'Record one actual answer with revision guard; then decide whether a dependent question is needed.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'question_id':string(40),'choice':string(500),'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','question_id','choice','user_reference'])},
  {'name':'orbit_intake_followup','description':'Add ONE conditional question based on an already recorded answer; cannot pre-answer it.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'based_on_id':string(40),'based_on_choice':string(500),'question':{'type':'object'},'rationale':string(500),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','based_on_id','based_on_choice','question','rationale'])},
  {'name':'orbit_intake_approve','description':'Record selected options or explicitly delegated recommended defaults; user consent is host-attested.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'answers':{'type':'object'},'answer_source':{'type':'string','enum':['user_choices','user_delegated_defaults']},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','answers','answer_source','user_reference'])},

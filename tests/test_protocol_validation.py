@@ -14,6 +14,31 @@ import orbit_mcp
 
 
 class ProtocolValidationTests(unittest.TestCase):
+    def test_host_tool_inventory_declares_array_items(self):
+        # Antigravity's model rejects an entire tool inventory if an array has
+        # no item definition. Inspect the actual tools/list response.
+        response = orbit_mcp.handle(None, {
+            'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'})
+        tools = response['result']['tools']
+        pending = [(tool['name'], tool['inputSchema']) for tool in tools]
+        while pending:
+            path, spec = pending.pop()
+            if spec.get('type') == 'array':
+                self.assertIsInstance(spec.get('items'), dict, path)
+                pending.append((path + '[]', spec['items']))
+            pending.extend((f'{path}.{key}', child)
+                           for key, child in spec.get('properties', {}).items())
+        intake = next(tool for tool in tools if tool['name'] == 'orbit_intake_propose')
+        questions = intake['inputSchema']['properties']['questions']
+        self.assertEqual(set(questions['items']['required']),
+                         {'id', 'prompt', 'options', 'recommended'})
+        orbit_mcp.validate_value([{
+            'id': 'scope', 'prompt': 'What should we build?',
+            'options': ['Small fixture', 'Larger fixture'], 'recommended': 'Small fixture',
+        }], questions)
+        with self.assertRaises(ValueError):
+            orbit_mcp.validate_value(['untyped question'], questions)
+
     def test_published_desktop_bundle_is_valid_without_repacking(self):
         # Published .mcpb remains immutable while branch source advances.
         # Release packaging requires scripts/check_version.py --strict-bundle.
