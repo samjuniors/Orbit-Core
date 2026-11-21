@@ -257,7 +257,7 @@ class DisposableLPACPipe:
         self._overlapped("write", data, deadline)
 
     def accept_handshake(self, *, child, job, session, timeout_seconds=3,
-                         fixture_wsgi=False):
+                         fixture_wsgi=False, browser_snapshot=False):
         """Verify a kernel-authenticated hello; optionally exchange one WSGI fixture.
 
         This is NOT a browser endpoint, permission grant, or production READY.
@@ -266,6 +266,8 @@ class DisposableLPACPipe:
         if (type(timeout_seconds) not in (int, float)
                 or not 0 < timeout_seconds <= 10 or self.handle is None):
             raise IPCSecurityHold("Invalid bounded LPAC pipe handshake")
+        if browser_snapshot and not fixture_wsgi:
+            raise IPCSecurityHold("Browser snapshot requires actual synthetic IPC response")
         if self.profile != session.profile or child.pid != session.child_pid:
             raise IPCSecurityHold("Pipe host session mismatch")
         deadline = time.monotonic() + timeout_seconds
@@ -310,9 +312,14 @@ class DisposableLPACPipe:
                     or response["content_type"] != "text/plain; charset=utf-8"
                     or response["body"] != b"ORBIT_ISOLATED_WSGI_OK\n"):
                 raise IPCSecurityHold("Unexpected disposable WSGI fixture response")
-            return {"status": "WSGI_IPC_ROUNDTRIP_VERIFIED_NOT_READY",
-                    "preview_ready": False, "host_approval_verified": False,
-                    "body_length": len(response["body"])}
+            result = {"status": "WSGI_IPC_ROUNDTRIP_VERIFIED_NOT_READY",
+                      "preview_ready": False, "host_approval_verified": False,
+                      "body_length": len(response["body"])}
+            if browser_snapshot:
+                # In-memory only, after native opener identity and sequence checks.
+                # Do not persist the body or expose it in acceptance reports.
+                result["http_fixture_response"] = response
+            return result
         finally:
             _win.CloseHandle(event)
             self.close()
