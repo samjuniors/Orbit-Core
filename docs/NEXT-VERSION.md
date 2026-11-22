@@ -1,5 +1,8 @@
 # Orbit Core — current v0.33 integration and acceptance gate (2026-11-18)
 
+**Continuity note (2026-11-22):** Cross-agent resumption rules are maintained in [AGENT-HANDOFF.md](AGENT-HANDOFF.md). This v0.33 candidate intentionally uses the manual-main-only release workflow documented in [RELEASE-PROCESS.md](RELEASE-PROCESS.md); do not copy the current mainline tag-push prerelease trigger into this candidate. Revalidate host/SQLite state and exact branch heads before resuming. This note does not authorize publication.
+
+
 **Published source authority:** [v0.32.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.32.0) is the latest public **prerelease** (2026-11-17); [v0.30.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) remains the latest stable-channel release. The source `main` and the separately installed Windows release remain v0.32.0. This development branch retains `VERSION=0.32.0` / `NEXT_VERSION=0.33.0` until a separately approved release cut. It is not a published v0.33 installer.
 
 **Current single integration entry point:** [draft PR #133](https://github.com/samjuniors/Orbit-Core/pull/133), incorporating the two still-open independently reviewed draft lines: [visual policy PR #131](https://github.com/samjuniors/Orbit-Core/pull/131) and [Autopilot/security/handoff PR #132](https://github.com/samjuniors/Orbit-Core/pull/132). The shared skill-instruction conflict was reconciled without removing either domain. No second model runner, required LLM/API key, external Agents SDK, new SQLite event store, or new permanent specialist.

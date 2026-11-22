@@ -8,7 +8,7 @@
 
 Orbit connects to the coding environment you already use. It helps turn requirements into an approved plan, coordinate specialist work, track progress, retain concise project context, and resume from the last checkpoint—without replacing your IDE or choosing an external model for you.
 
-**[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core/releases)**
+**[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [AI agent handoff](docs/AGENT-HANDOFF.md) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core/releases)**
 
 > [!IMPORTANT]
 > **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. Published packages have separate stable/prerelease channels. **v0.32.0 is the latest published prerelease as checked 2026-11-18**, not a production certification; a stable-channel label is also not a security or production certificate. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
