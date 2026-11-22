@@ -8,6 +8,15 @@ This repository is **Orbit Core MCP**, not Helm, Aro, SamjuniorsOS or a separate
 - The dedicated **Orbit Core Notion hub** records product decisions, roadmap, durable research, release intent and version status: https://app.notion.com/p/4074f681d48881a7a407c3bdc2054409
 - Project-scoped **SQLite and `.orbit`** hold local execution history, checkpoints and recovery. These systems do not synchronize automatically.
 
+## Model-independent development handoffs
+
+Use the one canonical [cross-agent continuity and active-state handoff](docs/AGENT-HANDOFF.md) when moving work between ChatGPT, Claude Code, Codex, Antigravity and other authorized hosts. `CLAUDE.md` is a Claude Code entry point to these same rules, not a separate policy.
+
+- On exit, record the **exact workstream, branch and HEAD**, status of uncommitted work, changes, tests with source SHA and real evidence, blockers, approved scope, local Orbit checkpoint/task revision **if actually accessible**, and one safe next step.
+- On entry, **revalidate live** GitHub/Notion/host availability and the project-scoped SQLite/`.orbit` state before resuming. If they differ, reconcile without losing work or replaying uncertain side effects. No host permission or hidden model session state transfers automatically.
+- Use reviewed PR/branch records for redacted engineering handoffs; the **existing** Notion hub for durable product decisions; local ignored SQLite/`.orbit` for operational details. Never commit private host settings, credentials, approval tokens, raw WAL files or unrelated project data.
+- Don't let two agents concurrently write the same workstream or assume a previous host's unverified result was a PASS. Retain the owner's final authority. **Orbit Commander is separately paused and outside this repository.**
+
 ## Every release — required workflow
 
 **Read and follow [docs/RELEASE-PROCESS.md](docs/RELEASE-PROCESS.md) before working on a version.** It contains the single canonical release checklist and public changelog template. Do not invent a competing release guide or rely on a prior chat summary as proof of current release state.
