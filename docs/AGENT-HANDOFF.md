@@ -5,6 +5,13 @@
 **Project:** [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core). The historic Orbit-Core-MCP URL redirects to this repository.
 **Applies to:** ChatGPT, Claude Code, Codex, Antigravity and other authorized coding hosts. **Not** the separate Orbit Commander project (paused by owner).
 
+## 2026-11-22 — documentation merge and release disposition
+
+- [PR #148](https://github.com/samjuniors/Orbit-Core/pull/148) is **MERGED** to `main` at [`2a11fd37b171fa2701e5c4d926b941f6b4f65332`](https://github.com/samjuniors/Orbit-Core/commit/2a11fd37b171fa2701e5c4d926b941f6b4f65332). Six documentation paths from this handoff are now on main. Exact PR-head CI #44903594241 completed success; separate push CI on the merge commit was not confirmed.
+- Main `VERSION` remains `0.32.0`. **No new release was created.** v0.33.0 remains a separate unmerged candidate stacked on #133; its existing acceptance record continues to report owner-profile native delivery NOT VERIFIED, host-enforced timed permission expiry/active revocation BLOCKED, and independent review/owner release gates outstanding. Do not publish based on the documentation PR's CI.
+- **Release policy discrepancy requiring correction before any publication:** current `.github/workflows/release.yml` declares both manual `workflow_dispatch` and tag-push `push.tags: v[0-9]*`; its job condition also permits `github.event_name == 'push'`. This contradicts the manual-main-only policy described in `docs/RELEASE-PROCESS.md` and earlier handoff notes. Do not tag or dispatch until this mismatch is resolved and regression-tested on a reviewed PR.
+- Notion project hub updated with the merge SHA, release HOLD, and this workflow discrepancy. Local PC `.orbit`/SQLite remains unverified; Remote Arc was offline at the last check.
+
 ## 1. Source of truth and handoff limits
 
 | Source | Owns | Never assume |
