@@ -80,6 +80,21 @@ class ReleaseAssetManifestTests(unittest.TestCase):
         self.assertNotIn("github.event_name == 'push'", workflow)
         self.assertIn('if [[ "$GITHUB_EVENT_NAME" != \'workflow_dispatch\' || "$GITHUB_REF" != \'refs/heads/main\' ]]', workflow)
 
+    def test_release_publication_requires_repository_owner_for_dispatch_and_rerun(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("permissions: {}", workflow)
+        self.assertIn("  authorize:", workflow)
+        self.assertIn("    permissions: {}", workflow)
+        self.assertIn("ACTOR: ${{ github.actor }}", workflow)
+        self.assertIn("TRIGGERING_ACTOR: ${{ github.triggering_actor }}", workflow)
+        self.assertIn("REPOSITORY_OWNER: ${{ github.repository_owner }}", workflow)
+        self.assertIn('if [[ "$ACTOR" != "$REPOSITORY_OWNER" || "$TRIGGERING_ACTOR" != "$REPOSITORY_OWNER" ]]', workflow)
+        self.assertIn("    needs: authorize", workflow)
+        self.assertIn("github.actor == github.repository_owner", workflow)
+        self.assertIn("github.triggering_actor == github.repository_owner", workflow)
+        self.assertIn("    permissions:\n      contents: write", workflow)
+        self.assertNotIn("permissions:\n  contents: write", workflow)
+
     def test_publishing_requires_extracted_candidate_smoke_before_tag(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         build = workflow.index("Build and verify reproducible release artifacts")
