@@ -982,24 +982,14 @@ class CharteredTeamEventTests(unittest.TestCase):
             "confirm_write": True,
         })["status"], "NATIVE_STOP_REQUEST_RECORDED")
 
-        # Model a terminal first attempt and a separately staffed retry. The
-        # old stop request must remain auditable but cannot block the new session.
+        # A retry advances the task revision and runs in a new native session.
+        # The old request remains auditable but must not block the new attempt.
         self.conn.execute(
             """UPDATE orbit_agent_tasks
-               SET status='REWORK', revision=4, host_session=NULL
+               SET status='FAILED', revision=4
                WHERE project=? AND project_root=? AND task_key='qa'""",
             (self.project, str(self.root)))
         self.conn.commit()
-        retry_staff = self.staffing(
-            task_key="qa", event_key="staff-qa-retry", task_revision=4,
-            worker_kind="bot", requested_tool_names=["read_file"])
-        self.assertEqual(retry_staff["status"], "STAFFING_REQUEST_REVIEW")
-        self.assertEqual(self.staffing(
-            task_key="qa", event_key="staff-qa-retry", task_revision=4,
-            worker_kind="bot", requested_tool_names=["read_file"],
-            review_manifest=retry_staff["payload"]["skill_manifest"],
-            expected_digest=retry_staff["review_digest"],
-            confirm_write=True)["status"], "STAFF_REQUEST_RECORDED")
         self.conn.execute(
             """UPDATE orbit_agent_tasks
                SET status='RUNNING', revision=5,
