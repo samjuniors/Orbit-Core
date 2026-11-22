@@ -1080,27 +1080,16 @@ def _stop_plan(conn, root, project, a, charter):
         raise ValueError("Unsupported coding host for native stop")
     tools = orbit_delegation.validate_reported_tools(
         host, a.get("available_host_tools", []))
-    staff_candidates = []
-    for row in history:
-        if (row["event_type"] != "STAFF_REQUEST"
-                or row["task_key"] != task["task_key"]):
-            continue
-        staff_body, issue = _existing_event(
-            conn, root, project, a["mission_id"],
-            row["event_key"], "STAFF_REQUEST")
-        if issue:
-            return {**common, "status": issue}
-        staff_revision = staff_body.get("task_revision")
-        if type(staff_revision) is int and staff_revision < task["revision"]:
-            staff_candidates.append((staff_revision, row, staff_body))
-    if not staff_candidates:
+    staff_rows = [row for row in history
+                  if row["event_type"] == "STAFF_REQUEST"
+                  and row["task_key"] == task["task_key"]]
+    if len(staff_rows) != 1:
         return {**common, "status": "HOLD_STOP_STAFF_IDENTITY_MISSING"}
-    latest_staff_revision = max(item[0] for item in staff_candidates)
-    latest_staff = [item for item in staff_candidates
-                    if item[0] == latest_staff_revision]
-    if len(latest_staff) != 1:
-        return {**common, "status": "HOLD_AMBIGUOUS_STAFF_REQUEST"}
-    staff = latest_staff[0][2]
+    staff, reason = _existing_event(
+        conn, root, project, a["mission_id"],
+        staff_rows[0]["event_key"], "STAFF_REQUEST")
+    if reason:
+        return {**common, "status": reason}
     if staff["host"] != host:
         return {**common, "status": "HOLD_STOP_HOST_MISMATCH"}
     # Do not pretend every supported IDE exposes a native interrupt tool.
