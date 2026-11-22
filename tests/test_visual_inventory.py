@@ -2,9 +2,11 @@
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,6 +98,64 @@ class VisualInventoryTests(unittest.TestCase):
         self.assertIn("HARD_LINK_SOURCE_FILE", result["partial_reasons"])
         self.assertEqual(result["scanned_file_count"], 5)
         self.assertFalse(result["screen_inventory_complete"])
+
+    def test_parent_directory_swap_to_symlink_is_not_read(self):
+        components = self.root / "src/components"
+        saved = self.root / "src/components-original"
+        outside = self.root.parent / "outside-components"
+        outside.mkdir()
+        (outside / "Button.tsx").write_text(
+            "export function OutsideSecretComponent() { return <div />; }",
+            encoding="utf-8")
+        swapped = False
+
+        def install_directory_link():
+            try:
+                os.symlink(outside, components, target_is_directory=True)
+            except OSError:
+                if os.name != "nt":
+                    raise
+                result = subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(components), str(outside)],
+                    capture_output=True, text=True)
+                if result.returncode:
+                    raise OSError(result.stderr or "Directory junction unavailable")
+
+        if os.name == "nt":
+            original_path_open = Path.open
+
+            def racing_path_open(path, *args, **kwargs):
+                nonlocal swapped
+                if not swapped and Path(path) == components / "Button.tsx":
+                    components.rename(saved)
+                    install_directory_link()
+                    swapped = True
+                return original_path_open(path, *args, **kwargs)
+
+            try:
+                with patch.object(Path, "open", new=racing_path_open):
+                    result = orbit_specialists.scan_visual_project(self.root)
+            except OSError as exc:
+                self.skipTest(f"Directory symlink/junction unavailable: {exc}")
+        else:
+            original_os_open = os.open
+
+            def racing_os_open(path, flags, *args, **kwargs):
+                nonlocal swapped
+                if (not swapped and path == "components"
+                        and kwargs.get("dir_fd") is not None):
+                    components.rename(saved)
+                    install_directory_link()
+                    swapped = True
+                return original_os_open(path, flags, *args, **kwargs)
+
+            with patch("os.open", side_effect=racing_os_open):
+                result = orbit_specialists.scan_visual_project(self.root)
+
+        self.assertTrue(swapped, "test did not replace the parent directory during open")
+        self.assertIn("UNSAFE_OR_MISSING_SOURCE_FILE", result["partial_reasons"])
+        self.assertNotIn("OutsideSecretComponent", json.dumps(result))
+        self.assertNotIn("src/components/Button.tsx", result["component_files"])
 
     def test_conservative_dynamic_route_and_file_size_limit(self):
         (self.root / "src/app/[slug]").mkdir()
