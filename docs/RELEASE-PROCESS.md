@@ -66,7 +66,7 @@ Treat source implementation, CI, native-host acceptance and GitHub publication a
 2. Run `python scripts/prepare_release_candidate.py`, `python scripts/check_release_readiness.py`, `python -m unittest discover -s tests -v`, `python scripts/check_version.py --strict-bundle`, and `python scripts/build_release.py --verify`. Check the installation package on a disposable project. CI also tests supported Python versions.
 3. Merge the reviewed pull request into `main` when Linux/Windows CI passes, source/archive parity holds, and owner approval is complete. Live desktop/browser acceptance is separately required for production claims.
 4. In **GitHub → Actions → Publish versioned release → Run workflow**, select `main`, enter the exact approved value of `VERSION`, and run it. No local Git CLI required. The workflow retests source, builds artifacts, creates an **annotated tag** `vMAJOR.MINOR.PATCH` on the tested commit if missing, and creates a GitHub Release.
-5. Alternatively, an authorized maintainer may push a new `vMAJOR.MINOR.PATCH` tag pointing at a commit already on `main`. This triggers the same tested publication path. A tag pushed by the workflow's `GITHUB_TOKEN` does not trigger another workflow; manual publication completes within that original run.
+5. **Do not publish by pushing a tag.** The release workflow is intentionally `workflow_dispatch`-only and accepts runs from `main` only. After all validation gates pass, the workflow itself creates the annotated immutable tag and publishes the release in that same run. A manually pushed tag is not a supported publication path.
 6. Verify the GitHub **Releases** and **Tags** pages, CI execution, ZIP and `.mcpb` downloads, and their `.sha256` checksums. Only after verification, publish any separately managed ChatGPT plugin version in Plugin Creator.
 
 ## Published assets
@@ -86,7 +86,7 @@ The release body is generated from the matching section `## [X.Y.Z]` in `CHANGEL
 ## Safety and consistency rules
 
 - **Never force-push, retag, or silently repoint a published version.** Use the next SemVer patch for corrections and record them in the changelog.
-- The workflow refuses a manual release whose requested version differs from `VERSION`, and rejects a pushed tag that differs from `VERSION` or points outside main's history.
+- The workflow refuses any run that is not an explicit `workflow_dispatch` from `main`, or whose requested version differs from `VERSION`. It creates the immutable tag only after release readiness, test, packaging, checksum and extracted-install smoke gates pass.
 - Re-running a successful workflow does not replace an existing GitHub Release. A matching tag can be reused if a previous release attempt failed halfway through.
 - GitHub Actions requires repository Actions enabled and an available `GITHUB_TOKEN` with `contents: write`; repository rules or restricted Actions settings can block tag creation or release upload. Review the failure logs rather than bypassing protections.
 - Keep project-specific memory (`.sqlite3`, WAL files), `.env`, credentials, personal host config and project transcripts out of Git and release artifacts.
