@@ -1,7 +1,7 @@
 # Orbit Core — cross-agent continuity and handoff
 
 **Status:** maintained handoff contract plus a dated engineering snapshot, **not** authorization to merge, install, or release.
-**Last reviewed:** 2026-11-21 (Asia/Kolkata).
+**Last reviewed:** 2026-11-22 (Asia/Kolkata).
 **Project:** [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core). The historic Orbit-Core-MCP URL redirects to this repository.
 **Applies to:** ChatGPT, Claude Code, Codex, Antigravity and other authorized coding hosts. **Not** the separate Orbit Commander project (paused by owner).
 
@@ -11,6 +11,15 @@
 - Main `VERSION` remains `0.32.0`. **No new release was created.** v0.33.0 remains a separate unmerged candidate stacked on #133; its existing acceptance record continues to report owner-profile native delivery NOT VERIFIED, host-enforced timed permission expiry/active revocation BLOCKED, and independent review/owner release gates outstanding. Do not publish based on the documentation PR's CI.
 - **Release trigger policy is branch-specific (verified 2026-11-22):** current `main` supports manual `workflow_dispatch` from `main` (default `prerelease`; `stable` only by explicit manual selection) and matching version-tag pushes (prerelease only, pointing to a commit already contained in `main`). The v0.33 candidate branch intentionally hardens this to **owner-only manual `workflow_dispatch` from `main`**; the no-write authorization job checks both original and triggering actors against `github.repository_owner`, and the publish job grants `contents: write` only after that gate. Its `.github/workflows/release.yml` and `docs/RELEASE-PROCESS.md` agree, and a tag push alone is not a publication path. Do not transfer main's tag-trigger behavior into the candidate. After v0.33 is merged, revalidate the new main workflow and update this note. All publication remains subject to release readiness and separate explicit owner approval.
 - Notion project hub updated with the merge SHA, release HOLD, and this workflow discrepancy. Local PC `.orbit`/SQLite remains unverified; Remote Arc was offline at the last check.
+
+## 2026-11-22 — v0.33 remediation and candidate synchronization
+
+- **Integration:** PR #156 merged the session-scoped native stop-request retry fix at `1e04dd1df7ac7fc74cf37d906b25c01bf9aa67d1`. PR #161 merged hard-link/TOCTOU-safe visual source scanning and payload-bound trace metadata at `5c1a3552cd41607d68afc91c58936561e5399254`. Integration PR #133 is at `5c1a355`; exact CI [#45049655426](https://github.com/samjuniors/Orbit-Core/actions/runs/45049655426) passed 5/5. Codex re-review of #133 is still running.
+- **Candidate:** PR #159 merged owner-only release dispatch/rerun authorization and preservation of existing AGENTS.md/CLAUDE.md before stock-agent hash matching at `098cdf2cfb267d8dd569ab6da5ede6cb728f3dba`. Candidate CI [#45048926337](https://github.com/samjuniors/Orbit-Core/actions/runs/45048926337) passed 5/5. Candidate was 54 ahead / 12 behind integration before synchronization.
+- **Synchronization:** `chore/v033-candidate-sync-after-p2-fixes-20261122` is based on the updated integration head and preserves candidate-specific `AGENT-HANDOFF.md`, `NEXT-VERSION.md`, `RELEASE-PROCESS.md` and `RELEASE-ACCEPTANCE-v0.33.0.md`. Its PR into the candidate must pass exact-head CI before the candidate is considered current.
+- **Review:** Codex code reviews on #156, #159 and #161 reported no findings. Updated #133 re-review is in progress. Separate security-review passes are NOT VERIFIED; CodeRabbit review on #159 was rate-limited. Keep the release hold until the final #133/#135 reviews and owner decision.
+- **Host gates:** Remote Arc reports the Windows PC offline. Local `.orbit`/SQLite and full owner-profile configuration are not verified. Inherited native specialist delivery remains NOT VERIFIED; timed permission expiry and active revocation remain BLOCKED; owner-profile install/rollback and real-product visual QA remain open.
+- Main remains `VERSION=0.32.0`. No v0.33 merge to main, tag, release, installation or deployment has occurred.
 
 ## 1. Source of truth and handoff limits
 
