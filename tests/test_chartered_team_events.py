@@ -1048,11 +1048,16 @@ class CharteredTeamEventTests(unittest.TestCase):
             "stop-qa-retry")
 
         inbox = self.event(action="inbox", task_key="qa")
-        pending = {row["event_key"] for row in
-                   inbox["native_stops_needing_reconciliation"]
-                   if row["reconciliation_required"]}
-        self.assertIn("stop-qa-old", pending)
-        self.assertNotIn("stop-qa-retry", pending)
+        stops = {row["event_key"]: row for row in
+                 inbox["native_stops_needing_reconciliation"]}
+        # Retirement notes are caller-reported only, so reconciliation stays
+        # required for both sessions; only the new request gets the matching note.
+        self.assertTrue(stops["stop-qa-old"]["reconciliation_required"])
+        self.assertFalse(stops["stop-qa-old"]["retirement_note_caller_reported"])
+        self.assertTrue(stops["stop-qa-retry"]["reconciliation_required"])
+        self.assertTrue(stops["stop-qa-retry"]["retirement_note_caller_reported"])
+        self.assertEqual(stops["stop-qa-retry"]["retirement_event_key"],
+                         "retire-qa-retry")
 
     def test_inbox_preserves_stop_reconciliation_through_pause_and_cold_restart(self):
         self._native_recipient_with_handoff()
