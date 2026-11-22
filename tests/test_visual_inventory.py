@@ -149,8 +149,10 @@ class VisualInventoryTests(unittest.TestCase):
                     swapped = True
                 return original_os_open(path, flags, *args, **kwargs)
 
-            with patch("os.open", side_effect=racing_os_open):
-                result = orbit_specialists.scan_visual_project(self.root)
+            supported_dir_fd = set(getattr(os, "supports_dir_fd", set()))
+            with patch("os.open", new=racing_os_open):
+                with patch("os.supports_dir_fd", supported_dir_fd | {racing_os_open}):
+                    result = orbit_specialists.scan_visual_project(self.root)
 
         self.assertTrue(swapped, "test did not replace the parent directory during open")
         self.assertIn("UNSAFE_OR_MISSING_SOURCE_FILE", result["partial_reasons"])
