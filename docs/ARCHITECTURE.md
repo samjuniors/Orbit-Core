@@ -17,6 +17,17 @@ Coding host: Antigravity / Codex / Claude Code / supported VS Code
        |-- Opt-in session-managed loopback preview and Playwright QA
 ```
 
+## Cross-host continuity and state ownership
+
+Orbit is **not** the host's LLM or an independent process executor. Switching between ChatGPT, Claude Code, Codex and Antigravity changes the active model/permissions/session; it does **not** migrate those ephemeral capabilities or implicitly grant consent.
+
+- **GitHub:** exact implementation, source revisions, PRs, automated checks and published releases.
+- **Orbit Core Notion:** approved product intent, research, rationale and durable decisions.
+- **Project-scoped SQLite and ignored `.orbit/`:** operational checkpoints, task/ledger revisions and recovery local to the configured project and trust domain. Git clones do not automatically include this local state.
+- **Handoff:** the outgoing host publishes a redacted, evidence-linked engineering summary; the incoming host checks branch, commit, dirty worktree, existing checkpoint revision and current permissions before writing. Cross-device portability requires explicit authorized transfer of operational data; never use a Git commit as a substitute for raw SQLite snapshot/backup or vice versa.
+
+The **single** portable procedure, active 2026-11-21 workstream snapshot, and incoming/outgoing template live in [AGENT-HANDOFF.md](AGENT-HANDOFF.md). Do not add separate competing handoff databases or silently copy sensitive settings/SQLite into the repository.
+
 ## Source modules and trust boundaries
 
 | Module | Implemented | Critical limitation |
