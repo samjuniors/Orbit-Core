@@ -220,6 +220,7 @@ def scan_visual_project(root):
     import json
     import os
     import posixpath
+    import stat
     from pathlib import Path
 
     base = Path(root)
@@ -274,19 +275,30 @@ def scan_visual_project(root):
                 if not actual.is_relative_to(base) or not actual.is_file():
                     reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
                     continue
-                metadata = actual.stat()
-                link_count = getattr(metadata, "st_nlink", None)
-                if type(link_count) is not int or link_count != 1:
-                    reasons.add("HARD_LINK_SOURCE_FILE")
-                    continue
-                size = metadata.st_size
-                if size > 128 * 1024 or bytes_read + size > max_bytes:
-                    reasons.add("MAX_FILE_OR_BYTE_LIMIT")
-                    continue
-                raw = actual.read_bytes()
-                if len(raw) > 128 * 1024 or bytes_read + len(raw) > max_bytes:
-                    reasons.add("MAX_FILE_OR_BYTE_LIMIT")
-                    continue
+                with actual.open("rb") as stream:
+                    metadata = os.fstat(stream.fileno())
+                    path_metadata = os.lstat(actual)
+                    if (stat.S_ISLNK(path_metadata.st_mode)
+                            or (metadata.st_dev, metadata.st_ino) !=
+                            (path_metadata.st_dev, path_metadata.st_ino)):
+                        reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
+                        continue
+                    link_counts = (
+                        getattr(metadata, "st_nlink", None),
+                        getattr(path_metadata, "st_nlink", None),
+                    )
+                    if any(type(count) is not int or count != 1
+                           for count in link_counts):
+                        reasons.add("HARD_LINK_SOURCE_FILE")
+                        continue
+                    size = metadata.st_size
+                    if size > 128 * 1024 or bytes_read + size > max_bytes:
+                        reasons.add("MAX_FILE_OR_BYTE_LIMIT")
+                        continue
+                    raw = stream.read(128 * 1024 + 1)
+                    if len(raw) > 128 * 1024 or bytes_read + len(raw) > max_bytes:
+                        reasons.add("MAX_FILE_OR_BYTE_LIMIT")
+                        continue
             except (OSError, ValueError):
                 reasons.add("UNREADABLE_SOURCE_FILE")
                 continue
