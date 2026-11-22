@@ -1,3 +1,38 @@
+## 2026-11-22 — Live continuation checkpoint: P2 stop-session retry + provider adapter research
+
+**Verified source snapshot:** canonical repo `samjuniors/Orbit-Core`; default `main` at `914290b4a5ac69c0d753961affc916ba2e69b909` (signed commit). Published latest release remains prerelease `v0.32.0`; no v0.33 release is published. The historic Orbit-Core-MCP URL redirects to this repository.
+
+### Active work and evidence
+
+- [PR #133](https://github.com/samjuniors/Orbit-Core/pull/133) remains open/unmerged as the v0.33 integration base. [PR #135](https://github.com/samjuniors/Orbit-Core/pull/135) remains the versioned v0.33.0 candidate stacked on #133. [PR #155](https://github.com/samjuniors/Orbit-Core/pull/155) is CI-validation-only; never merge it.
+- Codex's review on #133 found a P2 defect: an earlier native worker session's stop request could block a retry in a new session. [PR #156](https://github.com/samjuniors/Orbit-Core/pull/156) implements task-revision/native-session-scoped duplicate detection, exact attempt stop-plan lookup, retirement correlation, and a regression test preserving the old request as audit evidence.
+- Initial #156 CI run [#45047149105](https://github.com/samjuniors/Orbit-Core/actions/runs/45047149105) failed on all four Ubuntu Python versions at an assertion expecting the prior stop request to disappear from the inbox. That expectation conflicts with the intended audit contract: historical requests remain pending evidence. The branch was updated; current PR head observed as `dd835332cd1279ded38de51eeb5fc5b835cd183a`. Latest matrix run [#45047242899](https://github.com/samjuniors/Orbit-Core/actions/runs/45047242899) was **IN PROGRESS** at snapshot time. Recheck exact head and all five jobs before calling it PASS.
+- [PR #157](https://github.com/samjuniors/Orbit-Core/pull/157) is explicitly a temporary CI-validation PR for #156; its body says **DO NOT MERGE**. Close only after its validation purpose is fulfilled and evidence is recorded.
+- [RAD P2 issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) remains open. RAD P0/P1/P2 drafts #136–#147 are separate, security-sensitive, and not automatically included in #135.
+
+### Release disposition
+
+**v0.33 remains HOLD / NOT MERGED / NOT TAGGED / NOT RELEASED / NOT INSTALLED.** Outstanding gates include real supported-host acceptance (including native child receipts/permission and cancellation reconciliation), host-enforced timed permission expiry/revocation, actual target-project browser/visual QA, independent security review, and owner release decision. Do not treat CI or a synthetic fixture as host/production certification. Follow the canonical [release process](RELEASE-PROCESS.md) and existing [v0.33 acceptance matrix](RELEASE-ACCEPTANCE-v0.33.0.md). Preserve v0.32 assets.
+
+### Cross-host primary-source research delta
+
+Research recorded in the existing Notion [Orbit Core Research & References](https://app.notion.com/p/4074f681d488816e9fe7f4504982c948) page (2026-11-22):
+- Antigravity's current rules support cumulative workspace/global `AGENTS.md`, `GEMINI.md`, and `.agents/rules/*.md`; Google says legacy Workflows are deprecated in favor of skills. Enforce documented file/token budgets; don't emit deprecated workflow manifests as the preferred integration.
+- Claude Code exposes lifecycle hooks (SessionStart, PreToolUse, PostToolUse, PermissionRequest, Stop, PostCompact); hooks execute commands with host-user privileges, so treat them as privileged code requiring review and narrow allowlists.
+- Codex distinguishes read-only/workspace-write sandboxes and approval policies; bypass flags remove protection. Preserve native approvals and never route around host denials.
+- OpenAI Agents SDK documents manager-owned agents-as-tools versus control-transferring handoffs, plus traces for tool calls/handoffs/guardrails. Use as design reference only, not an Orbit runtime dependency.
+- Recommendation: canonical provider-neutral task/evidence state + thin versioned adapters; model host capabilities as observed, not assumed; represent proposed → host-approved → host-invoked → independently observed → reconciled; measure task quality, regression, policy compliance, interventions, latency and cost only where real metadata exists.
+
+### Blockers and next safe action
+
+- Remote Arc Windows was previously reported offline; recheck before any local/IDE acceptance. No local `.orbit`/SQLite checkpoint was accessed in this run.
+- Orbit-specific ChatGPT plugin was not exposed in the available integration registry; GitHub and Notion integrations were used. Do not claim plugin execution.
+- **Next:** revalidate #156 latest head and #45047242899; inspect failure logs if any, then obtain focused independent review. Keep #157 non-mergeable/validation-only. Resume #133/#135 acceptance only after the P2 finding is resolved and all separate host/security/release gates are evidenced.
+
+**Notion records updated:** [Project Decisions & Releases](https://app.notion.com/p/4074f681d48881a7a407c3bdc2054409) and [Research & References](https://app.notion.com/p/4074f681d488816e9fe7f4504982c948). GitHub and Notion are linked sources, not auto-synchronized. This is a redacted shared handoff; no credentials, local paths, raw SQLite/WAL or host tokens included.
+
+---
+
 # Orbit Core — cross-agent continuity and handoff
 
 **Status:** maintained handoff contract plus a dated engineering snapshot, **not** authorization to merge, install, or release.
