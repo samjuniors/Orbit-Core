@@ -303,23 +303,22 @@ def _retire(conn, root, project, a, charter):
     # A stop request may outlive an ACTIVE charter. Bind any later terminal
     # retirement *note* to the exact session-bound request, never claiming the
     # actual host performed a stop or revoked worker permissions.
-    stop_requests = [e for e in _history(conn, root, project, a["mission_id"])
-                     if e["event_type"] == "NATIVE_STOP_REQUEST"
-                     and e["task_key"] == task["task_key"]]
-    if len(stop_requests) > 1:
-        return "HOLD_AMBIGUOUS_STOP_REQUEST", None
+    stop_requests, issue = _matching_stop_requests(
+        conn, root, project, a["mission_id"], task["task_key"],
+        task["host_session"], before_revision=task["revision"])
+    if issue:
+        return issue, None
     linked_key = ""
     linked_digest = ""
     if stop_requests:
-        linked_key = stop_requests[0]["event_key"]
-        request, issue = _existing_event(
-            conn, root, project, a["mission_id"], linked_key,
-            "NATIVE_STOP_REQUEST")
-        if issue:
-            return issue, None
-        if (request["recipient_session_caller_reported"] != task["host_session"]
-                or request["task_revision"] >= task["revision"]):
-            return "HOLD_STOP_SESSION_OR_REVISION_DRIFT", None
+        latest_revision = max(body["task_revision"]
+                              for _row, body in stop_requests)
+        latest = [(row, body) for row, body in stop_requests
+                  if body["task_revision"] == latest_revision]
+        if len(latest) != 1:
+            return "HOLD_AMBIGUOUS_STOP_REQUEST", None
+        stop_row, request = latest[0]
+        linked_key = stop_row["event_key"]
         linked_digest = _digest(request)
     payload = {
         "event_type": "RETIRE_NOTE",
@@ -352,6 +351,38 @@ def _existing_event(conn, root, project, mission, event_key, expected_type):
         return None, "HOLD_EVENT_INTEGRITY_CHANGED"
     return body, None
 
+
+
+def _matching_stop_requests(conn, root, project, mission, task_key,
+                            host_session, task_revision=None,
+                            before_revision=None):
+    """Return integrity-checked stop requests for one task/session attempt.
+
+    Historical requests from earlier native sessions remain in the audit inbox,
+    but must not block a retry or be linked to a different worker's retirement.
+    """
+    matches = []
+    for row in _history(conn, root, project, mission, task_key):
+        if (row["event_type"] != "NATIVE_STOP_REQUEST"
+                or row["task_key"] != task_key):
+            continue
+        payload, issue = _existing_event(
+            conn, root, project, mission, row["event_key"],
+            "NATIVE_STOP_REQUEST")
+        if issue:
+            return [], issue
+        revision = payload.get("task_revision")
+        session = payload.get("recipient_session_caller_reported")
+        if type(revision) is not int or not isinstance(session, str) or not session:
+            return [], "HOLD_INVALID_STOP_REQUEST"
+        if session != host_session:
+            continue
+        if task_revision is not None and revision != task_revision:
+            continue
+        if before_revision is not None and revision >= before_revision:
+            continue
+        matches.append((row, payload))
+    return matches, None
 
 def _list_names(value, name, max_items):
     if (not isinstance(value, list) or len(value) > max_items
@@ -994,9 +1025,12 @@ def _stop_request(conn, root, project, a, charter):
         return "HOLD_NATIVE_RUNNING_SESSION_REQUIRED", None
     if a.get("observed_host_session") != item["host_session"]:
         return "HOLD_NATIVE_SESSION_MISMATCH", None
-    if any(row["event_type"] == "NATIVE_STOP_REQUEST"
-           and row["task_key"] == item["task_key"]
-           for row in _history(conn, root, project, a["mission_id"])):
+    requests, issue = _matching_stop_requests(
+        conn, root, project, a["mission_id"], item["task_key"],
+        item["host_session"], task_revision=item["revision"])
+    if issue:
+        return issue, None
+    if requests:
         return "HOLD_STOP_ALREADY_REQUESTED", None
     reason_text = _text(a, "summary", 12, 280)
     return "NATIVE_STOP_REQUEST_REVIEW", {
@@ -1030,34 +1064,43 @@ def _stop_plan(conn, root, project, a, charter):
     if a.get("observed_host_session") != task["host_session"]:
         return {**common, "status": "HOLD_NATIVE_SESSION_MISMATCH"}
     history = _history(conn, root, project, a["mission_id"])
-    requests = [row for row in history
-                if row["event_type"] == "NATIVE_STOP_REQUEST"
-                and row["task_key"] == task["task_key"]]
-    if len(requests) != 1:
-        return {**common, "status": "HOLD_EXACT_STOP_REQUEST_REQUIRED"}
-    stop_key = requests[0]["event_key"]
-    request, reason = _existing_event(
-        conn, root, project, a["mission_id"], stop_key, "NATIVE_STOP_REQUEST")
+    requests, reason = _matching_stop_requests(
+        conn, root, project, a["mission_id"], task["task_key"],
+        task["host_session"], task_revision=task["revision"])
     if reason:
         return {**common, "status": reason}
-    if (request["task_revision"] != task["revision"]
-            or request["recipient_session_caller_reported"] != task["host_session"]):
-        return {**common, "status": "HOLD_STOP_SESSION_OR_REVISION_DRIFT"}
+    if len(requests) != 1:
+        status = ("HOLD_AMBIGUOUS_STOP_REQUEST" if requests
+                  else "HOLD_EXACT_STOP_REQUEST_REQUIRED")
+        return {**common, "status": status}
+    stop_row, request = requests[0]
+    stop_key = stop_row["event_key"]
     host = a.get("host")
     if host not in orbit_delegation.HOST_NATIVE_TOOLS:
         raise ValueError("Unsupported coding host for native stop")
     tools = orbit_delegation.validate_reported_tools(
         host, a.get("available_host_tools", []))
-    staff_rows = [row for row in history
-                  if row["event_type"] == "STAFF_REQUEST"
-                  and row["task_key"] == task["task_key"]]
-    if len(staff_rows) != 1:
+    staff_candidates = []
+    for row in history:
+        if (row["event_type"] != "STAFF_REQUEST"
+                or row["task_key"] != task["task_key"]):
+            continue
+        staff_body, issue = _existing_event(
+            conn, root, project, a["mission_id"],
+            row["event_key"], "STAFF_REQUEST")
+        if issue:
+            return {**common, "status": issue}
+        staff_revision = staff_body.get("task_revision")
+        if type(staff_revision) is int and staff_revision < task["revision"]:
+            staff_candidates.append((staff_revision, row, staff_body))
+    if not staff_candidates:
         return {**common, "status": "HOLD_STOP_STAFF_IDENTITY_MISSING"}
-    staff, reason = _existing_event(
-        conn, root, project, a["mission_id"],
-        staff_rows[0]["event_key"], "STAFF_REQUEST")
-    if reason:
-        return {**common, "status": reason}
+    latest_staff_revision = max(item[0] for item in staff_candidates)
+    latest_staff = [item for item in staff_candidates
+                    if item[0] == latest_staff_revision]
+    if len(latest_staff) != 1:
+        return {**common, "status": "HOLD_AMBIGUOUS_STAFF_REQUEST"}
+    staff = latest_staff[0][2]
     if staff["host"] != host:
         return {**common, "status": "HOLD_STOP_HOST_MISMATCH"}
     # Do not pretend every supported IDE exposes a native interrupt tool.
