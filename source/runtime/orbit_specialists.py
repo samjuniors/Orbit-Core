@@ -213,8 +213,10 @@ def _ui_route_from_file(rel):
 def scan_visual_project(root):
     """Read source as untrusted bytes; return bounded heuristic UI inventory.
 
-    Does not execute project code, fetch registries, follow project symlinks,
+    Does not execute project code, fetch registries, follow unsafe project paths,
     authenticate a Git revision, or independently verify rendered screen states.
+    Source reads use descriptor-relative no-follow traversal on POSIX and
+    opened-handle containment validation on Windows.
     """
     import hashlib
     import json
@@ -227,6 +229,92 @@ def scan_visual_project(root):
     if base.is_symlink() or not base.is_dir():
         raise ValueError("Expected an existing non-symlink project root")
     base = base.resolve(strict=True)
+
+    class UnsafeSourcePathError(OSError):
+        """A source path could not be proven to remain beneath the project root."""
+
+    def _open_scoped_source(relative):
+        parts = tuple(relative.parts)
+        if not parts or any(part in ("", ".", "..") for part in parts):
+            raise UnsafeSourcePathError("Invalid relative source path")
+
+        if os.name == "nt":
+            import ctypes
+            import msvcrt
+            import ntpath
+            from ctypes import wintypes
+
+            try:
+                stream = (base / relative).open("rb")
+            except OSError as exc:
+                raise UnsafeSourcePathError("Unable to open source candidate") from exc
+            try:
+                metadata = os.fstat(stream.fileno())
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                get_final_path = kernel32.GetFinalPathNameByHandleW
+                get_final_path.argtypes = (
+                    wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD)
+                get_final_path.restype = wintypes.DWORD
+                buffer = ctypes.create_unicode_buffer(32768)
+                handle = wintypes.HANDLE(msvcrt.get_osfhandle(stream.fileno()))
+                length = get_final_path(handle, buffer, len(buffer), 0)
+                if not length or length >= len(buffer):
+                    raise UnsafeSourcePathError("Unable to resolve opened source handle")
+
+                def _normalise_windows_path(value):
+                    if value.startswith("\\\\?\\UNC\\"):
+                        value = "\\\\" + value[8:]
+                    elif value.startswith("\\\\?\\"):
+                        value = value[4:]
+                    return ntpath.normcase(ntpath.normpath(value))
+
+                root_path = _normalise_windows_path(str(base))
+                file_path = _normalise_windows_path(buffer.value)
+                try:
+                    contained = ntpath.commonpath((root_path, file_path)) == root_path
+                except ValueError:
+                    contained = False
+                if not contained or not stat.S_ISREG(metadata.st_mode):
+                    raise UnsafeSourcePathError("Opened source handle escaped project root")
+                return stream, metadata
+            except Exception as exc:
+                stream.close()
+                if isinstance(exc, UnsafeSourcePathError):
+                    raise
+                raise UnsafeSourcePathError("Unable to validate opened source handle") from exc
+
+        if (not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY")
+                or os.open not in getattr(os, "supports_dir_fd", set())):
+            raise UnsafeSourcePathError("Safe descriptor-relative traversal unavailable")
+
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        file_flags = os.O_RDONLY | os.O_NOFOLLOW
+        root_fd = current_fd = file_fd = None
+        try:
+            root_fd = os.open(os.fspath(base), directory_flags)
+            current_fd = os.dup(root_fd)
+            for part in parts[:-1]:
+                next_fd = os.open(part, directory_flags, dir_fd=current_fd)
+                os.close(current_fd)
+                current_fd = next_fd
+            file_fd = os.open(parts[-1], file_flags, dir_fd=current_fd)
+            metadata = os.fstat(file_fd)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise UnsafeSourcePathError("Source candidate is not a regular file")
+            stream = os.fdopen(file_fd, "rb")
+            file_fd = None
+            return stream, metadata
+        except UnsafeSourcePathError:
+            raise
+        except OSError as exc:
+            raise UnsafeSourcePathError("Source path changed or escaped during traversal") from exc
+        finally:
+            if file_fd is not None:
+                os.close(file_fd)
+            if current_fd is not None:
+                os.close(current_fd)
+            if root_fd is not None:
+                os.close(root_fd)
     hashes = hashlib.sha256()
     scanned = []
     routes = {}
@@ -271,24 +359,10 @@ def scan_visual_project(root):
                 reasons.add("MAX_SOURCE_FILES")
                 break
             try:
-                actual = file.resolve(strict=True)
-                if not actual.is_relative_to(base) or not actual.is_file():
-                    reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
-                    continue
-                with actual.open("rb") as stream:
-                    metadata = os.fstat(stream.fileno())
-                    path_metadata = os.lstat(actual)
-                    if (stat.S_ISLNK(path_metadata.st_mode)
-                            or (metadata.st_dev, metadata.st_ino) !=
-                            (path_metadata.st_dev, path_metadata.st_ino)):
-                        reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
-                        continue
-                    link_counts = (
-                        getattr(metadata, "st_nlink", None),
-                        getattr(path_metadata, "st_nlink", None),
-                    )
-                    if any(type(count) is not int or count != 1
-                           for count in link_counts):
+                stream, metadata = _open_scoped_source(rel)
+                with stream:
+                    link_count = getattr(metadata, "st_nlink", None)
+                    if type(link_count) is not int or link_count != 1:
                         reasons.add("HARD_LINK_SOURCE_FILE")
                         continue
                     size = metadata.st_size
@@ -299,6 +373,9 @@ def scan_visual_project(root):
                     if len(raw) > 128 * 1024 or bytes_read + len(raw) > max_bytes:
                         reasons.add("MAX_FILE_OR_BYTE_LIMIT")
                         continue
+            except UnsafeSourcePathError:
+                reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
+                continue
             except (OSError, ValueError):
                 reasons.add("UNREADABLE_SOURCE_FILE")
                 continue
