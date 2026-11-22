@@ -389,10 +389,18 @@ def same_or_create(changes: list[Change], dest: Path, data: bytes, root: Path|No
         current=dest.read_bytes()
         if current != data:
             oldhash=hashlib.sha256(current).hexdigest()
-            if oldhash in OLD_STOCK_SHA256:
+            owner_guidance_path = (
+                root is not None
+                and dest.name in {'AGENTS.md','CLAUDE.md'}
+                and dest.parent.resolve() == root.resolve()
+            )
+            if owner_guidance_path:
+                # Project-root owner guidance wins over any matching stock-agent digest.
+                changes.append(Change(dest,current,'PRESERVE','Existing owner guidance retained'))
+            elif oldhash in OLD_STOCK_SHA256:
                 changes.append(Change(dest,data,'UPGRADE',desc+' (recognized stock file; backup made)'))
             elif dest.name in {'AGENTS.md','CLAUDE.md'}:
-                # Existing owner guidance is authoritative; Orbit's skill remains available.
+                # Nested owner guidance is also preserved; stock digests never override it.
                 changes.append(Change(dest,current,'PRESERVE','Existing owner guidance retained'))
             else:
                 raise SetupError('Existing file differs from recognized Orbit versions; no overwrite.\n\nReview this file (it may be customized or from an unrecognized build):\n'+str(dest))
