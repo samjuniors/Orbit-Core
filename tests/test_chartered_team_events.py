@@ -4,6 +4,7 @@ These tests never launch any agent or assume saved approval is host consent.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import sys
@@ -757,6 +758,51 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertFalse(all(s["stored_payload_integrity_matches"]
                              for s in result["team_spans"]))
         self.assertFalse(result["host_execution_verified"])
+
+    def test_indexed_team_event_metadata_mismatch_is_not_verified_in_trace(self):
+        self._native_recipient_with_handoff()
+        original = self.conn.execute(
+            """SELECT event_type,task_key,peer_task_key FROM orbit_team_events
+               WHERE project=? AND project_root=? AND mission_id=?
+               AND event_key='api-to-qa'""",
+            (self.project, str(self.root), self.mission)).fetchone()
+        trace_args = {
+            "project_root": str(self.root), "project": self.project,
+            "mission_id": self.mission, "action": "timeline",
+            "include_team_events": True,
+        }
+        event_prefix = hashlib.sha256(b"api-to-qa").hexdigest()[:16]
+        for column, tampered in (
+            ("event_type", "TAMPERED_EVENT"),
+            ("task_key", "outside-task"),
+            ("peer_task_key", "outside-peer"),
+        ):
+            with self.subTest(column=column):
+                self.conn.execute(
+                    f"""UPDATE orbit_team_events SET {column}=?
+                        WHERE project=? AND project_root=? AND mission_id=?
+                        AND event_key='api-to-qa'""",
+                    (tampered, self.project, str(self.root), self.mission))
+                self.conn.commit()
+                trace = orbit_mcp.execute(
+                    self.conn, "orbit_autopilot_charter", trace_args)
+                self.assertEqual(trace["status"], "LOCAL_TRACE_INTEGRITY_WARNING")
+                span = next(s for s in trace["team_spans"]
+                            if s["event_key_sha256_prefix"] == event_prefix)
+                self.assertFalse(span["stored_payload_integrity_matches"])
+                self.assertEqual(span["event"], "UNTRUSTED_EVENT_LABEL")
+                self.assertIsNone(span["linked_span_id_hint"])
+                self.assertIsNone(span["task_ref_sha256_prefix"])
+                self.assertNotIn(tampered, json.dumps(trace))
+                self.conn.execute(
+                    """UPDATE orbit_team_events
+                       SET event_type=?,task_key=?,peer_task_key=?
+                       WHERE project=? AND project_root=? AND mission_id=?
+                       AND event_key='api-to-qa'""",
+                    (original["event_type"], original["task_key"],
+                     original["peer_task_key"], self.project,
+                     str(self.root), self.mission))
+                self.conn.commit()
 
     def test_default_handoff_contract_is_backward_compatible(self):
         self.conn.execute("""UPDATE orbit_agent_tasks
