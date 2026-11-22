@@ -16,18 +16,43 @@ on:
           - prerelease
           - stable
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: release-${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
+  authorize:
+    name: Verify repository owner release authorization
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require owner dispatch and rerun
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != 'workflow_dispatch' || "$REF" != 'refs/heads/main' ]]; then
+            echo 'Release publication requires a manual dispatch from main.' >&2
+            exit 1
+          fi
+          if [[ "$ACTOR" != "$REPOSITORY_OWNER" || "$TRIGGERING_ACTOR" != "$REPOSITORY_OWNER" ]]; then
+            echo "Only repository owner $REPOSITORY_OWNER may initiate or rerun release publication." >&2
+            exit 1
+          fi
   publish:
     name: Test, tag and publish
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: authorize
+    if: needs.authorize.result == 'success' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Check out full history and tags
         uses: actions/checkout@v4
