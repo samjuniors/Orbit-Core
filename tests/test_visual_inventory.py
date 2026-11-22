@@ -1,5 +1,6 @@
 """v0.33 local UI inventory, source-claim evaluation and scoped preference regression."""
 import json
+import os
 import sqlite3
 import sys
 import tempfile
@@ -81,6 +82,20 @@ class VisualInventoryTests(unittest.TestCase):
         result = orbit_specialists.scan_visual_project(self.root)
         self.assertNotIn("src/components/Outside.tsx", result["component_files"])
         self.assertEqual(result["scanned_file_count"], 5)
+
+    def test_hard_link_to_external_source_is_not_read(self):
+        outside = self.root.parent / "outside-hardlink.tsx"
+        outside.write_text('export const secret = "outside";', encoding="utf-8")
+        alias = self.root / "src/components/OutsideHardlink.tsx"
+        try:
+            os.link(outside, alias)
+        except (OSError, NotImplementedError):
+            self.skipTest("Hard links unavailable on this filesystem")
+        result = orbit_specialists.scan_visual_project(self.root)
+        self.assertNotIn("src/components/OutsideHardlink.tsx", result["component_files"])
+        self.assertIn("HARD_LINK_SOURCE_FILE", result["partial_reasons"])
+        self.assertEqual(result["scanned_file_count"], 5)
+        self.assertFalse(result["screen_inventory_complete"])
 
     def test_conservative_dynamic_route_and_file_size_limit(self):
         (self.root / "src/app/[slug]").mkdir()

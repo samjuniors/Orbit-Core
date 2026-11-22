@@ -485,20 +485,32 @@ def timeline(conn, root, project, mission, a):
         for event in source:
             try:
                 payload = json.loads(event["payload_json"])
-                good = (isinstance(payload, dict) and
-                        _digest(payload) == event["content_sha256"])
+                good = (
+                    isinstance(payload, dict)
+                    and _digest(payload) == event["content_sha256"]
+                    and isinstance(payload.get("event_type"), str)
+                    and isinstance(payload.get("task_key"), str)
+                    and isinstance(payload.get("peer_task_key", ""), str)
+                    and payload.get("event_type") == event["event_type"]
+                    and payload.get("task_key") == event["task_key"]
+                    and payload.get("peer_task_key", "") == event["peer_task_key"]
+                )
             except (TypeError, ValueError):
                 good = False
             if not good:
                 warnings += 1
-            name = event["event_type"]
+            # Do not project indexed labels or links unless they still match
+            # the integrity-checked payload; a mismatch is untrusted metadata.
+            name = event["event_type"] if good else "UNTRUSTED_EVENT_LABEL"
             if not isinstance(name, str) or not re.fullmatch(r"[A-Z_]{1,60}", name):
                 name = "UNTRUSTED_EVENT_LABEL"
                 warnings += 1
             # Event keys and task names can contain user-defined data. Return
             # only bounded, stable hashes and coarse event types; never payload.
-            peer = event["peer_task_key"]
-            linked = ids.get(peer)
+            peer = event["peer_task_key"] if good else ""
+            linked = ids.get(peer) if peer else None
+            task_ref = (hashlib.sha256(event["task_key"].encode("utf-8")).hexdigest()[:16]
+                        if good else None)
             spans.append({
                 "span_id": ids[event["event_key"]],
                 "parent_span_id": root_span,
@@ -506,8 +518,7 @@ def timeline(conn, root, project, mission, a):
                 "event": name,
                 "event_key_sha256_prefix": hashlib.sha256(
                     event["event_key"].encode("utf-8")).hexdigest()[:16],
-                "task_ref_sha256_prefix": hashlib.sha256(
-                    event["task_key"].encode("utf-8")).hexdigest()[:16],
+                "task_ref_sha256_prefix": task_ref,
                 "recorded_at": event["recorded_at"],
                 "stored_payload_integrity_matches": good,
                 "host_execution_verified": False,

@@ -4,6 +4,7 @@ These tests never launch any agent or assume saved approval is host consent.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import sys
@@ -758,6 +759,51 @@ class CharteredTeamEventTests(unittest.TestCase):
                              for s in result["team_spans"]))
         self.assertFalse(result["host_execution_verified"])
 
+    def test_indexed_team_event_metadata_mismatch_is_not_verified_in_trace(self):
+        self._native_recipient_with_handoff()
+        original = self.conn.execute(
+            """SELECT event_type,task_key,peer_task_key FROM orbit_team_events
+               WHERE project=? AND project_root=? AND mission_id=?
+               AND event_key='api-to-qa'""",
+            (self.project, str(self.root), self.mission)).fetchone()
+        trace_args = {
+            "project_root": str(self.root), "project": self.project,
+            "mission_id": self.mission, "action": "timeline",
+            "include_team_events": True,
+        }
+        event_prefix = hashlib.sha256(b"api-to-qa").hexdigest()[:16]
+        for column, tampered in (
+            ("event_type", "TAMPERED_EVENT"),
+            ("task_key", "outside-task"),
+            ("peer_task_key", "outside-peer"),
+        ):
+            with self.subTest(column=column):
+                self.conn.execute(
+                    f"""UPDATE orbit_team_events SET {column}=?
+                        WHERE project=? AND project_root=? AND mission_id=?
+                        AND event_key='api-to-qa'""",
+                    (tampered, self.project, str(self.root), self.mission))
+                self.conn.commit()
+                trace = orbit_mcp.execute(
+                    self.conn, "orbit_autopilot_charter", trace_args)
+                self.assertEqual(trace["status"], "LOCAL_TRACE_INTEGRITY_WARNING")
+                span = next(s for s in trace["team_spans"]
+                            if s["event_key_sha256_prefix"] == event_prefix)
+                self.assertFalse(span["stored_payload_integrity_matches"])
+                self.assertEqual(span["event"], "UNTRUSTED_EVENT_LABEL")
+                self.assertIsNone(span["linked_span_id_hint"])
+                self.assertIsNone(span["task_ref_sha256_prefix"])
+                self.assertNotIn(tampered, json.dumps(trace))
+                self.conn.execute(
+                    """UPDATE orbit_team_events
+                       SET event_type=?,task_key=?,peer_task_key=?
+                       WHERE project=? AND project_root=? AND mission_id=?
+                       AND event_key='api-to-qa'""",
+                    (original["event_type"], original["task_key"],
+                     original["peer_task_key"], self.project,
+                     str(self.root), self.mission))
+                self.conn.commit()
+
     def test_default_handoff_contract_is_backward_compatible(self):
         self.conn.execute("""UPDATE orbit_agent_tasks
             SET status='REVIEW_ACCEPTED', review_evidence='reviewed source'
@@ -966,6 +1012,98 @@ class CharteredTeamEventTests(unittest.TestCase):
         current = orbit_tasks._row(self.conn,
             {"project":self.project,"task_key":"qa"}, self.root)
         self.assertEqual(current["status"], "RUNNING")
+
+    def test_stop_requests_are_scoped_to_task_revision_and_native_session(self):
+        self._native_recipient_with_handoff()
+        old_request = {
+            "action": "stop_request", "event_key": "stop-qa-old",
+            "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "summary": "Owner requested stop of the first bounded worker",
+        }
+        old_preview = self.event(**old_request)
+        self.assertEqual(old_preview["status"], "NATIVE_STOP_REQUEST_REVIEW")
+        self.assertEqual(self.event(**{
+            **old_request, "expected_digest": old_preview["review_digest"],
+            "confirm_write": True,
+        })["status"], "NATIVE_STOP_REQUEST_RECORDED")
+
+        # A retry advances the task revision and runs in a new native session.
+        # The old request remains auditable but must not block the new attempt.
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks
+               SET status='FAILED', revision=4
+               WHERE project=? AND project_root=? AND task_key='qa'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks
+               SET status='RUNNING', revision=5,
+                   host_session='claimed-codex-retry-session'
+               WHERE project=? AND project_root=? AND task_key='qa'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+
+        retry_request = {
+            "action": "stop_request", "event_key": "stop-qa-retry",
+            "task_key": "qa", "task_revision": 5,
+            "observed_host_session": "claimed-codex-retry-session",
+            "summary": "Owner requested stop of the retried bounded worker",
+        }
+        retry_preview = self.event(**retry_request)
+        self.assertEqual(retry_preview["status"], "NATIVE_STOP_REQUEST_REVIEW")
+        retry_saved = self.event(**{
+            **retry_request, "expected_digest": retry_preview["review_digest"],
+            "confirm_write": True,
+        })
+        self.assertEqual(retry_saved["status"], "NATIVE_STOP_REQUEST_RECORDED")
+        self.assertEqual(self.event(**retry_request)["status"],
+                         "HOLD_STOP_ALREADY_REQUESTED")
+
+        plan = self.event(
+            action="stop_plan", task_key="qa", task_revision=5,
+            observed_host_session="claimed-codex-retry-session",
+            host="codex", available_host_tools=["collaboration.interrupt_agent"])
+        self.assertEqual(plan["status"], "HOST_NATIVE_STOP_REVIEW_REQUIRED")
+        self.assertEqual(plan["host_action_hint"]["stop_event_key"],
+                         "stop-qa-retry")
+        self.assertEqual(plan["host_action_hint"]["target_session_caller_reported"],
+                         "claimed-codex-retry-session")
+        self.assertFalse(plan["host_action_hint"]["actual_stop_verified"])
+
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks SET status='CANCELLED', revision=6
+               WHERE project=? AND project_root=? AND task_key='qa'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        retire = {
+            "action": "retire", "event_key": "retire-qa-retry",
+            "task_key": "qa", "task_revision": 6,
+            "observed_host_session": "claimed-codex-retry-session",
+            "host_terminal_state": "STOPPED",
+        }
+        retire_preview = self.event(**retire)
+        self.assertEqual(retire_preview["status"], "RETIRE_NOTE_REVIEW")
+        retire_saved = self.event(**{
+            **retire, "expected_digest": retire_preview["review_digest"],
+            "confirm_write": True,
+        })
+        self.assertEqual(retire_saved["status"], "RETIRE_NOTE_RECORDED")
+        self.assertEqual(
+            retire_saved["payload"]["linked_stop_request_event_key"],
+            "stop-qa-retry")
+
+        inbox = self.event(action="inbox", task_key="qa")
+        stops = {row["event_key"]: row for row in
+                 inbox["native_stops_needing_reconciliation"]}
+        # Retirement notes are caller-reported only, so reconciliation stays
+        # required for both sessions; only the new request gets the matching note.
+        self.assertTrue(stops["stop-qa-old"]["reconciliation_required"])
+        self.assertFalse(stops["stop-qa-old"]["retirement_note_caller_reported"])
+        self.assertTrue(stops["stop-qa-retry"]["reconciliation_required"])
+        self.assertTrue(stops["stop-qa-retry"]["retirement_note_caller_reported"])
+        self.assertEqual(stops["stop-qa-retry"]["retirement_event_key"],
+                         "retire-qa-retry")
 
     def test_inbox_preserves_stop_reconciliation_through_pause_and_cold_restart(self):
         self._native_recipient_with_handoff()
