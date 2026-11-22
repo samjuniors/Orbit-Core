@@ -274,7 +274,12 @@ def scan_visual_project(root):
                 if not actual.is_relative_to(base) or not actual.is_file():
                     reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
                     continue
-                size = actual.stat().st_size
+                metadata = actual.stat()
+                link_count = getattr(metadata, "st_nlink", None)
+                if type(link_count) is not int or link_count != 1:
+                    reasons.add("HARD_LINK_SOURCE_FILE")
+                    continue
+                size = metadata.st_size
                 if size > 128 * 1024 or bytes_read + size > max_bytes:
                     reasons.add("MAX_FILE_OR_BYTE_LIMIT")
                     continue
