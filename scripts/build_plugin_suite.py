@@ -93,8 +93,9 @@ def claude_code_files(root=ROOT, source=None):
               if name.startswith(("runtime/", "skills/"))}
     claude[".claude-plugin/plugin.json"] = json_bytes({
         "name": "orbit-core", "version": version,
+        "displayName": "Orbit Core",
         "description": "Orbit Core local workflow, MCP and specialist agents",
-        "author": {"name": "samjuniors"},
+        "author": {"name": "Samjuniors", "url": "https://github.com/samjuniors"},
         "homepage": "https://github.com/samjuniors/Orbit-Core",
         "repository": "https://github.com/samjuniors/Orbit-Core", "license": "MIT"})
     claude[".mcp.json"] = json_bytes({"mcpServers": {"orbit-core-mcp": {
