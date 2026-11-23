@@ -27,13 +27,13 @@ def checked_run(command, env):
     return process.stdout
 
 
-def test_upgrade(previous_root, candidate_root=ROOT):
+def test_upgrade(previous_root, candidate_root=ROOT, *, hosts=("codex",)):
     previous_root = Path(previous_root).resolve(strict=True)
     candidate_root = Path(candidate_root).resolve(strict=True)
     old_version = (previous_root / "VERSION").read_text(encoding="utf-8").strip()
     new_version = (candidate_root / "VERSION").read_text(encoding="utf-8").strip()
-    supported_source_versions = {"0.24.1", "0.25.1", "0.26.0", "0.27.0", "0.27.1", "0.28.0", "0.29.0", "0.30.0", "0.31.0"}
-    reviewed_candidate_versions = {"0.25.0", "0.25.1", "0.26.0", "0.27.0", "0.27.1", "0.28.0", "0.29.0", "0.30.0", "0.31.0", "0.32.0"}
+    supported_source_versions = {"0.24.1", "0.25.1", "0.26.0", "0.27.0", "0.27.1", "0.28.0", "0.29.0", "0.30.0", "0.31.0", "0.32.0"}
+    reviewed_candidate_versions = {"0.25.0", "0.25.1", "0.26.0", "0.27.0", "0.27.1", "0.28.0", "0.29.0", "0.30.0", "0.31.0", "0.32.0", "0.33.0"}
     if (old_version not in supported_source_versions
             or new_version not in reviewed_candidate_versions
             or tuple(map(int, new_version.split("."))) <= tuple(map(int, old_version.split(".")))):
@@ -49,8 +49,8 @@ def test_upgrade(previous_root, candidate_root=ROOT):
         env = {**os.environ,
                "ORBIT_SETUP_HOME": str(home),
                "ORBIT_LOCAL_DB": str(base / "old-memories.sqlite3")}
-        old_command = [sys.executable, str(previous_root / "installer.py"),
-                       "--scope", "project", "--hosts", "codex", "--project", str(project)]
+        scope = ["--scope", "project", "--project", str(project), "--hosts", *hosts]
+        old_command = [sys.executable, str(previous_root / "installer.py"), *scope]
         checked_run(old_command + ["--install"], env)
         old_runtime = home / ".orbit-universal" / old_version / "orbit_mcp.py"
         if not old_runtime.is_file():
@@ -85,13 +85,14 @@ def test_upgrade(previous_root, candidate_root=ROOT):
         with zipfile.ZipFile(archive) as z:
             z.extractall(base / "new-archive")
         pkg = base / "new-archive" / ("orbit-universal-" + new_version)
-        new_command = [sys.executable, str(pkg / "installer.py"),
-                       "--scope", "project", "--hosts", "codex", "--project", str(project)]
+        new_command = [sys.executable, str(pkg / "installer.py"), *scope]
         # A tiny owner edit to an *official* installed Orbit file must still
         # stop the upgrade; exact stock digests never authorize edited content.
-        protected = project / ".agents" / "skills" / "orbit" / "references" / "TASK-LIFECYCLE.md"
+        protected = (project / ".agents" / "agents" / "orbit-frontend.md"
+                     if "antigravity" in hosts else
+                     project / ".agents" / "skills" / "orbit" / "references" / "TASK-LIFECYCLE.md")
         if not protected.is_file():
-            raise RuntimeError("Previous stock task lifecycle reference missing")
+            raise RuntimeError("Previous stock Orbit fixture missing")
         original = protected.read_bytes()
         owner_edit = original + b"\n# Owner-specific workflow customization\n"
         protected.write_bytes(owner_edit)
@@ -118,8 +119,15 @@ def test_upgrade(previous_root, candidate_root=ROOT):
         new_runtime = home / ".orbit-universal" / new_version / "orbit_mcp.py"
         if not new_runtime.is_file() or new_runtime.read_bytes() != (pkg / "source/runtime/orbit_mcp.py").read_bytes():
             raise RuntimeError("New version runtime installation mismatch")
+        if "antigravity" in hosts:
+            new_agent = (pkg / "source/agents" / protected.name).read_bytes()
+            backup = protected.with_name(protected.name + ".orbit-backup")
+            if protected.read_bytes() != new_agent:
+                raise RuntimeError("Antigravity agent did not match the candidate")
+            if original != new_agent and (not backup.is_file() or backup.read_bytes() != original):
+                raise RuntimeError("Antigravity agent upgrade did not preserve exact original bytes")
 
-        return {"from": old_version, "to": new_version,
+        return {"from": old_version, "to": new_version, "hosts": list(hosts),
                 "result": "DISPOSABLE_STOCK_UPGRADE_PASS",
                 "preserved": ["custom AGENTS.md", ".orbit/STATE.md",
                               "existing DB bytes", "v" + old_version + " runtime"],
@@ -130,5 +138,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--previous-root", required=True,
                         help="Existing checked-out immutable prior release Git tag")
+    parser.add_argument("--hosts", nargs="+", choices=("codex", "antigravity"), default=("codex",))
     args = parser.parse_args()
-    print(json.dumps(test_upgrade(args.previous_root), indent=2))
+    print(json.dumps(test_upgrade(args.previous_root, hosts=args.hosts), indent=2))

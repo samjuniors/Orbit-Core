@@ -37,7 +37,8 @@ class RejectRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError('Preview endpoint redirected; refusing to follow any redirect')
 
 
-NO_REDIRECT = urllib.request.build_opener(RejectRedirect)
+# Probe the loopback listener directly on hosts with configured proxies.
+LOOPBACK_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), RejectRedirect)
 
 
 def preview_key(root, preview_id):
@@ -103,7 +104,7 @@ def http_probe(port, path):
     url = f'http://127.0.0.1:{port}{path}'
     req = urllib.request.Request(url, method='GET', headers={'User-Agent':'Orbit-Local-Preview/0.24'})
     try:
-        with NO_REDIRECT.open(req, timeout=0.6) as response:
+        with LOOPBACK_OPENER.open(req, timeout=0.6) as response:
             return {'reachable': True, 'http_status': response.status, 'healthy': 200 <= response.status < 400,
                     'url': url}
     except urllib.error.HTTPError as exc:

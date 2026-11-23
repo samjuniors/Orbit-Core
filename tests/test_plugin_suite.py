@@ -38,5 +38,18 @@ class SuiteTests(unittest.TestCase):
         self.assertEqual(plugin['name'], entry['name'])
         self.assertEqual(plugin['version'], (ROOT / 'VERSION').read_text().strip())
 
+    def test_claude_code_agents_keep_tool_allowlists_and_canonical_mcp_names(self):
+        agents = {n: b.decode('utf-8') for n, b in claude_code_files(ROOT).items()
+                  if n.startswith('agents/')}
+        self.assertTrue(agents)
+        for name, text in agents.items():
+            header = text.split('\n---\n', 1)[0]
+            tools = [line for line in header.splitlines() if line.startswith('tools: ')]
+            self.assertEqual(len(tools), 1, name)
+            self.assertNotIn('orbit-lead-agent_', text, name)
+        for role in ('orbit-research-agent', 'orbit-reviewer-agent', 'orbit-security-agent'):
+            self.assertIn('\ntools: Read, Grep, Glob\n', agents[f'agents/{role}.md'])
+        self.assertIn('`orbit_capability_select`', agents['agents/orbit-architect-agent.md'])
+
 if __name__ == '__main__':
     unittest.main()

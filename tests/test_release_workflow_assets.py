@@ -9,6 +9,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleaseAssetManifestTests(unittest.TestCase):
+    def test_candidate_artifact_upload_contains_four_verified_checksum_pairs(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        checks, upload = workflow.split("Upload non-published candidate installers for host acceptance", 1)
+        checks = checks.split("Verify checksums for unpublished candidate artifacts", 1)[1]
+        self.assertIn('sha256sum "$bundle" > "$bundle.sha256"', checks)
+        self.assertIn('sha256sum --check "$bundle.sha256"', checks)
+        self.assertIn("sha256sum --check ./*.zip.sha256", checks)
+        assets = {line.strip() for line in upload.splitlines()}
+        version = "${{ env.ORBIT_CANDIDATE_VERSION }}"
+        for path in (
+            f"ORBIT-Claude-Desktop-v{version}.mcpb",
+            f"dist/ORBIT-Universal-Setup-v{version}.zip",
+            f"dist/Orbit-Antigravity-Plugin-v{version}.zip",
+            f"dist/Orbit-Core-Plugin-Suite-v{version}.zip",
+        ):
+            with self.subTest(asset=path):
+                self.assertIn(path, assets)
+                self.assertIn(path + ".sha256", assets)
+
     def test_built_plugin_suite_is_in_release_upload_inventory(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         build_step = workflow.split("Build and verify reproducible release artifacts", 1)[1]
@@ -33,7 +52,7 @@ class ReleaseAssetManifestTests(unittest.TestCase):
         self.assertIn("default: prerelease", workflow)
         self.assertIn("          - stable", workflow)
         self.assertIn("RELEASE_TYPE: ${{ inputs.release_type || 'prerelease' }}", workflow)
-        self.assertIn('if [[ "$GITHUB_EVENT_NAME" != \'workflow_dispatch\' && "$RELEASE_TYPE" != \'prerelease\' ]]', workflow)
+        self.assertIn('if [[ "$GITHUB_EVENT_NAME" != \'workflow_dispatch\' || "$GITHUB_REF" != \'refs/heads/main\' ]]', workflow)
         self.assertIn('if [[ "$ORBIT_RELEASE_TYPE" == \'prerelease\' ]]; then flags+=(--prerelease); fi', workflow)
         self.assertNotIn("ORBIT_RELEASE_VERSION%%.*", workflow)
         self.assertIn('gh release view "$ORBIT_RELEASE_TAG"', workflow)
@@ -46,16 +65,47 @@ class ReleaseAssetManifestTests(unittest.TestCase):
         self.assertIn("expected_prerelease=true", workflow)
         self.assertIn("if [[ \"$ORBIT_RELEASE_TYPE\" == 'stable' ]]; then expected_prerelease=false; fi", workflow)
         self.assertIn("incompatible draft/channel state; refusing success", workflow)
-        self.assertIn("--json assets --jq '.assets[].name'", workflow)
-        self.assertIn("missing expected asset $asset", workflow)
-        self.assertIn("grep -Fxq -- \"$asset\"", workflow)
+        self.assertIn('gh release view "$ORBIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > "$existing_assets"', workflow)
+        self.assertIn('verified="$(python scripts/verify_release_draft_assets.py --version "$ORBIT_RELEASE_VERSION" --assets-json "$existing_assets")"', workflow)
+        self.assertIn("Existing published release assets do not match the reviewed source; refusing success", workflow)
+        self.assertNotIn("missing expected asset $asset", workflow)
 
-    def test_manual_dispatch_and_tag_push_share_release_concurrency_group(self):
+    def test_publication_requires_explicit_manual_dispatch_from_main(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("on:\n  workflow_dispatch:", workflow)
+        self.assertNotIn("  push:\n    tags:", workflow)
         self.assertIn("format('v{0}', github.event.inputs.version)", workflow)
-        self.assertIn("|| github.ref_name", workflow)
         self.assertIn("Run manual releases from the main branch only", workflow)
-        self.assertIn("Tagged commit is not present on main", workflow)
+        self.assertIn("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'", workflow)
+        self.assertNotIn("github.event_name == 'push'", workflow)
+        self.assertIn('if [[ "$GITHUB_EVENT_NAME" != \'workflow_dispatch\' || "$GITHUB_REF" != \'refs/heads/main\' ]]', workflow)
+
+    def test_release_publication_requires_repository_owner_for_dispatch_and_rerun(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("permissions: {}", workflow)
+        self.assertIn("  authorize:", workflow)
+        self.assertIn("    permissions: {}", workflow)
+        self.assertIn("ACTOR: ${{ github.actor }}", workflow)
+        self.assertIn("TRIGGERING_ACTOR: ${{ github.triggering_actor }}", workflow)
+        self.assertIn("REPOSITORY_OWNER: ${{ github.repository_owner }}", workflow)
+        self.assertIn('if [[ "$ACTOR" != "$REPOSITORY_OWNER" || "$TRIGGERING_ACTOR" != "$REPOSITORY_OWNER" ]]', workflow)
+        self.assertIn("    needs: authorize", workflow)
+        self.assertIn("github.actor == github.repository_owner", workflow)
+        self.assertIn("github.triggering_actor == github.repository_owner", workflow)
+        self.assertIn("    permissions:\n      contents: write", workflow)
+        self.assertNotIn("permissions:\n  contents: write", workflow)
+
+    def test_publishing_requires_extracted_candidate_smoke_before_tag(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        build = workflow.index("Build and verify reproducible release artifacts")
+        smoke = workflow.index("Smoke-test extracted release ZIP and disposable installed MCP")
+        tag = workflow.index("Confirm tag is immutable or create it")
+        self.assertLess(build, smoke)
+        checksum = workflow.index("Add checksum for desktop extension")
+        self.assertLess(smoke, tag)
+        self.assertLess(checksum, tag)
+        self.assertIn("run: python scripts/smoke_release_zip.py", workflow)
+        self.assertIn('sha256sum "ORBIT-Claude-Desktop-v${ORBIT_RELEASE_VERSION}.mcpb"', workflow)
 
 
 

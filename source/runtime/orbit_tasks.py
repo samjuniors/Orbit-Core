@@ -7,6 +7,7 @@ with the host, and review requires separate actual source/test inspection.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
@@ -71,6 +72,10 @@ def setup(conn):
         PRIMARY KEY(project,project_root,task_key,attempt_number))''')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_orbit_attempt_step ON orbit_task_attempts(project,project_root,step,disposition)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_orbit_attempt_day ON orbit_task_attempts(project_root,reserved_at,disposition)')
+    conn.execute('''CREATE TABLE IF NOT EXISTS orbit_task_approval_refs (
+        project TEXT NOT NULL, project_root TEXT NOT NULL, task_key TEXT NOT NULL,
+        approval_sha256 TEXT NOT NULL,
+        PRIMARY KEY(project,project_root,task_key,approval_sha256))''')
     conn.commit()
 
 
@@ -361,6 +366,21 @@ def _mark_latest_attempt(conn, old, disposition, *, host_session=None):
          old['project'],old['project_root'],old['task_key']))
 
 
+def _record_reservation_approval(conn, old, approval):
+    scope = (old['project'], old['project_root'], old['task_key'])
+    insert = '''INSERT INTO orbit_task_approval_refs
+        (project,project_root,task_key,approval_sha256) VALUES(?,?,?,?)
+        ON CONFLICT(project,project_root,task_key,approval_sha256) DO NOTHING'''
+    # Preserve the last known reference for databases from earlier versions.
+    previous = old['approval_reference']
+    if previous:
+        conn.execute(insert, (*scope, hashlib.sha256(previous.encode('utf-8')).hexdigest()))
+    fingerprint = hashlib.sha256(approval.encode('utf-8')).hexdigest()
+    if conn.execute(insert, (*scope, fingerprint)).rowcount != 1:
+        raise ValueError('Retry requires fresh host/user approval; do not reuse an '
+                         'earlier task reservation approval reference')
+
+
 def reserve(conn,a,root):
     if a.get('confirm_write') is not True:
         return {'status':'PREVIEW_ONLY','message':'Reservation requires explicit approved write, no native agent is launched'}
@@ -371,16 +391,9 @@ def reserve(conn,a,root):
         conflict=_revision(a,old)
         if conflict: conn.rollback();return conflict
         if old['status'] not in RETRYABLE: raise ValueError('Only PLANNED, REWORK, FAILED or BLOCKED tasks can reserve')
-        # A failed, rejected or blocked attempt never authorizes a retry,
-        # even when the host worker exited normally with no delivered work.
-        # A fresh caller reference is an advisory anti-replay guard, NOT proof
-        # that the real host or owner granted permission to spawn another agent.
-        if (old['status'] in {'REWORK','FAILED','BLOCKED'} and
-                old.get('approval_reference') and
-                approval == old['approval_reference']):
-            raise ValueError(
-                'Retry requires fresh host/user approval; do not reuse an '
-                'earlier task reservation approval reference')
+        # Record the reference under the same lock as the reservation.
+        # This guards against replay of caller references. The host owns consent.
+        _record_reservation_approval(conn, old, approval)
         for dep in json.loads(old['depends_on']):
             item=conn.execute('SELECT status FROM orbit_agent_tasks WHERE project=? AND project_root=? AND task_key=?',
                               (old['project'],old['project_root'],dep)).fetchone()

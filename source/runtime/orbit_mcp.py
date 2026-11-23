@@ -19,6 +19,7 @@ import orbit_browser
 import orbit_build
 import orbit_intake
 import orbit_decisions
+import orbit_specialists
 import orbit_updates
 import orbit_evidence
 import orbit_delegation
@@ -38,7 +39,7 @@ import orbit_team_events
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = '0.32.0'
+VERSION = '0.33.0'
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_STATE_BYTES = 24000
 SUPPORTED_PROTOCOLS = ('2025-11-25', '2025-06-18', '2025-03-26')
@@ -451,7 +452,7 @@ def string(n=4000):
 TOOLS = [
     {'name':'orbit_project_scan','description':'Read-only bounded project checkpoint and document metadata.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
     {'name':'orbit_project_resume','description':'Resume full project state, or request an objective-scoped compact local context envelope without unrelated memory history. Compact output is read-only and cannot attest owner approvals or Git/test status.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'compact':{'type':'boolean'},'objective':string(600),'max_chars':{'type':'integer','minimum':900,'maximum':3500},'pulse':{'type':'boolean'}},['project_root','project'])},
-    {'name':'orbit_update_status','description':'Read-only update notice; optional refresh fetches only published GitHub release metadata. It NEVER downloads code, executes an installer or changes a project. User opens Orbit Update Manager to approve installation.', 'inputSchema':schema({'refresh':{'type':'boolean'}},[])}, 
+    {'name':'orbit_update_status','description':'Read-only update notice; optional refresh fetches only published GitHub release metadata. It NEVER downloads code, executes an installer or changes a project. User opens Orbit Update Manager to approve installation.', 'inputSchema':schema({'refresh':{'type':'boolean'}},[])},
     {'name':'orbit_research_source_save','description':'Preview or save one reviewed external research pointer in folder+project-scoped SQLite; revision-guarded, no downloads, skills, Git writes or independent approval attestation.','inputSchema':schema({'project_root':string(2000),'project':string(80),'source_key':string(80),'url':string(500),'title':string(140),'tags':{'type':'array','minItems':1,'maxItems':8,'items':string(32)},'note':string(1100),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','source_key','url','title','tags','note'])},
     {'name':'orbit_research_context','description':'Read a tiny objective-relevant pack of saved source pointers from this exact project folder+key. No network calls, no execution, no bulk document retrieval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'objective':string(600),'limit':{'type':'integer','minimum':1,'maximum':6},'max_chars':{'type':'integer','minimum':600,'maximum':4500}},['project_root','project','objective'])},
     {'name':'orbit_memory_save','description':'Preview/save one approved project-scoped memory; explicit confirm_write for persistence.', 'inputSchema':schema({'project':string(80),'key':string(160),'kind':{'type':'string','enum':sorted(KINDS)},'summary':string(4000),'source':string(1000),'evidence':{'type':'string','maxLength':4000},'importance':{'type':'integer','minimum':1,'maximum':5},'confirm_write':{'type':'boolean'}},['project','key','kind','summary','source'])},
@@ -531,13 +532,49 @@ TOOLS += [
 ]
 TOOLS += [
  {'name':'orbit_intake_status','description':'Read guided product intake and progressive autonomy.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
- {'name':'orbit_intake_propose','description':'Save proposed product classification and interview questions, not user acceptance.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'profile':{'type':'object'},'questions':{'type':'array','maxItems':6},'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','profile','questions'])},
+ {'name':'orbit_intake_propose','description':'Save proposed product classification and interview questions, not user acceptance.',
+  'inputSchema':schema({
+      'project_root':string(2000),'project':string(80),'profile':{'type':'object'},
+      'questions':{'type':'array','minItems':1,'maxItems':6,'items':schema({
+          'id':{'type':'string','minLength':2,'maxLength':40},
+          'prompt':{'type':'string','minLength':5,'maxLength':250},
+          'options':{'type':'array','minItems':2,'maxItems':5,'items':string(120)},
+          'recommended':string(120),
+      },['id','prompt','options','recommended'])},
+      'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'},
+  },['project_root','project','profile','questions'])},
  {'name':'orbit_intake_answer','description':'Record one actual answer with revision guard; then decide whether a dependent question is needed.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'question_id':string(40),'choice':string(500),'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','question_id','choice','user_reference'])},
  {'name':'orbit_intake_followup','description':'Add ONE conditional question based on an already recorded answer; cannot pre-answer it.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'based_on_id':string(40),'based_on_choice':string(500),'question':{'type':'object'},'rationale':string(500),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','based_on_id','based_on_choice','question','rationale'])},
  {'name':'orbit_intake_approve','description':'Record selected options or explicitly delegated recommended defaults; user consent is host-attested.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'expected_revision':{'type':'integer','minimum':1},'answers':{'type':'object'},'answer_source':{'type':'string','enum':['user_choices','user_delegated_defaults']},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project','expected_revision','answers','answer_source','user_reference'])},
  {'name':'orbit_autonomy_review','description':'Recommend maturity-based guided/assisted/trusted mode; no automatic promotion.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'level':{'type':'string','enum':['guided','assisted','trusted']},'expected_revision':{'type':'integer','minimum':1},'user_reference':string(240),'confirm_write':{'type':'boolean'}},['project_root','project'])},
  {'name':'orbit_docs_audit','description':'Read-only, repeatable project documentation inventory and growth signals.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'signals':{'type':'array','maxItems':8,'items':{'type':'string'}}},['project_root','project'])},
-    {'name':'orbit_decision_route','description':'Read-only, platform-specific workflow and reviewed component/library research candidates; permits custom designs.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']}},['project_root','project'])},
+    {'name':'orbit_decision_route','description':'Read-only platform/component decisions. Optional v0.33 bounded static UI inventory, project-scoped preference claims and host-reported source review. No execution, network fetch, approval or installation.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'product_type':{'type':'string','enum':sorted(orbit_decisions.TYPES)},'platforms':{'type':'array','maxItems':6,'items':{'type':'string'}},'existing_stack':{'type':'string','maxLength':160},'component_preference':{'type':'string','enum':['balanced','reuse','custom']},'include_ui_inventory':{'type':'boolean'},
+        'include_project_style_context':{'type':'boolean'},
+        'include_visual_review':{'type':'boolean'},
+        'visual_contract':schema({
+            'icon_family':string(50),
+            'spacing_policy':{'type':'string','enum':['token-first','allow-literals']},
+            'typography_policy':{'type':'string','enum':['token-first','allow-literals']},
+            'motion_policy':{'type':'string','enum':['token-first','allow-literals']},
+            'shape_policy':{'type':'string','enum':['token-first','allow-literals']}
+        },[]),
+        'qa_plan_scope':{'type':'string','enum':['full-product','changed-slice']},
+        'qa_target_routes':{'type':'array','maxItems':25,'items':string(150)},
+        'ui_coverage_packet':schema({
+            'source_revision':string(128),
+            'source_snapshot_sha256':string(64),
+            'scope':{'type':'string','enum':['full-product','changed-slice']},
+            'runtime_routes_reviewed':{'type':'boolean'},
+            'expected':{'type':'object'},
+            'observations':{'type':'array','maxItems':400,
+                            'items':schema({
+                                'screen':string(120),'state':string(80),
+                                'source_revision':string(128),
+                                'status':{'type':'string','enum':['PASS','FAIL','NOT_RUN','BLOCKED']},
+                                'evidence_ref':string(500)
+                            },['screen','state','source_revision','status'])}
+        },['source_revision','scope','expected','observations']),
+        'source_snapshot':schema({'source_id':string(70),'url':string(300),'version_or_commit':string(180),'license':string(180),'compatibility':string(180),'source_evidence':string(180)},['source_id'])},['project_root','project'])},
     {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
 ]
 TOOLS += [
@@ -553,6 +590,7 @@ TOOLS += [
         'kind':{'type':'string','enum':sorted(orbit_improvement._KINDS)},
         'result':{'type':'string','enum':sorted(orbit_improvement._RESULTS)},
         'lesson':string(320),'evidence_ref':string(160),
+        'approval_reference':string(160),
         'score_before':{'type':'integer','minimum':0,'maximum':100},
         'score_after':{'type':'integer','minimum':0,'maximum':100},
         'expected_revision':{'type':'integer','minimum':1},
@@ -606,6 +644,7 @@ TOOLS += [
          'task_key':string(80),'task_revision':{'type':'integer','minimum':1},
          'peer_task_key':string(80),'peer_revision':{'type':'integer','minimum':1},
          'worker_kind':{'type':'string','enum':['agent','bot']},
+         'specialist_return_mode':{'type':'string','enum':['normal_task','report_to_lead','transfer_control']},
          'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
          'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
          'requested_tool_names':{'type':'array','maxItems':6,'items':string(64)},
@@ -636,6 +675,8 @@ TOOLS += [
          },['format','context_sha256','skills']),
          'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
          'summary':string(280),'evidence_ref':string(200),
+         'handoff_mode':{'type':'string','enum':['dependency_delivery','specialist_return_to_lead','transfer_control']},
+         'expected_output_kind':{'type':'string','enum':['implementation_evidence','test_evidence','design_review','security_review','research_summary']},
          'host_terminal_state':{'type':'string','enum':['COMPLETED','FAILED','CANCELLED','STOPPED']},
          'observed_host_session':string(240),
          'expected_digest':{'type':'string','minLength':64,'maxLength':64},
@@ -653,10 +694,10 @@ TOOLS += [
 ]
 TOOLS.extend([
     {'name':'orbit_autopilot_charter',
-     'description':'Phase 1 Autopilot: preview or record an immutable, expiring project/roadmap/task-scoped Mission Charter; pause/resume/stop with revisions and audit. Caller approval references are NOT authenticated. No unattended runner, model, agent, host permission or Git action is activated.',
+     'description':'Phase 1 Autopilot: preview or record scoped Mission Charters; exact-revision pause/resume requires a source-bound digest and journaled single-use caller reference; local-only redacted event timeline. NOT owner authentication, host permission, native agent or execution.',
      'inputSchema':schema({
          'project_root':string(2000),'project':string(80),'mission_id':string(80),
-         'action':{'type':'string','enum':['preview','activate','status','pause','resume','stop']},
+         'action':{'type':'string','enum':['preview','activate','status','timeline','pause','resume','stop']},
          'objective':string(750),'roadmap_ref':string(220),'roadmap_revision':string(128),
          'branch':string(150),'expires_at':string(20),
          'task_keys':{'type':'array','minItems':1,'maxItems':12,'items':string(80)},
@@ -666,7 +707,11 @@ TOOLS.extend([
          'max_parallel':{'type':'integer','minimum':1,'maximum':2},
          'max_attempts_per_task':{'type':'integer','minimum':1,'maximum':3},
          'expected_digest':string(64),
+         'expected_resume_digest':string(64),
          'expected_revision':{'type':'integer','minimum':1},
+         'reported_branch':string(150),
+         'limit':{'type':'integer','minimum':1,'maximum':50},
+         'include_team_events':{'type':'boolean'},
          'approval_reference':string(200),'confirm_write':{'type':'boolean'}},
          ['project_root','project','mission_id','action'])},
     {'name':'orbit_autopilot_next',
@@ -805,8 +850,79 @@ def execute(conn, name, a):
                 return {'status':'NEEDS_PROJECT_CLASSIFICATION','next':'Ask project type or propose an intake before choosing a framework.'}
             result=orbit_decisions.components(kind,a.get('platforms',[]),
                      a.get('existing_stack',profile.get('stack','')),a.get('component_preference','balanced'))
+            extras={}
+            wants_inventory = a.get('include_ui_inventory') is True
+            wants_review = (a.get('include_visual_review') is True or
+                            'visual_contract' in a or
+                            'qa_plan_scope' in a or
+                            'ui_coverage_packet' in a)
+            if wants_inventory or wants_review:
+                inventory = (orbit_specialists.scan_visual_project(root)
+                             if kind in orbit_specialists.VISUAL else None)
+                if wants_inventory:
+                    extras['ui_inventory'] = inventory if inventory is not None else {
+                        'status':'NOT_APPLICABLE_NONVISUAL','state_written':False}
+                if wants_review:
+                    if inventory is None:
+                        extras['ui_quality_review'] = {
+                            'status':'NOT_APPLICABLE_NONVISUAL',
+                            'rendered_visual_qa_verified':False}
+                    else:
+                        extras['ui_quality_review'] = {
+                            'status':'SOURCE_REVIEW_ONLY',
+                            'visual_contract':orbit_specialists.audit_visual_contract(
+                                inventory, a.get('visual_contract')),
+                            'qa_plan':orbit_specialists.plan_visual_qa(
+                                inventory, scope=a.get('qa_plan_scope','full-product'),
+                                target_routes=a.get('qa_target_routes')),
+                        }
+                        if a.get('ui_coverage_packet') is not None:
+                            packet = a['ui_coverage_packet']
+                            coverage = orbit_specialists.review_visual_coverage(
+                                packet['expected'], packet['observations'],
+                                packet['source_revision'])
+                            if packet['scope'] == 'full-product':
+                                discovered = {x['path'] for x in inventory['routes']}
+                                missing_routes = sorted(discovered - set(packet['expected']))
+                                coverage['unmapped_static_route_hints'] = missing_routes
+                                if missing_routes:
+                                    coverage['status'] = 'HOLD_UNMAPPED_STATIC_ROUTES'
+                            if packet.get('runtime_routes_reviewed') is not True:
+                                coverage['status'] = 'HOLD_RUNTIME_SCOPE_NOT_REVIEWED'
+                            # A host-reported Git/source revision is not enough:
+                            # require that the actual bounded files scanned NOW
+                            # match the snapshot used to prepare the QA packet.
+                            current_snapshot = inventory['source_snapshot_sha256']
+                            if packet.get('source_snapshot_sha256') != current_snapshot:
+                                coverage['status'] = 'HOLD_SOURCE_SNAPSHOT_MISMATCH'
+                            coverage['source_snapshot_matches_inspected_files'] = (
+                                packet.get('source_snapshot_sha256') == current_snapshot)
+                            coverage['runtime_route_review_independently_verified'] = False
+                            coverage['source_snapshot_sha256'] = inventory['source_snapshot_sha256']
+                            extras['ui_quality_review']['coverage_review'] = coverage
+            if a.get('source_snapshot') is not None:
+                candidate_review = orbit_decisions.review_component_source(a['source_snapshot'])
+                source_key = a['source_snapshot']['source_id']
+                match = next((x for x in result['candidates'] if x['id'] == source_key), None)
+                if match is None:
+                    candidate_review = {**candidate_review,
+                        'status': 'HOLD_SOURCE_NOT_APPLICABLE_TO_PROJECT'}
+                elif match['status'] in {'INCOMPATIBLE_STACK', 'STACK_CHANGE_REQUIRED'}:
+                    candidate_review = {**candidate_review,
+                        'status': 'HOLD_PROJECT_STACK_MISMATCH',
+                        'project_candidate_status': match['status']}
+                extras['component_source_review'] = candidate_review
+            if a.get('include_project_style_context') is True:
+                ctx = orbit_improvement.context(conn,root,project,{'limit':20})
+                extras['project_style_context'] = {
+                    'status':'PROJECT_ONLY_CALLER_REPORTED_PREFERENCES',
+                    'claims':ctx['project_style_preference_claims'],
+                    'source':'EXISTING_LOCAL_IMPROVEMENT_LEDGER',
+                    'approval_independently_verified':False,
+                    'preferences_auto_applied':False,
+                }
             return {'status':'RECOMMENDATION_ONLY','project':project,**result,
-                    'selection_applied':False,'host_validation_required':True}
+                    **extras,'selection_applied':False,'host_validation_required':True}
         complexity=a.get('complexity') or profile.get('complexity','moderate')
         return orbit_decisions.model_route(a['role'],a['task'],complexity,
                    a.get('available_models',[]),a['host'],a.get('budget','economy'))

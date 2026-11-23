@@ -137,6 +137,16 @@ def _staff(conn, root, project, a, charter):
     kind = a.get("worker_kind")
     if kind not in {"agent", "bot"}:
         raise ValueError("worker_kind must be agent or bot")
+    work_mode = a.get("specialist_return_mode", "normal_task")
+    if work_mode not in {"normal_task", "report_to_lead"}:
+        return "HOLD_UNSUPPORTED_SPECIALIST_RETURN_MODE", None
+    deliverable = a.get("expected_output_kind")
+    if work_mode == "normal_task" and deliverable is not None:
+        return "HOLD_SPECIALIST_RETURN_MODE_REQUIRED", None
+    if work_mode == "report_to_lead" and deliverable not in {
+            "implementation_evidence", "test_evidence", "design_review",
+            "security_review", "research_summary"}:
+        return "HOLD_SPECIALIST_OUTPUT_CONTRACT_REQUIRED", None
     host = a.get("host")
     if host not in orbit_skill_plan.HOSTS or host == "unknown":
         raise ValueError("Choose a declared supported coding host")
@@ -182,6 +192,16 @@ def _staff(conn, root, project, a, charter):
         "profile_creation": "REUSE_EXISTING_PROFILE_FIRST",
         "charter_grants_spawn": False,
     }
+    if work_mode == "report_to_lead":
+        payload["specialist_return_contract"] = {
+            "mode": "report_to_lead",
+            "return_to": "orbit-lead",
+            "expected_output_kind": deliverable,
+            "independent_lead_review_required": True,
+            "host_result_authenticated": False,
+            "host_control_transferred": False,
+            "worker_execution_started": False,
+        }
     # Stronger confirmation on writes: must pin and revalidate the exact
     # tree/location snapshot returned by a previous preview.
     if a.get("confirm_write") is True and (
@@ -218,6 +238,18 @@ def _handoff(conn, root, project, a, charter):
         return "HOLD_DOWNSTREAM_NOT_READY", None
     summary = _text(a, "summary", 20, 280)
     evidence = _text(a, "evidence_ref", 8, 200)
+    # Distinguish a reviewed result returning to Orbit's coordinator from
+    # ordinary downstream dependency delivery. Neither transfers native control.
+    mode = a.get("handoff_mode", "dependency_delivery")
+    if mode not in {"dependency_delivery", "specialist_return_to_lead"}:
+        return "HOLD_UNSUPPORTED_HANDOFF_MODE", None
+    output_kind = a.get("expected_output_kind")
+    allowed_outputs = {"implementation_evidence", "test_evidence",
+                       "design_review", "security_review", "research_summary"}
+    if output_kind is not None and output_kind not in allowed_outputs:
+        return "HOLD_INVALID_SPECIALIST_OUTPUT_KIND", None
+    if mode == "specialist_return_to_lead" and output_kind is None:
+        return "HOLD_SPECIALIST_OUTPUT_CONTRACT_REQUIRED", None
     payload = {
         "event_type": "HANDOFF_RECORDED",
         "task_key": source["task_key"],
@@ -229,6 +261,15 @@ def _handoff(conn, root, project, a, charter):
         "review_evidence_present_unverified": True,
         "delivered_to_host": False, "native_peer_message_sent": False,
     }
+    if mode != "dependency_delivery" or output_kind is not None:
+        payload["handoff_contract"] = {
+            "mode": mode, "expected_output_kind": output_kind,
+            "return_to": "orbit-lead" if mode == "specialist_return_to_lead" else "downstream-task",
+            "lead_review_required": mode == "specialist_return_to_lead",
+            "lead_review_completed": False,
+            "native_control_transferred": False,
+            "host_result_authenticated": False,
+        }
     return "HANDOFF_REVIEW", payload
 
 
@@ -262,23 +303,22 @@ def _retire(conn, root, project, a, charter):
     # A stop request may outlive an ACTIVE charter. Bind any later terminal
     # retirement *note* to the exact session-bound request, never claiming the
     # actual host performed a stop or revoked worker permissions.
-    stop_requests = [e for e in _history(conn, root, project, a["mission_id"])
-                     if e["event_type"] == "NATIVE_STOP_REQUEST"
-                     and e["task_key"] == task["task_key"]]
-    if len(stop_requests) > 1:
-        return "HOLD_AMBIGUOUS_STOP_REQUEST", None
+    stop_requests, issue = _matching_stop_requests(
+        conn, root, project, a["mission_id"], task["task_key"],
+        task["host_session"], before_revision=task["revision"])
+    if issue:
+        return issue, None
     linked_key = ""
     linked_digest = ""
     if stop_requests:
-        linked_key = stop_requests[0]["event_key"]
-        request, issue = _existing_event(
-            conn, root, project, a["mission_id"], linked_key,
-            "NATIVE_STOP_REQUEST")
-        if issue:
-            return issue, None
-        if (request["recipient_session_caller_reported"] != task["host_session"]
-                or request["task_revision"] >= task["revision"]):
-            return "HOLD_STOP_SESSION_OR_REVISION_DRIFT", None
+        latest_revision = max(body["task_revision"]
+                              for _row, body in stop_requests)
+        latest = [(row, body) for row, body in stop_requests
+                  if body["task_revision"] == latest_revision]
+        if len(latest) != 1:
+            return "HOLD_AMBIGUOUS_STOP_REQUEST", None
+        stop_row, request = latest[0]
+        linked_key = stop_row["event_key"]
         linked_digest = _digest(request)
     payload = {
         "event_type": "RETIRE_NOTE",
@@ -311,6 +351,38 @@ def _existing_event(conn, root, project, mission, event_key, expected_type):
         return None, "HOLD_EVENT_INTEGRITY_CHANGED"
     return body, None
 
+
+
+def _matching_stop_requests(conn, root, project, mission, task_key,
+                            host_session, task_revision=None,
+                            before_revision=None):
+    """Return integrity-checked stop requests for one task/session attempt.
+
+    Historical requests from earlier native sessions remain in the audit inbox,
+    but must not block a retry or be linked to a different worker's retirement.
+    """
+    matches = []
+    for row in _history(conn, root, project, mission, task_key):
+        if (row["event_type"] != "NATIVE_STOP_REQUEST"
+                or row["task_key"] != task_key):
+            continue
+        payload, issue = _existing_event(
+            conn, root, project, mission, row["event_key"],
+            "NATIVE_STOP_REQUEST")
+        if issue:
+            return [], issue
+        revision = payload.get("task_revision")
+        session = payload.get("recipient_session_caller_reported")
+        if type(revision) is not int or not isinstance(session, str) or not session:
+            return [], "HOLD_INVALID_STOP_REQUEST"
+        if session != host_session:
+            continue
+        if task_revision is not None and revision != task_revision:
+            continue
+        if before_revision is not None and revision >= before_revision:
+            continue
+        matches.append((row, payload))
+    return matches, None
 
 def _list_names(value, name, max_items):
     if (not isinstance(value, list) or len(value) > max_items
@@ -482,8 +554,12 @@ def _receipt(conn, root, project, a, charter):
             or not source["review_evidence"]):
         return "HOLD_UPSTREAM_REVIEW_REVISION_DRIFT", None
     history = _history(conn, root, project, a["mission_id"])
-    if any(e["event_type"] == "NATIVE_STOP_REQUEST"
-           and e["task_key"] == target["task_key"] for e in history):
+    stops, issue = _matching_stop_requests(
+        conn, root, project, a["mission_id"], target["task_key"],
+        target["host_session"])
+    if issue:
+        return issue, None
+    if stops:
         return "HOLD_RECIPIENT_STOP_REQUESTED", None
     if any(e["event_type"] == "HANDOFF_RECEIPT" and
            e["peer_task_key"] == source_key for e in history):
@@ -525,6 +601,13 @@ def _receipt(conn, root, project, a, charter):
         "host_delivery_verified": False, "peer_message_sent_by_orbit": False,
         "task_accepted": False,
     }
+    if handoff.get("handoff_contract", {}).get("mode") == "specialist_return_to_lead":
+        payload["lead_result_review"] = {
+            "required": True, "lead": "orbit-lead",
+            "expected_output_kind": handoff["handoff_contract"]["expected_output_kind"],
+            "completed": False, "host_evidence_verified": False,
+            "native_control_transferred": False,
+        }
     return "HANDOFF_RECEIPT_REVIEW", payload
 
 
@@ -724,6 +807,7 @@ def _dispatch(conn, root, project, a, charter):
         "skill_pins_not_activated": lease["skill_pins"],
         "capability_intent_expires_at": lease["lease_expires_at"],
         "reviewed_handoff_references": handoffs,
+        "specialist_return_contract": staff.get("specialist_return_contract"),
         "native_task_handoff": entry["handoff"],
         "prohibited_actions": orbit_delegation.NO_SIDE_EFFECTS,
         "host_permission_authenticated": False,
@@ -841,8 +925,12 @@ def _route(conn, root, project, a, charter):
         return {**base, "status": "HOLD_INVALID_LEASE_EXPIRY"}
     if orbit_autopilot.utc_now() >= deadline:
         return {**base, "status": "HOLD_CAPABILITY_INTENT_EXPIRED"}
-    if any(e["event_type"] == "NATIVE_STOP_REQUEST"
-           and e["task_key"] == task["task_key"] for e in all_events):
+    stops, issue = _matching_stop_requests(
+        conn, root, project, a["mission_id"], task["task_key"],
+        task["host_session"])
+    if issue:
+        return {**base, "status": issue}
+    if stops:
         return {**base, "status": "HOLD_RECIPIENT_STOP_REQUESTED"}
     if any(e["event_type"] == "HANDOFF_RECEIPT" and
            e["peer_task_key"] == source_key for e in all_events):
@@ -945,9 +1033,12 @@ def _stop_request(conn, root, project, a, charter):
         return "HOLD_NATIVE_RUNNING_SESSION_REQUIRED", None
     if a.get("observed_host_session") != item["host_session"]:
         return "HOLD_NATIVE_SESSION_MISMATCH", None
-    if any(row["event_type"] == "NATIVE_STOP_REQUEST"
-           and row["task_key"] == item["task_key"]
-           for row in _history(conn, root, project, a["mission_id"])):
+    requests, issue = _matching_stop_requests(
+        conn, root, project, a["mission_id"], item["task_key"],
+        item["host_session"], task_revision=item["revision"])
+    if issue:
+        return issue, None
+    if requests:
         return "HOLD_STOP_ALREADY_REQUESTED", None
     reason_text = _text(a, "summary", 12, 280)
     return "NATIVE_STOP_REQUEST_REVIEW", {
@@ -981,19 +1072,17 @@ def _stop_plan(conn, root, project, a, charter):
     if a.get("observed_host_session") != task["host_session"]:
         return {**common, "status": "HOLD_NATIVE_SESSION_MISMATCH"}
     history = _history(conn, root, project, a["mission_id"])
-    requests = [row for row in history
-                if row["event_type"] == "NATIVE_STOP_REQUEST"
-                and row["task_key"] == task["task_key"]]
-    if len(requests) != 1:
-        return {**common, "status": "HOLD_EXACT_STOP_REQUEST_REQUIRED"}
-    stop_key = requests[0]["event_key"]
-    request, reason = _existing_event(
-        conn, root, project, a["mission_id"], stop_key, "NATIVE_STOP_REQUEST")
+    requests, reason = _matching_stop_requests(
+        conn, root, project, a["mission_id"], task["task_key"],
+        task["host_session"], task_revision=task["revision"])
     if reason:
         return {**common, "status": reason}
-    if (request["task_revision"] != task["revision"]
-            or request["recipient_session_caller_reported"] != task["host_session"]):
-        return {**common, "status": "HOLD_STOP_SESSION_OR_REVISION_DRIFT"}
+    if len(requests) != 1:
+        status = ("HOLD_AMBIGUOUS_STOP_REQUEST" if requests
+                  else "HOLD_EXACT_STOP_REQUEST_REQUIRED")
+        return {**common, "status": status}
+    stop_row, request = requests[0]
+    stop_key = stop_row["event_key"]
     host = a.get("host")
     if host not in orbit_delegation.HOST_NATIVE_TOOLS:
         raise ValueError("Unsupported coding host for native stop")

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
-VERSION = '0.32.0'
+VERSION = '0.33.0'
 SERVER = "orbit-core-native"
 HOSTS = ("antigravity", "codex", "claude-code", "vscode")
 SCOPES = ("machine", "project")
@@ -52,6 +52,19 @@ OLD_STOCK_SHA256 = {
     '693f90e5cdf0c05b04210f0cbbb17e8ae478105c03c309a57bc4933addec97cb',  # v0.31.0 project host stock SOFTWARE-DELIVERY.md
     '962e4b027553811e93a0669889f26f84b18d15020dfd7c40604b01a6e1a2ae1b',  # v0.31.0 project host stock TASK-LIFECYCLE.md
     'e402a46c24937b2a15476275cc4799fde9da85f7ea7bc3e94a2eae282433c2ff',  # v0.31.0 project host stock orbit_cli.py
+    # v0.31.0 official unmodified Antigravity agent bytes (Issue #130).
+    # Exact SHA256 only, verified against immutable v0.31.0 source. Owner edits
+    # remain unrecognized and must still block before any file modification.
+    'cb22cb9021995e7814fdf82da38539065b759ec885c21ffb0e392d3dd4bbe600',  # v0.31.0 native orbit-creative-director.md, LF
+    '7ffa5061f3192ee8156ef4bee44ed65bbf72e5219363034b4338816216bb59e4',  # v0.31.0 native orbit.md, LF
+    # Unmodified v0.32.0 Antigravity templates replaced in v0.33.0. Verified
+    # against the published Universal Setup ZIP and its checksum.
+    '1e7c35791fc861969caefcc6ef5976f89e4a459c930f816fd64350cdf0c8a55b',  # creative-director, LF
+    '3747cc7e7676bf4ef705a37e9b6f7fc0a890f2c5875e4593f98f842cd941eee9',  # creative-director, CRLF
+    '98fc649d1747e7d4dff04697ec82d1b061a83ab1b1ce3bd300dcf190e8357b2e',  # frontend, LF
+    'bdc655181cab355f3269f1691b2c492b124dd42261c19dce53413b10c091483f',  # frontend, CRLF
+    '08c46fda5443aa0a8a92c334bc8a3ca2fa23ad618f3c55391f86aa2905f8a3c9',  # qa, LF
+    '5c0295bb6ed7c7ec33ce2d352323d2d4133a20e71568be30e2dc635b09379403',  # qa, CRLF
     # Published v0.26.0-v0.30.0 immutable release updater/GUI stock bytes.
     # Include official ZIP LF and exact Windows CRLF forms. Only full SHA256
     # matches permit backup-first replacement; any owner edit still blocks.
@@ -376,11 +389,11 @@ def same_or_create(changes: list[Change], dest: Path, data: bytes, root: Path|No
         current=dest.read_bytes()
         if current != data:
             oldhash=hashlib.sha256(current).hexdigest()
-            if oldhash in OLD_STOCK_SHA256:
-                changes.append(Change(dest,data,'UPGRADE',desc+' (recognized stock file; backup made)'))
-            elif dest.name in {'AGENTS.md','CLAUDE.md'}:
-                # Existing owner guidance is authoritative; Orbit's skill remains available.
+            if dest.name in {'AGENTS.md','CLAUDE.md'}:
+                # Owner guidance wins over any matching stock-agent digest.
                 changes.append(Change(dest,current,'PRESERVE','Existing owner guidance retained'))
+            elif oldhash in OLD_STOCK_SHA256:
+                changes.append(Change(dest,data,'UPGRADE',desc+' (recognized stock file; backup made)'))
             else:
                 raise SetupError('Existing file differs from recognized Orbit versions; no overwrite.\n\nReview this file (it may be customized or from an unrecognized build):\n'+str(dest))
         else:

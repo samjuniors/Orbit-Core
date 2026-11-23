@@ -30,6 +30,15 @@ CATALOG=(
      'Unstyled accessible primitives useful for custom visual design.'),
     ('react-aria','UI primitives','web','react','https://react-aria.adobe.com/',
      'Accessible React interaction primitives; inspect actual package compatibility.'),
+    ('vercel-ui-sdk','UI primitives','web','react,vue,svelte,solid,web-components',
+     'https://github.com/vercel-labs/ui',
+     'Beta behavior primitives and framework adapters; not a visual design system. Explicit dependency approval and API compatibility checks required.'),
+    ('lucide','icons','web','react,vue,svelte,vanilla,web-components',
+     'https://lucide.dev/',
+     'Icon family reference; reuse the current project icon set first and check consistent sizes and licensing.'),
+    ('motion','animation','web','react',
+     'https://motion.dev/',
+     'Optional animation library for React; prefer existing CSS for simple motion and honor reduced-motion preferences.'),
     ('native-web','platform APIs','web','vanilla,html,typescript,javascript',
      'https://developer.mozilla.org/en-US/docs/Web/API',
      'Prefer semantic HTML and web platform APIs for appropriately simple web apps.'),
@@ -114,6 +123,8 @@ def components(product_type,platforms,stack,preference):
     if product_type in {'sdk-library','cli','api-service','plugin-mcp','os-platform','data-automation'}:
         wants= wants or {'server'}
     lower=stack.lower()
+    if product_type=='desktop-app' and re.search(r'\belectron\b|\btauri\b|\breact\b|\bwebview\b|\bvue\b|\bsvelte\b',lower):
+        wants.add('web')  # Web-rendered desktop UI; do not force native SwiftUI/Compose.
     flags={
         'react':bool(re.search(r'\breact\b|\bnext(?:\.js)?\b',lower)),
         'stylex':'stylex' in lower,
@@ -127,11 +138,19 @@ def components(product_type,platforms,stack,preference):
     for ident,kind,platform,stacks,url,why in CATALOG:
         permitted=set(platform.split(','))
         if 'any' not in permitted and not wants.intersection(permitted):continue
-        if product_type in {'sdk-library','cli','api-service','plugin-mcp','os-platform','data-automation'} and kind in {'UI components','UI primitives','mobile framework','native mobile UI','browser QA'}:continue
+        if product_type in {'sdk-library','cli','api-service','plugin-mcp','os-platform','data-automation'} and kind in {'UI components','UI primitives','mobile framework','native mobile UI','browser QA','icons','animation'}:continue
         if ident=='astryx':
             status='INCOMPATIBLE_STACK' if re.search(r'\breact\s*(?:1[0-8]|[1-9])\b',lower) else 'REVIEW_MATCH' if flags['react'] else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
         elif ident in {'shadcn-ui','radix-primitives','react-aria'}:
             status='REVIEW_MATCH' if flags['react'] and (ident!='shadcn-ui' or flags['tailwind']) else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
+        elif ident=='vercel-ui-sdk':
+            supported=flags['react'] or any(x in lower for x in ('vue','svelte','solid','web component'))
+            status='REVIEW_MATCH' if supported else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
+        elif ident=='motion':
+            status='REVIEW_MATCH' if flags['react'] else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
+        elif ident=='lucide':
+            supported=flags['react'] or flags['vanilla'] or any(x in lower for x in ('vue','svelte','web component'))
+            status='REVIEW_MATCH' if supported else 'REVIEW_COMPATIBILITY' if not lower else 'INCOMPATIBLE_STACK'
         elif ident=='native-web':
             status='REVIEW_MATCH' if flags['vanilla'] else 'REVIEW_COMPATIBILITY'
         elif ident=='expo':
@@ -161,6 +180,71 @@ def components(product_type,platforms,stack,preference):
     return {'product_type':product_type,'platforms':sorted(wants),'workflow_profile':profile,
             'recommended_stages':list(FLOWS[profile]),'initial_question':required_question,
             'component_preference':preference,
-            'candidates':result[:9],
+            'reuse_policy': [
+                'Inspect existing project components, tokens, icons and approved design decisions first',
+                'Prefer existing tested components and already approved dependencies',
+                'Review compatible official registries and version-pinned sources when there is a real gap',
+                'Create a custom component when requested or justified, with interaction and accessibility tests',
+            ],
+            'source_review_requirements': ['project_fit', 'version_or_commit', 'license',
+                                           'maintenance', 'security', 'accessibility',
+                                           'integration_cost', 'owner_approval'],
+            'new_project_design_order': ([
+                'Clarify product goal, users, platform and consequential constraints',
+                'Approve a brief before imposing a design or component framework',
+                'Research and compare visual directions, source components and project conventions',
+                'Approve a design direction, then create or update a design contract if useful',
+                'Plan implementation and independently verify all relevant rendered screens and states',
+            ] if product_type in {'website','web-app','mobile-app','desktop-app','game'} else []),
+            'design_md_required_at_project_start': False,
+            'external_sources_installed': False,
+            'candidates':result[:12],  # bounded, retains legacy candidates after optional sources
             'custom_component_allowed':True,
             'warning':'Recommendations are read-only research pointers, not verified installed components or permission to install.'}
+
+
+def review_component_source(snapshot):
+    """Validate a host-collected source claim; never fetch or attest registry data."""
+    if not isinstance(snapshot, dict) or len(snapshot) > 12:
+        raise ValueError("Source snapshot must be a bounded object")
+    if any(not isinstance(k, str) or len(k) > 80 for k in snapshot):
+        raise ValueError("Invalid source snapshot fields")
+    ident = snapshot.get("source_id")
+    if not isinstance(ident, str) or not 1 <= len(ident) <= 70:
+        raise ValueError("source_id is required")
+    known = next(((key, kind, platform, stacks, url) for
+                  key, kind, platform, stacks, url, why in CATALOG if key == ident), None)
+    base = {"source_id": ident, "source_data_untrusted": True,
+            "provenance_independently_verified": False,
+            "license_independently_verified": False, "registry_fetched_by_orbit": False,
+            "dependency_installed": False, "selection_applied": False,
+            "host_review_required": True}
+    if known is None:
+        return {**base, "status": "HOLD_UNCATALOGED_SOURCE",
+                "next": "Research source provenance, license and framework compatibility before proposing addition."}
+    url = snapshot.get("url")
+    if not isinstance(url, str) or url.rstrip("/") != known[4].rstrip("/"):
+        return {**base, "status": "HOLD_SOURCE_URL_MISMATCH",
+                "expected_official_url": known[4]}
+    fields = ("version_or_commit", "license", "compatibility", "source_evidence")
+    missing = [field for field in fields if
+               not isinstance(snapshot.get(field), str) or
+               not 3 <= len(snapshot[field].strip()) <= 180]
+    if missing:
+        return {**base, "status": "HOLD_MISSING_SOURCE_CLAIMS", "missing_fields": missing,
+                "official_url": known[4]}
+    if snapshot["version_or_commit"].strip().lower() in {
+            "latest", "main", "master", "head", "unknown", "unspecified", "current"}:
+        return {**base, "status": "HOLD_UNPINNED_SOURCE", "official_url": known[4]}
+    if snapshot["license"].strip().lower() in {"unknown", "unspecified", "tbd"}:
+        return {**base, "status": "HOLD_UNCLEAR_LICENSE", "official_url": known[4]}
+    if snapshot["compatibility"] not in {"compatible", "incompatible", "unknown"}:
+        raise ValueError("Unsupported compatibility claim")
+    if snapshot["compatibility"] == "incompatible":
+        return {**base, "status": "HOLD_INCOMPATIBLE_SOURCE", "official_url": known[4]}
+    if snapshot["compatibility"] == "unknown":
+        return {**base, "status": "HOLD_COMPATIBILITY_REVIEW", "official_url": known[4]}
+    return {**base, "status": "REVIEW_SOURCE_CLAIMS",
+            "official_url": known[4],
+            "claims": {k: snapshot[k] for k in fields},
+            "next": "Verify the pinned source, license, maintenance, security and accessibility against trusted official documentation; then request separate dependency approval."}

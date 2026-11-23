@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 _EVENT = re.compile(r"[a-z][a-z0-9-]{2,47}\Z")
 _KINDS = {"user-correction", "qa-result", "regression", "task-outcome",
-          "resource-review", "process-lesson"}
+          "resource-review", "process-lesson", "project-style-preference"}
 _RESULTS = {"improved", "regressed", "unchanged", "unknown"}
 _RISK = re.compile(
     r"(?i)(?:ignore (?:all |your )?(?:previous|system|developer) instructions|"
@@ -85,6 +85,16 @@ def record(conn, root, project, args):
             raise ValueError("Invalid observation classification")
         lesson = _text(args["lesson"], "lesson", 20, 320)
         ref = _text(args["evidence_ref"], "evidence_ref", 4, 160)
+        if kind == "project-style-preference":
+            # A project preference is not inferred from a casual correction.
+            # A host must supply the exact explicit user-approval reference.
+            # This is host-reported: Orbit cannot authenticate identity/consent.
+            approval = args.get("approval_reference")
+            if not isinstance(approval, str) or approval != ref or len(approval) < 8:
+                return {"status": "HOLD_PROJECT_STYLE_APPROVAL_REFERENCE",
+                        "state_written": False, "approval_authenticated": False}
+            if result != "unknown":
+                raise ValueError("A style preference is not a measured quality outcome")
         before = _score(args.get("score_before"), "score_before")
         after = _score(args.get("score_after"), "score_after")
         if (before is None) != (after is None):
@@ -108,7 +118,9 @@ def record(conn, root, project, args):
             return {"status": "ALREADY_EXISTS", "state_written": False}
         return {"status": "OBSERVATION_RECORDED", "revision": 1,
                 "state_written": True, "evidence_verified": False,
-                "auto_skill_activated": False}
+                "approved_style_preference_claim_recorded": kind == "project-style-preference",
+                "approval_authenticated": False,
+                "scope": "THIS_PROJECT_ONLY", "auto_skill_activated": False}
     if action != "archive":
         raise ValueError("Invalid observation action")
     if not old or old["status"] != "ACTIVE":
@@ -160,7 +172,23 @@ def context(conn, root, project, args):
             """SELECT lesson_sha256, lesson, revision FROM orbit_shared_lessons
                 WHERE status='ACTIVE' ORDER BY updated_at DESC LIMIT 12"""
         ).fetchall()]
+    # Durable style preferences must not disappear behind the unrelated
+    # 20-most-recent task/QA observations used for the normal context budget.
+    preference_rows = conn.execute("""SELECT event_key,lesson,evidence_ref,revision
+        FROM orbit_improvement_events WHERE root=? AND project=?
+        AND status='ACTIVE' AND kind='project-style-preference'
+        ORDER BY updated_at DESC, event_key LIMIT 8""",
+        (str(root), project)).fetchall()
+    preferences = [
+        {"event_key": x["event_key"], "preference": x["lesson"],
+         "approval_reference": x["evidence_ref"], "revision": x["revision"],
+         "approval_independently_verified": False}
+        for x in preference_rows
+    ]
     return {
+        "project_style_preference_claims": preferences,
+        "project_style_preference_scope": "THIS_PROJECT_ONLY",
+        "project_style_preference_auto_applied": False,
         "status": "PROJECT_IMPROVEMENT_CONTEXT",
         "project": project, "observations": rows,
         "repeat_candidates": suggestions[:5],
