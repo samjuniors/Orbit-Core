@@ -1,9 +1,12 @@
 """v0.33 local UI inventory, source-claim evaluation and scoped preference regression."""
 import json
+import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,6 +84,253 @@ class VisualInventoryTests(unittest.TestCase):
         result = orbit_specialists.scan_visual_project(self.root)
         self.assertNotIn("src/components/Outside.tsx", result["component_files"])
         self.assertEqual(result["scanned_file_count"], 5)
+
+    def test_hard_link_to_external_source_is_not_read(self):
+        outside = self.root.parent / "outside-hardlink.tsx"
+        outside.write_text('export const secret = "outside";', encoding="utf-8")
+        alias = self.root / "src/components/OutsideHardlink.tsx"
+        try:
+            os.link(outside, alias)
+        except (OSError, NotImplementedError):
+            self.skipTest("Hard links unavailable on this filesystem")
+        result = orbit_specialists.scan_visual_project(self.root)
+        self.assertNotIn("src/components/OutsideHardlink.tsx", result["component_files"])
+        self.assertIn("HARD_LINK_SOURCE_FILE", result["partial_reasons"])
+        self.assertEqual(result["scanned_file_count"], 5)
+        self.assertFalse(result["screen_inventory_complete"])
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFOs unavailable on this platform")
+    def test_fifo_source_candidate_does_not_block_scan(self):
+        import threading
+        fifo = self.root / "src/components/Blocking.tsx"
+        os.mkfifo(fifo)
+        outcome = {}
+
+        def scan():
+            try:
+                outcome["result"] = orbit_specialists.scan_visual_project(self.root)
+            except BaseException as exc:  # surfaced below
+                outcome["error"] = exc
+
+        worker = threading.Thread(target=scan, daemon=True)
+        worker.start()
+        worker.join(timeout=10)
+        if worker.is_alive():
+            # Release the blocked reader so the daemon thread can exit.
+            writer = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+            os.close(writer)
+            worker.join(timeout=5)
+            self.fail("scan_visual_project blocked opening a FIFO source candidate")
+        if "error" in outcome:
+            raise outcome["error"]
+        result = outcome["result"]
+        self.assertIn("UNSAFE_OR_MISSING_SOURCE_FILE", result["partial_reasons"])
+        self.assertNotIn("src/components/Blocking.tsx", result["component_files"])
+        self.assertIn("src/components/Button.tsx", result["component_files"])
+
+    class DirectoryLinkUnavailable(Exception):
+        """Racing link/junction setup failed; not an OSError, so the scanner cannot absorb it."""
+
+    def _install_directory_link(self, link, target):
+        try:
+            os.symlink(target, link, target_is_directory=True)
+        except OSError as exc:
+            if os.name != "nt":
+                raise self.DirectoryLinkUnavailable(str(exc)) from exc
+            result = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                capture_output=True, text=True)
+            if result.returncode:
+                raise self.DirectoryLinkUnavailable(
+                    result.stderr or "Directory junction unavailable") from exc
+        # Remove the link itself (never its target) before the temp tree is deleted.
+        self.addCleanup(lambda: os.rmdir(link) if os.name == "nt" else os.unlink(link))
+
+    def _scan_with_swap_on_open(self, root, swap, trigger=None):
+        """Run swap() inside the scanner, just before opening ``trigger`` (default: first file)."""
+        original_open = orbit_specialists._open_visual_source
+        calls, swapped = [], []
+
+        def racing_open(directory, name):
+            if not swapped and (trigger is None or name == trigger):
+                swapped.append(name)
+                swap()
+            calls.append(name)
+            return original_open(directory, name)
+
+        with patch.object(orbit_specialists, "_open_visual_source", new=racing_open):
+            result = orbit_specialists.scan_visual_project(root)
+        self.assertTrue(swapped, "scanner never reached the swap point")
+        return result
+
+    def test_parent_directory_swap_to_symlink_is_not_read(self):
+        components = self.root / "src/components"
+        outside = self.root.parent / "outside-components"
+        outside.mkdir()
+        (outside / "Button.tsx").write_text(
+            "export function OutsideSecretComponent() { return <div />; }",
+            encoding="utf-8")
+        (outside / "OutsideOnly.tsx").write_text("export const x = 1;", encoding="utf-8")
+
+        def swap():
+            components.rename(self.root / "src/components-original")
+            self._install_directory_link(components, outside)
+
+        try:
+            # Swap after src/components was enumerated, just before Button.tsx is opened.
+            result = self._scan_with_swap_on_open(self.root, swap, trigger="Button.tsx")
+        except self.DirectoryLinkUnavailable as exc:
+            self.skipTest(f"Directory symlink/junction unavailable: {exc}")
+        self.assertTrue((components / "OutsideOnly.tsx").exists(), "swap did not redirect path")
+        dumped = json.dumps(result)
+        self.assertNotIn("OutsideSecretComponent", dumped)
+        self.assertNotIn("OutsideOnly", dumped)
+        # The open stayed on the held directory handle: the original file was read.
+        self.assertIn("src/components/Button.tsx", result["component_files"])
+        self.assertEqual(result["icon_families_imported_hint"].get("lucide"), 1)
+
+    def test_project_root_ancestor_swap_during_scan_reads_no_outside_file(self):
+        holder = self.root.parent / "holder"
+        holder.mkdir()
+        selected = holder / "project"
+        self.root.rename(selected)
+        evil = self.root.parent / "evil"
+        (evil / "project/src/components").mkdir(parents=True)
+        (evil / "project/src/components/Button.tsx").write_text(
+            "export function OutsideSecretComponent() { return <div />; }",
+            encoding="utf-8")
+        (evil / "project/src/components/EvilOnly.tsx").write_text(
+            "export const evil = 1;", encoding="utf-8")
+        (evil / "project/package.json").write_text(
+            json.dumps({"dependencies": {"outside-evil-dep": "6.6.6"}}), encoding="utf-8")
+
+        rename_refused = []
+
+        def swap():
+            # Replace an ANCESTOR of the selected root while the scan is in progress.
+            try:
+                holder.rename(self.root.parent / "holder-original")
+            except PermissionError:
+                if os.name != "nt":
+                    raise
+                # Windows refuses to rename a directory with open descendant handles;
+                # the pinned root handle itself blocks the replacement. Proven below.
+                rename_refused.append(True)
+                return
+            self._install_directory_link(holder, evil)
+
+        try:
+            result = self._scan_with_swap_on_open(selected, swap)
+        except self.DirectoryLinkUnavailable as exc:
+            self.skipTest(f"Directory symlink/junction unavailable: {exc}")
+        dumped = json.dumps(result)
+        for marker in ("OutsideSecretComponent", "EvilOnly", "outside-evil-dep"):
+            self.assertNotIn(marker, dumped)
+        # Every original file was read through the pinned root handle.
+        self.assertEqual(result["scanned_file_count"], 5)
+        self.assertIn("src/components/Button.tsx", result["component_files"])
+        self.assertEqual(result["declared_ui_dependencies_hint"]["react"], "19.2.0")
+        self.assertNotIn("UNSAFE_OR_MISSING_SOURCE_FILE", result["partial_reasons"])
+        if rename_refused:
+            # Same rename succeeds once the scan released its handles, so the refusal
+            # came from the scanner's held root handle, not the test environment.
+            holder.rename(self.root.parent / "holder-original")
+        else:
+            # The selected path really resolved into the outside tree mid-scan,
+            # yet nothing from it was enumerated or read.
+            self.assertTrue((selected / "src/components/EvilOnly.tsx").exists(),
+                            "swap did not redirect the selected root path")
+
+    def _make_link(self, link, target, kind):
+        """Create a directory ``symlink`` or Windows ``junction``; skip only if unsupported."""
+        try:
+            if kind == "junction":
+                if os.name != "nt":
+                    raise self.DirectoryLinkUnavailable("junctions are Windows-only")
+                result = subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                    capture_output=True, text=True)
+                if result.returncode:
+                    raise self.DirectoryLinkUnavailable(result.stderr or "mklink /J failed")
+            else:
+                try:
+                    os.symlink(target, link, target_is_directory=True)
+                except OSError as exc:  # e.g. Windows without symlink privilege
+                    raise self.DirectoryLinkUnavailable(str(exc)) from exc
+        except self.DirectoryLinkUnavailable as exc:
+            self.skipTest(f"Directory {kind} unavailable: {exc}")
+        self.addCleanup(lambda: os.rmdir(link) if os.name == "nt" else os.unlink(link))
+
+    def test_link_root_is_rejected_before_resolution(self):
+        for kind in ("symlink", "junction") if os.name == "nt" else ("symlink",):
+            with self.subTest(kind=kind):
+                link = self.root.parent / f"root-{kind}"
+                self._make_link(link, self.root, kind)
+                with self.assertRaises(ValueError):
+                    orbit_specialists.scan_visual_project(link)
+
+    def test_link_ancestor_of_root_is_rejected_on_windows(self):
+        for kind in ("symlink", "junction") if os.name == "nt" else ("symlink",):
+            with self.subTest(kind=kind):
+                link = self.root.parent / f"ancestor-{kind}"
+                self._make_link(link, self.root.parent, kind)
+                selected = link / "project"
+                if os.name == "nt":
+                    # Path.resolve() would canonicalize this into the real tree; the
+                    # scanner must reject the reparse point instead of following it.
+                    with self.assertRaises(ValueError):
+                        orbit_specialists.scan_visual_project(selected)
+                else:
+                    # POSIX contract: ancestors are resolved at selection, then the
+                    # canonical root is pinned component by component.
+                    result = orbit_specialists.scan_visual_project(selected)
+                    self.assertEqual(result["scanned_file_count"], 5)
+
+    def test_unrepresentable_directory_name_is_skipped_not_fatal(self):
+        bad_name = "bad\ud800dir" if os.name == "nt" else "bad\udcffdir"
+        bad = (self.root / "src" / bad_name) if os.name == "nt" else None
+        try:
+            if os.name == "nt":
+                bad.mkdir()  # NTFS accepts unpaired UTF-16 surrogates
+                (bad / "Hidden.tsx").write_text("export const h = 1;", encoding="utf-8")
+            else:
+                raw = os.fsencode(self.root / "src") + b"/bad\xffdir"
+                os.mkdir(raw)  # non-UTF-8 bytes surface as surrogateescape'd str
+                with open(raw + b"/Hidden.tsx", "wb") as handle:
+                    handle.write(b"export const h = 1;")
+        except (OSError, UnicodeError) as exc:
+            self.skipTest(f"Filesystem rejects undecodable names: {exc}")
+        result = orbit_specialists.scan_visual_project(self.root)
+        self.assertIn("UNREPRESENTABLE_SOURCE_NAME", result["partial_reasons"])
+        self.assertEqual(result["scanned_file_count"], 5)
+        self.assertIn("src/components/Button.tsx", result["component_files"])
+        json.dumps(result).encode("utf-8")  # inventory stays strictly UTF-8 serializable
+        if os.name == "nt":
+            # The handle-relative open itself must round-trip the surrogate name.
+            root = orbit_specialists._visual_pin_root(self.root)
+            try:
+                src = orbit_specialists._visual_win_open_relative(root, "src", directory=True)
+                try:
+                    child = orbit_specialists._visual_win_open_relative(
+                        src, bad_name, directory=True)
+                    orbit_specialists._visual_close_root(child)
+                finally:
+                    orbit_specialists._visual_close_root(src)
+            finally:
+                orbit_specialists._visual_close_root(root)
+
+    def test_root_pin_rejects_redirected_ancestor(self):
+        link = self.root.parent / "linked-holder"
+        try:
+            self._install_directory_link(link, self.root.parent)
+        except self.DirectoryLinkUnavailable as exc:
+            self.skipTest(f"Directory symlink/junction unavailable: {exc}")
+        # Unresolved path whose ancestor is a link: pinning must refuse it.
+        with self.assertRaises(OSError):
+            handle = orbit_specialists._visual_pin_root(link / "project")
+            orbit_specialists._visual_close_root(handle)
+        handle = orbit_specialists._visual_pin_root(self.root)
+        orbit_specialists._visual_close_root(handle)
 
     def test_conservative_dynamic_route_and_file_size_limit(self):
         (self.root / "src/app/[slug]").mkdir()
