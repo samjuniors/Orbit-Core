@@ -18,6 +18,7 @@ import orbit_preview
 import orbit_browser
 import orbit_build
 import orbit_intake
+import orbit_project_audit
 import orbit_decisions
 import orbit_specialists
 import orbit_updates
@@ -306,11 +307,24 @@ def checkpoint(conn, a):
             conn.rollback()  # no DB rows changed; just release the cross-process lock
 
 
-def scan(a):
+def scan(a, conn=None):
     root, project = project_root(a), project_key(a)
     candidates = ('README.md','docs/README.md','docs/ARCHITECTURE.md','ARCHITECTURE.md','PRD.md','REQUIREMENTS.md','ROADMAP.md','.orbit/STATE.md','.orbit/PROJECT.md')
     existing = [x for x in candidates if not (root / x).is_symlink() and (root/x).is_file()]
-    return {'project': project, 'root': str(root), 'docs_found': existing, 'checkpoint': snapshot(root), 'notice':'Metadata only; not a full semantic document audit'}
+    profile = None
+    if conn is not None:
+        intake = orbit_intake.status(conn, root, {'project': project})
+        if intake.get('status') == 'APPROVED':
+            profile = intake.get('profile')
+    audit = orbit_project_audit.scan_project(root, profile=profile)
+    return {
+        'project': project,
+        'root': str(root),
+        'docs_found': existing,
+        'checkpoint': snapshot(root),
+        'project_audit': audit,
+        'notice': 'Bounded read-only structural audit; no source contents read or project scripts executed. Findings are review leads, not confirmed defects.',
+    }
 
 
 def compact_resume(conn, root, project, a):
