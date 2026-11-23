@@ -464,7 +464,7 @@ def string(n=4000):
     return {'type':'string','minLength':1,'maxLength':n}
 
 TOOLS = [
-    {'name':'orbit_project_scan','description':'Read-only bounded project checkpoint and document metadata.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
+    {'name':'orbit_project_scan','description':'Read-only bounded project inventory and structural gap audit. Inspects filesystem metadata only; does not read source contents, execute project scripts or write files. Findings are heuristic review leads, not confirmed defects.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
     {'name':'orbit_project_resume','description':'Resume full project state, or request an objective-scoped compact local context envelope without unrelated memory history. Compact output is read-only and cannot attest owner approvals or Git/test status.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'compact':{'type':'boolean'},'objective':string(600),'max_chars':{'type':'integer','minimum':900,'maximum':3500},'pulse':{'type':'boolean'}},['project_root','project'])},
     {'name':'orbit_update_status','description':'Read-only update notice; optional refresh fetches only published GitHub release metadata. It NEVER downloads code, executes an installer or changes a project. User opens Orbit Update Manager to approve installation.', 'inputSchema':schema({'refresh':{'type':'boolean'}},[])},
     {'name':'orbit_research_source_save','description':'Preview or save one reviewed external research pointer in folder+project-scoped SQLite; revision-guarded, no downloads, skills, Git writes or independent approval attestation.','inputSchema':schema({'project_root':string(2000),'project':string(80),'source_key':string(80),'url':string(500),'title':string(140),'tags':{'type':'array','minItems':1,'maxItems':8,'items':string(32)},'note':string(1100),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','source_key','url','title','tags','note'])},
@@ -992,12 +992,12 @@ def execute(conn, name, a):
     if name=='orbit_preview_stop': return orbit_preview.stop(project_root(a), a)
     if name=='orbit_capability_discover': return orbit_capabilities.discover(project_root(a))
     if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]),host_plugins=a.get('host_plugins',[]),permission_state=a.get('permission_state','UNKNOWN'),project_profile=a.get('project_profile'),requested_skill_names=a.get('requested_skill_names'),review_manifest=a.get('review_manifest'),host=a.get('host','unknown'))
-    if name=='orbit_project_scan': return scan(a)
+    if name=='orbit_project_scan': return scan(a, conn)
     if name=='orbit_project_resume':
         if a.get('compact') is True:
             root=project_root(a)
             return compact_resume(conn,root,project_key(a),a)
-        status=scan(a)
+        status=scan(a, conn)
         status['memories']=memory_recall(conn,{'project':status['project'],'limit':5})
         status['intake']=orbit_intake.status(conn,project_root(a),a)
         status['recovery']=orbit_build.recovery_brief(conn,project_root(a),project_key(a))
