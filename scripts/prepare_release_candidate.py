@@ -48,7 +48,16 @@ def prepare(root=ROOT):
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     current = semver(version)
     target = root / ("ORBIT-Claude-Desktop-v" + version + ".mcpb")
-    if not target.exists():
+    if target.exists():
+        if target.is_symlink() or not target.is_file():
+            raise ValueError("Candidate bundle must be a regular file")
+        # The checked-in current-version bundle can lag newly added canonical
+        # runtime modules on a feature branch. Rebuild only this current-version
+        # candidate from its own non-code metadata before asserting source parity.
+        # Older versioned bundles remain immutable.
+        build(root=root)
+        created = True
+    else:
         options = []
         for path in root.glob("ORBIT-Claude-Desktop-v*.mcpb"):
             old = path.name.removeprefix("ORBIT-Claude-Desktop-v").removesuffix(".mcpb")
@@ -67,10 +76,6 @@ def prepare(root=ROOT):
         if hashlib.sha256(path.read_bytes()).hexdigest() != before:
             raise ValueError("Previous published bundle was modified")
         created = True
-    else:
-        if target.is_symlink() or not target.is_file():
-            raise ValueError("Candidate bundle must be a regular file")
-        created = False
     digest = source_parity(root, target, version)
     return {"version": version, "bundle": str(target), "sha256": digest, "generated": created}
 
