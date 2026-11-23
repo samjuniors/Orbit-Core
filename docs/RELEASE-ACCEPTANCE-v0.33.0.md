@@ -195,3 +195,42 @@
 | Owner release decision | **NOT GIVEN** | Required before merging #171 → #172 → #135 → #133 and dispatching `Publish versioned release` from `main`. |
 
 **Owner merge order once approved:** #171 into integration, #172 into the candidate, #135 into integration, then #133 into `main`; rerun merge-commit CI on `main` before any publication.
+
+## 2026-11-23 (later) — Review remediation, exact candidate and merge gate
+
+**Release decision: HOLD.** This section supersedes the merge order in the previous section. Nothing has been merged, tagged, published or installed.
+
+**Exact candidate:** `dev/v033-candidate-sync-20261123` at `8db21f5e32a247b592eb74f2c9057e770c7bef91` ([PR #172](https://github.com/samjuniors/Orbit-Core/pull/172)). It contains the live candidate `4389222` (owner-pushed merge of integration `0572a5e`, itself `main` `cb105dc` merged into `141e8c5`), the #173 fixes and the acceptance-record corrections. Later docs-only commits to this record need a fresh CI check, and the candidate SHA must be re-recorded.
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| [PR #171](https://github.com/samjuniors/Orbit-Core/pull/171) main → integration | **SUPERSEDED** | Integration `0572a5e` has a tree identical to #171 head `0f7adcb` (`git diff` empty). Close without merging. Its Codex P2 thread (Claude Code tool allowlists) is fixed in #173. |
+| [PR #173](https://github.com/samjuniors/Orbit-Core/pull/173) Codex P2 fixes → integration | **PASS 5/5 at `3d48f6a`** ([run 45133844533](https://github.com/samjuniors/Orbit-Core/actions/runs/45133844533)) | (1) `_route`/`_receipt` stop gates are session-scoped and fail closed; the regression test fails on the old code. (2) The agent rename no longer rewrites `orbit_*` MCP tool names into `orbit-lead-agent_*`; this also corrects the Antigravity agents. (3) Generated Claude Code agents carry per-role `tools:` allowlists, and the build fails on an unmapped tool. Local Windows: 761 tests OK, 33 skipped. A new Codex P2 asks for write tools on `orbit-software-engineer`. That role has been read-only since published v0.32.0, so widening it is an owner privilege decision; the thread is left open. |
+| #172 exact-head CI | **PASS 5/5 at `8db21f5`** ([run 45133917615](https://github.com/samjuniors/Orbit-Core/actions/runs/45133917615)) | Ubuntu Python 3.10–3.13 and Windows Python 3.12. |
+| Local Windows full suite at `8db21f5` | **PASS** | Windows 11, CPython 3.12.10: 769 tests, 33 skipped, 0 failures. |
+| Release gates at `8db21f5` | **PASS** | `prepare_release_candidate.py`, `check_release_readiness.py`, `check_version.py --strict-bundle`, `build_release.py --verify` (clean `dist/`; Universal Setup `f9f4075f…74f1`, Antigravity `9ef78183…4b39`, suite `ae3b9a16…2766`; MCPB `60c1498c…9252`), `smoke_release_zip.py` (57 tools). The first local attempt failed on a stale untracked MCPB and `dist/` from the earlier `b3e220d` build. The parity checks correctly refused them, and they were moved aside (not deleted) before the rebuild. |
+| Linux local suite | **NOT RUN locally** | Linux coverage comes from exact-head CI only. |
+| Separate-agent security review of `8db21f5` | **DONE — not independent** | A separate Claude review agent, launched by the same operator session, reviewed `v0.32.0..8db21f5` read-only. Its targeted tests passed: 143 run, 4 skipped. It found no issue letting an expired or revoked grant authorize anything, no session/revision bypass in route/receipt (including the new fix), no stock-digest or migration regression, no release-workflow weakening, and no visual-scan traversal regression. Codex (GitHub connector) independently reviewed each pushed PR head. Its open threads are listed in this table. A human or third-party security review has **NOT** been done. |
+| **F1 — Claude Code marketplace publishes on merge to `main`** | **BLOCKER — owner decision** | `.claude-plugin/marketplace.json` on `main` serves `./plugins/claude-code/orbit-core` (currently v0.32.0). Merging #133 would ship v0.33.0 to `/plugin marketplace` users before the owner-dispatched `Publish versioned release` workflow runs its tests, pre-tag smoke and tagging. That makes a merge a publication, contrary to AGENTS.md. Before merging #133, decide whether to accept it, or to pin the marketplace source to a release tag/ref first (a reviewed change). |
+| F2 — CI MCPB checksum self-check | **OPEN (low)** | `ci.yml` writes `$bundle.sha256` and immediately checks against it, so that step cannot fail. Source parity (`prepare_release_candidate`) is the real control. The release workflow's 8-asset digest check is unaffected. |
+| F3 — approval reference reuse across tasks | **OPEN (low, not a regression)** | `orbit_tasks._record_reservation_approval` blocks replay per task only. The reference is documented as advisory, not authentication. |
+| F4 — event budget blocks late revoke/stop records | **OPEN (low, pre-existing since v0.32)** | Lease expiry checks still block dispatch and route. |
+| F5 — `--sync-claude-code` may follow a planted Windows junction | **NOT VERIFIED (low)** | Developer-only tool; needs a locally planted junction. |
+| Codex P3 on #135 (stale review row) | **FIXED** | The row is updated above in this record. |
+| Host-enforced timed expiry / active revocation | **BLOCKED** | No host evidence. Runtime payloads report these as unverified. |
+| Owner-profile native specialist delivery; v0.33 owner-profile migration/rollback; automatic downgrade | **NOT VERIFIED / NOT RUN** | Needs an authorized signed-in host session. Disposable-profile and CI upgrade evidence from earlier sections still applies to unchanged installer paths. |
+| Claude Code `/plugin` install and `tools:` enforcement in a real host | **NOT VERIFIED** | |
+| RAD issue #138 OS isolation | **Outside v0.33.0; OPEN** | |
+| Owner release decision | **NOT GIVEN** | |
+
+**Safest merge order, owner approval required for each:**
+1. Merge #173 into integration.
+2. Merge #172 into the candidate, which updates #135.
+3. Merge #135 into integration, which updates #133.
+4. Close #171 as superseded.
+5. Resolve F1, then merge #133 into `main`.
+6. Check `main` merge-commit CI (5/5) and `VERSION=0.33.0`.
+7. Dispatch `Publish versioned release` from `main` only with explicit approval.
+8. Verify the tag peels to the tested `main` commit, all four packages plus four `.sha256` sidecars, and updater discovery and a disposable install.
+
+Rerun exact-head CI after each merge that changes code.
