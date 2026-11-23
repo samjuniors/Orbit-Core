@@ -17,5 +17,5 @@ NEXT_VERSION text eol=lf
 tests/fixtures/v0251-renamed-orbit-cli-crlf.bin binary
 
 # Preserve native Windows script bytes in plugin distributions.
-*.bat -text
-*.cmd -text
+*.bat -text -eol
+*.cmd -text -eol
