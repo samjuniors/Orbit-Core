@@ -37,6 +37,9 @@ class SuiteTests(unittest.TestCase):
                             .read_text(encoding='utf-8'))
         self.assertEqual(plugin['name'], entry['name'])
         self.assertEqual(plugin['version'], (ROOT / 'VERSION').read_text().strip())
+        # Windows Store `python` alias closes stdio before the server starts; ORBIT_PYTHON overrides it.
+        mcp = json.loads((ROOT / CLAUDE_CODE_PLUGIN_DIR / '.mcp.json').read_text(encoding='utf-8'))
+        self.assertEqual(mcp['mcpServers']['orbit-core-mcp']['command'], '${ORBIT_PYTHON:-python}')
 
     def test_claude_code_agents_keep_tool_allowlists_and_canonical_mcp_names(self):
         agents = {n: b.decode('utf-8') for n, b in claude_code_files(ROOT).items()

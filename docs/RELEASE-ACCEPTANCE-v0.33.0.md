@@ -265,3 +265,17 @@ Rerun exact-head CI after each merge that changes code.
 - [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) OS isolation stays **OPEN** and outside v0.33.0.
 
 **Next recommended action:** run an owner-approved, disposable-then-owner-profile install of the published v0.33.0 with per-file before/after hashes and a rollback rehearsal. Then commission a human security review and decide on F2 (CI self-checksum) for v0.34.0.
+
+## 2026-11-23 — Real Claude Code plugin install and v0.33.1 patch candidate
+
+Host: Claude Code 2.1.307 on Windows 11 build 26200. Each check used an isolated `CLAUDE_CONFIG_DIR` in a disposable scratch folder. The owner's profile was read only.
+
+| Check | Result |
+|---|---|
+| Owner's installed marketplace plugin (v0.32.0) MCP server | **FAIL.** The session's MCP log shows `CONNECTION_CLOSED`; stderr is the Microsoft Store "Python was not found" message. `.mcp.json` launches bare `python`, and `%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe` precedes the real interpreter on `PATH`. |
+| v0.33.0 `/plugin marketplace add` + `plugin install` (isolated profile) | **PASS** for install: 1 skill, 15 agents, 1 MCP server. MCP health check **FAIL** with the same cause. |
+| v0.33.1 candidate: `command` is `${ORBIT_PYTHON:-python}` | `claude plugin validate` **PASS**. Marketplace update 0.33.0 → 0.33.1 **PASS**. Without `ORBIT_PYTHON` the result is unchanged (still FAIL on this machine). With `ORBIT_PYTHON` set to CPython 3.12, `claude mcp list` reports **✔ Connected**. |
+| v0.33.1 local gates (Python 3.12) | **PASS**: `prepare_release_candidate`, `check_release_readiness`, `check_version --strict-bundle` (0.33.1), 769 unit tests OK (33 skipped), `build_release --verify`, `smoke_release_zip`. |
+| Agent `tools:` allowlist enforcement in a signed-in Claude Code session | **NOT VERIFIED.** The isolated profile has no sign-in, and the owner's install is still v0.32.0, which has no allowlists. |
+
+Unchanged: host-enforced timed native grant expiry and active revocation remain **BLOCKED**. Specialist delivery and migration/rollback in the owner's own Codex and Antigravity profiles remain **NOT VERIFIED**. No independent human security review has been performed. [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) is still open. v0.33.1 is unmerged and unpublished.

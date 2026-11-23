@@ -9,7 +9,7 @@
     {
       "name": "orbit-core",
       "source": "./plugins/claude-code/orbit-core",
-      "description": "Orbit workflow skill, 15 specialist agents and the local Orbit MCP server (requires Python 3.10+ on PATH as `python`).",
+      "description": "Orbit workflow skill, 15 specialist agents and the local Orbit MCP server (requires Python 3.10+ as `python`, or set ORBIT_PYTHON to its full path).",
       "category": "development"
     }
   ]
