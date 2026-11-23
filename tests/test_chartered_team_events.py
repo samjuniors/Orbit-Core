@@ -1105,6 +1105,49 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(stops["stop-qa-retry"]["retirement_event_key"],
                          "retire-qa-retry")
 
+    def test_route_and_receipt_ignore_stop_requests_from_earlier_sessions(self):
+        route = self._native_recipient_with_handoff()
+        old = {
+            "action": "stop_request", "event_key": "stop-qa-first",
+            "task_key": "qa", "task_revision": 3,
+            "observed_host_session": "claimed-codex-native-session",
+            "summary": "Owner requested stop of the first bounded worker",
+        }
+        preview = self.event(**old)
+        self.assertEqual(self.event(**{**old,
+            "expected_digest": preview["review_digest"],
+            "confirm_write": True})["status"], "NATIVE_STOP_REQUEST_RECORDED")
+        self.conn.execute(
+            """UPDATE orbit_agent_tasks
+               SET host_session='claimed-codex-retry-session'
+               WHERE project=? AND project_root=? AND task_key='qa'""",
+            (self.project, str(self.root)))
+        self.conn.commit()
+        # Only the native session changes, isolating the session-scoped stop gate.
+        route = {**route,
+                 "observed_host_session": "claimed-codex-retry-session"}
+        receipt = {
+            "action": "receipt", "event_key": "recv-retry", "task_key": "qa",
+            "task_revision": 3, "handoff_event_key": "api-to-qa",
+            "observed_host_session": "claimed-codex-retry-session",
+            "summary": "Host reported retried QA agent received the pointer",
+        }
+        self.assertNotEqual(self.event(**route)["status"],
+                            "HOLD_RECIPIENT_STOP_REQUESTED")
+        self.assertNotEqual(self.event(**receipt)["status"],
+                            "HOLD_RECIPIENT_STOP_REQUESTED")
+        # A stop request for the current session still blocks both gates.
+        new = {**old, "event_key": "stop-qa-retry",
+               "observed_host_session": "claimed-codex-retry-session"}
+        preview = self.event(**new)
+        self.assertEqual(self.event(**{**new,
+            "expected_digest": preview["review_digest"],
+            "confirm_write": True})["status"], "NATIVE_STOP_REQUEST_RECORDED")
+        self.assertEqual(self.event(**route)["status"],
+                         "HOLD_RECIPIENT_STOP_REQUESTED")
+        self.assertEqual(self.event(**receipt)["status"],
+                         "HOLD_RECIPIENT_STOP_REQUESTED")
+
     def test_inbox_preserves_stop_reconciliation_through_pause_and_cold_restart(self):
         self._native_recipient_with_handoff()
         request = {

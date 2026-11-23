@@ -59,6 +59,31 @@ def entries(root=ROOT):
         "Extracting this archive does not modify any host configuration.\n").encode()
     return mapped
 
+# Antigravity agent tool -> Claude Code built-in tools. Without a `tools` field a
+# Claude Code plugin agent inherits every session tool, so read-only roles must keep theirs.
+CLAUDE_CODE_TOOL_MAP = {
+    "view_file": ("Read",), "grep_search": ("Grep", "Glob"),
+    "replace_file_content": ("Edit",), "write_to_file": ("Write",), "run_command": ("Bash",),
+}
+
+def claude_code_tools(header, name):
+    listed, in_tools = [], False
+    for line in header.splitlines():
+        if line.startswith("tools:"):
+            in_tools = True
+        elif in_tools and line.startswith("  - "):
+            listed.append(line[4:].strip())
+        else:
+            in_tools = False
+    if not listed:
+        raise ValueError("Agent has no tool allowlist: " + name)
+    mapped = []
+    for tool in listed:
+        if tool not in CLAUDE_CODE_TOOL_MAP:
+            raise ValueError(f"Unmapped agent tool {tool!r} in {name}")
+        mapped += [t for t in CLAUDE_CODE_TOOL_MAP[tool] if t not in mapped]
+    return ", ".join(mapped)
+
 def claude_code_files(root=ROOT, source=None):
     """Claude Code plugin layout (relative names) generated from canonical source."""
     root = Path(root)
@@ -82,8 +107,9 @@ def claude_code_files(root=ROOT, source=None):
         description = next((line.split(":", 1)[1].strip()
                             for line in header.splitlines()
                             if line.startswith("description:")), Path(name).stem)
+        tools = claude_code_tools(header, name)
         claude[name] = (f"---\nname: {Path(name).stem}\n"
-                        f"description: {description}\nmodel: inherit\n---\n" +
+                        f"description: {description}\ntools: {tools}\nmodel: inherit\n---\n" +
                         details).encode("utf-8")
     return claude
 

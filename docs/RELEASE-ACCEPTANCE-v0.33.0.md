@@ -33,7 +33,7 @@
 | Native permission and revocation | One-time allow/reject, denial, and pending-write cancellation were observed. Host-enforced wall-clock expiry and active revocation of an existing grant have no verified host evidence. | **BLOCKED** for timed expiry/revocation |
 | Task lifecycle and restart | **PASS for one disposable Antigravity child:** captured the native child ID and `SUBAGENT_STATE_ALIVE`, restarted MCP while preserving SQLite WAL/checkpoint checksum, unknown host state returned `HOLD_HOST_RECONCILIATION`, duplicate reservation and premature release were rejected, host killed the exact child, matching terminal observation moved the ledger to `CANCELLED`, retry was refused, and SQLite integrity was `ok`. Other hosts and untested reconciliation cases remain NOT VERIFIED; caller-reported host events are not universal host-authenticated evidence. | **PASS (bounded Antigravity case); PARTIAL overall** |
 | Browser and visual QA | Actual disposable sample-app browser checks passed for desktop/mobile layout, keyboard, accessibility tree, reduced motion, screenshot stability and drift. Full visual acceptance of a real target project and its actual screens/states remains outstanding. | **PASS for sample fixture; NOT VERIFIED for a real project** |
-| Independent source/security review | Codex review of #135 found **P1 owner-only release authorization** and **P2 installer hash/path scoping** findings; remediation is in this branch/PR #159. Codex integration review on #133 found a separate P2 stop-request/session retry finding; remediation is in [PR #156](https://github.com/samjuniors/Orbit-Core/pull/156). CodeRabbit's bounded Antigravity lifecycle-row correction is addressed in `8f3d5c`. Codex security review is not complete. | **NOT DONE — PR #156 and #159 fixes, reviews and exact-head CI pending** |
+| Independent source/security review | Codex review of #135 found **P1 owner-only release authorization** and **P2 installer hash/path scoping** findings; remediation is in this branch/PR #159. Codex integration review on #133 found a separate P2 stop-request/session retry finding; remediation is in [PR #156](https://github.com/samjuniors/Orbit-Core/pull/156). CodeRabbit's bounded Antigravity lifecycle-row correction is addressed in `8f3d5c`. Codex security review is not complete. 2026-11-23: the #156 and #159 fixes are merged into the candidate; follow-up Codex P2 findings on #133/#171/#172 are remediated in [PR #173](https://github.com/samjuniors/Orbit-Core/pull/173). | **REMEDIATION MERGED (#156, #159); #173 fixes, independent review and exact-head CI of the final candidate pending** |
 | Owner-installed v0.33 migration/rollback | Published v0.32.0 remains installed. No v0.33 install on the owner's active profile, nor owner-profile rollback rehearsal, has been performed. | **NOT RUN** |
 | Owner release decision | Explicit approval of the exact reviewed candidate and its remaining documented limitations has not been recorded. | **NOT GIVEN** |
 | Merge, tag and publication | #133 and #135 are ready for review but remain unmerged. P2 stop-request remediation PR #156 must merge into integration and be carried into the candidate before final exact-head validation. No v0.33 tag or public release exists. | **NOT DONE — HOLD** |
@@ -176,3 +176,61 @@
 **Checker limitation and resolution.** The disposable execution recorded child delivery and a completed lead review, but its first local verifier incorrectly treated a host event content value as an object and returned `BLOCKED` with `AttributeError`. A separate read-only verifier validated the persisted MCP trace, child-to-lead receipt identity, read acknowledgment, independent lead verdict and owner-registration hashes; all its asserted acceptance checks passed. The original checker result remains in the private evidence as a harness defect, not rewritten to PASS. The private fixture stores the separate `arc-independent-verification.json` receipt. No Orbit runtime or test-suite code was changed.
 
 **Release decision: HOLD.** Merge, tag, publish, install and active registration changes remain unauthorized. [Draft PR #135](https://github.com/samjuniors/Orbit-Core/pull/135), stacked on #133, remains open. [RAD issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) remains separate.
+
+## 2026-11-23 — Branch-stack reconciliation and exact-head regression
+
+**Release decision: HOLD.** Branch-stack sync is complete in review PRs; nothing is merged, tagged or published.
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| Main → integration sync | **PASS 5/5, awaiting owner merge** | [PR #171](https://github.com/samjuniors/Orbit-Core/pull/171) at `0f7adcb7203aa12b8be050d775ed370dc9559190` merges `main` `cb105dc` into integration `141e8c5` (PR #166 merge). Ubuntu Python 3.10–3.13 and Windows Python 3.12 passed. Merging it resolves the `main` conflict reported on #133. |
+| Integration → candidate sync | **PASS 5/5, awaiting owner merge** | [PR #172](https://github.com/samjuniors/Orbit-Core/pull/172) at `b3e220d8c1bda7a710378e3895dd72ef19a8ba7a` merges #171 into `release/v0.33.0-candidate-20261118` (`098cdf2`), carrying #156, #161 and #166 fixes into the candidate. [CI run 45132100156](https://github.com/samjuniors/Orbit-Core/actions/runs/45132100156): Ubuntu 3.10–3.13 and Windows 3.12 success. |
+| Local Windows full suite at `b3e220d` | **PASS** | Windows 11, CPython 3.12.10: `python -m unittest discover -s tests` ran 767 tests, 33 skipped, 0 failures. |
+| Release gates at `b3e220d` | **PASS** | `check_release_readiness.py`, `check_version.py --strict-bundle` (0.33.0), `build_release.py --verify` (Universal Setup `fd0e65c6…3328`, Antigravity plugin `dfa9bc06…34ee`, plugin suite `66bcfe9a…a596`) and `smoke_release_zip.py` (57 tools, disposable install and stdio smoke). No IDE, desktop UI or browser covered by this smoke. |
+| Superseded candidate track | **CLOSED** | Alternative `main`-based candidate [PR #134](https://github.com/samjuniors/Orbit-Core/pull/134) closed to keep a single v0.33.0 candidate (#135). |
+| Host-enforced timed permission expiry / active revocation | **BLOCKED** | No new host evidence; unchanged. |
+| Inherited owner-profile native specialist delivery; owner-profile v0.33 migration/rollback | **NOT VERIFIED** | Requires an authorized signed-in host session; not run from this session. |
+| Independent security review of final candidate | **NOT DONE** | No independent review of `b3e220d` recorded. |
+| RAD issue #138 OS isolation | **Outside v0.33.0; OPEN** | Not folded into the candidate. |
+| Owner release decision | **NOT GIVEN** | Required before merging #171 → #172 → #135 → #133 and dispatching `Publish versioned release` from `main`. |
+
+**Owner merge order once approved:** #171 into integration, #172 into the candidate, #135 into integration, then #133 into `main`; rerun merge-commit CI on `main` before any publication.
+
+## 2026-11-23 (later) — Review remediation, exact candidate and merge gate
+
+**Release decision: HOLD.** This section supersedes the merge order in the previous section. Nothing has been merged, tagged, published or installed.
+
+**Exact candidate:** `dev/v033-candidate-sync-20261123` at `8db21f5e32a247b592eb74f2c9057e770c7bef91` ([PR #172](https://github.com/samjuniors/Orbit-Core/pull/172)). It contains the live candidate `4389222` (owner-pushed merge of integration `0572a5e`, itself `main` `cb105dc` merged into `141e8c5`), the #173 fixes and the acceptance-record corrections. Later docs-only commits to this record need a fresh CI check, and the candidate SHA must be re-recorded.
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| [PR #171](https://github.com/samjuniors/Orbit-Core/pull/171) main → integration | **SUPERSEDED** | Integration `0572a5e` has a tree identical to #171 head `0f7adcb` (`git diff` empty). Close without merging. Its Codex P2 thread (Claude Code tool allowlists) is fixed in #173. |
+| [PR #173](https://github.com/samjuniors/Orbit-Core/pull/173) Codex P2 fixes → integration | **PASS 5/5 at `3d48f6a`** ([run 45133844533](https://github.com/samjuniors/Orbit-Core/actions/runs/45133844533)) | (1) `_route`/`_receipt` stop gates are session-scoped and fail closed; the regression test fails on the old code. (2) The agent rename no longer rewrites `orbit_*` MCP tool names into `orbit-lead-agent_*`; this also corrects the Antigravity agents. (3) Generated Claude Code agents carry per-role `tools:` allowlists, and the build fails on an unmapped tool. Local Windows: 761 tests OK, 33 skipped. A new Codex P2 asks for write tools on `orbit-software-engineer`. That role has been read-only since published v0.32.0, so widening it is an owner privilege decision; the thread is left open. |
+| #172 exact-head CI | **PASS 5/5 at `8db21f5`** ([run 45133917615](https://github.com/samjuniors/Orbit-Core/actions/runs/45133917615)) | Ubuntu Python 3.10–3.13 and Windows Python 3.12. |
+| Local Windows full suite at `8db21f5` | **PASS** | Windows 11, CPython 3.12.10: 769 tests, 33 skipped, 0 failures. |
+| Release gates at `8db21f5` | **PASS** | `prepare_release_candidate.py`, `check_release_readiness.py`, `check_version.py --strict-bundle`, `build_release.py --verify` (clean `dist/`; Universal Setup `f9f4075f…74f1`, Antigravity `9ef78183…4b39`, suite `ae3b9a16…2766`; MCPB `60c1498c…9252`), `smoke_release_zip.py` (57 tools). The first local attempt failed on a stale untracked MCPB and `dist/` from the earlier `b3e220d` build. The parity checks correctly refused them, and they were moved aside (not deleted) before the rebuild. |
+| Linux local suite | **NOT RUN locally** | Linux coverage comes from exact-head CI only. |
+| Separate-agent security review of `8db21f5` | **DONE — not independent** | A separate Claude review agent, launched by the same operator session, reviewed `v0.32.0..8db21f5` read-only. Its targeted tests passed: 143 run, 4 skipped. It found no issue letting an expired or revoked grant authorize anything, no session/revision bypass in route/receipt (including the new fix), no stock-digest or migration regression, no release-workflow weakening, and no visual-scan traversal regression. Codex (GitHub connector) independently reviewed each pushed PR head. Its open threads are listed in this table. A human or third-party security review has **NOT** been done. |
+| **F1 — Claude Code marketplace publishes on merge to `main`** | **ACCEPTED BY OWNER 2026-11-23** (owner chose "Accept publish-on-merge"): merging #133 to `main` is treated as publication to Claude Code `/plugin` users. Merge #133 only together with release approval. | `.claude-plugin/marketplace.json` on `main` serves `./plugins/claude-code/orbit-core` (currently v0.32.0). Merging #133 would ship v0.33.0 to `/plugin marketplace` users before the owner-dispatched `Publish versioned release` workflow runs its tests, pre-tag smoke and tagging. That makes a merge a publication, contrary to AGENTS.md. Before merging #133, decide whether to accept it, or to pin the marketplace source to a release tag/ref first (a reviewed change). |
+| F2 — CI MCPB checksum self-check | **OPEN (low)** | `ci.yml` writes `$bundle.sha256` and immediately checks against it, so that step cannot fail. Source parity (`prepare_release_candidate`) is the real control. The release workflow's 8-asset digest check is unaffected. |
+| F3 — approval reference reuse across tasks | **OPEN (low, not a regression)** | `orbit_tasks._record_reservation_approval` blocks replay per task only. The reference is documented as advisory, not authentication. |
+| F4 — event budget blocks late revoke/stop records | **OPEN (low, pre-existing since v0.32)** | Lease expiry checks still block dispatch and route. |
+| F5 — `--sync-claude-code` may follow a planted Windows junction | **NOT VERIFIED (low)** | Developer-only tool; needs a locally planted junction. |
+| Codex P3 on #135 (stale review row) | **FIXED** | The row is updated above in this record. |
+| Host-enforced timed expiry / active revocation | **BLOCKED** | No host evidence. Runtime payloads report these as unverified. |
+| Owner-profile native specialist delivery; v0.33 owner-profile migration/rollback; automatic downgrade | **NOT VERIFIED / NOT RUN** | Needs an authorized signed-in host session. Disposable-profile and CI upgrade evidence from earlier sections still applies to unchanged installer paths. |
+| Claude Code `/plugin` install and `tools:` enforcement in a real host | **NOT VERIFIED** | |
+| RAD issue #138 OS isolation | **Outside v0.33.0; OPEN** | |
+| Owner release decision | **NOT GIVEN** | |
+
+**Safest merge order, owner approval required for each:**
+1. Merge #173 into integration.
+2. Merge #172 into the candidate, which updates #135.
+3. Merge #135 into integration, which updates #133.
+4. Close #171 as superseded.
+5. Merge #133 into `main` only with release approval, because F1 (accepted) makes that merge a Claude Code publication.
+6. Check `main` merge-commit CI (5/5) and `VERSION=0.33.0`.
+7. Dispatch `Publish versioned release` from `main` only with explicit approval.
+8. Verify the tag peels to the tested `main` commit, all four packages plus four `.sha256` sidecars, and updater discovery and a disposable install.
+
+Rerun exact-head CI after each merge that changes code.
