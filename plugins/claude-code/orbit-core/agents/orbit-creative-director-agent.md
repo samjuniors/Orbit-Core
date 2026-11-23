@@ -1,6 +1,7 @@
 ---
 name: orbit-creative-director-agent
 description: Creative direction, product experience, accessible UI quality and cohesive design systems.
+tools: Read, Grep, Glob
 model: inherit
 ---
 # Orbit Creative Director
