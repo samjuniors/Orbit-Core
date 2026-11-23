@@ -1,8 +1,8 @@
 {
   "name": "orbit-core",
   "owner": {
-    "name": "samjuniors",
-    "url": "https://github.com/samjuniors/Orbit-Core"
+    "name": "Samjuniors",
+    "url": "https://github.com/samjuniors"
   },
   "description": "Orbit Core: local-first project orchestrator with a local stdio MCP server, workflow skill and specialist agents for Claude Code.",
   "plugins": [
@@ -10,7 +10,15 @@
       "name": "orbit-core",
       "source": "./plugins/claude-code/orbit-core",
       "description": "Orbit workflow skill, 15 specialist agents and the local Orbit MCP server (requires Python 3.10+ as `python`, or set ORBIT_PYTHON to its full path).",
-      "category": "development"
+      "category": "development",
+      "displayName": "Orbit Core",
+      "author": {
+        "name": "Samjuniors",
+        "url": "https://github.com/samjuniors"
+      },
+      "homepage": "https://github.com/samjuniors/Orbit-Core",
+      "repository": "https://github.com/samjuniors/Orbit-Core",
+      "license": "MIT"
     }
   ]
 }
