@@ -30,12 +30,22 @@ class SuiteTests(unittest.TestCase):
     def test_marketplace_points_at_committed_plugin(self):
         market = json.loads((ROOT / '.claude-plugin/marketplace.json').read_text(encoding='utf-8'))
         self.assertEqual(market['name'], 'orbit-core')
-        self.assertTrue(market['owner']['name'])
+        self.assertEqual(market['owner']['name'], 'Samjuniors')
+        self.assertEqual(market['owner']['url'], 'https://github.com/samjuniors')
         [entry] = market['plugins']
+        self.assertEqual(entry['displayName'], 'Orbit Core')
+        self.assertEqual(entry['author'], {
+            'name': 'Samjuniors', 'url': 'https://github.com/samjuniors'})
+        self.assertEqual(entry['homepage'], 'https://github.com/samjuniors/Orbit-Core')
+        self.assertEqual(entry['repository'], 'https://github.com/samjuniors/Orbit-Core')
+        self.assertEqual(entry['license'], 'MIT')
         self.assertEqual(entry['source'], './' + CLAUDE_CODE_PLUGIN_DIR.as_posix())
         plugin = json.loads((ROOT / CLAUDE_CODE_PLUGIN_DIR / '.claude-plugin/plugin.json')
                             .read_text(encoding='utf-8'))
         self.assertEqual(plugin['name'], entry['name'])
+        self.assertEqual(plugin['displayName'], 'Orbit Core')
+        self.assertEqual(plugin['author'], {
+            'name': 'Samjuniors', 'url': 'https://github.com/samjuniors'})
         self.assertEqual(plugin['version'], (ROOT / 'VERSION').read_text().strip())
         # Windows Store `python` alias closes stdio before the server starts; ORBIT_PYTHON overrides it.
         mcp = json.loads((ROOT / CLAUDE_CODE_PLUGIN_DIR / '.mcp.json').read_text(encoding='utf-8'))
