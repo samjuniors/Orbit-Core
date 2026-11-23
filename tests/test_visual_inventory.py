@@ -204,31 +204,42 @@ class VisualInventoryTests(unittest.TestCase):
         (evil / "project/package.json").write_text(
             json.dumps({"dependencies": {"outside-evil-dep": "6.6.6"}}), encoding="utf-8")
 
+        rename_refused = []
+
         def swap():
             # Replace an ANCESTOR of the selected root while the scan is in progress.
             try:
                 holder.rename(self.root.parent / "holder-original")
-            except PermissionError as exc:
-                raise self.DirectoryLinkUnavailable(
-                    f"OS refused to rename an ancestor of an open root: {exc}") from exc
+            except PermissionError:
+                if os.name != "nt":
+                    raise
+                # Windows refuses to rename a directory with open descendant handles;
+                # the pinned root handle itself blocks the replacement. Proven below.
+                rename_refused.append(True)
+                return
             self._install_directory_link(holder, evil)
 
         try:
             result = self._scan_with_swap_on_open(selected, swap)
         except self.DirectoryLinkUnavailable as exc:
-            self.skipTest(f"Ancestor replacement not constructible here: {exc}")
-        # The selected path now resolves into the outside tree ...
-        self.assertTrue((selected / "src/components/EvilOnly.tsx").exists(),
-                        "swap did not redirect the selected root path")
+            self.skipTest(f"Directory symlink/junction unavailable: {exc}")
         dumped = json.dumps(result)
-        # ... but nothing from it was enumerated or read.
         for marker in ("OutsideSecretComponent", "EvilOnly", "outside-evil-dep"):
             self.assertNotIn(marker, dumped)
-        # Every original file was still read through the pinned root handle.
+        # Every original file was read through the pinned root handle.
         self.assertEqual(result["scanned_file_count"], 5)
         self.assertIn("src/components/Button.tsx", result["component_files"])
         self.assertEqual(result["declared_ui_dependencies_hint"]["react"], "19.2.0")
         self.assertNotIn("UNSAFE_OR_MISSING_SOURCE_FILE", result["partial_reasons"])
+        if rename_refused:
+            # Same rename succeeds once the scan released its handles, so the refusal
+            # came from the scanner's held root handle, not the test environment.
+            holder.rename(self.root.parent / "holder-original")
+        else:
+            # The selected path really resolved into the outside tree mid-scan,
+            # yet nothing from it was enumerated or read.
+            self.assertTrue((selected / "src/components/EvilOnly.tsx").exists(),
+                            "swap did not redirect the selected root path")
 
     def test_root_pin_rejects_redirected_ancestor(self):
         link = self.root.parent / "linked-holder"
