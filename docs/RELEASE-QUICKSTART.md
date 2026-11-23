@@ -1,6 +1,6 @@
 # Install, update and uninstall published Orbit Core releases
 
-**Choose your release from [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases).** Verified on 2026-11-18: **v0.30.0** is the newest stable-channel release, while **v0.32.0** is the latest published prerelease. GitHub `main`, an open PR or CI artifact is **not** an official published release. Neither channel certifies security or production readiness.
+**Choose your release from [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases).** Verified on 2026-11-23: **v0.30.0** is the newest stable-channel release, while **v0.33.0** is the latest published prerelease. Main contains VERSION=0.33.1, which is source-only and not yet published. GitHub `main`, an open PR or CI artifact is **not** an official published release. Neither channel certifies security or production readiness.
 
 ## 1. Windows — easiest setup
 
@@ -11,7 +11,7 @@
 
 **macOS/Linux:** From the verified, extracted ZIP, run `python3 orbit_setup.py install --scope machine --hosts codex` to preview and repeat with `--apply` after reviewing. Use a supported Python 3.10–3.13. For a single existing workspace add `--scope project --project /absolute/existing/project`.
 
-**Published v0.32 upgrade note:** The stock installer may refuse two exact unmodified v0.31 Antigravity agents (see [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130)). Do not delete or force-overwrite a protected file; preserve the current installation and review the source-verified patch candidate separately. This issue does not mean the existing v0.31 files are unsafe.
+**Historical v0.32.0 upgrade note:** The published v0.32.0 installer may refuse two exact unmodified v0.31 Antigravity stock agents (see [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130)). This was fixed in published v0.33.0 with exact fingerprint allowlisting and regression coverage; issue #130 is closed. Do not delete or force-overwrite unknown/customized files; preserve backups and review the installer plan before upgrading.
 
 ## 2. Windows PowerShell — from the verified ZIP
 

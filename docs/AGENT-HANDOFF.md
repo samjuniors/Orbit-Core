@@ -13,7 +13,7 @@
 - Exact main-head CI [run #45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) completed PASS 5/5 on 2fdf4f. This is hosted CI evidence; no local test suite ran in this session.
 - [PR #175](https://github.com/samjuniors/Orbit-Core/pull/175) merged to main at a90f1b398a2be9a3807277f560360598ef247e36 (Claude Code Windows ORBIT_PYTHON override, source VERSION 0.33.1). [PR #176](https://github.com/samjuniors/Orbit-Core/pull/176) merged at 5416230722b1009df1216023c475738f662f6c0a (Claude Code publisher attribution). [PR #173](https://github.com/samjuniors/Orbit-Core/pull/173) merged into the v0.33 integration branch at 51591e6370314e7567946ed3ca60f91aa6a189b4.
 - [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130) was closed as completed after its exact v0.31 stock-agent hash fix shipped in v0.33.0. This does not certify an owner's live migration.
-- v0.33.1 is source on main only; no v0.33.1 release/tag exists. No v0.34 release exists.
+- v0.33.1 is source on main only; no v0.33.1 release/tag exists. Its [version-specific acceptance record](RELEASE-ACCEPTANCE-v0.33.1.md) documents the merged patch, test evidence and outstanding host/security gates. No v0.34 release exists.
 
 ### Open work and release/security gates
 - [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) remains OPEN. RAD P2 OS-isolated preview is still a separate prototype/security workstream; loopback/Python preview acceptance is blocked. Draft PRs #136, #137, #139–#147 remain separate and are not release-ready.
