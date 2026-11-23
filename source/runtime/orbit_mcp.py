@@ -19,6 +19,7 @@ import orbit_browser
 import orbit_build
 import orbit_intake
 import orbit_project_audit
+import orbit_findings
 import orbit_decisions
 import orbit_specialists
 import orbit_updates
@@ -148,6 +149,7 @@ def db_connect():
     orbit_improvement.setup(conn)
     orbit_build.setup(conn)
     orbit_intake.setup(conn)
+    orbit_findings.setup(conn)
     orbit_build.setup_browser(conn)
     if os.name != 'nt':
         try: path.chmod(0o600)
@@ -466,6 +468,7 @@ def string(n=4000):
 TOOLS = [
     {'name':'orbit_project_scan','description':'Read-only bounded project inventory and structural gap audit. Inspects filesystem metadata only; does not read source contents, execute project scripts or write files. Findings are heuristic review leads, not confirmed defects.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
     {'name':'orbit_project_resume','description':'Resume full project state, or request an objective-scoped compact local context envelope without unrelated memory history. Compact output is read-only and cannot attest owner approvals or Git/test status.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'compact':{'type':'boolean'},'objective':string(600),'max_chars':{'type':'integer','minimum':900,'maximum':3500},'pulse':{'type':'boolean'}},['project_root','project'])},
+    {'name':'orbit_project_findings','description':'Reconcile or review persistent structural audit findings for this exact project root. Reconciliation writes only to Orbit local SQLite; incomplete scans mark findings stale and never resolve them. Review dispositions are owner-supplied classifications, not proof of defects. Does not create tasks.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['reconcile','list','review']},'finding_id':string(80),'disposition':{'type':'string','enum':sorted(orbit_findings.DISPOSITIONS)},'expected_revision':{'type':'integer','minimum':1},'limit':{'type':'integer','minimum':1,'maximum':200}},['project_root','project','action'])},
     {'name':'orbit_update_status','description':'Read-only update notice; optional refresh fetches only published GitHub release metadata. It NEVER downloads code, executes an installer or changes a project. User opens Orbit Update Manager to approve installation.', 'inputSchema':schema({'refresh':{'type':'boolean'}},[])},
     {'name':'orbit_research_source_save','description':'Preview or save one reviewed external research pointer in folder+project-scoped SQLite; revision-guarded, no downloads, skills, Git writes or independent approval attestation.','inputSchema':schema({'project_root':string(2000),'project':string(80),'source_key':string(80),'url':string(500),'title':string(140),'tags':{'type':'array','minItems':1,'maxItems':8,'items':string(32)},'note':string(1100),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','source_key','url','title','tags','note'])},
     {'name':'orbit_research_context','description':'Read a tiny objective-relevant pack of saved source pointers from this exact project folder+key. No network calls, no execution, no bulk document retrieval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'objective':string(600),'limit':{'type':'integer','minimum':1,'maximum':6},'max_chars':{'type':'integer','minimum':600,'maximum':4500}},['project_root','project','objective'])},
@@ -993,6 +996,24 @@ def execute(conn, name, a):
     if name=='orbit_capability_discover': return orbit_capabilities.discover(project_root(a))
     if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]),host_plugins=a.get('host_plugins',[]),permission_state=a.get('permission_state','UNKNOWN'),project_profile=a.get('project_profile'),requested_skill_names=a.get('requested_skill_names'),review_manifest=a.get('review_manifest'),host=a.get('host','unknown'))
     if name=='orbit_project_scan': return scan(a, conn)
+    if name=='orbit_project_findings':
+        root, project = project_root(a), project_key(a)
+        action = a.get('action')
+        if action == 'reconcile':
+            current = scan({**a, 'project': project}, conn)
+            result = orbit_findings.reconcile(conn, project, root, current['project_audit'])
+            result['project'] = project
+            result['root_identity'] = current['project_audit']['root_identity']
+            result['scan_status'] = current['project_audit']['status']
+            result['audit_scope'] = current['project_audit']['audit_scope']
+            return result
+        if action == 'list':
+            return orbit_findings.list_findings(conn, project, root, a.get('limit', 100))
+        if action == 'review':
+            return orbit_findings.set_disposition(
+                conn, project, root, a.get('finding_id'), a.get('disposition'),
+                a.get('expected_revision'))
+        raise ValueError('Unsupported finding action')
     if name=='orbit_project_resume':
         if a.get('compact') is True:
             root=project_root(a)
