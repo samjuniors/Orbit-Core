@@ -210,115 +210,307 @@ def _ui_route_from_file(rel):
     return None
 
 
+class UnsafeVisualSourceError(OSError):
+    """A source path could not be proven to remain beneath the pinned project root."""
+
+
+_WIN_FILE_LIST_DIRECTORY = _WIN_FILE_READ_DATA = 0x1
+_WIN_FILE_TRAVERSE, _WIN_FILE_READ_ATTRIBUTES, _WIN_SYNCHRONIZE = 0x20, 0x80, 0x100000
+_WIN_ATTR_DIRECTORY, _WIN_ATTR_REPARSE_POINT = 0x10, 0x400
+_win_api = None
+
+
+def _visual_win_api():
+    """Lazily bind the kernel32/ntdll calls used for handle-relative traversal."""
+    global _win_api
+    if _win_api is None:
+        import ctypes
+        from ctypes import wintypes
+
+        class UnicodeString(ctypes.Structure):
+            _fields_ = [("Length", wintypes.USHORT), ("MaximumLength", wintypes.USHORT),
+                        ("Buffer", wintypes.LPWSTR)]
+
+        class ObjectAttributes(ctypes.Structure):
+            _fields_ = [("Length", wintypes.ULONG), ("RootDirectory", wintypes.HANDLE),
+                        ("ObjectName", ctypes.POINTER(UnicodeString)),
+                        ("Attributes", wintypes.ULONG), ("SecurityDescriptor", ctypes.c_void_p),
+                        ("SecurityQualityOfService", ctypes.c_void_p)]
+
+        class IoStatusBlock(ctypes.Structure):
+            _fields_ = [("Status", ctypes.c_void_p), ("Information", ctypes.c_size_t)]
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        ntdll = ctypes.WinDLL("ntdll")
+        kernel32.CreateFileW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                                         ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD,
+                                         wintypes.HANDLE)
+        kernel32.CreateFileW.restype = wintypes.HANDLE
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        kernel32.GetFileInformationByHandleEx.argtypes = (
+            wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD)
+        kernel32.GetFileInformationByHandleEx.restype = wintypes.BOOL
+        kernel32.GetFinalPathNameByHandleW.argtypes = (
+            wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD)
+        kernel32.GetFinalPathNameByHandleW.restype = wintypes.DWORD
+        ntdll.NtCreateFile.argtypes = (
+            ctypes.POINTER(wintypes.HANDLE), wintypes.ULONG, ctypes.POINTER(ObjectAttributes),
+            ctypes.POINTER(IoStatusBlock), ctypes.c_void_p, wintypes.ULONG, wintypes.ULONG,
+            wintypes.ULONG, wintypes.ULONG, ctypes.c_void_p, wintypes.ULONG)
+        ntdll.NtCreateFile.restype = ctypes.c_long
+        _win_api = (ctypes, wintypes, kernel32, ntdll, UnicodeString, ObjectAttributes,
+                    IoStatusBlock)
+    return _win_api
+
+
+def _visual_win_check_handle(handle, *, directory):
+    """Reject reparse points and the wrong object kind on an opened handle."""
+    import struct
+    ctypes, _, kernel32, *_ = _visual_win_api()
+    info = ctypes.create_string_buffer(8)  # FILE_ATTRIBUTE_TAG_INFO
+    if not kernel32.GetFileInformationByHandleEx(handle, 9, info, len(info)):
+        raise UnsafeVisualSourceError("Unable to read opened handle attributes")
+    attributes, _tag = struct.unpack("<LL", info.raw)
+    if attributes & _WIN_ATTR_REPARSE_POINT or bool(attributes & _WIN_ATTR_DIRECTORY) != directory:
+        raise UnsafeVisualSourceError("Opened handle is a reparse point or wrong kind")
+
+
+def _visual_win_open_relative(parent, name, *, directory):
+    """NtCreateFile relative to a held directory handle, never following reparse points."""
+    if (not name or name in (".", "..")
+            or any(c in name for c in "\\/:\0")):
+        raise UnsafeVisualSourceError("Invalid source path component")
+    ctypes, wintypes, kernel32, ntdll, UnicodeString, ObjectAttributes, IoStatusBlock = \
+        _visual_win_api()
+    size = len(name.encode("utf-16-le"))
+    buffer = ctypes.create_unicode_buffer(name)
+    object_name = UnicodeString(size, size, ctypes.cast(buffer, wintypes.LPWSTR))
+    attributes = ObjectAttributes(ctypes.sizeof(ObjectAttributes), parent,
+                                  ctypes.pointer(object_name), 0x40, None, None)
+    status_block = IoStatusBlock()
+    handle = wintypes.HANDLE()
+    access = (_WIN_FILE_LIST_DIRECTORY | _WIN_FILE_TRAVERSE if directory else _WIN_FILE_READ_DATA)
+    # FILE_DIRECTORY_FILE / FILE_NON_DIRECTORY_FILE, FILE_SYNCHRONOUS_IO_NONALERT,
+    # FILE_OPEN_REPARSE_POINT; FILE_OPEN disposition; share read/write/delete.
+    options = (0x1 if directory else 0x40) | 0x20 | 0x200000
+    status = ntdll.NtCreateFile(ctypes.byref(handle),
+                                access | _WIN_FILE_READ_ATTRIBUTES | _WIN_SYNCHRONIZE,
+                                ctypes.byref(attributes), ctypes.byref(status_block),
+                                None, 0, 7, 1, options, None, 0)
+    if status < 0 or not handle.value:
+        raise UnsafeVisualSourceError(f"Relative open failed (NTSTATUS 0x{status & 0xFFFFFFFF:08X})")
+    try:
+        _visual_win_check_handle(handle.value, directory=directory)
+    except BaseException:
+        kernel32.CloseHandle(handle.value)
+        raise
+    return handle.value
+
+
+def _visual_win_normalise(value):
+    import ntpath
+    if value.startswith("\\\\?\\UNC\\"):
+        value = "\\\\" + value[8:]
+    elif value.startswith("\\\\?\\"):
+        value = value[4:]
+    return ntpath.normcase(ntpath.normpath(value))
+
+
+def _visual_pin_root(base):
+    """Open the resolved project root once and prove no ancestor was redirected.
+
+    POSIX walks every component of the resolved absolute path from "/" with
+    O_DIRECTORY|O_NOFOLLOW, so an ancestor swapped for a symlink fails closed.
+    Windows opens the root without following a final reparse point and requires
+    the handle's final path to equal the resolved root, so an ancestor junction or
+    symlink fails closed. All later enumeration and opens are relative to the
+    returned handle, so later ancestor replacement cannot redirect the scan.
+    """
+    import os
+    if os.name == "nt":
+        ctypes, wintypes, kernel32, *_ = _visual_win_api()
+        handle = kernel32.CreateFileW(
+            str(base), _WIN_FILE_LIST_DIRECTORY | _WIN_FILE_TRAVERSE
+            | _WIN_FILE_READ_ATTRIBUTES | _WIN_SYNCHRONIZE, 7, None, 3,
+            0x02000000 | 0x00200000, None)  # BACKUP_SEMANTICS | OPEN_REPARSE_POINT
+        if not handle or handle == ctypes.c_void_p(-1).value:
+            raise UnsafeVisualSourceError("Unable to open project root handle")
+        try:
+            _visual_win_check_handle(handle, directory=True)
+            buffer = ctypes.create_unicode_buffer(32768)
+            length = kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
+            if (not length or length >= len(buffer)
+                    or _visual_win_normalise(buffer.value) != _visual_win_normalise(str(base))):
+                raise UnsafeVisualSourceError("Project root handle does not match selected root")
+        except BaseException:
+            kernel32.CloseHandle(handle)
+            raise
+        return handle
+    if (not all(hasattr(os, n) for n in ("O_NOFOLLOW", "O_DIRECTORY", "fwalk"))
+            or os.open not in os.supports_dir_fd or os.stat not in os.supports_dir_fd):
+        raise UnsafeVisualSourceError("Descriptor-relative traversal unavailable")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    anchor, *parts = base.parts
+    fd = os.open(anchor, flags)
+    try:
+        for part in parts:
+            child = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = child
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _visual_close_root(handle):
+    import os
+    if os.name == "nt":
+        _visual_win_api()[2].CloseHandle(handle)
+    else:
+        os.close(handle)
+
+
+def _visual_win_list(handle):
+    """Enumerate (name, attributes) of a held directory handle."""
+    import struct
+    ctypes, _, kernel32, *_ = _visual_win_api()
+    buffer = ctypes.create_string_buffer(64 * 1024)
+    info_class = 15  # FileFullDirectoryRestartInfo, then FileFullDirectoryInfo (14)
+    while True:
+        if not kernel32.GetFileInformationByHandleEx(handle, info_class, buffer, len(buffer)):
+            if ctypes.get_last_error() == 18:  # ERROR_NO_MORE_FILES
+                return
+            raise UnsafeVisualSourceError("Unable to enumerate directory handle")
+        info_class = 14
+        offset = 0
+        while True:
+            next_offset, = struct.unpack_from("<L", buffer, offset)
+            attributes, name_length = struct.unpack_from("<LL", buffer, offset + 56)
+            name = ctypes.string_at(ctypes.addressof(buffer) + offset + 68,
+                                    name_length).decode("utf-16-le", "surrogatepass")
+            yield name, attributes
+            if not next_offset:
+                break
+            offset += next_offset
+
+
+def _visual_walk(base):
+    """Yield (relative parts, directory handle, dirs, files) beneath a pinned root.
+
+    Top-down like os.walk; callers may prune ``dirs`` in place. Symlinks and
+    reparse points are omitted and never descended. Unreadable directories are
+    skipped, as os.walk does.
+    """
+    import os
+    import stat
+    from pathlib import PurePosixPath
+    try:
+        root = _visual_pin_root(base)
+    except OSError as exc:
+        raise ValueError("Unable to pin the project root safely") from exc
+    try:
+        if os.name == "nt":
+            kernel32 = _visual_win_api()[2]
+
+            def walk(parts, handle):
+                dirs, files = [], []
+                try:
+                    for name, attributes in _visual_win_list(handle):
+                        if name in (".", "..") or attributes & _WIN_ATTR_REPARSE_POINT:
+                            continue
+                        (dirs if attributes & _WIN_ATTR_DIRECTORY else files).append(name)
+                except OSError:
+                    return
+                yield parts, handle, dirs, files
+                for name in dirs:
+                    try:
+                        child = _visual_win_open_relative(handle, name, directory=True)
+                    except OSError:
+                        continue
+                    try:
+                        yield from walk(parts + (name,), child)
+                    finally:
+                        kernel32.CloseHandle(child)
+
+            yield from walk((), root)
+        else:
+            def is_link(name, dir_fd):
+                try:
+                    return stat.S_ISLNK(os.stat(name, dir_fd=dir_fd,
+                                                follow_symlinks=False).st_mode)
+                except OSError:
+                    return False  # the no-follow open below fails closed instead
+
+            walker = os.fwalk(".", topdown=True, follow_symlinks=False, dir_fd=root)
+            try:
+                for path, dirs, files, dir_fd in walker:
+                    dirs[:] = [d for d in dirs if not is_link(d, dir_fd)]
+                    yield (PurePosixPath(path).parts, dir_fd, dirs,
+                           [f for f in files if not is_link(f, dir_fd)])
+            finally:
+                walker.close()
+    finally:
+        _visual_close_root(root)
+
+
+def _open_visual_source(directory, name):
+    """Open one regular file relative to a held directory handle; return (stream, stat)."""
+    import os
+    import stat
+    if os.name == "nt":
+        import msvcrt
+        handle = _visual_win_open_relative(directory, name, directory=False)
+        try:
+            fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        except BaseException:
+            _visual_win_api()[2].CloseHandle(handle)
+            raise
+    else:
+        if not name or name in (".", "..") or "/" in name or "\0" in name:
+            raise UnsafeVisualSourceError("Invalid source path component")
+        # O_NONBLOCK keeps a FIFO or device swapped in for a source candidate from
+        # blocking open(); S_ISREG below rejects it before any read.
+        flags = (os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
+                 | getattr(os, "O_NOCTTY", 0) | getattr(os, "O_CLOEXEC", 0))
+        try:
+            fd = os.open(name, flags, dir_fd=directory)
+        except OSError as exc:
+            raise UnsafeVisualSourceError("Source candidate changed or is unsafe") from exc
+    try:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise UnsafeVisualSourceError("Source candidate is not a regular file")
+        stream = os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
+    return stream, metadata
+
+
 def scan_visual_project(root):
     """Read source as untrusted bytes; return bounded heuristic UI inventory.
 
     Does not execute project code, fetch registries, follow unsafe project paths,
     authenticate a Git revision, or independently verify rendered screen states.
-    Source reads use descriptor-relative no-follow traversal on POSIX and
-    opened-handle containment validation on Windows.
+    The root is pinned once; enumeration and opens are relative to that pinned
+    directory handle (POSIX dir_fd/O_NOFOLLOW, Windows NtCreateFile with
+    FILE_OPEN_REPARSE_POINT), so replacing the root or an ancestor mid-scan cannot
+    redirect reads. Fails closed (ValueError) when the root cannot be pinned.
     """
     import hashlib
     import json
     import os
     import posixpath
     import stat
-    from pathlib import Path
+    from pathlib import Path, PurePath
 
     base = Path(root)
     if base.is_symlink() or not base.is_dir():
         raise ValueError("Expected an existing non-symlink project root")
     base = base.resolve(strict=True)
 
-    class UnsafeSourcePathError(OSError):
-        """A source path could not be proven to remain beneath the project root."""
-
-    def _open_scoped_source(relative):
-        parts = tuple(relative.parts)
-        if not parts or any(part in ("", ".", "..") for part in parts):
-            raise UnsafeSourcePathError("Invalid relative source path")
-
-        if os.name == "nt":
-            import ctypes
-            import msvcrt
-            import ntpath
-            from ctypes import wintypes
-
-            try:
-                stream = (base / relative).open("rb")
-            except OSError as exc:
-                raise UnsafeSourcePathError("Unable to open source candidate") from exc
-            try:
-                metadata = os.fstat(stream.fileno())
-                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-                get_final_path = kernel32.GetFinalPathNameByHandleW
-                get_final_path.argtypes = (
-                    wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD)
-                get_final_path.restype = wintypes.DWORD
-                buffer = ctypes.create_unicode_buffer(32768)
-                handle = wintypes.HANDLE(msvcrt.get_osfhandle(stream.fileno()))
-                length = get_final_path(handle, buffer, len(buffer), 0)
-                if not length or length >= len(buffer):
-                    raise UnsafeSourcePathError("Unable to resolve opened source handle")
-
-                def _normalise_windows_path(value):
-                    if value.startswith("\\\\?\\UNC\\"):
-                        value = "\\\\" + value[8:]
-                    elif value.startswith("\\\\?\\"):
-                        value = value[4:]
-                    return ntpath.normcase(ntpath.normpath(value))
-
-                root_path = _normalise_windows_path(str(base))
-                file_path = _normalise_windows_path(buffer.value)
-                try:
-                    contained = ntpath.commonpath((root_path, file_path)) == root_path
-                except ValueError:
-                    contained = False
-                if not contained or not stat.S_ISREG(metadata.st_mode):
-                    raise UnsafeSourcePathError("Opened source handle escaped project root")
-                return stream, metadata
-            except Exception as exc:
-                stream.close()
-                if isinstance(exc, UnsafeSourcePathError):
-                    raise
-                raise UnsafeSourcePathError("Unable to validate opened source handle") from exc
-
-        if (not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY")
-                or os.open not in getattr(os, "supports_dir_fd", set())):
-            raise UnsafeSourcePathError("Safe descriptor-relative traversal unavailable")
-
-        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-        # O_NONBLOCK keeps a FIFO or device swapped in for a source candidate from
-        # blocking open(); it has no effect on regular files, and S_ISREG below
-        # rejects anything else before a read is attempted.
-        file_flags = (os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
-                      | getattr(os, "O_NOCTTY", 0))
-        root_fd = current_fd = file_fd = None
-        try:
-            root_fd = os.open(os.fspath(base), directory_flags)
-            current_fd = os.dup(root_fd)
-            for part in parts[:-1]:
-                next_fd = os.open(part, directory_flags, dir_fd=current_fd)
-                os.close(current_fd)
-                current_fd = next_fd
-            file_fd = os.open(parts[-1], file_flags, dir_fd=current_fd)
-            metadata = os.fstat(file_fd)
-            if not stat.S_ISREG(metadata.st_mode):
-                raise UnsafeSourcePathError("Source candidate is not a regular file")
-            stream = os.fdopen(file_fd, "rb")
-            file_fd = None
-            return stream, metadata
-        except UnsafeSourcePathError:
-            raise
-        except OSError as exc:
-            raise UnsafeSourcePathError("Source path changed or escaped during traversal") from exc
-        finally:
-            if file_fd is not None:
-                os.close(file_fd)
-            if current_fd is not None:
-                os.close(current_fd)
-            if root_fd is not None:
-                os.close(root_fd)
     hashes = hashlib.sha256()
     scanned = []
     routes = {}
@@ -336,126 +528,128 @@ def scan_visual_project(root):
     candidate_count = 0
     max_files, max_bytes, max_entries = 160, 4 * 1024 * 1024, 2400
 
-    for parent, dirs, names in os.walk(base, topdown=True, followlinks=False):
-        folder = Path(parent)
-        depth = len(folder.relative_to(base).parts)
-        if depth >= 9:
-            dirs[:] = []
-            reasons.add("MAX_DIRECTORY_DEPTH")
-            continue
-        examined += len(dirs) + len(names)
-        if examined > max_entries:
-            reasons.add("MAX_DIRECTORY_ENTRIES")
-            break
-        dirs[:] = sorted(d for d in dirs if d not in _UI_EXCLUDE and
-                         not d.startswith(".") and not (folder / d).is_symlink())
-        for name in sorted(names):
-            file = folder / name
-            rel = file.relative_to(base)
-            if (name.startswith(".") or file.is_symlink() or
-                    not (rel.parts[0] in _UI_ROOTS or name == "package.json"
-                         or (len(rel.parts) == 1 and file.suffix in _UI_SUFFIXES))):
+    walker = _visual_walk(base)
+    try:
+        for rel_dir, directory, dirs, names in walker:
+            depth = len(rel_dir)
+            if depth >= 9:
+                dirs[:] = []
+                reasons.add("MAX_DIRECTORY_DEPTH")
                 continue
-            if file.suffix not in _UI_SUFFIXES and name != "package.json":
-                continue
-            candidate_count += 1
-            if len(scanned) >= max_files:
-                reasons.add("MAX_SOURCE_FILES")
+            examined += len(dirs) + len(names)
+            if examined > max_entries:
+                reasons.add("MAX_DIRECTORY_ENTRIES")
                 break
-            try:
-                stream, metadata = _open_scoped_source(rel)
-                with stream:
-                    link_count = getattr(metadata, "st_nlink", None)
-                    if type(link_count) is not int or link_count != 1:
-                        reasons.add("HARD_LINK_SOURCE_FILE")
-                        continue
-                    size = metadata.st_size
-                    if size > 128 * 1024 or bytes_read + size > max_bytes:
-                        reasons.add("MAX_FILE_OR_BYTE_LIMIT")
-                        continue
-                    raw = stream.read(128 * 1024 + 1)
-                    if len(raw) > 128 * 1024 or bytes_read + len(raw) > max_bytes:
-                        reasons.add("MAX_FILE_OR_BYTE_LIMIT")
-                        continue
-            except UnsafeSourcePathError:
-                reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
-                continue
-            except (OSError, ValueError):
-                reasons.add("UNREADABLE_SOURCE_FILE")
-                continue
-            bytes_read += len(raw)
-            namepath = rel.as_posix()
-            scanned.append(namepath)
-            hashes.update(namepath.encode("utf-8") + b"\0" + hashlib.sha256(raw).digest())
-            if name == "package.json":
+            dirs[:] = sorted(d for d in dirs if d not in _UI_EXCLUDE and
+                             not d.startswith("."))
+            for name in sorted(names):
+                rel = PurePath(*rel_dir, name)
+                if (name.startswith(".") or
+                        not (rel.parts[0] in _UI_ROOTS or name == "package.json"
+                             or (len(rel.parts) == 1 and rel.suffix in _UI_SUFFIXES))):
+                    continue
+                if rel.suffix not in _UI_SUFFIXES and name != "package.json":
+                    continue
+                candidate_count += 1
+                if len(scanned) >= max_files:
+                    reasons.add("MAX_SOURCE_FILES")
+                    break
                 try:
-                    manifest = json.loads(raw)
-                    if isinstance(manifest, dict):
-                        for group in ("dependencies", "devDependencies"):
-                            deps = manifest.get(group, {})
-                            if isinstance(deps, dict):
-                                declared.update({k: str(v)[:50] for k, v in
-                                                 list(deps.items())[:80] if isinstance(k, str)})
-                except (ValueError, UnicodeError, TypeError):
-                    reasons.add("INVALID_PACKAGE_MANIFEST")
-                continue
-            data = raw.decode("utf-8", errors="replace")
-            token_refs.update(_UI_TOKEN_REF.findall(data))
-            if _UI_MOTION_A11Y.search(data):
-                reduced_motion_sources.append(namepath)
-            if file.suffix in {".css", ".scss", ".tsx", ".jsx", ".vue", ".svelte", ".html"}:
-                for line_number, line in enumerate(data.splitlines(), 1):
-                    if len(literal_hints) >= 60:
-                        reasons.add("MAX_STYLE_HINTS")
-                        break
-                    for match in _UI_DIRECT_VALUE.finditer(line):
-                        prop = match.group(1).lower()
-                        bucket = ("typography" if prop.startswith("font-") else
-                                  "motion" if "duration" in prop else
-                                  "shape" if prop == "border-radius" else "spacing")
-                        literal_hints.append({"file": namepath, "line": line_number,
-                                              "area": bucket, "rule": "RAW_CSS_LITERAL",
-                                              "source": "HEURISTIC"})
-                        if len(literal_hints) >= 60:
-                            break
-                    if len(literal_hints) >= 60:
-                        reasons.add("MAX_STYLE_HINTS")
-                        break
-                    for match in _UI_ARBITRARY_VALUE.finditer(line):
-                        prop = match.group(1).lower()
-                        bucket = ("typography" if prop == "text" else
-                                  "motion" if prop == "duration" else
-                                  "shape" if prop == "rounded" else "spacing")
-                        literal_hints.append({"file": namepath, "line": line_number,
-                                              "area": bucket, "rule": "ARBITRARY_UTILITY_LITERAL",
-                                              "source": "HEURISTIC"})
+                    stream, metadata = _open_visual_source(directory, name)
+                    with stream:
+                        link_count = getattr(metadata, "st_nlink", None)
+                        if type(link_count) is not int or link_count != 1:
+                            reasons.add("HARD_LINK_SOURCE_FILE")
+                            continue
+                        size = metadata.st_size
+                        if size > 128 * 1024 or bytes_read + size > max_bytes:
+                            reasons.add("MAX_FILE_OR_BYTE_LIMIT")
+                            continue
+                        raw = stream.read(128 * 1024 + 1)
+                        if len(raw) > 128 * 1024 or bytes_read + len(raw) > max_bytes:
+                            reasons.add("MAX_FILE_OR_BYTE_LIMIT")
+                            continue
+                except UnsafeVisualSourceError:
+                    reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
+                    continue
+                except (OSError, ValueError):
+                    reasons.add("UNREADABLE_SOURCE_FILE")
+                    continue
+                bytes_read += len(raw)
+                namepath = rel.as_posix()
+                scanned.append(namepath)
+                hashes.update(namepath.encode("utf-8") + b"\0" + hashlib.sha256(raw).digest())
+                if name == "package.json":
+                    try:
+                        manifest = json.loads(raw)
+                        if isinstance(manifest, dict):
+                            for group in ("dependencies", "devDependencies"):
+                                deps = manifest.get(group, {})
+                                if isinstance(deps, dict):
+                                    declared.update({k: str(v)[:50] for k, v in
+                                                     list(deps.items())[:80] if isinstance(k, str)})
+                    except (ValueError, UnicodeError, TypeError):
+                        reasons.add("INVALID_PACKAGE_MANIFEST")
+                    continue
+                data = raw.decode("utf-8", errors="replace")
+                token_refs.update(_UI_TOKEN_REF.findall(data))
+                if _UI_MOTION_A11Y.search(data):
+                    reduced_motion_sources.append(namepath)
+                if rel.suffix in {".css", ".scss", ".tsx", ".jsx", ".vue", ".svelte", ".html"}:
+                    for line_number, line in enumerate(data.splitlines(), 1):
                         if len(literal_hints) >= 60:
                             reasons.add("MAX_STYLE_HINTS")
                             break
-            file_route = _ui_route_from_file(rel)
-            if file_route is not None:
-                routes.setdefault(file_route, set()).add(namepath)
-            if file.suffix in {".tsx", ".jsx", ".ts", ".js", ".vue", ".svelte"}:
-                for path in _UI_ROUTE.findall(data):
-                    routes.setdefault(path, set()).add(namepath)
-                local_imports = []
-                for imp in _UI_IMPORT.findall(data):
-                    if imp.startswith("."):
-                        target = posixpath.normpath(posixpath.join(
-                            posixpath.dirname(namepath), imp))
-                        if target != ".." and not target.startswith("../"):
-                            local_imports.append(target)
-                    for package, family in _ICON_PACKAGES.items():
-                        if imp == package or imp.startswith(package + "/"):
-                            icons[family] = icons.get(family, 0) + 1
-                imports_by_file[namepath] = sorted(set(local_imports))[:40]
-            if ("components" in rel.parts or "ui" in rel.parts) and \
-                    file.suffix in {".tsx", ".jsx", ".vue", ".svelte"}:
-                components.append(namepath)
-            if file.suffix in {".css", ".scss", ".vue", ".svelte"}:
-                tokens.update(_UI_TOKEN.findall(data))
-        if len(scanned) >= max_files:
-            break
+                        for match in _UI_DIRECT_VALUE.finditer(line):
+                            prop = match.group(1).lower()
+                            bucket = ("typography" if prop.startswith("font-") else
+                                      "motion" if "duration" in prop else
+                                      "shape" if prop == "border-radius" else "spacing")
+                            literal_hints.append({"file": namepath, "line": line_number,
+                                                  "area": bucket, "rule": "RAW_CSS_LITERAL",
+                                                  "source": "HEURISTIC"})
+                            if len(literal_hints) >= 60:
+                                break
+                        if len(literal_hints) >= 60:
+                            reasons.add("MAX_STYLE_HINTS")
+                            break
+                        for match in _UI_ARBITRARY_VALUE.finditer(line):
+                            prop = match.group(1).lower()
+                            bucket = ("typography" if prop == "text" else
+                                      "motion" if prop == "duration" else
+                                      "shape" if prop == "rounded" else "spacing")
+                            literal_hints.append({"file": namepath, "line": line_number,
+                                                  "area": bucket, "rule": "ARBITRARY_UTILITY_LITERAL",
+                                                  "source": "HEURISTIC"})
+                            if len(literal_hints) >= 60:
+                                reasons.add("MAX_STYLE_HINTS")
+                                break
+                file_route = _ui_route_from_file(rel)
+                if file_route is not None:
+                    routes.setdefault(file_route, set()).add(namepath)
+                if rel.suffix in {".tsx", ".jsx", ".ts", ".js", ".vue", ".svelte"}:
+                    for path in _UI_ROUTE.findall(data):
+                        routes.setdefault(path, set()).add(namepath)
+                    local_imports = []
+                    for imp in _UI_IMPORT.findall(data):
+                        if imp.startswith("."):
+                            target = posixpath.normpath(posixpath.join(
+                                posixpath.dirname(namepath), imp))
+                            if target != ".." and not target.startswith("../"):
+                                local_imports.append(target)
+                        for package, family in _ICON_PACKAGES.items():
+                            if imp == package or imp.startswith(package + "/"):
+                                icons[family] = icons.get(family, 0) + 1
+                    imports_by_file[namepath] = sorted(set(local_imports))[:40]
+                if ("components" in rel.parts or "ui" in rel.parts) and \
+                        rel.suffix in {".tsx", ".jsx", ".vue", ".svelte"}:
+                    components.append(namepath)
+                if rel.suffix in {".css", ".scss", ".vue", ".svelte"}:
+                    tokens.update(_UI_TOKEN.findall(data))
+            if len(scanned) >= max_files:
+                break
+    finally:
+        walker.close()
     # Imported-component consumers are conservative heuristics; files can be
     # aliased, barrel re-exported or dynamically loaded.
     impact = {}
