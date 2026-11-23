@@ -33,6 +33,16 @@
 - No local checkout, local test run, owner-profile IDE acceptance, .orbit directory or SQLite checkpoint was accessed. Mark these NOT VERIFIED / NOT RUN; do not infer local state from GitHub.
 - Notion sources: [Project Decisions & Releases](https://app.notion.com/p/4074f681d48881a7a407c3bdc2054409), [Research & References](https://app.notion.com/p/4074f681d488816e9fe7f4504982c948), and [Continuous Learning / Resource-First Specialist Architecture](https://app.notion.com/p/40f4f681d48881cea5afc2df9a35084c). No separate current Notion handoff page was found; this repository file remains the cross-agent handoff.
 
+### Fresh research delta (2026-11-23)
+- [Claude Code hooks](https://code.claude.com/docs/en/hooks): PreModelSwitch exposes context/cache metadata and can allow, deny or ask; hooks run in parallel. Treat this as a Claude-specific, version-gated adapter, not a shared provider contract.
+- [Codex sandbox](https://openai.com/index/inside-the-codex-sandbox/): permission profiles constrain filesystem/network access; Windows is transitioning to MXC on compatible devices; stdio MCP server launches are not sandboxed by default. Keep sandbox capability host-specific and evidence-backed.
+- [Antigravity skills migration](https://antigravity.google/docs/migration/workflows-to-skills/): workflows are deprecated; skills support progressive context loading and bundled references/scripts. Generate skills, not new legacy workflows.
+- [OpenHands SDK](https://github.com/OpenHands/software-agent-sdk): current SDK/Agent Server separates conversations, workspaces, tools and events from automation lifecycle; useful architecture reference, not an automatic dependency.
+- [RealSWE](https://arxiv.org/abs/2608.27831) finds realistic requests are sparse (88% problem-only/limited context vs 7% in SWE-bench) and Desired Behavior/Motivation materially improve outcomes. Ask for desired behavior on bug fixes and motivation on feature requests.
+- [SWE-Skills-Bench](https://arxiv.org/abs/2603.15401) is a preliminary preprint: 39/49 skills show zero pass-rate gain, average +1.2%, and some version-mismatched skills reduce performance. Prefer targeted, version-compatible skills with deterministic paired tests; avoid blanket injection.
+- [OpenAI Agents SDK tracing](https://openai.github.io/openai-agents-python/tracing/) warns generation/function spans may contain sensitive data; default to local, redacted metadata and do not require an OpenAI tracing key for provider-neutral Orbit.
+- [SWE-agent](https://github.com/SWE-agent/SWE-agent) now points users to [mini-SWE-agent](https://github.com/SWE-agent/mini-swe-agent). Treat benchmark claims in the latter's README as maintainer-reported, not independent Orbit evidence.
+
 ### Approved direction and next safe action
 - The existing Notion product direction orders safe Team Builder first, then task-specific skills/tools, then Orbit-mediated agent/bot coordination. Issues #90 (project-scoped learning), #91 (resource-first specialist factory) and #92 (cybersecurity specialist) remain open and must be reconciled with that order and their acceptance criteria.
 - No Notion approval was found for the current v0.34 branch's expanded context-monitoring/model-routing scope. Treat it as experimental until its plan, code and acceptance criteria agree and the owner-approved scope is clear.
