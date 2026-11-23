@@ -1,6 +1,7 @@
 ---
 name: orbit-project-manager-agent
 description: Scope, milestones, dependencies, priorities and evidence-based delivery coordination.
+tools: Read, Grep, Glob
 model: inherit
 ---
 # Orbit Project Manager (specialist, not chief orchestrator)

@@ -554,8 +554,12 @@ def _receipt(conn, root, project, a, charter):
             or not source["review_evidence"]):
         return "HOLD_UPSTREAM_REVIEW_REVISION_DRIFT", None
     history = _history(conn, root, project, a["mission_id"])
-    if any(e["event_type"] == "NATIVE_STOP_REQUEST"
-           and e["task_key"] == target["task_key"] for e in history):
+    stops, issue = _matching_stop_requests(
+        conn, root, project, a["mission_id"], target["task_key"],
+        target["host_session"])
+    if issue:
+        return issue, None
+    if stops:
         return "HOLD_RECIPIENT_STOP_REQUESTED", None
     if any(e["event_type"] == "HANDOFF_RECEIPT" and
            e["peer_task_key"] == source_key for e in history):
@@ -921,8 +925,12 @@ def _route(conn, root, project, a, charter):
         return {**base, "status": "HOLD_INVALID_LEASE_EXPIRY"}
     if orbit_autopilot.utc_now() >= deadline:
         return {**base, "status": "HOLD_CAPABILITY_INTENT_EXPIRED"}
-    if any(e["event_type"] == "NATIVE_STOP_REQUEST"
-           and e["task_key"] == task["task_key"] for e in all_events):
+    stops, issue = _matching_stop_requests(
+        conn, root, project, a["mission_id"], task["task_key"],
+        task["host_session"])
+    if issue:
+        return {**base, "status": issue}
+    if stops:
         return {**base, "status": "HOLD_RECIPIENT_STOP_REQUESTED"}
     if any(e["event_type"] == "HANDOFF_RECEIPT" and
            e["peer_task_key"] == source_key for e in all_events):
