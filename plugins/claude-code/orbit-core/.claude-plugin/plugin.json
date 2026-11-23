@@ -1,6 +1,7 @@
 {
   "name": "orbit-core",
   "version": "0.33.1",
+  "displayName": "Orbit Core",
   "description": "Orbit Core local workflow, MCP and specialist agents",
   "author": {
     "name": "Samjuniors",
@@ -8,6 +9,5 @@
   },
   "homepage": "https://github.com/samjuniors/Orbit-Core",
   "repository": "https://github.com/samjuniors/Orbit-Core",
-  "license": "MIT",
-  "displayName": "Orbit Core"
+  "license": "MIT"
 }
