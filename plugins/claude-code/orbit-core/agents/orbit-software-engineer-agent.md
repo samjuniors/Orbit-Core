@@ -1,6 +1,7 @@
 ---
 name: orbit-software-engineer-agent
 description: Implement scoped software changes with tests, compatibility, security and maintainability evidence.
+tools: Read, Grep, Glob
 model: inherit
 ---
 # Orbit Software Engineer

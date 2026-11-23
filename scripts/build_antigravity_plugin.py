@@ -117,7 +117,8 @@ def build_files(root: Path = ROOT) -> dict[str, bytes]:
         body = body.replace("skills/orbit/", "skills/orbit-workflow-skill/")
         body = body.replace("orbit-core-native", "orbit-core-mcp")
         for former in sorted(agent_names, key=len, reverse=True):
-            body = re.sub(r"(?<![A-Za-z0-9-])" + re.escape(former) + r"(?![A-Za-z0-9-])",
+            # `_` is a boundary too, so MCP tool names such as `orbit_capability_select` stay canonical.
+            body = re.sub(r"(?<![A-Za-z0-9_-])" + re.escape(former) + r"(?![A-Za-z0-9_-])",
                           agent_names[former], body)
         data[f"agents/{agent_names[path.stem]}.md"] = body.encode("utf-8")
     data["skills/orbit-workflow-skill/SKILL.md"] = compact
