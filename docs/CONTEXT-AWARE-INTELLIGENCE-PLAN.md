@@ -237,15 +237,26 @@ A phase is not complete because source code or tests were authored. Require:
 
 **Safety and scope:** This first slice does not read source contents, execute project scripts, install dependencies, persist a scan baseline, create implementation tasks or claim semantic/security verification. It is a structural inventory and gap-signal layer only. The next slice should add reviewed findings and plan/task linkage after test execution and security review.
 
-**Verification status:** Files were committed to the feature branch and their GitHub contents re-fetched. No CI status checks were reported for the latest commit at the time of this checkpoint, and no local test execution was available through the GitHub connector. Treat tests as authored, not passed.
+**Phase 1 follow-on — finding reconciliation implemented on the same branch:**
+
+- Added `source/runtime/orbit_findings.py`, a project-root-scoped SQLite ledger keyed by stable finding ID.
+- Added lifecycle states `NEW`, `OPEN`, `RECURRING`, `STALE`, and `RESOLVED`, plus owner-review dispositions `UNREVIEWED`, `ACCEPTED`, `FALSE_POSITIVE`, `RISK_ACCEPTED`, and `NOT_APPLICABLE`.
+- A complete scan can resolve a previously observed finding; an incomplete scan only marks active findings stale and never resolves them.
+- Evidence changes reset a prior disposition to `UNREVIEWED`; revision-guarded review updates reject stale writes.
+- Added `orbit_project_findings` with `reconcile`, `list`, and `review` actions. Reconciliation persists only in Orbit's local SQLite database; it does not write into the project.
+- Added tests for new/persistent/resolved/recurring transitions, incomplete-scan safety, revision conflicts, evidence-change re-review and project/root isolation.
+- Task creation and finding-to-task linkage remain intentionally unimplemented in this slice. Review dispositions do not prove a defect and do not create tasks.
+
+**Verification status:** Source and tests were committed and re-fetched from GitHub. The tests are authored, not passed: no local test execution has been performed. Exact-head CI status must be checked before treating this slice as verified.
 
 ---
 
 ## 10. Immediate next actions
 
-1. Review this audit/plan document and the existing PR #141 delta.
-2. Confirm the product semantics and whether v0.34 should ship the Claude Code adapter first while keeping other hosts on the existing behavior.
-3. Only after plan acceptance, implement Phase 1 in small reviewable commits on this branch.
-4. Keep main unchanged; create no PR until the first phase has tests and a reviewable diff.
+1. Execute the new tests and the full existing suite on the exact feature-branch head; add adversarial cases for scan truncation, duplicate IDs, path normalization and SQLite concurrency.
+2. Review the finding lifecycle and disposition semantics against actual product decisions.
+3. Implement finding-to-task preview using the existing task ledger, with dependency/verification criteria and explicit write confirmation; never create tasks merely because a heuristic finding exists.
+4. Continue Claude Code lifecycle work only after the scan/finding contract is tested and stable.
+5. Keep main unchanged; do not open a PR until tests, exact-head CI and review are complete.
 
-**Current branch contains this proposal only. No runtime behavior has been changed.**
+**Current branch:** Phase 1 structural audit plus persistent finding reconciliation are implemented in source. No merge, PR, release, hook installation or host-setting change has been performed.
