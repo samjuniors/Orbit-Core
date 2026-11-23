@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from itertools import islice
 from collections import Counter
 from pathlib import Path
 
@@ -75,7 +76,10 @@ def scan_project(root: Path, profile: dict | None = None) -> dict:
     while stack:
         folder, depth = stack.pop()
         try:
-            entries = sorted(os.scandir(folder), key=lambda entry: entry.name.casefold())
+            with os.scandir(folder) as iterator:
+                entries = sorted(islice(iterator, MAX_FILES + MAX_DIRECTORIES + 1), key=lambda entry: entry.name.casefold())
+                if len(entries) >= MAX_FILES + MAX_DIRECTORIES + 1:
+                    truncated = True
         except OSError:
             unreadable.append(folder.relative_to(root).as_posix() or ".")
             continue
@@ -87,13 +91,13 @@ def scan_project(root: Path, profile: dict | None = None) -> dict:
                 if entry.is_dir(follow_symlinks=False):
                     if entry.name in SKIP_DIRS:
                         continue
+                    if len(directories) >= MAX_DIRECTORIES:
+                        truncated = True
+                        continue
                     rel = Path(entry.path).relative_to(root).as_posix()
                     directories.append(rel)
                     if depth < MAX_DEPTH:
-                        if len(directories) >= MAX_DIRECTORIES:
-                            truncated = True
-                        else:
-                            stack.append((Path(entry.path), depth + 1))
+                        stack.append((Path(entry.path), depth + 1))
                     else:
                         truncated = True
                 elif entry.is_file(follow_symlinks=False):
@@ -130,7 +134,8 @@ def scan_project(root: Path, profile: dict | None = None) -> dict:
     security_docs = [item["path"] for item in files if item["name"].casefold() in SECURITY_DOCS]
     test_files = [item["path"] for item in files if _is_test_file(item["path"], item["name"])]
     test_dirs = [path for path in directories if Path(path).name.casefold() in TEST_DIRS]
-    workflows = [path for path in CI_MARKERS if path.casefold() in by_path or path.casefold() in by_name]
+    directory_keys = {path.casefold() for path in directories}
+    workflows = [path for path in CI_MARKERS if path.casefold() in directory_keys or path.casefold() in by_path or path.casefold() in by_name]
 
     digest = hashlib.sha256()
     for item in files:
@@ -138,7 +143,7 @@ def scan_project(root: Path, profile: dict | None = None) -> dict:
         digest.update(len(rel).to_bytes(4, "big"))
         digest.update(rel)
         digest.update(item["size"].to_bytes(8, "big"))
-        digest.update(item["mtime_ns"].to_bytes(8, "big", signed=False))
+        digest.update(item["mtime_ns"].to_bytes(8, "big", signed=True))
     snapshot = digest.hexdigest()
 
     findings = []
