@@ -251,9 +251,6 @@ def _visual_win_api():
         kernel32.GetFileInformationByHandleEx.argtypes = (
             wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD)
         kernel32.GetFileInformationByHandleEx.restype = wintypes.BOOL
-        kernel32.GetFinalPathNameByHandleW.argtypes = (
-            wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD)
-        kernel32.GetFinalPathNameByHandleW.restype = wintypes.DWORD
         ntdll.NtCreateFile.argtypes = (
             ctypes.POINTER(wintypes.HANDLE), wintypes.ULONG, ctypes.POINTER(ObjectAttributes),
             ctypes.POINTER(IoStatusBlock), ctypes.c_void_p, wintypes.ULONG, wintypes.ULONG,
@@ -283,8 +280,11 @@ def _visual_win_open_relative(parent, name, *, directory):
         raise UnsafeVisualSourceError("Invalid source path component")
     ctypes, wintypes, kernel32, ntdll, UnicodeString, ObjectAttributes, IoStatusBlock = \
         _visual_win_api()
-    size = len(name.encode("utf-16-le"))
-    buffer = ctypes.create_unicode_buffer(name)
+    # NTFS names are arbitrary UTF-16 code units; surrogatepass round-trips the
+    # unpaired surrogates that _visual_win_list decoded the same way.
+    encoded = name.encode("utf-16-le", "surrogatepass")
+    size = len(encoded)
+    buffer = ctypes.create_string_buffer(encoded + b"\0\0")
     object_name = UnicodeString(size, size, ctypes.cast(buffer, wintypes.LPWSTR))
     attributes = ObjectAttributes(ctypes.sizeof(ObjectAttributes), parent,
                                   ctypes.pointer(object_name), 0x40, None, None)
@@ -308,41 +308,33 @@ def _visual_win_open_relative(parent, name, *, directory):
     return handle.value
 
 
-def _visual_win_normalise(value):
-    import ntpath
-    if value.startswith("\\\\?\\UNC\\"):
-        value = "\\\\" + value[8:]
-    elif value.startswith("\\\\?\\"):
-        value = value[4:]
-    return ntpath.normcase(ntpath.normpath(value))
-
-
 def _visual_pin_root(base):
-    """Open the resolved project root once and prove no ancestor was redirected.
+    """Open the project root once, proving no component is a link or reparse point.
 
     POSIX walks every component of the resolved absolute path from "/" with
     O_DIRECTORY|O_NOFOLLOW, so an ancestor swapped for a symlink fails closed.
-    Windows opens the root without following a final reparse point and requires
-    the handle's final path to equal the resolved root, so an ancestor junction or
-    symlink fails closed. All later enumeration and opens are relative to the
-    returned handle, so later ancestor replacement cannot redirect the scan.
+    Windows receives the *unresolved* absolute path and opens each component
+    relative to its parent handle with FILE_OPEN_REPARSE_POINT, rejecting any
+    junction, symlink or mount point, including the root itself. All later
+    enumeration and opens are relative to the returned handle, so later ancestor
+    replacement cannot redirect the scan.
     """
     import os
     if os.name == "nt":
         ctypes, wintypes, kernel32, *_ = _visual_win_api()
+        anchor, *parts = base.parts  # drive or UNC share root, then components
         handle = kernel32.CreateFileW(
-            str(base), _WIN_FILE_LIST_DIRECTORY | _WIN_FILE_TRAVERSE
+            anchor, _WIN_FILE_LIST_DIRECTORY | _WIN_FILE_TRAVERSE
             | _WIN_FILE_READ_ATTRIBUTES | _WIN_SYNCHRONIZE, 7, None, 3,
             0x02000000 | 0x00200000, None)  # BACKUP_SEMANTICS | OPEN_REPARSE_POINT
         if not handle or handle == ctypes.c_void_p(-1).value:
-            raise UnsafeVisualSourceError("Unable to open project root handle")
+            raise UnsafeVisualSourceError("Unable to open volume root handle")
         try:
             _visual_win_check_handle(handle, directory=True)
-            buffer = ctypes.create_unicode_buffer(32768)
-            length = kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
-            if (not length or length >= len(buffer)
-                    or _visual_win_normalise(buffer.value) != _visual_win_normalise(str(base))):
-                raise UnsafeVisualSourceError("Project root handle does not match selected root")
+            for part in parts:
+                child = _visual_win_open_relative(handle, part, directory=True)
+                kernel32.CloseHandle(handle)
+                handle = child
         except BaseException:
             kernel32.CloseHandle(handle)
             raise
@@ -455,6 +447,14 @@ def _visual_walk(base):
         _visual_close_root(root)
 
 
+def _visual_name_representable(name):
+    try:
+        name.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _open_visual_source(directory, name):
     """Open one regular file relative to a held directory handle; return (stream, stat)."""
     import os
@@ -509,7 +509,9 @@ def scan_visual_project(root):
     base = Path(root)
     if base.is_symlink() or not base.is_dir():
         raise ValueError("Expected an existing non-symlink project root")
-    base = base.resolve(strict=True)
+    # Windows: never resolve(); it would follow a junction/symlink root or ancestor
+    # before _visual_pin_root could reject it. abspath is lexical only.
+    base = Path(os.path.abspath(base)) if os.name == "nt" else base.resolve(strict=True)
 
     hashes = hashlib.sha256()
     scanned = []
@@ -540,8 +542,13 @@ def scan_visual_project(root):
             if examined > max_entries:
                 reasons.add("MAX_DIRECTORY_ENTRIES")
                 break
+            if not all(_visual_name_representable(n) for n in dirs + names):
+                # Undecodable names (unpaired surrogates, non-UTF-8 bytes) cannot be
+                # reported or hashed as UTF-8; skip them as unreadable, keep scanning.
+                reasons.add("UNREPRESENTABLE_SOURCE_NAME")
+                names = [n for n in names if _visual_name_representable(n)]
             dirs[:] = sorted(d for d in dirs if d not in _UI_EXCLUDE and
-                             not d.startswith("."))
+                             not d.startswith(".") and _visual_name_representable(d))
             for name in sorted(names):
                 rel = PurePath(*rel_dir, name)
                 if (name.startswith(".") or

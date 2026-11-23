@@ -241,6 +241,84 @@ class VisualInventoryTests(unittest.TestCase):
             self.assertTrue((selected / "src/components/EvilOnly.tsx").exists(),
                             "swap did not redirect the selected root path")
 
+    def _make_link(self, link, target, kind):
+        """Create a directory ``symlink`` or Windows ``junction``; skip only if unsupported."""
+        try:
+            if kind == "junction":
+                if os.name != "nt":
+                    raise self.DirectoryLinkUnavailable("junctions are Windows-only")
+                result = subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                    capture_output=True, text=True)
+                if result.returncode:
+                    raise self.DirectoryLinkUnavailable(result.stderr or "mklink /J failed")
+            else:
+                try:
+                    os.symlink(target, link, target_is_directory=True)
+                except OSError as exc:  # e.g. Windows without symlink privilege
+                    raise self.DirectoryLinkUnavailable(str(exc)) from exc
+        except self.DirectoryLinkUnavailable as exc:
+            self.skipTest(f"Directory {kind} unavailable: {exc}")
+        self.addCleanup(lambda: os.rmdir(link) if os.name == "nt" else os.unlink(link))
+
+    def test_link_root_is_rejected_before_resolution(self):
+        for kind in ("symlink", "junction") if os.name == "nt" else ("symlink",):
+            with self.subTest(kind=kind):
+                link = self.root.parent / f"root-{kind}"
+                self._make_link(link, self.root, kind)
+                with self.assertRaises(ValueError):
+                    orbit_specialists.scan_visual_project(link)
+
+    def test_link_ancestor_of_root_is_rejected_on_windows(self):
+        for kind in ("symlink", "junction") if os.name == "nt" else ("symlink",):
+            with self.subTest(kind=kind):
+                link = self.root.parent / f"ancestor-{kind}"
+                self._make_link(link, self.root.parent, kind)
+                selected = link / "project"
+                if os.name == "nt":
+                    # Path.resolve() would canonicalize this into the real tree; the
+                    # scanner must reject the reparse point instead of following it.
+                    with self.assertRaises(ValueError):
+                        orbit_specialists.scan_visual_project(selected)
+                else:
+                    # POSIX contract: ancestors are resolved at selection, then the
+                    # canonical root is pinned component by component.
+                    result = orbit_specialists.scan_visual_project(selected)
+                    self.assertEqual(result["scanned_file_count"], 5)
+
+    def test_unrepresentable_directory_name_is_skipped_not_fatal(self):
+        bad_name = "bad\ud800dir" if os.name == "nt" else "bad\udcffdir"
+        bad = (self.root / "src" / bad_name) if os.name == "nt" else None
+        try:
+            if os.name == "nt":
+                bad.mkdir()  # NTFS accepts unpaired UTF-16 surrogates
+                (bad / "Hidden.tsx").write_text("export const h = 1;", encoding="utf-8")
+            else:
+                raw = os.fsencode(self.root / "src") + b"/bad\xffdir"
+                os.mkdir(raw)  # non-UTF-8 bytes surface as surrogateescape'd str
+                with open(raw + b"/Hidden.tsx", "wb") as handle:
+                    handle.write(b"export const h = 1;")
+        except (OSError, UnicodeError) as exc:
+            self.skipTest(f"Filesystem rejects undecodable names: {exc}")
+        result = orbit_specialists.scan_visual_project(self.root)
+        self.assertIn("UNREPRESENTABLE_SOURCE_NAME", result["partial_reasons"])
+        self.assertEqual(result["scanned_file_count"], 5)
+        self.assertIn("src/components/Button.tsx", result["component_files"])
+        json.dumps(result).encode("utf-8")  # inventory stays strictly UTF-8 serializable
+        if os.name == "nt":
+            # The handle-relative open itself must round-trip the surrogate name.
+            root = orbit_specialists._visual_pin_root(self.root)
+            try:
+                src = orbit_specialists._visual_win_open_relative(root, "src", directory=True)
+                try:
+                    child = orbit_specialists._visual_win_open_relative(
+                        src, bad_name, directory=True)
+                    orbit_specialists._visual_close_root(child)
+                finally:
+                    orbit_specialists._visual_close_root(src)
+            finally:
+                orbit_specialists._visual_close_root(root)
+
     def test_root_pin_rejects_redirected_ancestor(self):
         link = self.root.parent / "linked-holder"
         try:
