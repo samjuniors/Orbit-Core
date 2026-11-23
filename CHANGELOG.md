@@ -6,16 +6,37 @@ All notable changes are recorded under [Semantic Versioning](https://semver.org/
 
 Proposed future changes require separate owner review.
 
-### v0.33 integrated development source — UNRELEASED (2026-11-18)
-
-- Consolidates bounded visual decisions, source-only UI inventory, design-token drift hints, source-bound UI QA coverage and project-scoped style preferences from draft PR #131. Independent browser/UI inspection is still required.
-- Adds revision-bound and replay-resistant Autopilot resume, typed specialist return-to-lead policies and local-only redacted mission/team event correlation from draft PR #132. Caller approval hashes and host delivery reports are not authenticated consent or native execution evidence.
-- Addresses official v0.31 Antigravity stock-agent compatibility issue #130 with exact, verified SHA-256 fingerprints and backup-first upgrade tests; unknown and customized file refusals remain intact.
-- Integration candidate is draft PR #133. VERSION remains the published v0.32.0 until the separate approved v0.33 release process. No merge, tag, release or v0.33 installation is implied.
-
 ### Funding (2026-11-08)
 
 - Added a GitHub Sponsors funding configuration for `samjuniors` and an optional README support section. This documentation-only patch does not change runtime, package versions, tests or releases.
+
+## [0.33.0] - Prepared release notes (2026-11-18)
+
+### Highlights
+
+- **Review the complete UI, not only the first screen.** Optional, read-only route/component inventories, project design-contract hints, token/literal drift warnings and source-bound screen/state QA coverage help a coding host plan consistent UI review. They remain heuristics until an actual host renders and inspects the product.
+- **Keep approved Autopilot continuation safer.** Local pause/resume now requires a fresh, exact-revision and source-scope-bound reviewed digest. Reused approval-reference fingerprints are rejected in the existing project SQLite journal; a digest cannot authenticate a person or grant native permissions.
+- **Coordinate specialist results without handing away control.** Typed return-to-lead contracts and redacted local mission/team traces reuse Orbit's existing agents, tools and event journals. Recipient delivery reports and independent lead reviews remain distinct from real host agent execution.
+- **Upgrade official Antigravity templates safely.** Exact SHA-256 recognition covers the affected v0.31.0 and v0.32.0 stock agents. The installer backs up recognized files and stops for review when it encounters a customized file. ([v0.31 upgrade issue](https://github.com/samjuniors/Orbit-Core/issues/130))
+
+### Install and upgrade
+
+- Download only **published, owner-approved release assets** from [official GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases), together with their matching published SHA-256 sidecars. An unpublished CI acceptance artifact is not a released installer and must not replace an existing installation.
+- Review the proposed CREATE / UPGRADE / SKIP / MERGE / PRESERVE actions before confirming installation. Preserve SQLite databases, checkpoints, previous versioned runtime, and custom host configurations.
+- Supports Windows and Linux source tests with Python 3.10–3.13 (Windows release acceptance uses Python 3.12). Reopen Codex/Antigravity and actually call the MCP after an owner-approved install; a configured path alone is not connection evidence.
+
+### Compatibility
+
+- Retains **57 MCP tools** and the existing local-first, model-independent coordination architecture; no new SDK, permanent model runner, or mandatory cloud service.
+- `orbit_autopilot_charter(action="resume")` intentionally requires a **two-step preview and matching expected_resume_digest**. Older host workflows need updated calling instructions; never bypass the replay protection for compatibility.
+- Specialist reporting and team trace additions are optional; legacy handoff/timeline uses remain supported. Exact stock upgrades create adjacent backups; custom or unrecognized files are held for review. An install cannot promise automatic database-schema downgrade.
+
+### Known limitations
+
+- Automated CI and local protocol tests alone cannot authenticate the owner or prove production-grade host security. Scoped signed-in Codex and disposable Antigravity native-child/lead-review tests passed, along with observed one-time consent/denial and interruption handling; these are not unrestricted native-permission guarantees.
+- Host restrictions and denied operations remain authoritative; no sandbox or host-policy bypass is part of this release. The temporary inherited Antigravity v0.33 registration scan, checkpoint, resume and denial passed, but inherited native-child result delivery did not complete in its bounded window. The later disposable-profile specialist delivery passed; the historical owner-settings change cannot be reconstructed. Timed native grant expiry and active revocation, and complete real-product visual/screenshot review, remain unverified.
+- UI source inventories can miss dynamic/native views; caller-reported screenshot/QA packets and trace references are **not** verified visual or host-execution evidence. Preview commands still execute with the launching OS account's privileges; native OS isolation remains a separate, unmerged security effort.
+- This source candidate is not a production-readiness certificate. See [the v0.33 acceptance record](docs/RELEASE-ACCEPTANCE-v0.33.0.md) and the established release process for remaining gates.
 
 ## [0.32.0] - Published prerelease (2026-11-17)
 

@@ -1,12 +1,14 @@
 """Real loopback integration checks for the opt-in local preview tool."""
 import json
 import os
+import runpy
 import socket
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'source/runtime'))
@@ -52,6 +54,11 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(orbit_preview.stop(self.project,{'preview_id':self.preview_id})['status'],'PREVIEW_ONLY')
         self.assertEqual(orbit_preview.stop(self.project,{'preview_id':self.preview_id,'confirm_stop':True})['status'],'STOPPED')
         self.assertEqual(orbit_preview.status(self.project,{'preview_id':self.preview_id})['status'],'NOT_MANAGED_BY_THIS_SESSION')
+
+    def test_loopback_probe_does_not_load_ambient_proxy_settings(self):
+        with patch("urllib.request.getproxies") as get_proxies:
+            runpy.run_path(str(ROOT / "source/runtime/orbit_preview.py"))
+        get_proxies.assert_not_called()
 
     def test_refuse_foreign_port(self):
         with socket.socket() as sock:
