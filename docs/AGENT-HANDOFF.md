@@ -1,3 +1,32 @@
+## 2026-11-23 — Morning live revalidation (06:26 Asia/Kolkata)
+
+**Live snapshot:** canonical repository `samjuniors/Orbit-Core`; default `main` is signed commit [`914290b4a5ac69c0d753961affc916ba2e69b909`](https://github.com/samjuniors/Orbit-Core/commit/914290b4a5ac69c0d753961affc916ba2e69b909). Main still has `VERSION=0.32.0`, `NEXT_VERSION=0.33.0`; the latest published release is [v0.32.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.32.0) (2026-11-17). Latest stable release remains v0.30.0. No v0.33 tag or public release exists. GitHub reports `main` is not protected and required status checks are off.
+
+### Current v0.33 branches and PRs
+
+- [Integration PR #133](https://github.com/samjuniors/Orbit-Core/pull/133): open/unmerged, head `5c1a3552cd41607d68afc91c58936561e5399254`, base `main` at `914290b4a5ac69c0d753961affc916ba2e69b909`. Exact-head CI [#45049655426](https://github.com/samjuniors/Orbit-Core/actions/runs/45049655426) completed **PASS 5/5** (Ubuntu Python 3.10–3.13; Windows Python 3.12).
+- [Candidate PR #135](https://github.com/samjuniors/Orbit-Core/pull/135): open/unmerged, branch `release/v0.33.0-candidate-20261118`, head `098cdf2cfb267d8dd569ab6da5ede6cb728f3dba`, `VERSION=0.33.0`, `NEXT_VERSION=0.34.0`. Exact-head CI [#45048926337](https://github.com/samjuniors/Orbit-Core/actions/runs/45048926337) completed **PASS 5/5**. A fresh live compare now shows the candidate is **54 ahead / 12 behind** integration (`5c1a355`); it is diverged and must be synchronized and revalidated before it can be considered final. The previous sync attempts [#163](https://github.com/samjuniors/Orbit-Core/pull/163) and [#164](https://github.com/samjuniors/Orbit-Core/pull/164) closed **unmerged**; [#165](https://github.com/samjuniors/Orbit-Core/pull/165) was validation-only and closed unmerged. Do not treat its proposed merge commit as applied.
+- [PR #159](https://github.com/samjuniors/Orbit-Core/pull/159) merged into the candidate at `098cdf2`, adding owner-only release dispatch/rerun authorization and owner-guidance hash-precedence protection. [PR #156](https://github.com/samjuniors/Orbit-Core/pull/156) merged into integration at `1e04dd1df7ac7fc74cf37d906b25c01bf9aa67d1`; [PR #161](https://github.com/samjuniors/Orbit-Core/pull/161) merged into integration at `5c1a3552cd41607d68afc91c58936561e5399254`. These integration fixes are not yet carried into the current candidate head.
+- [PR #166](https://github.com/samjuniors/Orbit-Core/pull/166): open against integration, branch `fix/v033-pin-visual-scan-root-20261122`, head `2f69daa8365e7fd17f7e6991d3141b59c8d340fa`. It closes a parent-directory symlink race by using descriptor-relative no-follow traversal on POSIX and opened-handle containment on Windows, then reading from the validated handle. Exact-head CI [#45051094349](https://github.com/samjuniors/Orbit-Core/actions/runs/45051094349) completed **PASS 5/5**. Earlier run [#45050974010](https://github.com/samjuniors/Orbit-Core/actions/runs/45050974010) failed on the previous head because the race-test monkeypatch did not preserve `os.supports_dir_fd`; the test harness was corrected. A Codex review receipt exists for `2f69daa`, but a separate independent security sign-off is not established.
+- [PR #168](https://github.com/samjuniors/Orbit-Core/pull/168) is a temporary CI-validation PR for #166 and explicitly says **DO NOT MERGE**. Older validation PR #167 is closed unmerged. [PR #134](https://github.com/samjuniors/Orbit-Core/pull/134) remains an older alternative candidate draft; keep #135 canonical and do not combine the two.
+
+### Release, host and security gates
+
+**v0.33 remains HOLD / NOT MERGED TO MAIN / NOT TAGGED / NOT RELEASED / NOT INSTALLED.** Outstanding host gates include inherited-profile child-result delivery and Codex child identity/receipt (**NOT VERIFIED**), host-enforced timed permission expiry/active revocation (**BLOCKED**), actual target-project browser/visual QA (**NOT VERIFIED**), historical owner-settings delta (**NOT VERIFIED**), and owner-profile v0.33 install/rollback (**NOT RUN**). RAD P2 [issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) remains open; drafts #136–#147 are separate from v0.33. LPAC Python HTTP preview and descendant launch remain blocked; do not describe the prototype as a production OS sandbox.
+
+The candidate release workflow is owner-only manual dispatch from `main`; main's currently published workflow separately supports manual dispatch and tag-push prereleases. Reconcile this branch-specific difference after any approved merge.
+
+### Environment and research
+
+Remote Arc device `DESKTOP-AND1FUJ` is still **offline** (last seen 2026-11-21 11:56 UTC). No local checkout, local tests, owner-profile operation, or `.orbit`/SQLite checkpoint was accessed in this report. The Orbit-specific ChatGPT plugin connector was not exposed in the available tool registry; GitHub and Notion were used. The latest research record remains 2026-11-22 and is based on primary vendor documentation (Google Antigravity, Anthropic Claude Code, OpenAI Codex/Agents SDK); findings are host-specific design references, not implementation evidence or an approved dependency. No new external research or owner decision was added in this run.
+
+### Next safe sequence
+
+1. Complete review of #166; merge only the actual fix into integration after review and exact-head CI remain green. Never merge #168.
+2. Rebuild/synchronize the candidate from the current integration head, preserving candidate-only release controls; then run exact-head candidate CI and fresh review. Do not rely on the closed #163/#164/#165 sync attempts.
+3. Reconnect the authorized Windows host and run bounded disposable native acceptance; update the existing v0.33 acceptance matrix with evidence.
+4. Obtain the owner's explicit risk/release decision only after the host, security, package, and rollback gates are reviewed. Do not merge to main, tag, publish, install, or deploy before that decision.
+
 ## 2026-11-22 — Live continuation checkpoint: P2 stop-session retry + provider adapter research
 
 **Verified source snapshot:** canonical repo `samjuniors/Orbit-Core`; default `main` at `914290b4a5ac69c0d753961affc916ba2e69b909` (signed commit). Published latest release remains prerelease `v0.32.0`; no v0.33 release is published. The historic Orbit-Core-MCP URL redirects to this repository.
@@ -36,7 +65,7 @@ Research recorded in the existing Notion [Orbit Core Research & References](http
 # Orbit Core — cross-agent continuity and handoff
 
 **Status:** maintained handoff contract plus a dated engineering snapshot, **not** authorization to merge, install, or release.
-**Last reviewed:** 2026-11-21 (Asia/Kolkata).
+**Last reviewed:** 2026-11-23 (Asia/Kolkata).
 **Project:** [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core). The historic Orbit-Core-MCP URL redirects to this repository.
 **Applies to:** ChatGPT, Claude Code, Codex, Antigravity and other authorized coding hosts. **Not** the separate Orbit Commander project (paused by owner).
 
