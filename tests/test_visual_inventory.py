@@ -447,7 +447,7 @@ class VisualInventoryTests(unittest.TestCase):
         self.assertEqual(res["component_source_review"]["status"], "REVIEW_SOURCE_CLAIMS")
         self.assertEqual(res["project_style_context"]["claims"], [])
         self.assertFalse(res["selection_applied"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 57)
+        self.assertEqual(len(orbit_mcp.TOOLS), 58)
 
     def test_approved_project_style_is_visible_only_in_same_project_decisions(self):
         entry = {"project_root": str(self.root), "project": "app-a",
