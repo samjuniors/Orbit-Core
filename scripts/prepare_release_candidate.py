@@ -51,12 +51,19 @@ def prepare(root=ROOT):
     if target.exists():
         if target.is_symlink() or not target.is_file():
             raise ValueError("Candidate bundle must be a regular file")
-        # The checked-in current-version bundle can lag newly added canonical
-        # runtime modules on a feature branch. Rebuild only this current-version
-        # candidate from its own non-code metadata before asserting source parity.
-        # Older versioned bundles remain immutable.
-        build(root=root)
-        created = True
+        try:
+            source_parity(root, target, version)
+        except ValueError as exc:
+            # A feature branch may add a canonical runtime module while the
+            # checked-in current-version candidate still has the older module
+            # inventory. Rebuild only for that structural drift. Content drift
+            # in an existing module remains a hard failure.
+            if str(exc) != "Desktop bundle runtime module inventory differs from source":
+                raise
+            build(root=root)
+            created = True
+        else:
+            created = False
     else:
         options = []
         for path in root.glob("ORBIT-Claude-Desktop-v*.mcpb"):
