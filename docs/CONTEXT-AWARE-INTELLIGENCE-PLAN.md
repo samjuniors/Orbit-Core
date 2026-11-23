@@ -224,7 +224,24 @@ A phase is not complete because source code or tests were authored. Require:
 8. **Repository quality:** full existing unit suite, package parity, disposable plugin install/update/rollback, exact-head Linux/Windows CI.
 9. **Independent review:** source/security review and explicit owner acceptance before merge or release.
 
-## 9. Immediate next actions
+## 9. Phase 1 implementation checkpoint — started
+
+**Implemented on `feat/v034-context-aware-intelligence-20261123`:**
+
+- Added `source/runtime/orbit_project_audit.py`, a bounded read-only filesystem metadata inventory.
+- Extended existing `orbit_project_scan` and the full `orbit_project_resume` path to include structural audit results; no duplicate scan tool or database ledger was introduced.
+- Added heuristic review leads for missing conventional README, test structure, architecture documentation in larger source trees, dependency lockfiles, high-assurance security documentation and CI configuration.
+- Findings include category, severity, confidence, evidence paths, recommendation and explicit `is_confirmed_defect=false`.
+- Scan reports a metadata-only snapshot digest, scan limits, incomplete/truncated status, skipped symlinks, inventory summary and explicit non-execution/non-write semantics.
+- Added `tests/test_project_audit.py` for basic findings, test/CI discovery, high-assurance profile behavior, no-write behavior and symlink-root rejection.
+
+**Safety and scope:** This first slice does not read source contents, execute project scripts, install dependencies, persist a scan baseline, create implementation tasks or claim semantic/security verification. It is a structural inventory and gap-signal layer only. The next slice should add reviewed findings and plan/task linkage after test execution and security review.
+
+**Verification status:** Files were committed to the feature branch and their GitHub contents re-fetched. No CI status checks were reported for the latest commit at the time of this checkpoint, and no local test execution was available through the GitHub connector. Treat tests as authored, not passed.
+
+---
+
+## 10. Immediate next actions
 
 1. Review this audit/plan document and the existing PR #141 delta.
 2. Confirm the product semantics and whether v0.34 should ship the Claude Code adapter first while keeping other hosts on the existing behavior.
