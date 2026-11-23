@@ -8,10 +8,10 @@
 
 Orbit connects to the coding environment you already use. It helps turn requirements into an approved plan, coordinate specialist work, track progress, retain concise project context, and resume from the last checkpoint—without replacing your IDE or choosing an external model for you.
 
-**[Get started](#quick-start) · [How it works](#how-it-works) · [Documentation](#documentation) · [AI agent handoff](docs/AGENT-HANDOFF.md) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core/releases)**
+**[Get started](#quick-start) · [Claude Code plugin](#claude-code-install-as-a-plugin) · [How it works](#how-it-works) · [Documentation](#documentation) · [AI agent handoff](docs/AGENT-HANDOFF.md) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core/releases)**
 
 > [!IMPORTANT]
-> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. Published packages have separate stable/prerelease channels. **v0.32.0 is the latest published prerelease as checked 2026-11-18**, not a production certification; a stable-channel label is also not a security or production certificate. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
+> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. Published packages have separate stable/prerelease channels. As checked on 2026-11-23, **v0.32.0** is the newest published prerelease and **v0.30.0** the newest stable-channel release. A prerelease is not a production certification, and a stable-channel label is not a security or production certificate either. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
 
 ## Why Orbit Core?
 
@@ -43,6 +43,9 @@ Orbit does **not** provide its own LLM, silently install AI providers, launch ba
 
 ## Quick start
 
+> [!TIP]
+> **Using Claude Code?** The quickest path is one command: `/plugin install orbit-core --marketplace samjuniors/Orbit-Core`. See [Claude Code: install as a plugin](#claude-code-install-as-a-plugin).
+
 ### One Universal Setup for your coding hosts
 
 **Recommended for most users:** Download the latest **published** `ORBIT-Universal-Setup-vX.Y.Z.zip` and its `.sha256` file from **[GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases)**. Verify the ZIP checksum, extract it and open **`Orbit Setup.cmd`** (Windows) or **`python3 orbit_setup.py`** (macOS/Linux). Select one or more supported hosts, choose **This computer** or **One project**, review the exact file changes, then approve. Restart your IDE and verify that the Orbit MCP actually connects.
@@ -50,6 +53,25 @@ Orbit does **not** provide its own LLM, silently install AI providers, launch ba
 This one package can configure **Antigravity, Codex, Claude Code and VS Code** together. It does not install those coding applications or their models. **Claude Desktop** uses its separately published `.mcpb` extension and is not silently installed by the Universal Setup.
 
 **Requirements:** Python 3.10–3.13 (Windows: 3.12 recommended); no administrator permissions or `pip install` required for Orbit's core local MCP server. The Windows graphical setup additionally needs Tkinter. Installation applies to your **current OS account**, not all computer accounts.
+
+### Claude Code: install as a plugin
+
+In Claude Code (2.1.275 or later), install Orbit Core straight from this repository, no ZIP needed:
+
+```text
+/plugin install orbit-core --marketplace samjuniors/Orbit-Core
+```
+
+On older versions, add the marketplace first, then install:
+
+```text
+/plugin marketplace add samjuniors/Orbit-Core
+/plugin install orbit-core@orbit-core
+```
+
+To sync to a newer version later, run `/plugin marketplace update orbit-core`, then choose **Update now** for Orbit Core in `/plugin` (Installed tab). You can also turn on auto-update for the `orbit-core` marketplace in `/plugin` (Marketplaces tab). Restart Claude Code after an update so the MCP server reloads.
+
+The plugin adds the Orbit workflow skill, 15 specialist agents and the local Orbit MCP server (`orbit-core-mcp`). It needs **Python 3.10–3.13 on `PATH` as `python`**. It uses the same local database as other Orbit installs: `%LOCALAPPDATA%\OrbitCore\memory.sqlite3` on Windows, `~/.local/share/orbit-core/memory.sqlite3` elsewhere. The plugin tracks the published version on `main`. Use either the plugin or the Universal Setup's Claude Code option, not both, to avoid two Orbit MCP registrations.
 
 ### Installation from PowerShell or a terminal
 
@@ -63,7 +85,7 @@ py -3.12 .\orbit_setup.py install --scope machine --hosts antigravity codex --ap
 
 Select only the hosts you use. For one existing project use `--scope project --project "C:\full\path\to\project"`. On macOS/Linux, run the same `orbit_setup.py` commands with a supported `python3`. The installer doesn't install an IDE or model, delete SQLite memory or replace unrelated MCP entries.
 
-The **v0.32.0 ZIP** also includes `Orbit.ps1` and a release-aware CLI. If you want to install that **exact published prerelease**, not the older stable-channel release, specify both its channel and version:
+Since v0.31.0, the ZIP also includes `Orbit.ps1` and a release-aware CLI. To install an **exact published prerelease** such as v0.32.0, rather than the older stable-channel release, specify both its channel and version:
 
 ```powershell
 # Inside the extracted, checksum-verified v0.32.0 ZIP:
@@ -87,11 +109,11 @@ If PowerShell's local-script policy blocks `Orbit.ps1`, use `py -3.12 .\orbit_cl
 & "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex --apply
 ```
 
-- `stable` is the **default** published release channel; `candidate` explicitly opts into published prereleases. As checked 2026-11-18, [v0.30.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) remains the latest stable-channel release and [v0.32.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.32.0) is the latest published candidate/prerelease. Always use [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases) for the live list. The updater will not silently downgrade an installed newer prerelease. **Historical v0.31 updater limitation:** a stable-channel `--check` can itself show a downgrade-block error if the installed candidate is newer; no changes occur. Use `--channel candidate` to check your current prerelease track. A metadata-only UX fix is proposed in [PR #106](https://github.com/samjuniors/Orbit-Core/pull/106).
+- `stable` is the **default** published release channel; `candidate` explicitly opts into published prereleases. As checked on 2026-11-23, the [v0.30.0 release](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) is the latest stable and [v0.32.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.32.0) is the newest prerelease. Always use [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases) for the live list. The updater will not silently downgrade an installed newer prerelease. From v0.32.0, a stable-channel `--check` against a newer installed prerelease just reports the older release and changes nothing. **v0.31.0 installs only:** that check can instead show a downgrade-block error, still with no changes; use `--channel candidate` to check your prerelease track.
 - `--check` reads release metadata only. Without `--apply`, the update CLI verifies a package but does **not execute** downloaded installer code. It does **not** show the precise target-file change plan until the selected release installer runs; for that plan without writing files, run the verified ZIP's `orbit_setup.py install` or `update` **without** `--apply`.
 - `--apply` runs the selected checksum-verified published installer and makes only the selected host/scope changes with backup/customization guards. Save work first; restart the host IDE afterward and check the actual MCP response. GitHub checksums verify published bytes, **not independent publisher signing**.
 
-**Scoped uninstall (v0.32.0 example):** preview first, then apply only if you really want to remove Orbit from the selected host:
+**Scoped uninstall (v0.32.0 example; v0.31.0 and later):** preview first, then apply only if you really want to remove Orbit from the selected host:
 
 ```powershell
 & "$HOME\.orbit-universal\bin\orbit.cmd" uninstall --channel candidate --version 0.32.0 --hosts codex
@@ -99,8 +121,6 @@ If PowerShell's local-script policy blocks `Orbit.ps1`, use `py -3.12 .\orbit_cl
 ```
 
 Uninstall removes the selected Orbit integration, **not** SQLite memory, project checkpoints or unrelated MCP servers. Older installations such as v0.30.0 can use the scoped `orbit_setup.py uninstall` from their original checksum-verified ZIP. Do not use the destructive `clean` command for normal uninstall.
-
-**Known v0.32.0 upgrade issue:** [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130) documents two official v0.31 Antigravity agent files that the published v0.32 installer may fail to recognize. It fails closed without overwriting them; do not disable customization guards. A narrowly verified fix is being tested for the next source release.
 
 For details, see [Release quick start](docs/RELEASE-QUICKSTART.md), [installation options](docs/MCP-INSTALLATION-OPTIONS.md) and [update experience](docs/UPDATE-EXPERIENCE.md). A development/source-checkout `orbit_setup.py update` reapplies local files: it does **not** fetch GitHub Releases.
 
@@ -152,7 +172,7 @@ host differences and acceptance criteria, read
 | --- | --- | --- |
 | **Antigravity** | Orbit agents, skills and local stdio MCP | Host-controlled, only when a native delegation tool is actually available |
 | **Codex** | Orbit skill/guidance and local stdio MCP | Host-controlled, only when supported and authorized |
-| **Claude Code** | Orbit skill, specialist profiles and local stdio MCP | Host-controlled, only when supported and authorized |
+| **Claude Code** | Orbit skill, specialist agents and local stdio MCP, via the [`/plugin` marketplace](#claude-code-install-as-a-plugin) or the Universal Setup | Host-controlled, only when supported and authorized |
 | **VS Code** | MCP configuration where supported by the active extension/host | No universal native delegation guarantee |
 | **Claude Desktop** | Separate published `.mcpb` extension | MCP access is **not** Claude Code subagent execution |
 
@@ -208,7 +228,7 @@ The CI matrix covers Ubuntu with Python **3.10–3.13** and Windows with Python 
 | [Security](SECURITY.md) | Threat boundaries, approval caveats and known gaps |
 | [Roadmap](docs/NEXT-VERSION.md) | M1–M5 implementation and outstanding acceptance gates |
 | [Release and QA checklist](docs/RELEASE-PROCESS.md) | Repeatable checks and automatic publication workflow for every version |
-| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.31.0.md) | v0.31.0 published prerelease, installed-runtime evidence and remaining host gates |
+| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.32.0.md) | v0.32.0 release evidence and remaining host gates ([v0.31.0 record](docs/RELEASE-ACCEPTANCE-v0.31.0.md)) |
 | [Changelog](CHANGELOG.md) | Recorded source and release changes |
 
 ## Security and project status

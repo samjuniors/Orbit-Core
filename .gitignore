@@ -31,5 +31,7 @@ dist/
 *.log
 # Avoid storing local host overrides from user's home
 .mcp.json
+# Generated Claude Code plugin manifest (scripts/build_plugin_suite.py --sync-claude-code).
+!/plugins/claude-code/orbit-core/.mcp.json
 mcp_config.json
 .claude.json
