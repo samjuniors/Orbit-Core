@@ -1,4 +1,4 @@
-* text=auto
+* text=auto eol=lf
 *.py text eol=lf
 *.pyw text eol=lf
 *.md text eol=lf
@@ -15,3 +15,7 @@ NEXT_VERSION text eol=lf
 
 # Historical Windows CRLF stock bytes must not be normalized by Git.
 tests/fixtures/v0251-renamed-orbit-cli-crlf.bin binary
+
+# Preserve native Windows script bytes in plugin distributions.
+*.bat -text -eol
+*.cmd -text -eol
