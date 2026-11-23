@@ -98,7 +98,7 @@ def claude_code_files(root=ROOT, source=None):
         "homepage": "https://github.com/samjuniors/Orbit-Core",
         "repository": "https://github.com/samjuniors/Orbit-Core", "license": "MIT"})
     claude[".mcp.json"] = json_bytes({"mcpServers": {"orbit-core-mcp": {
-        "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/runtime/orbit_mcp.py"]}}})
+        "command": "${ORBIT_PYTHON:-python}", "args": ["${CLAUDE_PLUGIN_ROOT}/runtime/orbit_mcp.py"]}}})
     for name, body in source.items():
         if not name.startswith("agents/") or name == "agents/orbit-lead-agent.md":
             continue

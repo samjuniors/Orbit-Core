@@ -10,6 +10,25 @@ Proposed future changes require separate owner review.
 
 - Added a GitHub Sponsors funding configuration for `samjuniors` and an optional README support section. This documentation-only patch does not change runtime, package versions, tests or releases.
 
+## [0.33.1] - Prerelease (2026-11-23)
+
+### Highlights
+
+- **Claude Code plugin MCP server can start on Windows when `python` is the Microsoft Store alias.** The plugin's `.mcp.json` now launches `${ORBIT_PYTHON:-python}`. Without `ORBIT_PYTHON`, behaviour is unchanged. Setting it to a full Python path bypasses the Store alias, which otherwise closes the connection before the server starts.
+
+### Install and upgrade
+
+- Claude Code marketplace users: run `/plugin marketplace update orbit-core`, update Orbit Core in `/plugin`, then restart Claude Code. On Windows, if `/mcp` shows `orbit-core-mcp` failed, set the user environment variable `ORBIT_PYTHON` to your Python 3.10–3.13 executable and restart.
+- Universal Setup, Codex, Antigravity and Claude Desktop packages carry only the version change; their installers already write an absolute Python path.
+
+### Compatibility
+
+- No MCP tool, database or workflow change; still **57 MCP tools**. The release is a patch to v0.33.0.
+
+### Known limitations
+
+- Windows users whose `python` resolves to the Store alias must still set `ORBIT_PYTHON` once; a Claude Code plugin cannot pick a per-OS command. All v0.33.0 known limitations still apply: timed native grant expiry and active revocation remain unverified, there is no independent human security review, and native OS isolation ([issue #138](https://github.com/samjuniors/Orbit-Core/issues/138)) is not part of this release.
+
 ## [0.33.0] - Prepared release notes (2026-11-18)
 
 ### Highlights

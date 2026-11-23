@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "orbit-core-mcp": {
-      "command": "python",
+      "command": "${ORBIT_PYTHON:-python}",
       "args": [
         "${CLAUDE_PLUGIN_ROOT}/runtime/orbit_mcp.py"
       ]
