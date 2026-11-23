@@ -234,3 +234,34 @@
 8. Verify the tag peels to the tested `main` commit, all four packages plus four `.sha256` sidecars, and updater discovery and a disposable install.
 
 Rerun exact-head CI after each merge that changes code.
+
+## 2026-11-23 — v0.33.0 published (prerelease)
+
+**Status: PUBLISHED as a prerelease. Production host QA is NOT VERIFIED.** The owner approved the merge and release sequence. The prerelease channel was used; stable was not requested.
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| #173 Codex P2 fixes → integration | **MERGED** | Merge commit `51591e6370314e7567946ed3ca60f91aa6a189b4`; CI 5/5 on head `3d48f6a`. |
+| #172 sync → candidate | **MERGED** | Merge commit `89f261b25c814fb8bb444e6655e7231674fa06d1`; CI 5/5 on that exact head. |
+| #135 candidate → integration | **MERGED** | Merge commit `6ce936bb32bd4a4a54ea1e4bf3a56c9c256f6eac` (pinned to head `89f261b`); [CI run 45136461076](https://github.com/samjuniors/Orbit-Core/actions/runs/45136461076) 5/5 on `6ce936b`. |
+| #133 integration → `main` | **MERGED** | Merge commit `0100e6d1d3e33c907f726c03004d209f7876837d` (pinned to head `6ce936b`; tree identical). Per the owner-accepted F1 decision, this merge also updated the Claude Code marketplace plugin to 0.33.0. |
+| #171 | **Closed by GitHub as merged** | Its head `0f7adcb` became reachable from integration; it had no unique work. |
+| `main` merge-commit CI | **PASS 5/5** | [Run 45137125555](https://github.com/samjuniors/Orbit-Core/actions/runs/45137125555): Ubuntu Python 3.10–3.13, Windows Python 3.12. `VERSION=0.33.0`. |
+| Release workflow | **PASS** | [Run 45137788352](https://github.com/samjuniors/Orbit-Core/actions/runs/45137788352): owner `workflow_dispatch` from `main`, version `0.33.0`, `release_type=prerelease`. The authorization job and the test/tag/publish job both succeeded. |
+| Tag | **PASS** | Annotated `v0.33.0` peels to `0100e6d1d3e33c907f726c03004d209f7876837d`. Prior tags are untouched. |
+| GitHub Release | **PASS** | [ORBIT Core MCP v0.33.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0): prerelease, not draft. The page and assets are reachable without authentication (HTTP 200). |
+| Asset inventory and checksums | **PASS** | 4 packages plus 4 `.sha256` sidecars, downloaded and checked with `sha256sum -c`. Universal Setup `3a3eeb9f…a318`; Antigravity plugin `a06ad6c5…26e3`; plugin suite `174a6010…1e24`; Claude Desktop MCPB `ee04909f…c1b6`. |
+| Content parity with a local rebuild from the tag | **PASS (content); bytes differ** | A Windows rebuild of `v0.33.0` has identical entry names and contents for all four packages. The byte hashes differ because of platform ZIP compression and local `core.autocrlf` (one CRLF-only text difference). |
+| Disposable install smoke of the published ZIP | **PASS** | `smoke_release_zip.py` against the downloaded Universal Setup ZIP: 57 tools, disposable install and stdio. No real IDE, desktop UI or browser was involved. |
+| Updater discovery | **PASS (metadata only)** | `orbit update --check --channel candidate` reports installed 0.32.0 and published 0.33.0. Nothing was installed or applied. |
+
+**Known limitations (unchanged and still open):**
+- Host-enforced timed permission expiry and active revocation: **BLOCKED**.
+- Codex and Antigravity owner-profile native specialist delivery, and v0.33 owner-profile migration and rollback: **NOT VERIFIED**.
+- Real Claude Code `/plugin` install and `tools:` enforcement: **NOT VERIFIED**.
+- Independent human or third-party security review: **NOT PERFORMED**. Only a separate Claude agent review and Codex automated review were done.
+- `orbit-software-engineer` stays read-only, as the owner directed.
+- Low-severity review items F2–F5 remain open.
+- [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) OS isolation stays **OPEN** and outside v0.33.0.
+
+**Next recommended action:** run an owner-approved, disposable-then-owner-profile install of the published v0.33.0 with per-file before/after hashes and a rollback rehearsal. Then commission a human security review and decide on F2 (CI self-checksum) for v0.34.0.
