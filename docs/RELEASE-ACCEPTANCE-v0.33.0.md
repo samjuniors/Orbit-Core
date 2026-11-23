@@ -176,3 +176,22 @@
 **Checker limitation and resolution.** The disposable execution recorded child delivery and a completed lead review, but its first local verifier incorrectly treated a host event content value as an object and returned `BLOCKED` with `AttributeError`. A separate read-only verifier validated the persisted MCP trace, child-to-lead receipt identity, read acknowledgment, independent lead verdict and owner-registration hashes; all its asserted acceptance checks passed. The original checker result remains in the private evidence as a harness defect, not rewritten to PASS. The private fixture stores the separate `arc-independent-verification.json` receipt. No Orbit runtime or test-suite code was changed.
 
 **Release decision: HOLD.** Merge, tag, publish, install and active registration changes remain unauthorized. [Draft PR #135](https://github.com/samjuniors/Orbit-Core/pull/135), stacked on #133, remains open. [RAD issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) remains separate.
+
+## 2026-11-23 — Branch-stack reconciliation and exact-head regression
+
+**Release decision: HOLD.** Branch-stack sync is complete in review PRs; nothing is merged, tagged or published.
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| Main → integration sync | **PASS 5/5, awaiting owner merge** | [PR #171](https://github.com/samjuniors/Orbit-Core/pull/171) at `0f7adcb7203aa12b8be050d775ed370dc9559190` merges `main` `cb105dc` into integration `141e8c5` (PR #166 merge). Ubuntu Python 3.10–3.13 and Windows Python 3.12 passed. Merging it resolves the `main` conflict reported on #133. |
+| Integration → candidate sync | **PASS 5/5, awaiting owner merge** | [PR #172](https://github.com/samjuniors/Orbit-Core/pull/172) at `b3e220d8c1bda7a710378e3895dd72ef19a8ba7a` merges #171 into `release/v0.33.0-candidate-20261118` (`098cdf2`), carrying #156, #161 and #166 fixes into the candidate. [CI run 45132100156](https://github.com/samjuniors/Orbit-Core/actions/runs/45132100156): Ubuntu 3.10–3.13 and Windows 3.12 success. |
+| Local Windows full suite at `b3e220d` | **PASS** | Windows 11, CPython 3.12.10: `python -m unittest discover -s tests` ran 767 tests, 33 skipped, 0 failures. |
+| Release gates at `b3e220d` | **PASS** | `check_release_readiness.py`, `check_version.py --strict-bundle` (0.33.0), `build_release.py --verify` (Universal Setup `fd0e65c6…3328`, Antigravity plugin `dfa9bc06…34ee`, plugin suite `66bcfe9a…a596`) and `smoke_release_zip.py` (57 tools, disposable install and stdio smoke). No IDE, desktop UI or browser covered by this smoke. |
+| Superseded candidate track | **CLOSED** | Alternative `main`-based candidate [PR #134](https://github.com/samjuniors/Orbit-Core/pull/134) closed to keep a single v0.33.0 candidate (#135). |
+| Host-enforced timed permission expiry / active revocation | **BLOCKED** | No new host evidence; unchanged. |
+| Inherited owner-profile native specialist delivery; owner-profile v0.33 migration/rollback | **NOT VERIFIED** | Requires an authorized signed-in host session; not run from this session. |
+| Independent security review of final candidate | **NOT DONE** | No independent review of `b3e220d` recorded. |
+| RAD issue #138 OS isolation | **Outside v0.33.0; OPEN** | Not folded into the candidate. |
+| Owner release decision | **NOT GIVEN** | Required before merging #171 → #172 → #135 → #133 and dispatching `Publish versioned release` from `main`. |
+
+**Owner merge order once approved:** #171 into integration, #172 into the candidate, #135 into integration, then #133 into `main`; rerun merge-commit CI on `main` before any publication.
