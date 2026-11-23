@@ -51,6 +51,25 @@ This one package can configure **Antigravity, Codex, Claude Code and VS Code** t
 
 **Requirements:** Python 3.10–3.13 (Windows: 3.12 recommended); no administrator permissions or `pip install` required for Orbit's core local MCP server. The Windows graphical setup additionally needs Tkinter. Installation applies to your **current OS account**, not all computer accounts.
 
+### Claude Code: install as a plugin
+
+In Claude Code (2.1.275 or later), install Orbit Core straight from this repository, no ZIP needed:
+
+```text
+/plugin install orbit-core --marketplace samjuniors/Orbit-Core
+```
+
+On older versions, add the marketplace first, then install:
+
+```text
+/plugin marketplace add samjuniors/Orbit-Core
+/plugin install orbit-core@orbit-core
+```
+
+To sync to a newer version later, run `/plugin marketplace update orbit-core`, then choose **Update now** for Orbit Core in `/plugin` (Installed tab). You can also turn on auto-update for the `orbit-core` marketplace in `/plugin` (Marketplaces tab). Restart Claude Code after an update so the MCP server reloads.
+
+The plugin adds the Orbit workflow skill, 15 specialist agents and the local Orbit MCP server (`orbit-core-mcp`). It needs **Python 3.10–3.13 on `PATH` as `python`**. It uses the same local database as other Orbit installs: `%LOCALAPPDATA%\OrbitCore\memory.sqlite3` on Windows, `~/.local/share/orbit-core/memory.sqlite3` elsewhere. The plugin tracks the published version on `main`. Use either the plugin or the Universal Setup's Claude Code option, not both, to avoid two Orbit MCP registrations.
+
 ### Installation from PowerShell or a terminal
 
 From the **verified, extracted Universal Setup ZIP**, you can use its installer without opening the GUI. First preview the exact target-file plan, then apply only after reviewing it:

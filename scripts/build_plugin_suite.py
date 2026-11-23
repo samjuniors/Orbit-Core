@@ -11,6 +11,9 @@ except ImportError:
     from build_antigravity_plugin import build_files
 
 ROOT = Path(__file__).resolve().parents[1]
+# Committed copy of the Claude Code adapter, served by .claude-plugin/marketplace.json
+# so `/plugin marketplace add samjuniors/Orbit-Core` works without a ZIP.
+CLAUDE_CODE_PLUGIN_DIR = Path("plugins") / "claude-code" / "orbit-core"
 
 def json_bytes(obj):
     return (json.dumps(obj, indent=2, ensure_ascii=False) + "\n").encode()
@@ -46,10 +49,29 @@ def entries(root=ROOT):
         "command": "python", "args": ["${PLUGIN_ROOT}/runtime/orbit_mcp.py"]}}})
     for name, blob in codex.items():
         mapped[f"orbit-core-suite/codex/orbit-core/{name}"] = blob
-    claude = dict(common)
+    for name, blob in claude_code_files(root, source).items():
+        mapped[f"orbit-core-suite/claude-code/orbit-core/{name}"] = blob
+    mapped["orbit-core-suite/README.md"] = (
+        "One Orbit Core ZIP, separate Antigravity/Codex/Claude Code adapters.\n"
+        "DeepSeek Harness requires a separate Cordis adapter; NOT supported.\n"
+        "No cloud server is needed; locally launched MCP still requires Python.\n"
+        "Native plugin activation, paths and permissions require real-host tests.\n"
+        "Extracting this archive does not modify any host configuration.\n").encode()
+    return mapped
+
+def claude_code_files(root=ROOT, source=None):
+    """Claude Code plugin layout (relative names) generated from canonical source."""
+    root = Path(root)
+    version = (root / "VERSION").read_text().strip()
+    source = build_files(root) if source is None else source
+    claude = {name: blob for name, blob in source.items()
+              if name.startswith(("runtime/", "skills/"))}
     claude[".claude-plugin/plugin.json"] = json_bytes({
         "name": "orbit-core", "version": version,
-        "description": "Orbit Core local workflow, MCP and specialist agents"})
+        "description": "Orbit Core local workflow, MCP and specialist agents",
+        "author": {"name": "samjuniors"},
+        "homepage": "https://github.com/samjuniors/Orbit-Core",
+        "repository": "https://github.com/samjuniors/Orbit-Core", "license": "MIT"})
     claude[".mcp.json"] = json_bytes({"mcpServers": {"orbit-core-mcp": {
         "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/runtime/orbit_mcp.py"]}}})
     for name, body in source.items():
@@ -63,15 +85,27 @@ def entries(root=ROOT):
         claude[name] = (f"---\nname: {Path(name).stem}\n"
                         f"description: {description}\nmodel: inherit\n---\n" +
                         details).encode("utf-8")
-    for name, blob in claude.items():
-        mapped[f"orbit-core-suite/claude-code/orbit-core/{name}"] = blob
-    mapped["orbit-core-suite/README.md"] = (
-        "One Orbit Core ZIP, separate Antigravity/Codex/Claude Code adapters.\n"
-        "DeepSeek Harness requires a separate Cordis adapter; NOT supported.\n"
-        "No cloud server is needed; locally launched MCP still requires Python.\n"
-        "Native plugin activation, paths and permissions require real-host tests.\n"
-        "Extracting this archive does not modify any host configuration.\n").encode()
-    return mapped
+    return claude
+
+def sync_claude_code_plugin(root=ROOT):
+    """Rewrite the committed Claude Code plugin directory to match canonical source."""
+    root = Path(root)
+    target = root / CLAUDE_CODE_PLUGIN_DIR
+    desired = claude_code_files(root)
+    if target.is_symlink():
+        raise ValueError("Refusing symlinked Claude Code plugin directory")
+    for item in sorted(target.rglob("*"), reverse=True) if target.exists() else ():
+        rel = item.relative_to(target).as_posix()
+        if item.is_symlink() or (item.is_file() and rel not in desired):
+            item.unlink()
+        elif item.is_dir() and not any(item.iterdir()):
+            item.rmdir()
+    for name, blob in desired.items():
+        path = target / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.is_file() or path.read_bytes() != blob:
+            path.write_bytes(blob)
+    return {"directory": CLAUDE_CODE_PLUGIN_DIR.as_posix(), "files": len(desired)}
 
 def verify(root, path):
     desired = entries(root)
@@ -110,4 +144,8 @@ def build(root=ROOT, path=None):
     return verify(root, path)
 
 if __name__ == "__main__":
-    print(json.dumps(build(), indent=2))
+    import sys
+    if sys.argv[1:] == ["--sync-claude-code"]:
+        print(json.dumps(sync_claude_code_plugin(), indent=2))
+    else:
+        print(json.dumps(build(), indent=2))
