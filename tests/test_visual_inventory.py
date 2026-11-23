@@ -99,6 +99,35 @@ class VisualInventoryTests(unittest.TestCase):
         self.assertEqual(result["scanned_file_count"], 5)
         self.assertFalse(result["screen_inventory_complete"])
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFOs unavailable on this platform")
+    def test_fifo_source_candidate_does_not_block_scan(self):
+        import threading
+        fifo = self.root / "src/components/Blocking.tsx"
+        os.mkfifo(fifo)
+        outcome = {}
+
+        def scan():
+            try:
+                outcome["result"] = orbit_specialists.scan_visual_project(self.root)
+            except BaseException as exc:  # surfaced below
+                outcome["error"] = exc
+
+        worker = threading.Thread(target=scan, daemon=True)
+        worker.start()
+        worker.join(timeout=10)
+        if worker.is_alive():
+            # Release the blocked reader so the daemon thread can exit.
+            writer = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+            os.close(writer)
+            worker.join(timeout=5)
+            self.fail("scan_visual_project blocked opening a FIFO source candidate")
+        if "error" in outcome:
+            raise outcome["error"]
+        result = outcome["result"]
+        self.assertIn("UNSAFE_OR_MISSING_SOURCE_FILE", result["partial_reasons"])
+        self.assertNotIn("src/components/Blocking.tsx", result["component_files"])
+        self.assertIn("src/components/Button.tsx", result["component_files"])
+
     def test_parent_directory_swap_to_symlink_is_not_read(self):
         components = self.root / "src/components"
         saved = self.root / "src/components-original"
@@ -108,6 +137,9 @@ class VisualInventoryTests(unittest.TestCase):
             "export function OutsideSecretComponent() { return <div />; }",
             encoding="utf-8")
         swapped = False
+
+        class DirectoryLinkUnavailable(Exception):
+            """Raised only when the test cannot create the racing link or junction."""
 
         def install_directory_link():
             try:
@@ -128,14 +160,19 @@ class VisualInventoryTests(unittest.TestCase):
                 nonlocal swapped
                 if not swapped and Path(path) == components / "Button.tsx":
                     components.rename(saved)
-                    install_directory_link()
+                    try:
+                        install_directory_link()
+                    except OSError as exc:
+                        # Not an OSError subclass, so the scanner cannot absorb it and
+                        # only link-setup failure (never a scanner error) becomes a skip.
+                        raise DirectoryLinkUnavailable(str(exc)) from exc
                     swapped = True
                 return original_path_open(path, *args, **kwargs)
 
             try:
                 with patch.object(Path, "open", new=racing_path_open):
                     result = orbit_specialists.scan_visual_project(self.root)
-            except OSError as exc:
+            except DirectoryLinkUnavailable as exc:
                 self.skipTest(f"Directory symlink/junction unavailable: {exc}")
         else:
             original_os_open = os.open

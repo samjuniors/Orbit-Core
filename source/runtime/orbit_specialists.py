@@ -288,7 +288,11 @@ def scan_visual_project(root):
             raise UnsafeSourcePathError("Safe descriptor-relative traversal unavailable")
 
         directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-        file_flags = os.O_RDONLY | os.O_NOFOLLOW
+        # O_NONBLOCK keeps a FIFO or device swapped in for a source candidate from
+        # blocking open(); it has no effect on regular files, and S_ISREG below
+        # rejects anything else before a read is attempted.
+        file_flags = (os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
+                      | getattr(os, "O_NOCTTY", 0))
         root_fd = current_fd = file_fd = None
         try:
             root_fd = os.open(os.fspath(base), directory_flags)
