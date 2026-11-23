@@ -1,4 +1,25 @@
-# Orbit Core — current v0.33 integration and acceptance gate (2026-11-18)
+# Orbit Core — roadmap and current engineering status
+
+## 2026-11-23 — Current main and roadmap disposition
+
+**Canonical repository:** https://github.com/samjuniors/Orbit-Core. GitHub is implementation truth; the Notion decisions hub owns product decisions.
+
+- Main HEAD: [2fdf4f329774b9644e75ac0df4d89738a7cd625f](https://github.com/samjuniors/Orbit-Core/commit/2fdf4f329774b9644e75ac0df4d89738a7cd625f); VERSION=0.33.1; NEXT_VERSION=0.34.0.
+- Published baseline: [v0.33.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0), published 2026-11-23. v0.30.0 remains the latest stable-channel release. v0.33.1 is source-only and unpublished.
+- Main exact-head CI [run #45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) passed 5/5 on 2fdf4f. This does not replace owner-profile IDE acceptance, independent human security review, or production certification.
+- The current v0.33.0 limitations remain: host-enforced timed permission expiry/active revocation BLOCKED; owner-profile native specialist delivery and migration/rollback NOT VERIFIED; independent human security review NOT DONE; full real-product visual/browser QA NOT VERIFIED. See [v0.33 acceptance](RELEASE-ACCEPTANCE-v0.33.0.md).
+- The owner-approved product direction in the [Notion architecture decision](https://app.notion.com/p/40f4f681d48881cea5afc2df9a35084c) orders safe Team Builder, then task-specific skills/tools, then Orbit-mediated agent/bot coordination. Related open issues: [#90](https://github.com/samjuniors/Orbit-Core/issues/90), [#91](https://github.com/samjuniors/Orbit-Core/issues/91), [#92](https://github.com/samjuniors/Orbit-Core/issues/92). Reconcile their acceptance criteria before expanding scope.
+- Experimental branch [feat/v034-context-aware-intelligence-20261123](https://github.com/samjuniors/Orbit-Core/tree/feat/v034-context-aware-intelligence-20261123) is 38 commits ahead of main, has no PR, and its CI [run #45217966745](https://github.com/samjuniors/Orbit-Core/actions/runs/45217966745) failed 5/5. The observed failure is the packaged MCP inventory smoke: scripts/smoke_release_zip.py still expects 57 tools and omits the new orbit_project_findings tool. Its plan says “no runtime implementation” despite actual runtime changes. This branch is NOT APPROVED for merge or release.
+- Keep RAD P2 [issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) and draft PRs #136–#147 separate from product feature work; OS isolation acceptance remains blocked.
+
+**Next safe engineering step:** reconcile the v0.34 proposal/code mismatch against the approved #90/#91/#92 order; then create a focused, reviewable implementation branch with regression tests and exact-head CI. Do not merge, install or publish from the experimental branch.
+
+**Historical material below:** The following v0.33 integration notes are retained as dated evidence from 2026-11-18 through 2026-11-22. They are not the current repository or release snapshot; revalidate GitHub and Notion before acting.
+
+---
+
+## Historical v0.33 integration checkpoint (2026-11-18)
+
 
 **Continuity note (2026-11-22):** Cross-agent resumption rules are maintained in [AGENT-HANDOFF.md](AGENT-HANDOFF.md). This v0.33 candidate intentionally uses the manual-main-only release workflow documented in [RELEASE-PROCESS.md](RELEASE-PROCESS.md); do not copy the current mainline tag-push prerelease trigger into this candidate. Revalidate host/SQLite state and exact branch heads before resuming. This note does not authorize publication.
 
