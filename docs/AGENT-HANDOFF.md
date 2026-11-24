@@ -1,6 +1,6 @@
 # Orbit Core — cross-agent continuity and handoff
 
-**Last reviewed:** 2026-11-23 22:31 Asia/Kolkata.
+**Last reviewed:** 2026-11-24 06:45 Asia/Kolkata.
 **Canonical repository:** https://github.com/samjuniors/Orbit-Core. Revalidate live state before every resume.
 **Scope:** provider-neutral Orbit Core only. Orbit Commander remains separately paused and out of scope.
 **Current baseline:** main VERSION=0.33.1 / NEXT_VERSION=0.34.0; v0.33.0 prerelease published; v0.33.1 and v0.34.0 are not published.
@@ -219,3 +219,39 @@ Handoff saved where / receiving agent verification result:
 ## 6. Updating the handoff itself
 
 At the end of each meaningful task, update **this single handoff record** only for shared engineering summary and actionable pointers; preserve dated historical evidence instead of rewriting it as current. Put detailed version/host acceptance in the **existing** `docs/RELEASE-ACCEPTANCE-vX.Y.Z.md`, product decisions in the **existing** Notion hub, and ephemeral task/checkpoint data in **local** SQLite/`.orbit`. Link rather than duplicate. If a new agent can't access one source, record that constraint explicitly and do not infer its contents.
+
+
+## 2026-11-24 — Morning live revalidation
+
+### Main, releases and merged work
+- Canonical `main` remains [2fdf4f329774b9644e75ac0df4d89738a7cd625f](https://github.com/samjuniors/Orbit-Core/commit/2fdf4f329774b9644e75ac0df4d89738a7cd625f). `VERSION=0.33.1`; `NEXT_VERSION=0.34.0`. The latest main commit pins deterministic Git line endings in `.gitattributes` (`* text=auto eol=lf`) and exempts Windows `.bat/.cmd` files from conversion.
+- Exact-main [CI #45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) passed 5/5 (Ubuntu Python 3.10–3.13; Windows Python 3.12).
+- Published [v0.33.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0) remains the latest prerelease, published 2026-11-23 08:20:55 UTC by owner-triggered [workflow #45137788352](https://github.com/samjuniors/Orbit-Core/actions/runs/45137788352). The annotated tag points to `0100e6d1d3e33c907f726c03004d209f7876837d`; eight assets are present (four packages plus four SHA-256 sidecars). The tag object is unsigned; sidecars are integrity checks, not publisher signatures. Latest stable release remains v0.30.0. No v0.33.1 or v0.34 tag/release exists.
+- [PR #175](https://github.com/samjuniors/Orbit-Core/pull/175) merged to main at `a90f1b398a2be9a3807277f560360598ef247e36`: Claude Code Windows plugin MCP supports `${ORBIT_PYTHON:-python}`. [PR #176](https://github.com/samjuniors/Orbit-Core/pull/176) merged at `5416230722b1009df1216023c475738f662f6c0a`: explicit Samjuniors marketplace/plugin publisher metadata. The actual post-refresh Claude UI display replacing “Unknown Developer” is still NOT VERIFIED; third-party marketplace trust warnings remain expected.
+- [PR #173](https://github.com/samjuniors/Orbit-Core/pull/173) merged into the v0.33 integration branch at `51591e6370314e7567946ed3ca60f91aa6a189b4` for Codex P2 review remediations. [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130) is closed as completed after the stock-agent installer fingerprint fix shipped in v0.33.0.
+
+### Cross-agent handoff and docs PR
+- [PR #178](https://github.com/samjuniors/Orbit-Core/pull/178), branch `docs/orbit-nightly-handoff-20261123`, is still OPEN / DRAFT / documentation-only. Before this 2026-11-24 handoff append, its head was `f37a2eebe17ad8b96de6280bd056b9e447423e17`, 9 commits ahead / 0 behind main. Exact-head [CI #45225953749](https://github.com/samjuniors/Orbit-Core/actions/runs/45225953749) passed 5/5, including Windows Python 3.12. No review submissions or inline review threads were returned. It changes seven documentation files only; no runtime changes.
+- This append creates a new docs-only head; rerun/verify exact-head CI before merging #178. Do not merge automatically.
+
+### v0.33.1 publication gates
+- v0.33.1 is source-only on main; no tag/release and no owner-only release workflow dispatch. [PR #175](https://github.com/samjuniors/Orbit-Core/pull/175) reports isolated Claude Code 2.1.307 validation, marketplace update 0.33.0→0.33.1, and `claude mcp list` Connected with `ORBIT_PYTHON`; without the override the machine's Microsoft Store Python alias still fails. It also reports 769 Windows CPython 3.12 tests passed / 33 skipped plus readiness, strict-bundle, build-verify and ZIP-smoke PASS. These are PR-reported results, not rerun in this automation.
+- Owner's normal Claude Code profile, owner-profile Codex/Antigravity migration and specialist delivery, timed host permission expiry/active revocation, complete real-project visual/browser QA, and independent human security review remain NOT VERIFIED / BLOCKED / NOT DONE. Main branch protection/required checks remain NOT VERIFIED because the GitHub integration previously returned 403. Do not publish v0.33.1 until the acceptance record is revalidated and owner release authorization is explicit.
+
+### v0.34 experiment and approved product order
+- `feat/v034-context-aware-intelligence-20261123` is 38 commits ahead / 0 behind main at `56969232e107c56eb53f89d600793f95383ce2e6`, with no PR. Exact [CI #45217966745](https://github.com/samjuniors/Orbit-Core/actions/runs/45217966745) failed 5/5: every matrix job fails at `scripts/smoke_release_zip.py:101` with “Packaged MCP tool inventory mismatch”. The inspected Ubuntu Python 3.13 job passed 778 tests (6 skipped) before the smoke failure. The branch adds `orbit_project_findings` but the packaged smoke inventory still expects 57 tools. Its plan says “no runtime implementation” while the branch contains runtime changes. No approval for this expanded scope was found. Do not merge or release it.
+- The approved product order remains safe Team Builder first, task-specific skills/tools second, Orbit-mediated agent/bot coordination third. [Issues #90](https://github.com/samjuniors/Orbit-Core/issues/90), [#91](https://github.com/samjuniors/Orbit-Core/issues/91), and [#92](https://github.com/samjuniors/Orbit-Core/issues/92) remain open. Reconcile the v0.34 proposal with this order before selecting a bounded implementation.
+- RAD P2 [issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) remains OPEN and separate. Draft PRs #136–#147 are not release-ready; OS-isolation/preview acceptance remains on hold.
+
+### Research and nightly execution
+- The Notion Research & References page includes the 2026-11-23 update: Claude Code hooks are host-privileged and provider-specific; Codex sandbox/approval policy remains host authority; Antigravity is migrating from legacy Workflows to Skills; OpenHands SDK is an architectural comparison, not an adopted dependency; RealSWE supports asking for desired behavior/motivation; SWE-Skills-Bench is a preliminary preprint warning against blanket skill injection; mini-SWE-agent benchmark claims are maintainer-reported. No new research was added on 2026-11-24.
+- [Orbit Nightly Build](https://github.com/samjuniors/Orbit-Core) actually ran: recorded run `5a3858a3-c5a8-8320-946c-6f47b2694e06`, scheduled 2026-11-23 22:00 IST, started 22:31 IST, completed 22:51 IST with status `completed`; its result matched the run ID, was not marked as a failure, and required no user action. It reported main CI 5/5 PASS, #178 CI pending at that time, and v0.34 CI 5/5 FAIL. Automation delivery status is unknown.
+- Remote Arc `DESKTOP-AND1FUJ` remains OFFLINE (last seen 2026-11-23 11:47:38 UTC). No local checkout/tests, owner-profile IDE acceptance, `.orbit` or SQLite inspection occurred. The Orbit ChatGPT plugin connector was not exposed; GitHub and Notion were used.
+
+### Next safe actions
+1. Review #178 and rerun exact-head CI after this documentation append; keep it draft until reviewed.
+2. Validate the owner’s normal Claude Code profile and actual marketplace publisher display; preserve existing user configuration.
+3. Complete owner-profile Codex/Antigravity acceptance and obtain independent human security review; document timed permission expiry/revocation as blocked until host evidence exists.
+4. Keep v0.33.1 unpublished until its exact-main release workflow, acceptance gates and owner authorization are satisfied.
+5. Reconcile the v0.34 plan/runtime mismatch with the #90/#91/#92 order; do not merge the 38-commit experiment as-is.
+6. Keep RAD P2 #138 isolated from product/release work.
