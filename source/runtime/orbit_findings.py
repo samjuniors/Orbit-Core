@@ -82,7 +82,7 @@ def _validate_finding(item):
         raise ValueError("Audit finding recommendation is invalid")
     if not isinstance(evidence, list) or len(evidence) > 30 or any(
         not isinstance(path, str) or not path or len(path) > 240
-        or path.startswith("/") or "\\" in path or ":" in path or "\\x00" in path
+        or path.startswith("/") or "\\" in path or ":" in path or "\x00" in path
         or any(segment in {"", ".", ".."} for segment in path.split("/"))
         for path in evidence
     ):
