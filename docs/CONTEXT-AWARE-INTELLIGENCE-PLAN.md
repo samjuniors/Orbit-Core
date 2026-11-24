@@ -300,3 +300,16 @@ A phase is not complete because source code or tests were authored. Require:
 - Extended project readiness with source-scan state, revision guards, timestamps, content snapshot digest, byte/file counts and incomplete/failure handling.
 
 **Verification gate:** exact-head CI must cover source-read consent, no-write preview behavior, source-scope isolation, migration from existing databases, symlink/size limits, plugin/installer parity and Windows packaging before this slice is considered verified.
+
+
+## 10. Implementation checkpoint — prioritized remediation plan
+
+**Implemented on the feature branch (not released):**
+
+- Added a read-only `remediation_plan` action to the existing findings tool. It selects only owner-accepted, current findings from both audit scopes; unreviewed, stale and resolved findings are not scheduled.
+- Prioritization is deterministic and explainable from severity, confidence and recurrence. The plan is capped at the existing 12-task draft limit; oversized plans HOLD rather than silently truncating.
+- Reuses `orbit_swarm_draft.preview` and the existing task ledger's graph, concurrency and active-session checks. Priority order is applied to review waves without creating artificial dependency edges.
+- Tasks include evidence-review acceptance criteria and proposed verification gates. No write paths or dependencies are inferred from evidence paths; no task is registered, no host agent is launched and no tests are claimed.
+- Actual task registration continues through the existing `orbit_task_plan` flow with explicit confirmation.
+
+**Verification gate:** exact-head CI must cover priority ordering, task caps, source/structural inclusion, empty write/dependency scopes, existing-task collisions, read-only behavior, plugin parity and Windows packaging before this slice is considered verified.
