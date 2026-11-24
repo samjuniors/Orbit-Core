@@ -110,5 +110,66 @@ class ProjectFindingTests(unittest.TestCase):
         self.assertEqual(other["status"], "EMPTY")
 
 
+
+    def test_task_preview_requires_accepted_current_finding_and_is_read_only(self):
+        result = orbit_findings.reconcile(
+            self.conn, self.project, self.root, audit("a" * 64, [finding()])
+        )
+        row = result["findings"][0]
+        blocked = orbit_findings.task_preview(
+            self.conn, self.project, self.root, row["finding_id"], row["revision"]
+        )
+        self.assertEqual(blocked["status"], "REVIEW_REQUIRED")
+        accepted = orbit_findings.set_disposition(
+            self.conn, self.project, self.root, row["finding_id"], "ACCEPTED", row["revision"]
+        )
+        preview = orbit_findings.task_preview(
+            self.conn, self.project, self.root, row["finding_id"], accepted["finding"]["revision"]
+        )
+        self.assertEqual(preview["status"], "TASK_SPEC_READY")
+        self.assertFalse(preview["task_created"])
+        self.assertEqual(preview["task_spec"]["write_paths"], [])
+        self.assertEqual(preview["task_spec"]["depends_on"], [])
+        self.assertFalse(self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='orbit_agent_tasks'"
+        ).fetchone())
+
+    def test_task_link_requires_existing_task_and_explicit_confirmation(self):
+        import orbit_tasks
+        orbit_tasks.setup(self.conn)
+        result = orbit_findings.reconcile(
+            self.conn, self.project, self.root, audit("a" * 64, [finding()])
+        )
+        row = result["findings"][0]
+        accepted = orbit_findings.set_disposition(
+            self.conn, self.project, self.root, row["finding_id"], "ACCEPTED", row["revision"]
+        )
+        self.conn.execute(
+            """INSERT INTO orbit_agent_tasks
+               (project,project_root,task_key,step,role,goal,reason,write_paths,depends_on,
+                status,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (self.project,self.root,"finding-remediation","audit-remediation","software-engineer",
+             "Review and address the accepted structural finding with evidence and tests.",
+             "Owner accepted the finding; inspect source and tests before changes.",
+             "[]","[]","PLANNED","now","now"),
+        )
+        preview = orbit_findings.link_task(
+            self.conn,self.project,self.root,row["finding_id"],"finding-remediation",
+            accepted["finding"]["revision"],False)
+        self.assertEqual(preview["status"],"PREVIEW_ONLY")
+        self.assertFalse(preview["linked"])
+        linked = orbit_findings.link_task(
+            self.conn,self.project,self.root,row["finding_id"],"finding-remediation",
+            accepted["finding"]["revision"],True)
+        self.assertEqual(linked["status"],"LINKED")
+        self.assertEqual(linked["finding"]["linked_task_ids"],["finding-remediation"])
+
+    def test_evidence_paths_reject_windows_and_traversal_forms(self):
+        for path in (r"..\\secret.txt", r"C:\\secret.txt", "/etc/passwd", "src/../secret", "src//main.py", "src/./main.py", "src\\main.py"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                orbit_findings._validate_finding(finding(evidence=[path]))
+
+
 if __name__ == "__main__":
     unittest.main()
