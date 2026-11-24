@@ -81,10 +81,12 @@ def _validate_finding(item):
     if not isinstance(recommendation, str) or len(recommendation) > 1500:
         raise ValueError("Audit finding recommendation is invalid")
     if not isinstance(evidence, list) or len(evidence) > 30 or any(
-        not isinstance(path, str) or len(path) > 240 or path.startswith("/") or ".." in path.split("/")
+        not isinstance(path, str) or not path or len(path) > 240
+        or path.startswith("/") or "\\" in path or ":" in path or "\x00" in path
+        or any(segment in {"", ".", ".."} for segment in path.split("/"))
         for path in evidence
     ):
-        raise ValueError("Audit finding evidence paths are invalid")
+        raise ValueError("Audit finding evidence paths must be bounded repository-relative POSIX paths")
     payload = {"category": category, "severity": severity, "confidence": confidence,
                "summary": summary, "evidence": evidence, "recommendation": recommendation}
     digest = hashlib.sha256(_json(payload).encode("utf-8")).hexdigest()
@@ -241,3 +243,102 @@ def set_disposition(conn, project, root, finding_id, disposition, expected_revis
         ).fetchone()
     return {"status": "UPDATED", "finding": _public(updated),
             "defect_confirmed": False, "task_created": False}
+
+
+
+def task_preview(conn, project, root, finding_id, expected_revision):
+    """Build a no-write task preview from an explicitly accepted, current finding."""
+    if not isinstance(finding_id, str) or not re.fullmatch(r"[A-Z0-9][A-Z0-9_.-]{0,79}", finding_id):
+        raise ValueError("Invalid finding id")
+    if type(expected_revision) is not int or expected_revision < 1:
+        raise ValueError("expected_revision must be a positive integer")
+    row = conn.execute(
+        """SELECT * FROM orbit_project_findings
+           WHERE project=? AND project_root=? AND finding_id=?""",
+        (project, str(root), finding_id),
+    ).fetchone()
+    if row is None:
+        raise ValueError("Finding not found in selected project")
+    if row["revision"] != expected_revision:
+        return {"status": "STALE_REVISION", "finding": _public(row), "task_created": False}
+    if row["disposition"] != "ACCEPTED":
+        return {"status": "REVIEW_REQUIRED", "message": "Only owner-accepted findings can produce task previews.",
+                "finding": _public(row), "task_created": False}
+    if row["lifecycle"] in {"STALE", "RESOLVED"}:
+        return {"status": "FINDING_NOT_CURRENT", "message": "Refresh and review this finding before planning remediation.",
+                "finding": _public(row), "task_created": False}
+    evidence = json.loads(row["evidence"])
+    task_key = "finding-" + finding_id.lower().replace("_", "-").replace(".", "-")
+    goal = (f"Review and address structural finding {finding_id}: {row['summary']} "
+            f"Recommendation: {row['recommendation']}")[:1500]
+    reason = (f"Owner accepted {finding_id}; inspect evidence paths {', '.join(evidence) or '(none)'}. "
+              "Confirm the actual source condition and tests before editing.")[:500]
+    return {
+        "status": "TASK_SPEC_READY",
+        "finding_id": finding_id,
+        "finding_revision": row["revision"],
+        "task_spec": {
+            "project": project, "task_key": task_key, "step": "audit-remediation",
+            "role": "software-engineer", "goal": goal, "reason": reason,
+            "write_paths": [], "depends_on": [],
+        },
+        "task_created": False,
+        "write_scope_assigned": False,
+        "note": "This is a preview only. It does not register a task, assign write paths, invoke a host agent, or confirm a defect.",
+    }
+
+
+def link_task(conn, project, root, finding_id, task_key, expected_revision, confirm_write=False):
+    """Link an already registered task to an accepted finding after explicit confirmation."""
+    if not isinstance(finding_id, str) or not re.fullmatch(r"[A-Z0-9][A-Z0-9_.-]{0,79}", finding_id):
+        raise ValueError("Invalid finding id")
+    if not isinstance(task_key, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}", task_key):
+        raise ValueError("Invalid task key")
+    if type(expected_revision) is not int or expected_revision < 1:
+        raise ValueError("expected_revision must be a positive integer")
+    row = conn.execute(
+        """SELECT * FROM orbit_project_findings
+           WHERE project=? AND project_root=? AND finding_id=?""",
+        (project, str(root), finding_id),
+    ).fetchone()
+    if row is None:
+        raise ValueError("Finding not found in selected project")
+    if row["revision"] != expected_revision:
+        return {"status": "STALE_REVISION", "finding": _public(row), "linked": False}
+    if row["disposition"] != "ACCEPTED" or row["lifecycle"] in {"STALE", "RESOLVED"}:
+        return {"status": "FINDING_NOT_ELIGIBLE", "finding": _public(row), "linked": False}
+    task_table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='orbit_agent_tasks'"
+    ).fetchone()
+    if not task_table:
+        raise ValueError("Existing Orbit task ledger is unavailable")
+    task = conn.execute(
+        """SELECT status FROM orbit_agent_tasks
+           WHERE project=? AND project_root=? AND task_key=?""",
+        (project, str(root), task_key),
+    ).fetchone()
+    if task is None:
+        raise ValueError("Task must already exist in the same project and root before linking")
+    linked = json.loads(row["linked_task_ids"])
+    if task_key in linked:
+        return {"status": "ALREADY_LINKED", "finding": _public(row), "linked": True}
+    if confirm_write is not True:
+        return {"status": "PREVIEW_ONLY", "finding": _public(row),
+                "task_key": task_key, "task_status": task["status"], "linked": False}
+    linked.append(task_key)
+    with conn:
+        updated = conn.execute(
+            """UPDATE orbit_project_findings
+               SET linked_task_ids=?, revision=revision+1
+               WHERE project=? AND project_root=? AND finding_id=? AND revision=?""",
+            (_json(linked), project, str(root), finding_id, expected_revision),
+        )
+        if updated.rowcount != 1:
+            raise ValueError("Finding revision conflict: refresh and retry")
+        current = conn.execute(
+            """SELECT * FROM orbit_project_findings
+               WHERE project=? AND project_root=? AND finding_id=?""",
+            (project, str(root), finding_id),
+        ).fetchone()
+    return {"status": "LINKED", "finding": _public(current),
+            "task_key": task_key, "linked": True}
