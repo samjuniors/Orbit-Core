@@ -68,8 +68,8 @@ def _python_signals(text, rel):
     findings = []
     try:
         tree = ast.parse(text, filename=rel)
-    except SyntaxError as exc:
-        line = exc.lineno or 0
+    except (SyntaxError, ValueError, RecursionError) as exc:
+        line = getattr(exc, 'lineno', None) or 0
         findings.append({
             "id": "SOURCE_PYTHON_PARSE_" + hashlib.sha256(rel.encode("utf-8")).hexdigest()[:10].upper(),
             "category": "verification",
@@ -192,12 +192,11 @@ def scan_source(root: Path) -> dict:
                         continue
                     if len(candidates) >= MAX_FILES:
                         truncated = True
+                        stack.clear()
                         break
                     candidates.append((Path(entry.path), info))
             except OSError:
                 unreadable.append(Path(entry.path).relative_to(root).as_posix())
-        if len(candidates) >= MAX_FILES:
-            stack.clear()
 
     candidates.sort(key=lambda pair: pair[0].relative_to(root).as_posix().casefold())
     digest = hashlib.sha256()

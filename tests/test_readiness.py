@@ -111,6 +111,14 @@ class ProjectReadinessTests(unittest.TestCase):
 
 
 class ProjectReadinessIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.addCleanup(self.conn.close)
+        self.project = "sample"
+        self.root = "/tmp/orbit-project"
+        orbit_readiness.setup(self.conn)
+
     def test_explicit_scan_persists_readiness_even_with_prebuilt_connection(self):
         import tempfile
         import orbit_intake
