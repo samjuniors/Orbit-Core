@@ -342,3 +342,16 @@ A phase is not complete because source code or tests were authored. Require:
 - Synchronized the canonical decision, MCP and team-builder runtime files into the Claude Code plugin package.
 
 **Verification gate:** exact-head CI must cover context thresholds, timezone validation, unknown quota semantics, rate-limit hold behavior, worker-pool capacity, legacy model-route response compatibility, specialist-role mapping, source/plugin parity and Windows packaging. This implementation does not claim live Claude Code telemetry or measured model quality/cost.
+
+## 13. Correctness review follow-up — identity and high-assurance routing
+
+**Implemented on the feature branch; exact-head verification pending:**
+
+- The findings table's stable identity is project/root/finding ID, while the ledger also carries an audit-scope field. Because review and task APIs address findings by ID without a scope argument, reusing one ID in STRUCTURAL and SOURCE would otherwise overwrite the prior scope through the SQLite upsert.
+- Reconciliation now serializes the cross-scope identity check and upsert in one BEGIN IMMEDIATE transaction, and rejects a finding ID already owned by the other scope. Review/task lookup also fails closed if an ambiguous legacy schema is ever encountered.
+- Added regression coverage proving a duplicate cross-scope finding ID is rejected without replacing the original STRUCTURAL finding.
+- Model routing previously allowed a balanced-tier fallback to be recommended for a high-assurance task even when the requested tier was deep. It now withholds that recommendation and returns REQUIRES_MODEL_QUALITY_REVIEW unless the host-reported candidate classifies as deep.
+- Added a regression test for the high-assurance balanced-fallback case.
+- Synchronized the canonical findings and model-routing modules with the committed Claude Code plugin runtime copies.
+
+**Verification limitation:** These changes have been committed to the feature branch, but the exact-head test suite has not yet been executed. The connected Windows test device is currently offline, and the GitHub integration available in this session does not expose workflow dispatch. The earlier CI result applies to commit 56969232e107c56eb53f89d600793f95383ce2e6, not these later commits. Do not treat this branch as CI-certified or open/merge/release it until exact-head CI and independent review pass.
