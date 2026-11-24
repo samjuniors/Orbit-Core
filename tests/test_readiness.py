@@ -1,0 +1,112 @@
+"""Tests for persistent project scan/readiness lifecycle."""
+import sqlite3
+import sys
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source" / "runtime"))
+import orbit_readiness
+
+
+def audit(status="SCANNED", snapshot="a" * 64):
+    return {
+        "status": status,
+        "inventory_snapshot_sha256": snapshot,
+        "summary": {"files": 12, "directories": 3},
+        "findings_count": 2,
+    }
+
+
+class ProjectReadinessTests(unittest.TestCase):
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        orbit_readiness.setup(self.conn)
+        self.project = "sample"
+        self.root = "/tmp/orbit-project"
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_new_project_requires_scan(self):
+        result = orbit_readiness.get_status(self.conn, self.project, self.root)
+        self.assertEqual(result["status"], "SCAN_REQUIRED")
+        self.assertTrue(result["scan_required_to_revalidate"])
+
+    def test_complete_scan_persists_snapshot_and_counts(self):
+        token = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        self.assertEqual(orbit_readiness.get_status(self.conn, self.project, self.root)["status"], "SCANNING")
+        result = orbit_readiness.complete_scan(self.conn, self.project, self.root, token, audit())
+        self.assertEqual(result["status"], "SCANNED")
+        self.assertTrue(result["last_scan_complete"])
+        self.assertEqual(result["file_count"], 12)
+        self.assertIsNone(result["changed_since_previous_scan"])
+        self.assertIn("not a content hash", result["snapshot_semantics"])
+
+    def test_changed_inventory_is_reported_on_next_complete_scan(self):
+        first = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        orbit_readiness.complete_scan(self.conn, self.project, self.root, first, audit(snapshot="a" * 64))
+        second = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        changed = orbit_readiness.complete_scan(
+            self.conn, self.project, self.root, second, audit(snapshot="b" * 64)
+        )
+        self.assertEqual(changed["status"], "SCANNED")
+        self.assertTrue(changed["changed_since_previous_scan"])
+        self.assertEqual(changed["scan_count"], 2)
+
+    def test_incomplete_scan_is_not_reported_as_current_complete(self):
+        token = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        result = orbit_readiness.complete_scan(
+            self.conn, self.project, self.root, token, audit(status="INCOMPLETE")
+        )
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertFalse(result["last_scan_complete"])
+
+    def test_failure_preserves_last_good_snapshot(self):
+        good = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        orbit_readiness.complete_scan(self.conn, self.project, self.root, good, audit())
+        prior = orbit_readiness.get_status(self.conn, self.project, self.root)["last_snapshot_sha256"]
+        failed = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        result = orbit_readiness.fail_scan(
+            self.conn, self.project, self.root, failed, "PermissionError"
+        )
+        self.assertEqual(result["status"], "FAILED")
+        self.assertEqual(result["last_snapshot_sha256"], prior)
+        self.assertEqual(result["last_error"], "PermissionError")
+
+    def test_interrupted_scan_is_detected_on_next_start(self):
+        orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        next_scan = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        self.assertTrue(next_scan["recovered_interrupted_scan"])
+        self.assertEqual(orbit_readiness.get_status(self.conn, self.project, self.root)["status"], "SCANNING")
+
+    def test_stale_scan_token_cannot_overwrite_newer_scan(self):
+        old = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        newer = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        result = orbit_readiness.complete_scan(self.conn, self.project, self.root, old, audit())
+        self.assertEqual(result["status"], "STALE_SCAN_RESULT")
+        accepted = orbit_readiness.complete_scan(self.conn, self.project, self.root, newer, audit())
+        self.assertEqual(accepted["status"], "SCANNED")
+
+    def test_project_and_root_are_isolated(self):
+        token = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        orbit_readiness.complete_scan(self.conn, self.project, self.root, token, audit())
+        self.assertEqual(
+            orbit_readiness.get_status(self.conn, self.project, "/tmp/other")["status"],
+            "SCAN_REQUIRED",
+        )
+        self.assertEqual(
+            orbit_readiness.get_status(self.conn, "other", self.root)["status"],
+            "SCAN_REQUIRED",
+        )
+
+    def test_invalid_snapshot_and_counts_are_rejected(self):
+        token = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        with self.assertRaises(ValueError):
+            orbit_readiness.complete_scan(
+                self.conn, self.project, self.root, token, audit(snapshot="not-a-digest")
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

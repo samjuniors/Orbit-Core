@@ -20,6 +20,7 @@ import orbit_build
 import orbit_intake
 import orbit_project_audit
 import orbit_findings
+import orbit_readiness
 import orbit_decisions
 import orbit_specialists
 import orbit_updates
@@ -150,6 +151,7 @@ def db_connect():
     orbit_build.setup(conn)
     orbit_intake.setup(conn)
     orbit_findings.setup(conn)
+    orbit_readiness.setup(conn)
     orbit_build.setup_browser(conn)
     if os.name != 'nt':
         try: path.chmod(0o600)
@@ -311,20 +313,28 @@ def checkpoint(conn, a):
 
 def scan(a, conn=None):
     root, project = project_root(a), project_key(a)
-    candidates = ('README.md','docs/README.md','docs/ARCHITECTURE.md','ARCHITECTURE.md','PRD.md','REQUIREMENTS.md','ROADMAP.md','.orbit/STATE.md','.orbit/PROJECT.md')
-    existing = [x for x in candidates if not (root / x).is_symlink() and (root/x).is_file()]
-    profile = None
-    if conn is not None:
-        intake = orbit_intake.status(conn, root, {'project': project})
-        if intake.get('status') == 'APPROVED':
-            profile = intake.get('profile')
-    audit = orbit_project_audit.scan_project(root, profile=profile)
+    token = orbit_readiness.begin_scan(conn, project, root) if conn is not None else None
+    try:
+        candidates = ('README.md','docs/README.md','docs/ARCHITECTURE.md','ARCHITECTURE.md','PRD.md','REQUIREMENTS.md','ROADMAP.md','.orbit/STATE.md','.orbit/PROJECT.md')
+        existing = [x for x in candidates if not (root / x).is_symlink() and (root/x).is_file()]
+        profile = None
+        if conn is not None:
+            intake = orbit_intake.status(conn, root, {'project': project})
+            if intake.get('status') == 'APPROVED':
+                profile = intake.get('profile')
+        audit = orbit_project_audit.scan_project(root, profile=profile)
+        readiness = orbit_readiness.complete_scan(conn, project, root, token, audit) if conn is not None else None
+    except Exception as exc:
+        if conn is not None and token is not None:
+            orbit_readiness.fail_scan(conn, project, root, token, type(exc).__name__)
+        raise
     return {
         'project': project,
         'root': str(root),
         'docs_found': existing,
         'checkpoint': snapshot(root),
         'project_audit': audit,
+        'readiness': readiness,
         'notice': 'Bounded read-only structural audit; no source contents read or project scripts executed. Findings are review leads, not confirmed defects.',
     }
 

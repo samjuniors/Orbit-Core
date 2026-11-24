@@ -1,6 +1,6 @@
 # v0.34.0 proposal — Context-Aware Intelligence & Continuity
 
-**Status:** PROPOSAL / AUDIT-FIRST / NO RUNTIME IMPLEMENTATION  
+**Status:** IN PROGRESS / AUDIT-FIRST IMPLEMENTATION  
 **Audit base:** `main` at `2fdf4f329774b9644e75ac0df4d89738a7cd625f` (2026-11-23)  
 **Working branch:** `feat/v034-context-aware-intelligence-20261123`  
 **Version context observed on main:** `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`  
@@ -162,8 +162,10 @@ Recovery must re-inspect Git and relevant files, compare current source/task rev
 - Freeze data contracts, trust boundaries, hook event mapping and explicit non-goals.
 
 ### Phase 1 — Project readiness and scan/audit (P0)
-- Add a project readiness state: UNKNOWN, SCAN_REQUIRED, SCANNING, SCANNED_CURRENT, STALE, BLOCKED.
-- Build bounded read-only discovery, source snapshot and incremental invalidation.
+- Implemented a persistent, exact-project/root scan lifecycle: SCAN_REQUIRED, SCANNING, SCANNED, INCOMPLETE and FAILED, with interrupted-scan recovery detection.
+- Persist audit version, start/completion timestamps, metadata snapshot digest, completeness, bounded inventory counts, finding count and revision; preserve the last successful snapshot when a later scan fails.
+- Report whether the metadata snapshot changed since the prior scan. The digest is explicitly not a content hash or Git revision; without a watcher, freshness is only asserted as-of the recorded scan.
+- Bounded read-only discovery is integrated with the readiness lifecycle. Incremental source-level invalidation remains pending.
 - Audit implementation/spec alignment, architecture, docs, tests, dependencies and proportionate security/reliability areas.
 - Emit evidence-backed findings and confidence labels; never call heuristic signals confirmed vulnerabilities.
 - Handle new, existing-unscanned, previously scanned, changed, dirty and partially inaccessible projects.
@@ -264,3 +266,18 @@ A phase is not complete because source code or tests were authored. Require:
 5. Keep main unchanged; do not open a PR until tests, exact-head CI and review are complete.
 
 **Current branch:** Phase 1 structural audit plus persistent finding reconciliation are implemented in source. No merge, PR, release, hook installation or host-setting change has been performed.
+
+
+## 8. Implementation checkpoint — persistent project readiness
+
+**Implemented on the feature branch (not released):**
+
+- Added `orbit_readiness.py` to canonical runtime and Claude Code plugin runtime.
+- Added `orbit_project_readiness` in the existing local SQLite database, scoped by both project key and resolved project root. No second database or task ledger.
+- `orbit_project_scan` now records SCANNING before inventory, then SCANNED or INCOMPLETE on completion; exceptions record FAILED while retaining the last successful snapshot.
+- A new scan detects whether its metadata inventory digest differs from the prior completed scan. A process interrupted while SCANNING is identified when the next scan begins.
+- Readiness output includes audit version, timestamps, revision, counts, completion state and explicit freshness/snapshot semantics.
+- Installer runtime inventory includes the new module. The packaged desktop bundle is built from the canonical runtime inventory by the existing release preparation flow.
+- This is not continuous change detection: no watcher is installed, and the metadata digest is neither a content hash nor a Git commit. A fresh scan is required to revalidate the project.
+
+**Verification gate:** exact-head CI must cover the new readiness lifecycle, source/plugin parity, installer packaging and existing Windows upgrade paths before this slice is considered verified.
