@@ -386,7 +386,6 @@ def compact_resume(conn, root, project, a):
         else:
             base['omitted_for_budget'].append(name)
 
-    offer('host_lifecycle', orbit_claude_lifecycle.recent_events(conn, root, limit=4))
     state=snapshot(root)
     checkpoint={'exists':state['exists'],'revision':state['revision'],
                 'source':'.orbit/STATE.md','trust':'UNVERIFIED_LOCAL_CHECKPOINT'}

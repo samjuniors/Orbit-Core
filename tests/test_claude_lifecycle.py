@@ -81,6 +81,14 @@ class ClaudeLifecycleTests(unittest.TestCase):
             }, self.conn)
 
 
+    def test_recent_events_without_initialized_ledger_are_read_only(self):
+        empty = sqlite3.connect(":memory:")
+        self.addCleanup(empty.close)
+        before = empty.total_changes
+        result = orbit_claude_lifecycle.recent_events(empty, self.root)
+        self.assertEqual(result["status"], "NO_EVENTS_RECORDED")
+        self.assertEqual(empty.total_changes, before)
+
     def test_recent_events_accepts_path_objects_from_resume(self):
         result = orbit_claude_lifecycle.recent_events(self.conn, self.root)
         self.assertEqual(result["status"], "NO_EVENTS_RECORDED")

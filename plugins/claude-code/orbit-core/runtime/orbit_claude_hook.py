@@ -23,7 +23,10 @@ def process_payload(payload, conn):
     if not isinstance(cwd, str) or not cwd:
         return {"status": "IGNORED", "reason": "project_root_missing"}
     # Reuse Orbit's host-side path validation and configured trusted-root policy.
-    root = orbit_mcp.project_root({"project_root": cwd, "project": "claude-code-hook"})
+    try:
+        root = orbit_mcp.project_root({"project_root": cwd, "project": "claude-code-hook"})
+    except OSError as exc:
+        raise ValueError("Invalid Claude Code project root") from exc
     session_id = payload.get("session_id")
     return orbit_claude_lifecycle.record_event(
         conn, str(root), event_name, session_id=session_id
