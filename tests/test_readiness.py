@@ -161,6 +161,53 @@ class ProjectReadinessIntegrationTests(unittest.TestCase):
                 conn.close()
 
 
+    def test_resume_context_includes_findings_and_flags_snapshot_drift_read_only(self):
+        import orbit_findings
+        import orbit_mcp
+        orbit_findings.setup(self.conn)
+        snapshot = "a" * 64
+        audit_result = {
+            "status": "SCANNED",
+            "inventory_snapshot_sha256": snapshot,
+            "summary": {"files": 1, "directories": 1},
+            "findings_count": 1,
+            "findings": [{
+                "id": "TEST_STRUCTURE_NOT_DISCOVERED",
+                "category": "testing",
+                "severity": "MEDIUM",
+                "confidence": "MEDIUM",
+                "summary": "Review the discovered test structure.",
+                "evidence": ["src/main.py"],
+                "recommendation": "Confirm the project's test strategy.",
+                "is_confirmed_defect": False,
+            }],
+        }
+        token = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        orbit_readiness.complete_scan(self.conn, self.project, self.root, token, audit_result)
+        orbit_findings.reconcile(
+            self.conn, self.project, self.root, audit_result, audit_scope="STRUCTURAL"
+        )
+        before = self.conn.total_changes
+        context = orbit_mcp.resume_audit_context(
+            self.conn, self.project, self.root, audit_result
+        )
+        self.assertEqual(context["audit_freshness"]["structural_snapshot_comparison"], "MATCH")
+        self.assertEqual(context["finding_ledger"]["count"], 1)
+        self.assertEqual(
+            context["finding_ledger"]["findings"][0]["finding_id"],
+            "TEST_STRUCTURE_NOT_DISCOVERED",
+        )
+        self.assertFalse(context["audit_freshness"]["source_scan_revalidated_during_resume"])
+        self.assertEqual(self.conn.total_changes, before)
+
+        changed = {**audit_result, "inventory_snapshot_sha256": "b" * 64}
+        drift = orbit_mcp.resume_audit_context(
+            self.conn, self.project, self.root, changed
+        )
+        self.assertEqual(drift["audit_freshness"]["structural_snapshot_comparison"], "MISMATCH")
+        self.assertTrue(drift["audit_freshness"]["stored_structural_findings_may_be_stale"])
+        self.assertEqual(self.conn.total_changes, before)
+
     def test_source_scan_state_persists_content_snapshot_and_detects_change(self):
         orbit_readiness.setup(self.conn)
         first = orbit_readiness.begin_source_scan(self.conn, self.project, self.root)
