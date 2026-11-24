@@ -7,6 +7,7 @@ are deliberately discarded.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -103,11 +104,14 @@ def record_event(conn, project_root, event_name, session_id=None, occurred_at=No
 
 
 def recent_events(conn, project_root, limit=8):
+    try:
+        project_root = os.fspath(project_root)
+    except TypeError as exc:
+        raise ValueError("Invalid project root") from exc
     if not isinstance(project_root, str) or not project_root or len(project_root) > 2000:
         raise ValueError("Invalid project root")
     if type(limit) is not int or not 1 <= limit <= 20:
         raise ValueError("limit must be 1..20")
-    setup(conn)
     rows = conn.execute(
         """SELECT host,event_name,occurred_at
            FROM orbit_host_lifecycle_events

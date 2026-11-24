@@ -80,7 +80,11 @@ class ClaudeLifecycleTests(unittest.TestCase):
                 "hook_event_name": "SessionStart", "cwd": str(self.root / "missing")
             }, self.conn)
 
-    def test_events_are_isolated_by_exact_project_root(self):
+
+    def test_recent_events_accepts_path_objects_from_resume(self):
+        result = orbit_claude_lifecycle.recent_events(self.conn, self.root)
+        self.assertEqual(result["status"], "NO_EVENTS_RECORDED")
+\n    def test_events_are_isolated_by_exact_project_root(self):
         other = self.root.parent / "other"
         other.mkdir()
         orbit_claude_hook.process_payload({
