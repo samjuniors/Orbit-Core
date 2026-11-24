@@ -113,7 +113,7 @@ class CapacityObservationTests(unittest.TestCase):
         self.assertEqual(result["desired_tier"], "deep")
         self.assertIsNone(result["recommended_model"])
         self.assertEqual(result["selection_status"], "REQUIRES_MODEL_QUALITY_REVIEW")
-        self.assertFalse(result["no_switch_executed"])
+        self.assertTrue(result["no_switch_executed"])
 
     def test_model_route_includes_capacity_only_when_supplied(self):
         result = orbit_decisions.model_route(
