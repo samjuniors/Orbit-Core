@@ -117,25 +117,27 @@ def reconcile(conn, project, root, audit, audit_scope="STRUCTURAL"):
     validated = [_validate_finding(item) for item in items]
     if len({item[0] for item in validated}) != len(validated):
         raise ValueError("Audit contains duplicate finding identities")
-    # Finding IDs are addressed by the public review/task APIs without a scope
-    # argument. Enforce global uniqueness across STRUCTURAL and SOURCE ledgers.
-    # This prevents a review or task link from mutating the wrong scope.
-    for fid, _, _ in validated:
-        other_scope = conn.execute(
-            """SELECT audit_scope FROM orbit_project_findings
-               WHERE project=? AND project_root=? AND finding_id=? AND audit_scope<>?
-               LIMIT 1""",
-            (project, str(root), fid, audit_scope),
-        ).fetchone()
-        if other_scope is not None:
-            raise ValueError(
-                f"Finding id {fid} already exists in {other_scope['audit_scope']} scope; "
-                "finding IDs must be unique across audit scopes."
-            )
-
     now = _now()
     path = str(root)
     with conn:
+        # Serialize the cross-scope identity check with the following upsert.
+        # Without a write lock, simultaneous STRUCTURAL and SOURCE scans could
+        # both observe no conflict and the second upsert could overwrite scope.
+        conn.execute("BEGIN IMMEDIATE")
+        # Finding IDs are addressed by the public review/task APIs without a scope
+        # argument. Enforce global uniqueness across STRUCTURAL and SOURCE ledgers.
+        for fid, _, _ in validated:
+            other_scope = conn.execute(
+                """SELECT audit_scope FROM orbit_project_findings
+                   WHERE project=? AND project_root=? AND finding_id=? AND audit_scope<>?
+                   LIMIT 1""",
+                (project, path, fid, audit_scope),
+            ).fetchone()
+            if other_scope is not None:
+                raise ValueError(
+                    f"Finding id {fid} already exists in {other_scope['audit_scope']} scope; "
+                    "finding IDs must be unique across audit scopes."
+                )
         if audit["status"] == "INCOMPLETE":
             # An incomplete scan cannot prove absence. Preserve prior evidence and
             # mark active rows stale so callers do not interpret them as current.
