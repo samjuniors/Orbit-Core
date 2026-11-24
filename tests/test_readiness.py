@@ -110,3 +110,50 @@ class ProjectReadinessTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProjectReadinessIntegrationTests(unittest.TestCase):
+    def test_explicit_scan_persists_readiness_even_with_prebuilt_connection(self):
+        import tempfile
+        import orbit_intake
+        import orbit_mcp
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            (root / "README.md").write_text("Project", encoding="utf-8")
+            conn = sqlite3.connect(":memory:")
+            conn.row_factory = sqlite3.Row
+            orbit_intake.setup(conn)
+            try:
+                result = orbit_mcp.scan(
+                    {"project_root": str(root), "project": "sample"}, conn
+                )
+                self.assertEqual(result["readiness"]["status"], "SCANNED")
+                self.assertTrue(result["readiness"]["last_scan_complete"])
+            finally:
+                conn.close()
+
+    def test_resume_scan_can_remain_read_only(self):
+        import tempfile
+        import orbit_intake
+        import orbit_mcp
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            conn = sqlite3.connect(":memory:")
+            conn.row_factory = sqlite3.Row
+            orbit_intake.setup(conn)
+            before = conn.total_changes
+            try:
+                result = orbit_mcp.scan(
+                    {"project_root": str(root), "project": "sample"},
+                    conn, persist_readiness=False
+                )
+                self.assertIsNone(result["readiness"])
+                self.assertEqual(conn.total_changes, before)
+            finally:
+                conn.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

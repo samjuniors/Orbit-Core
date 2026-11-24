@@ -311,9 +311,14 @@ def checkpoint(conn, a):
             conn.rollback()  # no DB rows changed; just release the cross-process lock
 
 
-def scan(a, conn=None):
+def scan(a, conn=None, persist_readiness=True):
     root, project = project_root(a), project_key(a)
-    token = orbit_readiness.begin_scan(conn, project, root) if conn is not None else None
+    token = None
+    if conn is not None and persist_readiness:
+        # Some embedders call execute() with a pre-built connection rather than
+        # db_connect(); initialize this additive table idempotently at the scan boundary.
+        orbit_readiness.setup(conn)
+        token = orbit_readiness.begin_scan(conn, project, root)
     try:
         candidates = ('README.md','docs/README.md','docs/ARCHITECTURE.md','ARCHITECTURE.md','PRD.md','REQUIREMENTS.md','ROADMAP.md','.orbit/STATE.md','.orbit/PROJECT.md')
         existing = [x for x in candidates if not (root / x).is_symlink() and (root/x).is_file()]
@@ -323,9 +328,9 @@ def scan(a, conn=None):
             if intake.get('status') == 'APPROVED':
                 profile = intake.get('profile')
         audit = orbit_project_audit.scan_project(root, profile=profile)
-        readiness = orbit_readiness.complete_scan(conn, project, root, token, audit) if conn is not None else None
+        readiness = orbit_readiness.complete_scan(conn, project, root, token, audit) if token is not None else None
     except Exception as exc:
-        if conn is not None and token is not None:
+        if token is not None:
             orbit_readiness.fail_scan(conn, project, root, token, type(exc).__name__)
         raise
     return {
@@ -1040,7 +1045,7 @@ def execute(conn, name, a):
         if a.get('compact') is True:
             root=project_root(a)
             return compact_resume(conn,root,project_key(a),a)
-        status=scan(a, conn)
+        status=scan(a, conn, persist_readiness=False)
         status['memories']=memory_recall(conn,{'project':status['project'],'limit':5})
         status['intake']=orbit_intake.status(conn,project_root(a),a)
         status['recovery']=orbit_build.recovery_brief(conn,project_root(a),project_key(a))

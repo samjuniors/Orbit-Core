@@ -274,7 +274,7 @@ A phase is not complete because source code or tests were authored. Require:
 
 - Added `orbit_readiness.py` to canonical runtime and Claude Code plugin runtime.
 - Added `orbit_project_readiness` in the existing local SQLite database, scoped by both project key and resolved project root. No second database or task ledger.
-- `orbit_project_scan` now records SCANNING before inventory, then SCANNED or INCOMPLETE on completion; exceptions record FAILED while retaining the last successful snapshot.
+- `orbit_project_scan` now records SCANNING before inventory, then SCANNED or INCOMPLETE on completion; exceptions record FAILED while retaining the last successful snapshot. Explicit scans persist readiness; the general `orbit_project_resume` path retains its prior read-only database behavior.
 - A new scan detects whether its metadata inventory digest differs from the prior completed scan. A process interrupted while SCANNING is identified when the next scan begins.
 - Readiness output includes audit version, timestamps, revision, counts, completion state and explicit freshness/snapshot semantics.
 - Installer runtime inventory includes the new module. The packaged desktop bundle is built from the canonical runtime inventory by the existing release preparation flow.
