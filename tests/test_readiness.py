@@ -108,8 +108,6 @@ class ProjectReadinessTests(unittest.TestCase):
             )
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class ProjectReadinessIntegrationTests(unittest.TestCase):
@@ -153,6 +151,50 @@ class ProjectReadinessIntegrationTests(unittest.TestCase):
                 self.assertEqual(conn.total_changes, before)
             finally:
                 conn.close()
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+    def test_source_scan_state_persists_content_snapshot_and_detects_change(self):
+        orbit_readiness.setup(self.conn)
+        first = orbit_readiness.begin_source_scan(self.conn, self.project, self.root)
+        source_audit = {
+            "status": "SCANNED", "inventory_snapshot_sha256": "a" * 64,
+            "summary": {"source_files": 2, "source_bytes_read": 100},
+            "findings_count": 1,
+        }
+        result = orbit_readiness.complete_source_scan(
+            self.conn, self.project, self.root, first, source_audit
+        )
+        self.assertEqual(result["source_status"], "SCANNED")
+        self.assertTrue(result["source_scan_complete"])
+        second = orbit_readiness.begin_source_scan(self.conn, self.project, self.root)
+        source_audit["inventory_snapshot_sha256"] = "b" * 64
+        changed = orbit_readiness.complete_source_scan(
+            self.conn, self.project, self.root, second, source_audit
+        )
+        self.assertTrue(changed["changed_since_previous_source_scan"])
+        self.assertEqual(changed["source_scan_count"], 2)
+
+    def test_failed_source_scan_preserves_previous_snapshot(self):
+        orbit_readiness.setup(self.conn)
+        token = orbit_readiness.begin_source_scan(self.conn, self.project, self.root)
+        source_audit = {
+            "status": "SCANNED", "inventory_snapshot_sha256": "a" * 64,
+            "summary": {"source_files": 1, "source_bytes_read": 20},
+            "findings_count": 0,
+        }
+        orbit_readiness.complete_source_scan(
+            self.conn, self.project, self.root, token, source_audit
+        )
+        token2 = orbit_readiness.begin_source_scan(self.conn, self.project, self.root)
+        failed = orbit_readiness.fail_source_scan(
+            self.conn, self.project, self.root, token2, "PermissionError"
+        )
+        self.assertEqual(failed["source_status"], "FAILED")
+        self.assertEqual(failed["source_snapshot_sha256"], "a" * 64)
 
 
 if __name__ == "__main__":

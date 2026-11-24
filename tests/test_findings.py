@@ -173,3 +173,47 @@ class ProjectFindingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+    def test_structural_reconcile_does_not_resolve_source_scope(self):
+        orbit_findings.reconcile(
+            self.conn, self.project, self.root, audit("a" * 64, [finding()])
+        )
+        source_finding = finding("SOURCE_DYNAMIC_CODE_1234567890")
+        source = orbit_findings.reconcile(
+            self.conn, self.project, self.root,
+            audit("b" * 64, [source_finding]), audit_scope="SOURCE"
+        )
+        self.assertEqual(source["audit_scope"], "SOURCE")
+        structural_empty = orbit_findings.reconcile(
+            self.conn, self.project, self.root, audit("c" * 64, [])
+        )
+        all_rows = orbit_findings.list_findings(self.conn, self.project, self.root)
+        source_rows = orbit_findings.list_findings(
+            self.conn, self.project, self.root, audit_scope="SOURCE"
+        )
+        self.assertEqual(structural_empty["resolved_count"], 1)
+        self.assertEqual(source_rows["findings"][0]["lifecycle"], "NEW")
+        self.assertEqual(source_rows["findings"][0]["audit_scope"], "SOURCE")
+        self.assertEqual(len(all_rows["findings"]), 2)
+
+    def test_legacy_findings_table_gets_additive_scope_migration(self):
+        legacy = sqlite3.connect(":memory:")
+        legacy.row_factory = sqlite3.Row
+        legacy.execute("""CREATE TABLE orbit_project_findings (
+            project TEXT NOT NULL, project_root TEXT NOT NULL, finding_id TEXT NOT NULL,
+            category TEXT NOT NULL, severity TEXT NOT NULL, confidence TEXT NOT NULL,
+            summary TEXT NOT NULL, evidence TEXT NOT NULL, recommendation TEXT NOT NULL,
+            lifecycle TEXT NOT NULL, disposition TEXT NOT NULL DEFAULT 'UNREVIEWED',
+            first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, last_snapshot TEXT NOT NULL,
+            evidence_sha256 TEXT NOT NULL, occurrence_count INTEGER NOT NULL DEFAULT 1,
+            revision INTEGER NOT NULL DEFAULT 1, linked_task_ids TEXT NOT NULL DEFAULT '[]',
+            PRIMARY KEY(project,project_root,finding_id))""")
+        legacy.execute("""INSERT INTO orbit_project_findings
+            VALUES('p','/tmp/p','OLD','testing','LOW','LOW','old','[]','review',
+                   'OPEN','UNREVIEWED','now','now','x','y',1,1,'[]')""")
+        legacy.commit()
+        orbit_findings.setup(legacy)
+        row = legacy.execute("SELECT audit_scope FROM orbit_project_findings WHERE finding_id='OLD'").fetchone()
+        self.assertEqual(row["audit_scope"], "STRUCTURAL")
+        legacy.close()

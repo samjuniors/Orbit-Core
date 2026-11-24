@@ -165,7 +165,11 @@ Recovery must re-inspect Git and relevant files, compare current source/task rev
 - Implemented a persistent, exact-project/root scan lifecycle: SCAN_REQUIRED, SCANNING, SCANNED, INCOMPLETE and FAILED, with interrupted-scan recovery detection.
 - Persist audit version, start/completion timestamps, metadata snapshot digest, completeness, bounded inventory counts, finding count and revision; preserve the last successful snapshot when a later scan fails.
 - Report whether the metadata snapshot changed since the prior scan. The digest is explicitly not a content hash or Git revision; without a watcher, freshness is only asserted as-of the recorded scan.
-- Bounded read-only discovery is integrated with the readiness lifecycle. Incremental source-level invalidation remains pending.
+- Bounded read-only discovery is integrated with the readiness lifecycle.
+- Added a separate source-content audit action requiring `confirm_read=true`; persisting source readiness/findings additionally requires `confirm_write=true`.
+- The source audit reads only bounded allowlisted source files, computes per-file content hashes, parses Python AST and emits conservative review leads for selected risky call patterns. It never returns or persists raw source contents and never executes project code.
+- Extended the existing findings ledger with `STRUCTURAL` and `SOURCE` scopes so one audit cannot resolve findings belonging to the other. Added additive SQLite migrations and independent source-scan readiness metadata.
+- Incremental source-level invalidation between scans remains pending; the content digest detects changes only when the source audit is run.
 - Audit implementation/spec alignment, architecture, docs, tests, dependencies and proportionate security/reliability areas.
 - Emit evidence-backed findings and confidence labels; never call heuristic signals confirmed vulnerabilities.
 - Handle new, existing-unscanned, previously scanned, changed, dirty and partially inaccessible projects.
@@ -281,3 +285,18 @@ A phase is not complete because source code or tests were authored. Require:
 - This is not continuous change detection: no watcher is installed, and the metadata digest is neither a content hash nor a Git commit. A fresh scan is required to revalidate the project.
 
 **Verification gate:** exact-head CI must cover the new readiness lifecycle, source/plugin parity, installer packaging and existing Windows upgrade paths before this slice is considered verified.
+
+
+## 9. Implementation checkpoint — consented source evidence
+
+**Implemented on the feature branch (not released):**
+
+- Added `orbit_source_audit.py` to canonical runtime, Claude Code plugin runtime and installer module inventory.
+- The existing `orbit_project_findings` tool now supports `source_reconcile`. It returns `READ_CONSENT_REQUIRED` unless `confirm_read=true`; with read consent but no `confirm_write=true`, it performs a preview and writes no database state.
+- Source audit bounds traversal to 1,200 files, depth 14, 512 KiB per file and 16 MiB total. It excludes generated/vendor/cache trees, hidden folders and sensitive path/name patterns; rejects symlink traversal and detects file changes during reads.
+- It computes content hashes, parses Python AST and emits conservative review leads for parser mismatches, dynamic code execution, shell execution, pickle deserialization and unsafe YAML loader patterns. These are not confirmed vulnerabilities or proof of exploitability.
+- Raw source content is neither returned nor persisted. Only bounded summaries, repository-relative evidence paths, findings, content digests and scan metadata can be saved in Orbit's local SQLite database.
+- Extended the existing findings ledger with independent `STRUCTURAL` and `SOURCE` scopes, preserving legacy rows through additive migration. Reconciliation in one scope cannot resolve the other scope's findings.
+- Extended project readiness with source-scan state, revision guards, timestamps, content snapshot digest, byte/file counts and incomplete/failure handling.
+
+**Verification gate:** exact-head CI must cover source-read consent, no-write preview behavior, source-scope isolation, migration from existing databases, symlink/size limits, plugin/installer parity and Windows packaging before this slice is considered verified.
