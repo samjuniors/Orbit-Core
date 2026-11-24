@@ -657,6 +657,9 @@ TOOLS += [
          'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
          'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
          'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'available_models':{'type':'array','maxItems':20,'items':string(100)},
+         'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},
+         'budget':{'type':'string','enum':['economy','balanced','quality']},
          'project_profile':schema({
              'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
              'platform':{'type':'string','enum':sorted(orbit_skill_plan.PLATFORMS)},
