@@ -171,10 +171,6 @@ class ProjectFindingTests(unittest.TestCase):
                 orbit_findings._validate_finding(finding(evidence=[path]))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
     def test_structural_reconcile_does_not_resolve_source_scope(self):
         orbit_findings.reconcile(
             self.conn, self.project, self.root, audit("a" * 64, [finding()])
@@ -217,3 +213,7 @@ if __name__ == "__main__":
         row = legacy.execute("SELECT audit_scope FROM orbit_project_findings WHERE finding_id='OLD'").fetchone()
         self.assertEqual(row["audit_scope"], "STRUCTURAL")
         legacy.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

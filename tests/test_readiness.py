@@ -153,10 +153,6 @@ class ProjectReadinessIntegrationTests(unittest.TestCase):
                 conn.close()
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
     def test_source_scan_state_persists_content_snapshot_and_detects_change(self):
         orbit_readiness.setup(self.conn)
         first = orbit_readiness.begin_source_scan(self.conn, self.project, self.root)
