@@ -8,12 +8,30 @@ from __future__ import annotations
 import json
 
 import orbit_capabilities
+import orbit_decisions
 import orbit_delegation
 import orbit_skill_plan
 import orbit_tasks
 
 MAX_TEAM_TASKS = 6
 MAX_HANDOFFS = 24
+MODEL_ROLES = {
+    "project-manager": "orbit-project-manager", "research": "orbit-research",
+    "writer": "orbit-writer", "creative-director": "orbit-creative-director",
+    "ux": "orbit-ux", "architect": "orbit-architect",
+    "software-engineer": "orbit-software-engineer", "frontend": "orbit-frontend",
+    "backend": "orbit-backend", "data": "orbit-data", "devops": "orbit-devops",
+    "integrator": "orbit-integrator", "qa": "orbit-qa",
+    "reviewer": "orbit-reviewer", "security": "orbit-security",
+}
+MODEL_TASKS = {
+    "project-manager": "documentation", "research": "research",
+    "writer": "documentation", "creative-director": "design", "ux": "design",
+    "architect": "architecture", "software-engineer": "implementation",
+    "frontend": "implementation", "backend": "implementation", "data": "implementation",
+    "devops": "implementation", "integrator": "implementation", "qa": "qa",
+    "reviewer": "review", "security": "security",
+}
 LEADS = {
     "project-manager": "delivery",
     "research": "delivery",
@@ -143,10 +161,16 @@ def preview(conn, root, project, args):
         skill = orbit_skill_plan.preview(
             root, objective, available, project_profile=profile,
             permission_state=permission, host=host)
+        model_recommendation = orbit_decisions.model_route(
+            MODEL_ROLES[row["role"]], MODEL_TASKS[row["role"]],
+            args.get("complexity", "moderate"),
+            args.get("available_models", []), host,
+            args.get("budget", "economy"))
         workers.append({
             "task_key": key, "revision": row["revision"],
             "task_status": row["status"],
             "role": row["role"], "lead": LEADS[row["role"]],
+            "model_recommendation": model_recommendation,
             "proposed_kind": kind, "kind_basis": kind_source,
             "profile_policy": "REUSE_EXISTING_HOST_OR_ORBIT_PROFILE_FIRST",
             "candidate_skill_names": [s["name"] for s in skill["shortlist"]],
