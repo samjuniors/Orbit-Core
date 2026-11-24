@@ -327,3 +327,18 @@ A phase is not complete because source code or tests were authored. Require:
 - Hook execution is fail-open and bounded to a 3-second timeout in the template. It does not block Claude Code, spawn agents, change permissions, run project commands, update checkpoints or register tasks.
 
 **Verification gate:** unit tests must cover allowlisted events, rejected roots, sensitive payload exclusion, session-ID hashing, project-root isolation and retention bounds. Exact-head CI must pass on Windows and all supported Ubuntu Python versions. No hook was installed or activated on a user's machine.
+
+
+## 12. Specialist model recommendations and host-capacity observations
+
+**Implemented on the feature branch; exact-head verification pending:**
+
+- Extended the existing read-only `orbit_team_preview` with optional host-reported `available_models`, task complexity and budget inputs. Each existing task role maps to Orbit's existing `orbit_model_route` recommendation; the team builder does not create a second model catalog or router.
+- Each specialist receives a task-fit model-tier recommendation. If the host reports no models, the recommendation is `INHERIT_HOST_MODEL`. Unknown host identifiers use generic guidance rather than being treated as a supported model-control surface.
+- Extended `orbit_model_route` with an optional `capacity_report` containing independent context-window, rate-limit, host-availability and worker-pool observations. Every observation must include a timezone-aware timestamp and source label.
+- Context pressure is reported separately from rate limits, host availability and worker concurrency. At 80% context utilization, Orbit recommends preparing a host-native checkpoint; at 90%, it marks the context state critical. These are advisory thresholds, not automated actions.
+- Account/subscription quota, reset time, billing, token price and entitlement remain `UNKNOWN` unless an authoritative provider signal is added in a future, separately reviewed integration. This contract deliberately does not accept a caller-invented account-usage percentage.
+- Rate-limit denial never triggers provider fallback. Host unavailability and a full worker pool recommend holding or deferring work; no model switch, checkpoint write, throttling, reservation, agent spawn or scheduling action is performed.
+- Synchronized the canonical decision, MCP and team-builder runtime files into the Claude Code plugin package.
+
+**Verification gate:** exact-head CI must cover context thresholds, timezone validation, unknown quota semantics, rate-limit hold behavior, worker-pool capacity, legacy model-route response compatibility, specialist-role mapping, source/plugin parity and Windows packaging. This implementation does not claim live Claude Code telemetry or measured model quality/cost.
