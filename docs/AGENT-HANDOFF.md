@@ -1,9 +1,40 @@
 # Orbit Core — cross-agent continuity and handoff
 
-**Last reviewed:** 2026-11-24 06:45 Asia/Kolkata.
+**Last reviewed:** 2026-11-24 22:26 Asia/Kolkata.
 **Canonical repository:** https://github.com/samjuniors/Orbit-Core. Revalidate live state before every resume.
 **Scope:** provider-neutral Orbit Core only. Orbit Commander remains separately paused and out of scope.
 **Current baseline:** main VERSION=0.33.1 / NEXT_VERSION=0.34.0; v0.33.0 prerelease published; v0.33.1 and v0.34.0 are not published.
+
+## 2026-11-24 — Nightly live revalidation
+
+### Main, releases and open work
+- Canonical main HEAD remains [2fdf4f329774b9644e75ac0df4d89738a7cd625f](https://github.com/samjuniors/Orbit-Core/commit/2fdf4f329774b9644e75ac0df4d89738a7cd625f); main reports VERSION=0.33.1 / NEXT_VERSION=0.34.0.
+- Main exact-head CI [run #45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) remains PASS 5/5.
+- Latest published release remains [v0.33.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0), published 2026-11-23 08:20:55 UTC. Latest stable-channel release remains v0.30.0. v0.33.1 is source-only and unpublished; no release was created.
+- Live issue search returned six open issues: #138, #92, #91, #90, #85 and #72. Preserve the approved product order: safe Team Builder → task-specific skills/tools → Orbit-mediated agent/bot coordination. Keep RAD P2 #138 separate.
+- PR #178 remains a documentation-only draft. Before this handoff update, its head was 47de86f742679d61725381637ff56de7a770ef5e; exact-head runs [#45304020786](https://github.com/samjuniors/Orbit-Core/actions/runs/45304020786) and [#45304012954](https://github.com/samjuniors/Orbit-Core/actions/runs/45304012954) each passed 5/5, including Windows Python 3.12. No human review is recorded. This documentation update will trigger new exact-head CI; recheck it before marking the PR ready.
+
+### v0.34 context-aware intelligence experiment — NOT APPROVED FOR MERGE
+- Branch [feat/v034-context-aware-intelligence-20261123](https://github.com/samjuniors/Orbit-Core/tree/feat/v034-context-aware-intelligence-20261123) is now 94 commits ahead / 0 behind main at [f08448ff75c9d87f280ad66ff022a5466a7f4eb4](https://github.com/samjuniors/Orbit-Core/commit/f08448ff75c9d87f280ad66ff022a5466a7f4eb4). No PR exists.
+- Latest exact-head CI [run #45371214722](https://github.com/samjuniors/Orbit-Core/actions/runs/45371214722) passed all five jobs: Ubuntu Python 3.10, 3.11, 3.12 and 3.13, plus Windows Python 3.12. The Windows job also completed ZIP smoke and disposable upgrade rehearsals.
+- The plan now labels the work **IN PROGRESS / AUDIT-FIRST IMPLEMENTATION** and explicitly withholds merge, release, installation, host configuration, permission and autonomous-execution authorization. The branch adds structural project inventory, consented bounded source static signals, readiness metadata, revision-aware findings and optional Claude Code lifecycle telemetry. It remains broad and is not yet reconciled to approved issues #90/#91/#92; green CI is not approval.
+- **Static security review lead, not a confirmed vulnerability:** source-audit candidate paths are enumerated before open; `O_NOFOLLOW` is used only where the platform exposes it. The code checks file type, size and mtime on the opened handle but does not yet demonstrate Windows handle-level reparse-point identity continuity. Current tests do not demonstrate child reparse-point replacement, hard-link behavior or Windows TOCTOU resistance. Add adversarial Windows tests and prove safe handle semantics or fail closed before approving this slice.
+- The optional Claude hook is fail-open telemetry only: it records allowlisted lifecycle event names and a session digest, while discarding prompts, transcripts, tool input/output and permission data. Keep it optional and event-limited; validate the exact host hook schema/version before installation.
+
+### Host, connector and local execution
+- Orbit ChatGPT plugin connector is not exposed in the available integration registry; authorized GitHub and Notion integrations were used.
+- Remote Arc DESKTOP-AND1FUJ remains OFFLINE (last seen 2026-11-23T11:47:38Z). No Desktop Commander device is connected.
+- No local checkout, local test run, owner-profile Claude/Codex/Antigravity acceptance, .orbit directory or SQLite checkpoint was accessed. These remain NOT VERIFIED / NOT RUN.
+- Main branch-protection endpoint returned 403 Resource not accessible by integration; ruleset listing returned an empty list. Branch protection and required-check enforcement remain NOT VERIFIED.
+- A dedicated Notion handoff page now exists: [Orbit Core — Cross-Agent Handoff & Current State](https://app.notion.com/p/4224f681d488816c9e9efbdc8be38488). Notion Research & References and Continuous Learning/Roadmap were updated with 2026-11-24 findings.
+
+### Fresh research delta (2026-11-24)
+- [SWE-Explore](https://arxiv.org/abs/2606.07297) separates repository exploration from patch success and evaluates line-level evidence coverage, ranking and context efficiency across 848 issues, 10 languages and 203 repositories. Add retrieval-quality metrics to Orbit's discovery evaluation; its trajectory-derived ground truth is useful but not a universal diagnosis oracle.
+- [DeepSWE](https://arxiv.org/abs/2607.07946) uses 113 original long-horizon tasks and hand-written functional verifiers. Its paper reports 1.4% verifier/LLM-judge disagreement versus 32.4% for inherited SWE-Bench Pro tests in the audited sample. Add original multi-step tasks and behavior-level verifiers; this is a benchmark result, not proof that every verifier is correct.
+- [OpenHands Software Agent SDK](https://github.com/OpenHands/software-agent-sdk) separates SDK/Agent Server execution from automation scheduling/dispatch. Use as an architecture reference for keeping Orbit coordination distinct from host-owned execution; no dependency is approved.
+- [Claude Code hooks reference](https://code.claude.com/docs/en/hooks) documents event-specific hook type support and security considerations. Keep Orbit hooks optional, command-only and version-gated; never assume all hook types work for all events.
+
+**Historical snapshot:** The 2026-11-23 section below is preserved as dated evidence and is superseded where it conflicts with this 2026-11-24 live revalidation.
 
 ## 2026-11-23 — Evening live revalidation
 
