@@ -220,16 +220,21 @@ def scan_source(root: Path) -> dict:
                 if not stat.S_ISREG(actual.st_mode):
                     unreadable.append(rel)
                     continue
-                if (actual.st_dev, actual.st_ino, actual.st_size, actual.st_mtime_ns) != (
-                    observed.st_dev, observed.st_ino, observed.st_size, observed.st_mtime_ns
-                ):
+                # Windows file identity fields (st_dev/st_ino) are not
+                # consistently comparable between DirEntry.stat() and fstat().
+                # Size is checked against discovery metadata; mtime is checked
+                # on the same open handle before/after the bounded read.
+                if actual.st_size != observed.st_size:
                     unreadable.append(rel)
                     continue
                 if total_bytes + actual.st_size > MAX_TOTAL_BYTES:
                     truncated = True
+                    stack.clear()
                     break
                 raw = handle.read(MAX_FILE_BYTES + 1)
-                if len(raw) > MAX_FILE_BYTES or len(raw) != actual.st_size:
+                after = os.fstat(handle.fileno())
+                if (len(raw) > MAX_FILE_BYTES or len(raw) != actual.st_size
+                        or (after.st_size, after.st_mtime_ns) != (actual.st_size, actual.st_mtime_ns)):
                     unreadable.append(rel)
                     truncated = True
                     continue
