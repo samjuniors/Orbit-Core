@@ -1,0 +1,53 @@
+{
+  "description": "OPTIONAL Orbit Core lifecycle metadata hooks. Not auto-loaded. Copy this file to the installed plugin's hooks/hooks.json only after explicitly opting in.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/runtime/orbit_claude_hook.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/runtime/orbit_claude_hook.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/runtime/orbit_claude_hook.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/runtime/orbit_claude_hook.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

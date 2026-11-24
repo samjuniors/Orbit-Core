@@ -33,6 +33,7 @@ import orbit_delivery
 import orbit_swarm_host
 import orbit_native_coordination
 import orbit_autopilot
+import orbit_claude_lifecycle
 import orbit_swarm_integrity
 import orbit_portable
 import orbit_pulse
@@ -384,6 +385,7 @@ def compact_resume(conn, root, project, a):
         else:
             base['omitted_for_budget'].append(name)
 
+    offer('host_lifecycle', orbit_claude_lifecycle.recent_events(conn, root, limit=4))
     state=snapshot(root)
     checkpoint={'exists':state['exists'],'revision':state['revision'],
                 'source':'.orbit/STATE.md','trust':'UNVERIFIED_LOCAL_CHECKPOINT'}
@@ -1105,6 +1107,7 @@ def execute(conn, name, a):
         # Recover the task ledger without guessing whether a host subagent survived
         # a restart; actual host sessions must be checked before recording exits.
         status['host_reconciliation']=orbit_tasks.active_reconciliation(conn,root,status['project'])
+        status['host_lifecycle']=orbit_claude_lifecycle.recent_events(conn,root,limit=8)
         status['continuity']={'status':'CHECKPOINT_ONLY_LOCAL_CONTEXT_MISSING' if status['checkpoint']['exists'] and not any(local.values()) else 'LOCAL_CONTEXT',
             'local_records':local,'database_path':str(db_path()),
             'guidance':'A different PC or folder can have an empty local database. Continue from the checkpoint without onboarding; do not invent missing records. Export orbit_project_transfer on the original PC and preview/import on this PC for task/research continuity. Historical sessions are not current-host execution evidence.'}

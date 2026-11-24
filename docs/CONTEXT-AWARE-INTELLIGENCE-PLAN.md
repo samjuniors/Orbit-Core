@@ -313,3 +313,17 @@ A phase is not complete because source code or tests were authored. Require:
 - Actual task registration continues through the existing `orbit_task_plan` flow with explicit confirmation.
 
 **Verification gate:** exact-head CI must cover priority ordering, task caps, source/structural inclusion, empty write/dependency scopes, existing-task collisions, read-only behavior, plugin parity and Windows packaging before this slice is considered verified.
+
+
+## 11. Opt-in Claude Code lifecycle adapter
+
+**Implemented on the feature branch; not enabled by default:**
+
+- Added an optional hook configuration template under `hooks/optional/`. It is deliberately not at Claude Code's auto-discovered `hooks/hooks.json` path, so enabling the Orbit plugin does not silently activate lifecycle hooks.
+- To opt in, the owner must manually copy the template to `hooks/hooks.json` inside the installed Orbit plugin and restart Claude Code. Removing that file disables the adapter. No user/project settings file is edited by Orbit.
+- The adapter observes only `SessionStart`, `PreCompact`, `PostCompact`, and `SessionEnd`. It validates the reported working directory with Orbit's existing host-side project-root policy.
+- It stores only the event name, exact project root, UTC timestamp, host label, and SHA-256 digest of the session ID. It does not persist the raw session ID, prompts, transcript paths, tool inputs/results, permission decisions or model output.
+- Retention is bounded to 30 days and 500 events per project root. Resume exposes only the latest event names/timestamps; it does not treat them as proof of a live agent or completed work.
+- Hook execution is fail-open and bounded to a 3-second timeout in the template. It does not block Claude Code, spawn agents, change permissions, run project commands, update checkpoints or register tasks.
+
+**Verification gate:** unit tests must cover allowlisted events, rejected roots, sensitive payload exclusion, session-ID hashing, project-root isolation and retention bounds. Exact-head CI must pass on Windows and all supported Ubuntu Python versions. No hook was installed or activated on a user's machine.
