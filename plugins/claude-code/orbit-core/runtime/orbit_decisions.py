@@ -203,8 +203,8 @@ def model_route(role,task,complexity,models,host,budget,capacity_report=None):
            'deep':('deep','balanced','fast','unknown')}[tier]
     clean=list(dict.fromkeys(x.strip() for x in models))
     chosen=next((m for k in order for m in clean if _tier(m)==k),None)
-    insufficient=bool(tier=='deep' and chosen and _tier(chosen) in {'fast','unknown'}
-                      and complexity=='high-assurance')
+    insufficient=bool(tier=='deep' and chosen and complexity=='high-assurance'
+                      and _tier(chosen)!='deep')
     suggested=None if insufficient else chosen
     selection_status=('REQUIRES_MODEL_QUALITY_REVIEW' if insufficient else
                       'HOST_REPORTED_UNVERIFIED' if chosen else 'INHERIT_HOST_MODEL')
