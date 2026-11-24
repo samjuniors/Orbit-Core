@@ -1,7 +1,7 @@
-"""Persistent, revision-aware reconciliation for structural project findings.
+"""Persistent, revision-aware reconciliation for structural and source review findings.
 
-The ledger stores only Orbit-generated structural signals and review dispositions.
-It does not certify defects, read source contents, execute project code, or create tasks.
+The ledger stores bounded Orbit-generated evidence and review dispositions. It does
+not certify defects, execute project code, or create tasks.
 """
 from __future__ import annotations
 
@@ -42,10 +42,16 @@ def setup(conn):
         occurrence_count INTEGER NOT NULL DEFAULT 1,
         revision INTEGER NOT NULL DEFAULT 1,
         linked_task_ids TEXT NOT NULL DEFAULT '[]',
+        audit_scope TEXT NOT NULL DEFAULT 'STRUCTURAL',
         PRIMARY KEY(project, project_root, finding_id)
     )""")
+    # Additive migration for databases created before scoped audits.
+    columns = {row[1] for row in conn.execute('PRAGMA table_info(orbit_project_findings)')}
+    if 'audit_scope' not in columns:
+        conn.execute("ALTER TABLE orbit_project_findings ADD COLUMN audit_scope TEXT NOT NULL DEFAULT 'STRUCTURAL'")
+    conn.execute('DROP INDEX IF EXISTS idx_orbit_findings_scope')
     conn.execute("""CREATE INDEX IF NOT EXISTS idx_orbit_findings_scope
-                    ON orbit_project_findings(project, project_root, lifecycle)""")
+                    ON orbit_project_findings(project, project_root, audit_scope, lifecycle)""")
     conn.commit()
 
 
@@ -93,10 +99,12 @@ def _validate_finding(item):
     return fid, payload, digest
 
 
-def reconcile(conn, project, root, audit):
-    """Persist one complete or incomplete scan without false resolution."""
+def reconcile(conn, project, root, audit, audit_scope="STRUCTURAL"):
+    """Persist one complete or incomplete scan without cross-scope resolution."""
     if not isinstance(project, str) or not project or len(project) > 80:
         raise ValueError("Invalid project key")
+    if audit_scope not in {"STRUCTURAL", "SOURCE"}:
+        raise ValueError("Unknown audit scope")
     if not isinstance(audit, dict) or audit.get("status") not in {"SCANNED", "INCOMPLETE"}:
         raise ValueError("A valid structural project audit is required")
     snapshot = audit.get("inventory_snapshot_sha256")
@@ -117,15 +125,16 @@ def reconcile(conn, project, root, audit):
             # mark active rows stale so callers do not interpret them as current.
             conn.execute(
                 """UPDATE orbit_project_findings SET lifecycle='STALE', revision=revision+1
-                   WHERE project=? AND project_root=? AND lifecycle IN ('NEW','OPEN','RECURRING')""",
-                (project, path),
+                   WHERE project=? AND project_root=? AND audit_scope=? AND lifecycle IN ('NEW','OPEN','RECURRING')""",
+                (project, path, audit_scope),
             )
             rows = conn.execute(
-                "SELECT * FROM orbit_project_findings WHERE project=? AND project_root=? ORDER BY finding_id",
-                (project, path),
+                "SELECT * FROM orbit_project_findings WHERE project=? AND project_root=? AND audit_scope=? ORDER BY finding_id",
+                (project, path, audit_scope),
             ).fetchall()
             return {
                 "status": "RECONCILED_INCOMPLETE",
+                "audit_scope": audit_scope,
                 "complete_scan": False,
                 "resolved_count": 0,
                 "stale_count": sum(1 for row in rows if row["lifecycle"] == "STALE"),
@@ -138,8 +147,8 @@ def reconcile(conn, project, root, audit):
         previous = {
             row["finding_id"]: dict(row)
             for row in conn.execute(
-                "SELECT * FROM orbit_project_findings WHERE project=? AND project_root=?",
-                (project, path),
+                "SELECT * FROM orbit_project_findings WHERE project=? AND project_root=? AND audit_scope=?",
+                (project, path, audit_scope),
             ).fetchall()
         }
         for fid, payload, evidence_digest in validated:
@@ -160,17 +169,18 @@ def reconcile(conn, project, root, audit):
                 """INSERT INTO orbit_project_findings
                    (project,project_root,finding_id,category,severity,confidence,summary,evidence,
                     recommendation,lifecycle,disposition,first_seen,last_seen,last_snapshot,
-                    evidence_sha256,occurrence_count,revision,linked_task_ids)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    evidence_sha256,occurrence_count,revision,linked_task_ids,audit_scope)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(project,project_root,finding_id) DO UPDATE SET
                     category=excluded.category,severity=excluded.severity,confidence=excluded.confidence,
                     summary=excluded.summary,evidence=excluded.evidence,recommendation=excluded.recommendation,
                     lifecycle=excluded.lifecycle,disposition=excluded.disposition,last_seen=excluded.last_seen,
                     last_snapshot=excluded.last_snapshot,evidence_sha256=excluded.evidence_sha256,
-                    occurrence_count=excluded.occurrence_count,revision=excluded.revision""",
+                    occurrence_count=excluded.occurrence_count,revision=excluded.revision,
+                    audit_scope=excluded.audit_scope""",
                 (project, path, fid, payload["category"], payload["severity"], payload["confidence"],
                  payload["summary"], _json(payload["evidence"]), payload["recommendation"], lifecycle,
-                 disposition, first_seen, now, snapshot, evidence_digest, count, revision, links),
+                 disposition, first_seen, now, snapshot, evidence_digest, count, revision, links, audit_scope),
             )
 
         resolved_count = 0
@@ -178,16 +188,17 @@ def reconcile(conn, project, root, audit):
             if fid not in current_ids and old["lifecycle"] != "RESOLVED":
                 conn.execute(
                     """UPDATE orbit_project_findings SET lifecycle='RESOLVED',last_snapshot=?,
-                       revision=revision+1 WHERE project=? AND project_root=? AND finding_id=?""",
-                    (snapshot, project, path, fid),
+                       revision=revision+1 WHERE project=? AND project_root=? AND finding_id=? AND audit_scope=?""",
+                    (snapshot, project, path, fid, audit_scope),
                 )
                 resolved_count += 1
         rows = conn.execute(
-            "SELECT * FROM orbit_project_findings WHERE project=? AND project_root=? ORDER BY finding_id",
-            (project, path),
+            "SELECT * FROM orbit_project_findings WHERE project=? AND project_root=? AND audit_scope=? ORDER BY finding_id",
+            (project, path, audit_scope),
         ).fetchall()
     return {
         "status": "RECONCILED",
+        "audit_scope": audit_scope,
         "complete_scan": True,
         "snapshot": snapshot,
         "new_count": sum(1 for row in rows if row["lifecycle"] == "NEW" and row["last_snapshot"] == snapshot),
@@ -199,19 +210,22 @@ def reconcile(conn, project, root, audit):
     }
 
 
-def list_findings(conn, project, root, limit=100):
+def list_findings(conn, project, root, limit=100, audit_scope=None):
     if type(limit) is not int or not 1 <= limit <= 200:
         raise ValueError("limit must be 1..200")
-    rows = conn.execute(
-        """SELECT * FROM orbit_project_findings
-           WHERE project=? AND project_root=?
-           ORDER BY CASE lifecycle WHEN 'NEW' THEN 0 WHEN 'RECURRING' THEN 1
-                    WHEN 'OPEN' THEN 2 WHEN 'STALE' THEN 3 ELSE 4 END, finding_id
-           LIMIT ?""",
-        (project, str(root), limit),
-    ).fetchall()
+    if audit_scope is not None and audit_scope not in {"STRUCTURAL", "SOURCE"}:
+        raise ValueError("Unknown audit scope")
+    sql = "SELECT * FROM orbit_project_findings WHERE project=? AND project_root=?"
+    params = [project, str(root)]
+    if audit_scope is not None:
+        sql += " AND audit_scope=?"
+        params.append(audit_scope)
+    sql += """ ORDER BY CASE lifecycle WHEN 'NEW' THEN 0 WHEN 'RECURRING' THEN 1
+               WHEN 'OPEN' THEN 2 WHEN 'STALE' THEN 3 ELSE 4 END, finding_id LIMIT ?"""
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
     return {"status": "FOUND" if rows else "EMPTY", "findings": [_public(row) for row in rows],
-            "count": len(rows), "tasks_created": False}
+            "count": len(rows), "audit_scope": audit_scope or "ALL", "tasks_created": False}
 
 
 def set_disposition(conn, project, root, finding_id, disposition, expected_revision):

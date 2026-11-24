@@ -33,8 +33,38 @@ def setup(conn):
         finding_count INTEGER NOT NULL DEFAULT 0,
         scan_count INTEGER NOT NULL DEFAULT 0,
         revision INTEGER NOT NULL DEFAULT 1,
+        source_status TEXT NOT NULL DEFAULT 'SCAN_REQUIRED',
+        source_audit_version TEXT NOT NULL DEFAULT 'source-static-v1',
+        source_scan_started_at TEXT,
+        source_scan_completed_at TEXT,
+        source_snapshot_sha256 TEXT,
+        source_scan_complete INTEGER NOT NULL DEFAULT 0,
+        source_last_error TEXT,
+        source_file_count INTEGER NOT NULL DEFAULT 0,
+        source_bytes_read INTEGER NOT NULL DEFAULT 0,
+        source_finding_count INTEGER NOT NULL DEFAULT 0,
+        source_scan_count INTEGER NOT NULL DEFAULT 0,
+        source_revision INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY(project, project_root)
     )""")
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(orbit_project_readiness)")}
+    migrations = {
+        "source_status": "TEXT NOT NULL DEFAULT 'SCAN_REQUIRED'",
+        "source_audit_version": "TEXT NOT NULL DEFAULT 'source-static-v1'",
+        "source_scan_started_at": "TEXT",
+        "source_scan_completed_at": "TEXT",
+        "source_snapshot_sha256": "TEXT",
+        "source_scan_complete": "INTEGER NOT NULL DEFAULT 0",
+        "source_last_error": "TEXT",
+        "source_file_count": "INTEGER NOT NULL DEFAULT 0",
+        "source_bytes_read": "INTEGER NOT NULL DEFAULT 0",
+        "source_finding_count": "INTEGER NOT NULL DEFAULT 0",
+        "source_scan_count": "INTEGER NOT NULL DEFAULT 0",
+        "source_revision": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for name, declaration in migrations.items():
+        if name not in columns:
+            conn.execute(f"ALTER TABLE orbit_project_readiness ADD COLUMN {name} {declaration}")
     conn.commit()
 
 
@@ -48,6 +78,7 @@ def _validate_scope(project, root):
 def _public(row):
     result = dict(row)
     result["last_scan_complete"] = bool(result["last_scan_complete"])
+    result["source_scan_complete"] = bool(result["source_scan_complete"])
     result["snapshot_semantics"] = (
         "Bounded path/size/mtime metadata digest; not a content hash or Git revision."
     )
@@ -175,3 +206,118 @@ def fail_scan(conn, project, root, token, error_type):
     if update.rowcount != 1:
         return {"status": "STALE_SCAN_RESULT", "data_written": False}
     return {**get_status(conn, project, root), "data_written": True}
+
+
+def begin_source_scan(conn, project, root):
+    """Persist an explicit source scan start and return a revision token."""
+    _validate_scope(project, str(root))
+    started = _now()
+    with conn:
+        prior = conn.execute(
+            "SELECT source_status, source_revision FROM orbit_project_readiness WHERE project=? AND project_root=?",
+            (project, str(root)),
+        ).fetchone()
+        interrupted = bool(prior and prior["source_status"] == "SCANNING")
+        revision = (prior["source_revision"] + 1) if prior else 1
+        conn.execute(
+            """INSERT INTO orbit_project_readiness
+               (project,project_root,status,audit_version,scan_started_at,revision,
+                source_status,source_audit_version,source_scan_started_at,source_revision)
+               VALUES(?,?,'SCAN_REQUIRED',?,?,1,'SCANNING','source-static-v1',?,?)
+               ON CONFLICT(project,project_root) DO UPDATE SET
+                 source_status='SCANNING',source_audit_version='source-static-v1',
+                 source_scan_started_at=excluded.source_scan_started_at,
+                 source_last_error=NULL,source_revision=excluded.source_revision""",
+            (project, str(root), AUDIT_VERSION, started, started, revision),
+        )
+    return {
+        "project": project, "project_root": str(root), "revision": revision,
+        "scan_started_at": started, "recovered_interrupted_scan": interrupted,
+    }
+
+
+def complete_source_scan(conn, project, root, token, audit):
+    """Persist source-scan metadata only; never persist source file contents."""
+    _validate_scope(project, str(root))
+    if not isinstance(token, dict) or token.get("project") != project or token.get("project_root") != str(root):
+        raise ValueError("Source scan token does not match project scope")
+    if type(token.get("revision")) is not int or token["revision"] < 1:
+        raise ValueError("Invalid source scan revision")
+    if not isinstance(audit, dict) or audit.get("status") not in {"SCANNED", "INCOMPLETE"}:
+        raise ValueError("Invalid source audit result")
+    snapshot = audit.get("inventory_snapshot_sha256")
+    if not isinstance(snapshot, str) or not SNAPSHOT_RE.fullmatch(snapshot):
+        raise ValueError("Invalid source snapshot digest")
+    summary = audit.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError("Invalid source audit summary")
+    counts = [summary.get("source_files"), summary.get("source_bytes_read"), audit.get("findings_count")]
+    if any(type(value) is not int or value < 0 for value in counts):
+        raise ValueError("Invalid source audit counts")
+    complete = audit["status"] == "SCANNED"
+    completed = _now()
+    with conn:
+        prior = conn.execute(
+            "SELECT * FROM orbit_project_readiness WHERE project=? AND project_root=?",
+            (project, str(root)),
+        ).fetchone()
+        if prior is None or prior["source_revision"] != token["revision"] or prior["source_status"] != "SCANNING":
+            return {"status": "STALE_SOURCE_SCAN_RESULT", "data_written": False}
+        previous_snapshot = prior["source_snapshot_sha256"]
+        changed = None if previous_snapshot is None else previous_snapshot != snapshot
+        status = "SCANNED" if complete else "INCOMPLETE"
+        update = conn.execute(
+            """UPDATE orbit_project_readiness SET
+                 source_status=?,source_scan_completed_at=?,source_snapshot_sha256=?,
+                 source_scan_complete=?,source_last_error=NULL,source_file_count=?,
+                 source_bytes_read=?,source_finding_count=?,source_scan_count=source_scan_count+1,
+                 source_revision=source_revision+1
+               WHERE project=? AND project_root=? AND source_revision=? AND source_status='SCANNING'""",
+            (status, completed, snapshot, int(complete), counts[0], counts[1], counts[2],
+             project, str(root), token["revision"]),
+        )
+        if update.rowcount != 1:
+            return {"status": "STALE_SOURCE_SCAN_RESULT", "data_written": False}
+    current = get_status(conn, project, root)
+    return {
+        "status": current["source_status"],
+        "source_status": current["source_status"],
+        "source_scan_completed_at": current["source_scan_completed_at"],
+        "source_snapshot_sha256": current["source_snapshot_sha256"],
+        "source_scan_complete": current["source_scan_complete"],
+        "source_file_count": current["source_file_count"],
+        "source_bytes_read": current["source_bytes_read"],
+        "source_finding_count": current["source_finding_count"],
+        "source_scan_count": current["source_scan_count"],
+        "source_revision": current["source_revision"],
+        "changed_since_previous_source_scan": changed,
+        "data_written": True,
+    }
+
+
+def fail_source_scan(conn, project, root, token, error_type):
+    """Mark a failed source scan while preserving the previous source snapshot."""
+    _validate_scope(project, str(root))
+    if not isinstance(token, dict) or token.get("project") != project or token.get("project_root") != str(root):
+        raise ValueError("Source scan token does not match project scope")
+    if type(token.get("revision")) is not int or token["revision"] < 1:
+        raise ValueError("Invalid source scan revision")
+    safe_error = error_type if isinstance(error_type, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,79}", error_type) else "SourceScanError"
+    with conn:
+        update = conn.execute(
+            """UPDATE orbit_project_readiness SET source_status='FAILED',
+               source_scan_complete=0,source_last_error=?,source_revision=source_revision+1
+               WHERE project=? AND project_root=? AND source_revision=? AND source_status='SCANNING'""",
+            (safe_error, project, str(root), token["revision"]),
+        )
+    if update.rowcount != 1:
+        return {"status": "STALE_SOURCE_SCAN_RESULT", "data_written": False}
+    current = get_status(conn, project, root)
+    return {
+        "status": current["source_status"],
+        "source_status": current["source_status"],
+        "source_last_error": current["source_last_error"],
+        "source_snapshot_sha256": current["source_snapshot_sha256"],
+        "source_scan_complete": current["source_scan_complete"],
+        "data_written": True,
+    }
