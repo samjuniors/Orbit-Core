@@ -193,6 +193,43 @@ class ProjectFindingTests(unittest.TestCase):
         self.assertEqual(source_rows["findings"][0]["audit_scope"], "SOURCE")
         self.assertEqual(len(all_rows["findings"]), 2)
 
+    def test_reconcile_rejects_finding_id_reuse_across_audit_scopes(self):
+        orbit_findings.reconcile(
+            self.conn, self.project, self.root, audit("a" * 64, [finding()])
+        )
+        with self.assertRaisesRegex(ValueError, "unique across audit scopes"):
+            orbit_findings.reconcile(
+                self.conn, self.project, self.root,
+                audit("b" * 64, [finding()]), audit_scope="SOURCE"
+            )
+        rows = orbit_findings.list_findings(self.conn, self.project, self.root)
+        self.assertEqual(len(rows["findings"]), 1)
+        self.assertEqual(rows["findings"][0]["audit_scope"], "STRUCTURAL")
+
+    def test_review_fails_closed_for_legacy_ambiguous_finding_ids(self):
+        result = orbit_findings.reconcile(
+            self.conn, self.project, self.root, audit("a" * 64, [finding()])
+        )
+        row = result["findings"][0]
+        self.conn.execute(
+            """INSERT INTO orbit_project_findings
+               (project,project_root,finding_id,category,severity,confidence,summary,evidence,
+                recommendation,lifecycle,disposition,first_seen,last_seen,last_snapshot,
+                evidence_sha256,occurrence_count,revision,linked_task_ids,audit_scope)
+               SELECT project,project_root,finding_id,category,severity,confidence,summary,evidence,
+                      recommendation,lifecycle,disposition,first_seen,last_seen,last_snapshot,
+                      evidence_sha256,occurrence_count,revision,linked_task_ids,'SOURCE'
+               FROM orbit_project_findings
+               WHERE project=? AND project_root=? AND finding_id=? AND audit_scope='STRUCTURAL'""",
+            (self.project, self.root, row["finding_id"]),
+        )
+        self.conn.commit()
+        with self.assertRaisesRegex(ValueError, "ambiguous across audit scopes"):
+            orbit_findings.set_disposition(
+                self.conn, self.project, self.root, row["finding_id"],
+                "ACCEPTED", row["revision"]
+            )
+
     def test_legacy_findings_table_gets_additive_scope_migration(self):
         legacy = sqlite3.connect(":memory:")
         legacy.row_factory = sqlite3.Row
