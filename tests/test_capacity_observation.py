@@ -106,6 +106,15 @@ class CapacityObservationTests(unittest.TestCase):
         self.assertNotIn("capacity", result)
         self.assertTrue(result["no_switch_executed"])
 
+    def test_high_assurance_route_rejects_balanced_model_fallback(self):
+        result = orbit_decisions.model_route(
+            "orbit-security", "security", "high-assurance",
+            ["example-sonnet"], "claude-code", "quality")
+        self.assertEqual(result["desired_tier"], "deep")
+        self.assertIsNone(result["recommended_model"])
+        self.assertEqual(result["selection_status"], "REQUIRES_MODEL_QUALITY_REVIEW")
+        self.assertFalse(result["no_switch_executed"])
+
     def test_model_route_includes_capacity_only_when_supplied(self):
         result = orbit_decisions.model_route(
             "orbit-software-engineer", "implementation", "moderate",
