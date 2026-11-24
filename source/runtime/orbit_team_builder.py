@@ -94,6 +94,7 @@ def preview(conn, root, project, args):
         host if host in orbit_delegation.HOST_NATIVE_TOOLS else "generic",
         args.get("available_host_tools", []))
     profile = orbit_skill_plan._profile(args.get("project_profile"))
+    model_host = host if host in orbit_decisions.HOSTS else "generic"
     base = {
         "project": project,
         "project_root": str(root),
@@ -164,7 +165,7 @@ def preview(conn, root, project, args):
         model_recommendation = orbit_decisions.model_route(
             MODEL_ROLES[row["role"]], MODEL_TASKS[row["role"]],
             args.get("complexity", "moderate"),
-            args.get("available_models", []), host,
+            args.get("available_models", []), model_host,
             args.get("budget", "economy"))
         workers.append({
             "task_key": key, "revision": row["revision"],
