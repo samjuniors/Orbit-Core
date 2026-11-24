@@ -347,6 +347,41 @@ def scan(a, conn=None, persist_readiness=True):
     }
 
 
+def resume_audit_context(conn, project, root, current_audit):
+    """Read persisted audit/finding context and compare the current structural snapshot."""
+    readiness = orbit_readiness.get_status(conn, project, root)
+    findings = orbit_findings.list_findings(conn, project, root, limit=40)
+    current_snapshot = (
+        current_audit.get('inventory_snapshot_sha256')
+        if isinstance(current_audit, dict) else None
+    )
+    persisted_snapshot = readiness.get('last_snapshot_sha256')
+    if not persisted_snapshot:
+        comparison = 'NO_PERSISTED_BASELINE'
+    elif not isinstance(current_snapshot, str):
+        comparison = 'CURRENT_SNAPSHOT_UNAVAILABLE'
+    elif persisted_snapshot == current_snapshot:
+        comparison = 'MATCH'
+    else:
+        comparison = 'MISMATCH'
+    return {
+        'readiness': readiness,
+        'finding_ledger': findings,
+        'audit_freshness': {
+            'structural_snapshot_comparison': comparison,
+            'stored_structural_findings_may_be_stale': comparison == 'MISMATCH',
+            'source_scan_status': readiness.get('source_status', 'SCAN_REQUIRED'),
+            'source_scan_revalidated_during_resume': False,
+            'source_scan_requires_explicit_read_consent': True,
+            'note': (
+                'Resume performs a fresh metadata-only structural scan. A mismatch means '
+                'persisted structural findings need reconciliation. Source findings are '
+                'shown from the last consented scan and are not revalidated during resume.'
+            ),
+        },
+    }
+
+
 def compact_resume(conn, root, project, a):
     """M4 opt-in: small provenance-aware resume, without bulk memory/docs.
 
@@ -1081,6 +1116,9 @@ def execute(conn, name, a):
             root=project_root(a)
             return compact_resume(conn,root,project_key(a),a)
         status=scan(a, conn, persist_readiness=False)
+        root=project_root(a)
+        status.update(resume_audit_context(
+            conn, status['project'], root, status.get('project_audit')))
         status['memories']=memory_recall(conn,{'project':status['project'],'limit':5})
         status['intake']=orbit_intake.status(conn,project_root(a),a)
         status['recovery']=orbit_build.recovery_brief(conn,project_root(a),project_key(a))
