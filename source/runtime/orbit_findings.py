@@ -517,10 +517,12 @@ def remediation_plan(conn, project, root):
     enriched = []
     for task in preview["proposed_tasks"]:
         enriched.append({**task, **task_metadata[task["task_key"]]})
+    enriched.sort(key=lambda task: priority_order.index(task["task_key"]))
     return {
         **preview,
         "proposed_tasks": enriched,
         "priority_order": priority_order,
+        "quality_gate": "Owner review is required between waves. Wave order reflects priority and capacity only; it does not assert task dependencies.",
         "accepted_finding_count": accepted_count,
         "unreviewed_or_stale_count": max(0, active_count - accepted_count),
         "dependency_policy": "No dependencies are inferred without explicit evidence; all proposed depends_on arrays are empty.",
