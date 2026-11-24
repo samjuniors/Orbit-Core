@@ -348,9 +348,41 @@ def scan(a, conn=None, persist_readiness=True):
 
 
 def resume_audit_context(conn, project, root, current_audit):
-    """Read persisted audit/finding context and compare the current structural snapshot."""
-    readiness = orbit_readiness.get_status(conn, project, root)
-    findings = orbit_findings.list_findings(conn, project, root, limit=40)
+    """Read persisted audit/finding context and compare the current structural snapshot.
+
+    Resume is intentionally read-only. Older databases may predate the readiness
+    and findings ledgers, so inspect schema availability instead of running setup
+    migrations from this read path.
+    """
+    available = {
+        row["name"] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('orbit_project_readiness','orbit_project_findings')"
+        ).fetchall()
+    }
+    if "orbit_project_readiness" in available:
+        readiness = orbit_readiness.get_status(conn, project, root)
+    else:
+        readiness = {
+            "status": "SCAN_REQUIRED",
+            "project": project,
+            "project_root": str(root),
+            "revision": 0,
+            "scan_count": 0,
+            "scan_required_to_revalidate": True,
+            "freshness_semantics": "No persisted readiness ledger exists in this database.",
+            "source_status": "SCAN_REQUIRED",
+        }
+    if "orbit_project_findings" in available:
+        findings = orbit_findings.list_findings(conn, project, root, limit=40)
+    else:
+        findings = {
+            "status": "EMPTY",
+            "findings": [],
+            "count": 0,
+            "audit_scope": "ALL",
+            "tasks_created": False,
+        }
     current_snapshot = (
         current_audit.get('inventory_snapshot_sha256')
         if isinstance(current_audit, dict) else None
