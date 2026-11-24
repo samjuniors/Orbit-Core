@@ -117,6 +117,21 @@ def reconcile(conn, project, root, audit, audit_scope="STRUCTURAL"):
     validated = [_validate_finding(item) for item in items]
     if len({item[0] for item in validated}) != len(validated):
         raise ValueError("Audit contains duplicate finding identities")
+    # Finding IDs are addressed by the public review/task APIs without a scope
+    # argument. Enforce global uniqueness across STRUCTURAL and SOURCE ledgers.
+    # This prevents a review or task link from mutating the wrong scope.
+    for fid, _, _ in validated:
+        other_scope = conn.execute(
+            """SELECT audit_scope FROM orbit_project_findings
+               WHERE project=? AND project_root=? AND finding_id=? AND audit_scope<>?
+               LIMIT 1""",
+            (project, str(root), fid, audit_scope),
+        ).fetchone()
+        if other_scope is not None:
+            raise ValueError(
+                f"Finding id {fid} already exists in {other_scope['audit_scope']} scope; "
+                "finding IDs must be unique across audit scopes."
+            )
 
     now = _now()
     path = str(root)
@@ -211,6 +226,21 @@ def reconcile(conn, project, root, audit, audit_scope="STRUCTURAL"):
     }
 
 
+def _unique_finding(conn, project, root, finding_id):
+    """Return one finding or fail closed if legacy cross-scope IDs are ambiguous."""
+    rows = conn.execute(
+        """SELECT * FROM orbit_project_findings
+           WHERE project=? AND project_root=? AND finding_id=?
+           ORDER BY audit_scope""",
+        (project, str(root), finding_id),
+    ).fetchall()
+    if len(rows) > 1:
+        raise ValueError(
+            "Finding id is ambiguous across audit scopes; repair duplicate IDs before review."
+        )
+    return rows[0] if rows else None
+
+
 def list_findings(conn, project, root, limit=100, audit_scope=None):
     if type(limit) is not int or not 1 <= limit <= 200:
         raise ValueError("limit must be 1..200")
@@ -237,11 +267,7 @@ def set_disposition(conn, project, root, finding_id, disposition, expected_revis
     if type(expected_revision) is not int or expected_revision < 1:
         raise ValueError("expected_revision must be a positive integer")
     with conn:
-        row = conn.execute(
-            """SELECT * FROM orbit_project_findings
-               WHERE project=? AND project_root=? AND finding_id=?""",
-            (project, str(root), finding_id),
-        ).fetchone()
+        row = _unique_finding(conn, project, root, finding_id)
         if row is None:
             raise ValueError("Finding not found in selected project")
         if row["revision"] != expected_revision:
@@ -267,11 +293,7 @@ def task_preview(conn, project, root, finding_id, expected_revision):
         raise ValueError("Invalid finding id")
     if type(expected_revision) is not int or expected_revision < 1:
         raise ValueError("expected_revision must be a positive integer")
-    row = conn.execute(
-        """SELECT * FROM orbit_project_findings
-           WHERE project=? AND project_root=? AND finding_id=?""",
-        (project, str(root), finding_id),
-    ).fetchone()
+    row = _unique_finding(conn, project, root, finding_id)
     if row is None:
         raise ValueError("Finding not found in selected project")
     if row["revision"] != expected_revision:
@@ -311,11 +333,7 @@ def link_task(conn, project, root, finding_id, task_key, expected_revision, conf
         raise ValueError("Invalid task key")
     if type(expected_revision) is not int or expected_revision < 1:
         raise ValueError("expected_revision must be a positive integer")
-    row = conn.execute(
-        """SELECT * FROM orbit_project_findings
-           WHERE project=? AND project_root=? AND finding_id=?""",
-        (project, str(root), finding_id),
-    ).fetchone()
+    row = _unique_finding(conn, project, root, finding_id)
     if row is None:
         raise ValueError("Finding not found in selected project")
     if row["revision"] != expected_revision:
