@@ -245,9 +245,13 @@ A phase is not complete because source code or tests were authored. Require:
 - Evidence changes reset a prior disposition to `UNREVIEWED`; revision-guarded review updates reject stale writes.
 - Added `orbit_project_findings` with `reconcile`, `list`, and `review` actions. Reconciliation persists only in Orbit's local SQLite database; it does not write into the project.
 - Added tests for new/persistent/resolved/recurring transitions, incomplete-scan safety, revision conflicts, evidence-change re-review and project/root isolation.
-- Task creation and finding-to-task linkage remain intentionally unimplemented in this slice. Review dispositions do not prove a defect and do not create tasks.
+- Added a read-only task-preview path for findings that are explicitly owner-accepted and still current. It reuses the existing task ledger's planning contract, creates no task, assigns no write paths and invokes no host agent.
+- Added explicit task-linking for an already registered task in the same project/root. Linking requires the finding to remain accepted/current, a matching revision and `confirm_write=true`; cross-project/root links are rejected.
+- The generated preview uses an empty write scope and no dependencies by default. A human/host must inspect source and choose exact write scopes and verification before registering a task through the existing task planner.
+- Hardened evidence-path validation against Windows separators/drive paths, absolute paths, NULs, empty segments and traversal segments.
+- Added tests for accepted-only task preview, no-write behavior, explicit task-link confirmation and hostile path forms. No new MCP tool was added; the existing `orbit_project_findings` action surface was extended, preserving the tool inventory.
 
-**Verification status:** Source and tests were committed and re-fetched from GitHub. The tests are authored, not passed: no local test execution has been performed. Exact-head CI status must be checked before treating this slice as verified.
+**Verification status:** The preceding exact-head run passed 778 unit tests (6 skipped) but failed the packaged MCP smoke check because its expected tool count remained 57. That assertion was corrected to 58. Additional task-preview/linkage tests and the canonical/Claude-plugin runtime parity updates are now on the branch; exact-head CI is pending. No claim of current-head test success is made.
 
 ---
 
