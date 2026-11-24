@@ -248,5 +248,28 @@ class ProjectReadinessIntegrationTests(unittest.TestCase):
         self.assertEqual(failed["source_snapshot_sha256"], "a" * 64)
 
 
+    def test_resume_context_handles_legacy_database_without_ledgers_read_only(self):
+        import orbit_mcp
+        legacy = sqlite3.connect(":memory:")
+        legacy.row_factory = sqlite3.Row
+        self.addCleanup(legacy.close)
+        before = legacy.total_changes
+        context = orbit_mcp.resume_audit_context(
+            legacy, self.project, self.root, {"status": "SCANNED"}
+        )
+        self.assertEqual(context["readiness"]["status"], "SCAN_REQUIRED")
+        self.assertEqual(context["finding_ledger"]["status"], "EMPTY")
+        self.assertEqual(context["finding_ledger"]["count"], 0)
+        self.assertEqual(
+            context["audit_freshness"]["structural_snapshot_comparison"],
+            "NO_PERSISTED_BASELINE",
+        )
+        self.assertEqual(legacy.total_changes, before)
+        tables = legacy.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+        self.assertEqual(tables, [])
+
+
 if __name__ == "__main__":
     unittest.main()
