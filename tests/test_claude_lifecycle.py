@@ -99,10 +99,12 @@ class ClaudeLifecycleTests(unittest.TestCase):
         orbit_claude_hook.process_payload({
             "hook_event_name": "SessionStart", "cwd": str(self.root)
         }, self.conn)
-        result = orbit_claude_lifecycle.recent_events(self.conn, str(other))
+        result = orbit_claude_lifecycle.recent_events(self.conn, str(other.resolve()))
         self.assertEqual(result["status"], "NO_EVENTS_RECORDED")
+        # The hook stores Orbit's validated, canonical root. Windows resolve()
+        # may normalize the path spelling/case, so compare against that same identity.
         self.assertEqual(orbit_claude_lifecycle.recent_events(
-            self.conn, str(self.root)
+            self.conn, str(self.root.resolve())
         )["status"], "EVENTS_AVAILABLE")
 
     def test_retention_is_bounded_to_500_events_per_project(self):
