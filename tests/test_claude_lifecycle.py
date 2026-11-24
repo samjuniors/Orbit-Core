@@ -25,6 +25,19 @@ class ClaudeLifecycleTests(unittest.TestCase):
         self.addCleanup(self.conn.close)
         orbit_claude_lifecycle.setup(self.conn)
 
+
+    def test_optional_hook_configuration_is_not_auto_discovered(self):
+        plugin_root = Path(__file__).resolve().parents[1] / "plugins" / "claude-code" / "orbit-core"
+        optional = plugin_root / "hooks" / "optional" / "orbit-lifecycle.hooks.json"
+        auto_loaded = plugin_root / "hooks" / "hooks.json"
+        self.assertTrue(optional.is_file())
+        self.assertFalse(auto_loaded.exists())
+        config = json.loads(optional.read_text(encoding="utf-8"))
+        self.assertEqual(
+            set(config["hooks"]),
+            {"SessionStart", "PreCompact", "PostCompact", "SessionEnd"},
+        )
+
     def test_only_allowlisted_events_are_recorded(self):
         result = orbit_claude_hook.process_payload({
             "hook_event_name": "SessionStart", "cwd": str(self.root),

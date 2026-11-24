@@ -107,7 +107,6 @@ def recent_events(conn, project_root, limit=8):
         raise ValueError("Invalid project root")
     if type(limit) is not int or not 1 <= limit <= 20:
         raise ValueError("limit must be 1..20")
-    setup(conn)
     rows = conn.execute(
         """SELECT host,event_name,occurred_at
            FROM orbit_host_lifecycle_events

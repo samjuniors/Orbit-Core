@@ -154,6 +154,7 @@ def db_connect():
     orbit_intake.setup(conn)
     orbit_findings.setup(conn)
     orbit_readiness.setup(conn)
+    orbit_claude_lifecycle.setup(conn)
     orbit_build.setup_browser(conn)
     if os.name != 'nt':
         try: path.chmod(0o600)
