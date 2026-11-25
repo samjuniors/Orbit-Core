@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "source" / "runtime"))
 
 import orbit_security_review
+import orbit_mcp
 
 
 class SecurityReviewPlanTests(unittest.TestCase):
@@ -78,6 +80,23 @@ class SecurityReviewPlanTests(unittest.TestCase):
             orbit_security_review.plan(
                 self.profile("cli", "linux"), "Review CLI",
                 available_security_tools=["bandit", "../install-and-run"])
+
+    def test_mcp_tool_is_registered_read_only_and_dispatches_plan(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            args = {
+                "project_root": str(root), "project": "security-plan",
+                "objective": "Review API security",
+                "project_profile": self.profile("api-service", "server", ["python"]),
+            }
+            self.assertIn("orbit_security_review_plan",
+                          [item["name"] for item in orbit_mcp.TOOLS])
+            self.assertIn("orbit_security_review_plan", orbit_mcp.READ_ONLY_TOOLS)
+            result = orbit_mcp.execute(
+                __import__("sqlite3").connect(":memory:"),
+                "orbit_security_review_plan", args)
+            self.assertEqual(result["status"], "SECURITY_REVIEW_PLAN_READY")
+            self.assertFalse(result["vulnerability_scan_performed"])
 
     def test_every_control_stays_unverified_until_real_evidence_exists(self):
         result = orbit_security_review.plan(
