@@ -14,7 +14,9 @@ This document proposes a new v0.34 capability. It does not authorize merging, re
 ## Current checkpoint ? 2026-11-25 (Windows security review)
 
 **Working branch:** `feat/v034-context-aware-intelligence-20261123`
-**Security remediation commit:** `fde77820b004be8f172de723f8ffc37bf773367e`
+**Prior Windows source/candidate containment commit:** `fde77820b004be8f172de723f8ffc37bf773367e`
+
+**Latest Windows structural/readiness guard commit:** `50efb36d6987cd351859a6091c924a71c48767b3`
 **Version state:** `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`. This remains a development proposal, not a v0.34 release candidate.
 
 ### Verified Windows security finding and containment
