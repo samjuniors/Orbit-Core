@@ -20,26 +20,30 @@ This document proposes a new v0.34 capability. It does not authorize merging, re
 ### Verified Windows security finding and containment
 
 - A deterministic disposable test reproduced a junction replacement between path validation and `os.open` in `orbit_agent_factory.candidate`. The call reported `AGENT_CANDIDATE_DRAFTED` while writing `AGENT.md` outside the selected project. This was a confirmed project-boundary escape in the previous implementation.
+- A second deterministic junction-replacement test showed that metadata-only `orbit_project_audit.scan_project` could return `SCANNED` while including `src/test_secret.py` from outside the selected project. No file contents were read, but the path and inventory metadata crossed the selected project boundary.
 - Windows specialist-candidate **preview remains available**, but confirmed writes now fail closed with `HOLD_WINDOWS_SAFE_WRITE_UNAVAILABLE`. No project or host files are written by this hold path.
-- Windows source-content auditing now returns `INCOMPLETE` with `WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE`, no source reads, no snapshot and no findings. Path-based traversal is disabled until a handle-relative, reparse-safe implementation exists.
-- Canonical runtime and committed Claude Code plugin copies are synchronized. The guard tests cover both Windows hold paths.
+- Windows source-content auditing returns `INCOMPLETE` with `WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE`; it performs no source reads and produces no source snapshot/findings.
+- Windows structural project auditing now returns `INCOMPLETE` with `BLOCKED_UNSAFE_WINDOWS_PATH_TRAVERSAL`; a regression test proves `os.scandir` is never called. The result explicitly says not to treat the blocked scan as an empty project.
+- Path-based source and structural traversal, plus candidate persistence, remain disabled on Windows until handle-relative, reparse-safe implementations exist.
+- Canonical runtime and committed Claude Code plugin copies are synchronized. Regression tests cover all three Windows hold paths: structural inventory, source-content scan and candidate persistence.
 
-**Important limitation:** this is containment, not a complete Windows handle-relative implementation. Source-content scanning and agent-candidate persistence are therefore unavailable on Windows. Do not describe those two operations as cross-platform complete. Non-Windows behavior remains enabled and still requires independent adversarial review.
+**Important limitation:** this is containment, not a complete Windows handle-relative implementation. Structural inventory, source-content scanning and agent-candidate persistence are unavailable on Windows. Do not describe these operations as cross-platform complete. Non-Windows path-based traversal/writes remain enabled and still require independent adversarial review.
 
 ### Verification evidence
 
-- Windows Python 3.12 full suite after the remediation: **833 tests, PASS; 40 skipped**. The 34 pre-existing skips are host filesystem symlink-creation limitations; six additional tests are intentionally skipped because they exercise source-content reads or candidate writes that are disabled on Windows. Explicit Windows fail-closed regression tests passed.
-- Focused source-audit / agent-factory suite: **22 tests, PASS; 6 skipped** on Windows.
-- In an isolated temporary copy, built a fresh unpublished desktop bundle from the prior v0.24.1 template and verified: `prepare_release_candidate.py` PASS; `check_release_readiness.py` PASS; `check_version.py --strict-bundle` PASS; `build_release.py --verify` PASS; `smoke_release_zip.py` PASS with 58 MCP tools and `DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS`. Temporary artifacts were discarded; no published bundle was changed.
-- Exact-head GitHub Actions run [#45543537489](https://github.com/samjuniors/Orbit-Core/actions/runs/45543537489) passed **5/5** on branch head `ac25cab7e23354d74790f0c46816ee1fdd94c898`, including the Windows Python 3.12 job and all four Ubuntu Python jobs. This head contains the security remediation commit `fde77820b004be8f172de723f8ffc37bf773367e`.
+- Windows Python 3.12 full suite on the current source changes: **835 tests, PASS; 43 skipped; zero failures**. The 34 pre-existing skips are host filesystem symlink-creation limitations; six tests are intentionally skipped because source-content reads or candidate writes are disabled on Windows; three structural-inventory tests are skipped because Windows structural traversal is now also disabled. Explicit no-traversal, no-source-read and no-candidate-write guard tests passed.
+- Focused Windows tests: readiness **16/16 PASS**; structural audit **1 PASS / 4 SKIPPED**; source audit **2 PASS / 4 SKIPPED**; agent factory **14 PASS / 2 SKIPPED**; Claude plugin parity **4/4 PASS**. The readiness regression proves a blocked scan preserves the last complete snapshot/counts, does not claim drift, and does not fabricate an empty snapshot.
+- In a disposable temporary copy, `compileall` PASS; Windows GUI `py_compile` PASS; `prepare_release_candidate.py` PASS; `check_release_readiness.py` PASS; `check_version.py --strict-bundle` PASS; fresh `build_release.py --verify` PASS; `smoke_release_zip.py` PASS with 58 MCP tools and `DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS`. The three ZIP packages and checksum sidecars were generated only in the disposable copy. The desktop bundle/version was `0.33.1`; this is packaging validation, not a v0.34 release. No published or tracked bundle was modified.
+- A synthetic `SessionStart` payload through the Claude hook adapter recorded one minimal event in a temporary SQLite database and did not store the raw session ID or prompt/tool payload. This is an adapter smoke only; no Claude hook was activated and no native Claude Code lifecycle event was observed.
+- Prior GitHub Actions run [#45543537489](https://github.com/samjuniors/Orbit-Core/actions/runs/45543537489) passed **5/5** on `ac25cab7e23354d74790f0c46816ee1fdd94c898`, including Windows Python 3.12 and Ubuntu Python 3.10–3.13. It predates the new structural-scan/readiness containment change. Exact-head CI for the new commit must be re-run after the feature-branch push.
 - Local Claude Code CLI reports version `2.1.307`; the installed `orbit-core` plugin remains `0.33.1` and enabled. No plugin upgrade, hook activation or host configuration change was performed. Actual Claude lifecycle events and native host behavior remain NOT VERIFIED.
 
 ### Remaining gates
 
-1. Obtain independent security review of the complete branch; Windows containment does not close all source-audit and agent-factory design questions.
-2. Implement and adversarially test Windows handle-relative, reparse-safe traversal/writes before enabling those capabilities on Windows.
+1. Obtain independent security review of the complete branch, including non-Windows path traversal and candidate persistence; the Windows guards are containment, not a security certification.
+2. Implement and adversarially test handle-relative, reparse-safe directory traversal and file creation before re-enabling structural/source scans or candidate writes on Windows.
 3. Validate actual Claude Code lifecycle behavior in a disposable plugin installation without changing the owner's active plugin.
-4. Keep model selection advisory: host-reported capability recommendations exist, but Orbit does not switch the active Claude model or know account quota/entitlement unless the host exposes authoritative signals.
+4. Keep model selection advisory: host-reported capability recommendations exist, but Orbit does not switch the active Claude model or know account quota/entitlement unless the host exposes authoritative signals. Native model-switch observation is not yet verified.
 5. No PR, merge, tag, release, plugin installation or hook activation is authorized by this checkpoint.
 
 ---

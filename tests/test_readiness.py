@@ -74,6 +74,32 @@ class ProjectReadinessTests(unittest.TestCase):
         self.assertEqual(result["last_snapshot_sha256"], prior)
         self.assertEqual(result["last_error"], "PermissionError")
 
+    def test_blocked_windows_scan_preserves_last_complete_inventory(self):
+        good = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        orbit_readiness.complete_scan(
+            self.conn, self.project, self.root, good, audit(snapshot="c" * 64)
+        )
+        blocked_token = orbit_readiness.begin_scan(self.conn, self.project, self.root)
+        blocked = {
+            "status": "INCOMPLETE",
+            "scan_mode": "BLOCKED_UNSAFE_WINDOWS_PATH_TRAVERSAL",
+            "scan_block_reason": "WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE",
+            "inventory_snapshot_sha256": None,
+            "summary": {"files": 0, "directories": 0},
+            "findings_count": 0,
+        }
+        result = orbit_readiness.complete_scan(
+            self.conn, self.project, self.root, blocked_token, blocked
+        )
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertFalse(result["last_scan_complete"])
+        self.assertEqual(result["last_snapshot_sha256"], "c" * 64)
+        self.assertEqual(result["file_count"], 12)
+        self.assertEqual(result["directory_count"], 3)
+        self.assertEqual(result["finding_count"], 2)
+        self.assertIsNone(result["changed_since_previous_scan"])
+        self.assertIn("not a complete current inventory", result["snapshot_semantics"])
+
     def test_interrupted_scan_is_detected_on_next_start(self):
         orbit_readiness.begin_scan(self.conn, self.project, self.root)
         next_scan = orbit_readiness.begin_scan(self.conn, self.project, self.root)
@@ -134,8 +160,22 @@ class ProjectReadinessIntegrationTests(unittest.TestCase):
                 result = orbit_mcp.scan(
                     {"project_root": str(root), "project": "sample"}, conn
                 )
-                self.assertEqual(result["readiness"]["status"], "SCANNED")
-                self.assertTrue(result["readiness"]["last_scan_complete"])
+                if __import__("os").name == "nt":
+                    self.assertEqual(result["readiness"]["status"], "INCOMPLETE")
+                    self.assertFalse(result["readiness"]["last_scan_complete"])
+                    self.assertEqual(
+                        result["project_audit"]["scan_block_reason"],
+                        "WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE",
+                    )
+                    self.assertIsNone(result["readiness"]["last_snapshot_sha256"])
+                    self.assertIsNone(result["readiness"]["changed_since_previous_scan"])
+                    self.assertIn(
+                        "not a complete current inventory",
+                        result["readiness"]["snapshot_semantics"],
+                    )
+                else:
+                    self.assertEqual(result["readiness"]["status"], "SCANNED")
+                    self.assertTrue(result["readiness"]["last_scan_complete"])
             finally:
                 conn.close()
 

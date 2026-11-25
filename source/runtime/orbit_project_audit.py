@@ -44,6 +44,65 @@ CI_MARKERS = {".github/workflows", ".gitlab-ci.yml", ".circleci", "azure-pipelin
 MAX_FILES = 2500
 MAX_DIRECTORIES = 600
 MAX_DEPTH = 14
+# Path-based scandir traversal cannot prevent a Windows junction/reparse-point
+# replacement between directory enumeration and the next path-based open.
+_WINDOWS_SAFE_RELATIVE_SCAN = (os.name != "nt")
+
+
+def _blocked_windows_scan(root: Path) -> dict:
+    """Return an explicit no-traversal result until handle-relative scan exists."""
+    return {
+        "status": "INCOMPLETE",
+        "scan_mode": "BLOCKED_UNSAFE_WINDOWS_PATH_TRAVERSAL",
+        "root_identity": hashlib.sha256(
+            str(root).encode("utf-8", "surrogatepass")
+        ).hexdigest()[:16],
+        "inventory_snapshot_sha256": None,
+        "snapshot_semantics": (
+            "No directory entries were opened; no project inventory snapshot was produced."
+        ),
+        "limits": {
+            "max_files": MAX_FILES,
+            "max_directories": MAX_DIRECTORIES,
+            "max_depth": MAX_DEPTH,
+        },
+        "truncated": True,
+        "unreadable_paths": [],
+        "symlinks_skipped": 0,
+        "summary": {
+            "files": 0,
+            "directories": 0,
+            "source_files": 0,
+            "test_files": 0,
+            "test_directories": 0,
+            "languages_by_extension": {},
+        },
+        "discovered": {
+            "readmes": [],
+            "architecture_docs": [],
+            "security_docs": [],
+            "test_files": [],
+            "test_directories": [],
+            "dependency_manifests": [],
+            "dependency_lockfiles": [],
+            "ci_markers": [],
+        },
+        "findings": [],
+        "findings_count": 0,
+        "audit_scope": (
+            "Structural metadata scan blocked on Windows until handle-relative, "
+            "reparse-safe directory traversal is implemented. No directory entries "
+            "were read."
+        ),
+        "scan_block_reason": "WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE",
+        "next": (
+            "Use host-native project inspection for now; do not treat this result "
+            "as an empty project."
+        ),
+        "data_written": False,
+        "project_scripts_executed": False,
+        "source_contents_read": False,
+    }
 
 
 def _is_test_file(rel: str, name: str) -> bool:
@@ -66,6 +125,8 @@ def scan_project(root: Path, profile: dict | None = None) -> dict:
     root = root.resolve(strict=True)
     if root == Path(root.anchor) or root == Path.home().resolve():
         raise ValueError("Select a specific project directory")
+    if not _WINDOWS_SAFE_RELATIVE_SCAN:
+        return _blocked_windows_scan(root)
 
     files = []
     directories = []

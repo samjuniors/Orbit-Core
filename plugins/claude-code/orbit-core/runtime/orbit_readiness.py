@@ -81,6 +81,8 @@ def _public(row):
     result["source_scan_complete"] = bool(result["source_scan_complete"])
     result["snapshot_semantics"] = (
         "Bounded path/size/mtime metadata digest; not a content hash or Git revision."
+        if result["last_scan_complete"] else
+        "Latest scan attempt was incomplete; any stored digest is not a complete current inventory snapshot."
     )
     result["freshness_semantics"] = (
         "Valid as of scan_completed_at only; no filesystem watcher monitors later changes."
@@ -148,7 +150,11 @@ def complete_scan(conn, project, root, token, audit):
     if not isinstance(audit, dict) or audit.get("status") not in {"SCANNED", "INCOMPLETE"}:
         raise ValueError("Invalid project audit result")
     snapshot = audit.get("inventory_snapshot_sha256")
-    if not isinstance(snapshot, str) or not SNAPSHOT_RE.fullmatch(snapshot):
+    blocked = audit.get("scan_block_reason") == "WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE"
+    if blocked:
+        if audit.get("status") != "INCOMPLETE" or snapshot is not None:
+            raise ValueError("Invalid blocked project audit result")
+    elif not isinstance(snapshot, str) or not SNAPSHOT_RE.fullmatch(snapshot):
         raise ValueError("Invalid inventory snapshot digest")
     summary = audit.get("summary")
     if not isinstance(summary, dict):
@@ -166,7 +172,15 @@ def complete_scan(conn, project, root, token, audit):
         if prior is None or prior["revision"] != token["revision"] or prior["status"] != "SCANNING":
             return {"status": "STALE_SCAN_RESULT", "data_written": False}
         previous_snapshot = prior["last_snapshot_sha256"]
-        changed = None if previous_snapshot is None else previous_snapshot != snapshot
+        changed = (
+            None if blocked or previous_snapshot is None
+            else previous_snapshot != snapshot
+        )
+        stored_snapshot = previous_snapshot if blocked else snapshot
+        stored_counts = (
+            [prior["file_count"], prior["directory_count"], prior["finding_count"]]
+            if blocked else counts
+        )
         status = "SCANNED" if complete else "INCOMPLETE"
         update = conn.execute(
             """UPDATE orbit_project_readiness SET
@@ -174,7 +188,8 @@ def complete_scan(conn, project, root, token, audit):
                  last_scan_complete=?,last_error=NULL,file_count=?,directory_count=?,
                  finding_count=?,scan_count=scan_count+1,revision=revision+1
                WHERE project=? AND project_root=? AND revision=? AND status='SCANNING'""",
-            (status, completed, snapshot, int(complete), counts[0], counts[1], counts[2],
+            (status, completed, stored_snapshot, int(complete),
+             stored_counts[0], stored_counts[1], stored_counts[2],
              project, str(root), token["revision"]),
         )
         if update.rowcount != 1:
