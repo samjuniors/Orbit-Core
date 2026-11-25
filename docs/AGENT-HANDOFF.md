@@ -1,9 +1,34 @@
 # Orbit Core — cross-agent continuity and handoff
 
-**Last reviewed:** 2026-11-24 22:26 Asia/Kolkata.
+**Last reviewed:** 2026-11-25 06:56 Asia/Kolkata.
 **Canonical repository:** https://github.com/samjuniors/Orbit-Core. Revalidate live state before every resume.
 **Scope:** provider-neutral Orbit Core only. Orbit Commander remains separately paused and out of scope.
 **Current baseline:** main VERSION=0.33.1 / NEXT_VERSION=0.34.0; v0.33.0 prerelease published; v0.33.1 and v0.34.0 are not published.
+
+## 2026-11-25 — Morning live revalidation
+
+### Main, release and merged fixes
+- Canonical `main` remains [`2fdf4f329774b9644e75ac0df4d89738a7cd625f`](https://github.com/samjuniors/Orbit-Core/commit/2fdf4f329774b9644e75ac0df4d89738a7cd625f). Main metadata remains `VERSION=0.33.1` / `NEXT_VERSION=0.34.0`; exact-head [CI #45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) passed all five jobs (Ubuntu Python 3.10–3.13 and Windows Python 3.12).
+- Latest published prerelease remains [v0.33.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0), published 2026-11-23 08:20:55 UTC; latest stable remains v0.30.0. v0.33.0 has eight assets (four packages plus four SHA-256 sidecars). The tag is annotated; its target commit is `0100e6d1d3e33c907f726c03004d209f7876837d`. v0.33.1 remains source-only and unpublished.
+- [PR #175](https://github.com/samjuniors/Orbit-Core/pull/175) merged to main at `a90f1b398a2be9a3807277f560360598ef247e36` (Claude Code Windows `ORBIT_PYTHON` override). [PR #176](https://github.com/samjuniors/Orbit-Core/pull/176) merged at `5416230722b1009df1216023c475738f662f6c0a` (Samjuniors publisher metadata). The owner’s normal profile and actual Claude UI trust-warning behavior remain NOT VERIFIED; publisher metadata does not remove third-party marketplace trust classification.
+
+### Documentation handoff PR
+- [PR #178](https://github.com/samjuniors/Orbit-Core/pull/178), branch `docs/orbit-nightly-handoff-20261123`, was at `2cf36d8d240e8c92ee5b436833603e61a8b55647` before this 25 Nov documentation append. It is OPEN / DRAFT, documentation-only (7 files, 13 commits), with no submitted reviews or inline review threads.
+- Exact-head [CI #45445143967](https://github.com/samjuniors/Orbit-Core/actions/runs/45445143967) passed 5/5, including Windows Python 3.12. This append creates a new docs-only commit; verify its new exact-head CI and obtain human documentation review before considering merge. Do not merge automatically.
+
+### v0.34 context-aware experiment — still not approved
+- Branch [`feat/v034-context-aware-intelligence-20261123`](https://github.com/samjuniors/Orbit-Core/tree/feat/v034-context-aware-intelligence-20261123) is 94 commits ahead / 0 behind main at `f08448ff75c9d87f280ad66ff022a5466a7f4eb4`; no PR or independent review exists.
+- Its earlier packaged MCP inventory smoke failure has been corrected. Exact-head [CI #45371214722](https://github.com/samjuniors/Orbit-Core/actions/runs/45371214722) now passes 5/5, including Windows Python 3.12. Green CI does not approve the broad 94-commit branch for merge or release. Reconcile it to approved issues #90/#91/#92 and split any accepted work into bounded PRs.
+- Two static review leads remain, neither a reproduced exploit: (1) `source/runtime/orbit_source_audit.py` does not yet demonstrate Windows handle-level reparse-point identity binding across enumeration/open; add adversarial child-reparse-point, hard-link and TOCTOU tests or fail closed. (2) `source/runtime/orbit_agent_factory.py` uses pathname-based parent-directory checks/writes that do not pin parent identity; add directory-handle-relative and Windows reparse-point-aware protections with adversarial tests.
+
+### Previous nightly execution — verified record
+- [Orbit Nightly Build](https://github.com/samjuniors/Orbit-Core) did execute on 2026-11-24: run `903fe8fd-19c0-8326-808d-820c8ad70e4d`, scheduled 22:00 IST, started 22:26:04 IST, completed 22:50:39 IST. Recorded status `completed`; latest result run ID matches; result was not marked as a failure, required no user action, and was not truncated. Delivery status is unknown.
+- Its recorded outcome: main CI 5/5 PASS; PR #178 exact-head CI 5/5 PASS; v0.34 remains HOLD despite CI 5/5 PASS; handoff, Notion research and roadmap, and release documentation were refreshed. No runtime merge, release, install or deployment occurred.
+
+### Host, connector and next actions
+- Remote Arc `DESKTOP-AND1FUJ` remains OFFLINE (last seen 2026-11-23 11:47:38 UTC). No local checkout/tests, owner-profile Claude/Codex/Antigravity acceptance, `.orbit` or SQLite inspection occurred. Orbit ChatGPT plugin connector remains unavailable. GitHub branch-protection endpoint returned 403 `Resource not accessible by integration`; required-check enforcement remains NOT VERIFIED.
+- Approved order remains safe Team Builder → task-specific skills/tools → Orbit-mediated agent/bot coordination. Main already contains a read-only Team Builder/skills preview foundation; the missing evidence is host-owned execution, delivery/stop/expiry, permission/session attestation and owner-profile acceptance. Keep preview-only.
+- Next: (1) review this docs-only #178 update and verify its new exact-head CI; (2) resolve the two v0.34 static review leads with Windows adversarial tests; (3) reconcile v0.34 to #90/#91/#92; (4) complete owner-profile host acceptance and independent human security review before any v0.33.1 publication; (5) keep RAD P2 #138 separate and on hold.
 
 ## 2026-11-24 — Nightly live revalidation
 
