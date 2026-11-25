@@ -270,3 +270,13 @@ The M3 engineering improvements and M4.1 optional compact project resume are mer
 - Research: pin OWASP ASVS stable v5.0.0; treat bleeding-edge ASVS as preview. Map mobile work to risk-selected MASVS profiles. Use NIST SP 800-218 v1.1 as final baseline and track SP 800-218 Rev.1 v1.2 as draft. Evaluate installed Semgrep CE, Trivy, OSV-Scanner offline mode and OpenSSF Scorecard as optional resource-first tools; no automatic installation/network scan.
 - Environment: Remote Arc Windows device offline, Desktop Commander unconnected, container GitHub clone failed DNS. No local tests, .orbit/SQLite inspection or owner-profile host acceptance. Orbit ChatGPT plugin integration not exposed. Branch protection remains NOT VERIFIED (403).
 - Release gate: no merge or release until exact-head CI is green, package source parity is rebuilt from exact source, #183/#184 security issues are resolved or explicitly accepted after independent review, host acceptance is evidenced, and release notes/compatibility are verified.
+
+
+## Final live checkpoint — 2026-11-25
+
+- PR #178 prior docs head c613bb7f9266c4c957cb567cf8724e05817b33f4 passed exact-head push #45665192614 and pull_request #45665200445, both 5/5. No human review; keep draft. This additional documentation checkpoint triggers another CI run.
+- PR #182 code head 54a78b863c10baea305f0adf9f1c96c7fa39c58c passed exact-head push #45664882357 and pull_request #45664888434, both 5/5 including Windows upgrade rehearsals. Keep draft due #184 evidence-digest privacy issue, caller-reported permission and missing independent review.
+- PRs #179–#181 remain draft and CI-verified, but their limits remain: advisory model recommendations only; tests do not implement skill activation or native worker execution.
+- Context-aware branch: 100 commits ahead / 0 behind, no PR, CI #45561811215 PASS 5/5. Windows paths are fail-closed containment after the prior junction-replacement escape; handle-relative Windows implementation is still missing. POSIX parent-directory race lead is tracked in #183.
+- Mobile: MASWE v1.0.0 (2026-08-17) defines 78 stable weakness IDs; 36/78 currently have no MASTG test. Use MAS-L1 only when its assumptions fit, and leave untested weaknesses REVIEW_REQUIRED. Source: https://mas.owasp.org/news/2026/08/17/maswe-v100-release/ ; https://mas.owasp.org/Profiles/MAS-L1/
+- No release: v0.33.0 remains latest published prerelease, v0.30.0 latest stable; v0.33.1/v0.34 unpublished. No local/host acceptance or branch-protection verification occurred.
