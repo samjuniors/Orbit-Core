@@ -737,7 +737,7 @@ TOOLS.extend([
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
 TOOLS.append({
     'name':'orbit_security_review_plan',
-    'description':'Create a product-specific, read-only cybersecurity threat/review plan. Reports applicable control areas and candidate scanner names, but performs no source scan, command execution, installation, network request, penetration test or security certification.',
+    'description':'Create a product-specific cybersecurity review plan; optionally run bounded, local-only static source-pattern checks when scan_source=true and permission_state=APPROVED. No project code execution, external scanners, installation, network access, penetration test or security certification.',
     'inputSchema':schema({
         'project_root':string(2000),'project':string(80),
         'objective':string(1200),
