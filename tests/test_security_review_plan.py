@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import sqlite3
 import unittest
 from pathlib import Path
 
@@ -67,6 +68,47 @@ class SecurityReviewPlanTests(unittest.TestCase):
         self.assertFalse(result["permissions"]["external_targets_authorized"])
         self.assertFalse(result["vulnerability_scan_performed"])
 
+    def test_static_scan_requires_approval_and_redacts_source_values(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            src = root / "src"
+            src.mkdir()
+            secret = "AKIA1234567890ABCDEF"
+            (src / "vulnerable.py").write_text(
+                'KEY = "' + secret + '"\n'
+                'PASSWORD = "very-secret-value-123"\n'
+                'subprocess.run(command, shell=True)\n',
+                encoding="utf-8")
+            blocked = orbit_security_review.scan_project(root)
+            self.assertEqual(blocked["status"], "HOLD_PERMISSION_UNKNOWN")
+            self.assertEqual(blocked["findings_status"], "NOT_SCANNED")
+            result = orbit_security_review.scan_project(
+                root, permission_state="APPROVED")
+            self.assertEqual(result["status"], "STATIC_REVIEW_HINTS_FOUND")
+            self.assertFalse(result["source_text_returned"])
+            self.assertFalse(result["secret_values_returned"])
+            serialized = str(result)
+            self.assertNotIn(secret, serialized)
+            self.assertNotIn("very-secret-value-123", serialized)
+            self.assertTrue(all(x["status"] == "LIKELY_NOT_VERIFIED"
+                                and x["evidence_sha256"] for x in result["findings"]))
+            self.assertFalse(result["project_code_executed"])
+            self.assertFalse(result["network_accessed"])
+
+    def test_static_scan_no_hints_is_not_a_security_pass(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            src = root / "src"
+            src.mkdir()
+            (src / "safe.py").write_text(
+                'PASSWORD = os.environ.get("APP_PASSWORD")\n',
+                encoding="utf-8")
+            result = orbit_security_review.scan_project(
+                root, permission_state="APPROVED")
+            self.assertEqual(result["status"], "NO_STATIC_HINTS_REVIEW_REQUIRED")
+            self.assertEqual(result["findings_status"], "NO_STATIC_HINTS_NOT_A_PASS")
+            self.assertFalse(result["security_certification"])
+
     def test_invalid_profile_permission_and_untrusted_tool_inventory_rejected(self):
         with self.assertRaises(ValueError):
             orbit_security_review.plan(
@@ -92,11 +134,26 @@ class SecurityReviewPlanTests(unittest.TestCase):
             self.assertIn("orbit_security_review_plan",
                           [item["name"] for item in orbit_mcp.TOOLS])
             self.assertIn("orbit_security_review_plan", orbit_mcp.READ_ONLY_TOOLS)
-            result = orbit_mcp.execute(
-                __import__("sqlite3").connect(":memory:"),
-                "orbit_security_review_plan", args)
+            source = root / "src"
+            source.mkdir()
+            (source / "api.py").write_text(
+                'AWS_KEY = "AKIA1234567890ABCDEF"\n'
+                'PASSWORD = "real-secret-value-123"\n'
+                'requests.get(url, verify=False)\n'
+                'subprocess.run(command, shell=True)\n',
+                encoding="utf-8")
+            with sqlite3.connect(":memory:") as conn:
+                result = orbit_mcp.execute(
+                    conn, "orbit_security_review_plan",
+                    {**args, "permission_state": "APPROVED", "scan_source": True})
             self.assertEqual(result["status"], "SECURITY_REVIEW_PLAN_READY")
             self.assertFalse(result["vulnerability_scan_performed"])
+            scan = result["static_scan"]
+            self.assertEqual(scan["status"], "STATIC_REVIEW_HINTS_FOUND")
+            self.assertTrue({"AWS_ACCESS_KEY_ID", "HARDCODED_CREDENTIAL",
+                             "TLS_VERIFICATION_DISABLED", "SHELL_TRUE"} <=
+                            {x["id"].removeprefix("ORBIT-") for x in scan["findings"]})
+            self.assertFalse(scan["secret_values_returned"])
 
     def test_every_control_stays_unverified_until_real_evidence_exists(self):
         result = orbit_security_review.plan(
