@@ -1,13 +1,47 @@
 # v0.34.0 proposal — Context-Aware Intelligence & Continuity
 
-**Status:** IN PROGRESS / AUDIT-FIRST IMPLEMENTATION  
-**Audit base:** `main` at `2fdf4f329774b9644e75ac0df4d89738a7cd625f` (2026-11-23)  
-**Working branch:** `feat/v034-context-aware-intelligence-20261123`  
-**Version context observed on main:** `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`  
-**Host implementation target:** Claude Code first; provider-neutral Orbit Core contracts retained.  
+**Status:** IN PROGRESS / AUDIT-FIRST IMPLEMENTATION
+**Audit base:** `main` at `2fdf4f329774b9644e75ac0df4d89738a7cd625f` (2026-11-23)
+**Working branch:** `feat/v034-context-aware-intelligence-20261123`
+**Version context observed on main:** `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`
+**Host implementation target:** Claude Code first; provider-neutral Orbit Core contracts retained.
 **Authority:** GitHub is implementation truth. Existing Orbit Core Notion decisions remain product-decision truth.
 
 This document proposes a new v0.34 capability. It does not authorize merging, release, installation, host configuration changes, permission changes, or autonomous execution.
+
+---
+
+## Current checkpoint ? 2026-11-25 (Windows security review)
+
+**Working branch:** `feat/v034-context-aware-intelligence-20261123`
+**Security remediation commit:** `fde77820b004be8f172de723f8ffc37bf773367e`
+**Version state:** `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`. This remains a development proposal, not a v0.34 release candidate.
+
+### Verified Windows security finding and containment
+
+- A deterministic disposable test reproduced a junction replacement between path validation and `os.open` in `orbit_agent_factory.candidate`. The call reported `AGENT_CANDIDATE_DRAFTED` while writing `AGENT.md` outside the selected project. This was a confirmed project-boundary escape in the previous implementation.
+- Windows specialist-candidate **preview remains available**, but confirmed writes now fail closed with `HOLD_WINDOWS_SAFE_WRITE_UNAVAILABLE`. No project or host files are written by this hold path.
+- Windows source-content auditing now returns `INCOMPLETE` with `WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE`, no source reads, no snapshot and no findings. Path-based traversal is disabled until a handle-relative, reparse-safe implementation exists.
+- Canonical runtime and committed Claude Code plugin copies are synchronized. The guard tests cover both Windows hold paths.
+
+**Important limitation:** this is containment, not a complete Windows handle-relative implementation. Source-content scanning and agent-candidate persistence are therefore unavailable on Windows. Do not describe those two operations as cross-platform complete. Non-Windows behavior remains enabled and still requires independent adversarial review.
+
+### Verification evidence
+
+- Windows Python 3.12 full suite after the remediation: **833 tests, PASS; 40 skipped**. The 34 pre-existing skips are host filesystem symlink-creation limitations; six additional tests are intentionally skipped because they exercise source-content reads or candidate writes that are disabled on Windows. Explicit Windows fail-closed regression tests passed.
+- Focused source-audit / agent-factory suite: **22 tests, PASS; 6 skipped** on Windows.
+- In an isolated temporary copy, built a fresh unpublished desktop bundle from the prior v0.24.1 template and verified: `prepare_release_candidate.py` PASS; `check_release_readiness.py` PASS; `check_version.py --strict-bundle` PASS; `build_release.py --verify` PASS; `smoke_release_zip.py` PASS with 58 MCP tools and `DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS`. Temporary artifacts were discarded; no published bundle was changed.
+- Prior exact-head CI run [#45371214722](https://github.com/samjuniors/Orbit-Core/actions/runs/45371214722) passed 5/5 on `f08448ff75c9d87f280ad66ff022a5466a7f4eb4`; it predates the security remediation commit. CI for `fde77820b004be8f172de723f8ffc37bf773367e` must be checked separately.
+- Local Claude Code CLI reports version `2.1.307`; the installed `orbit-core` plugin remains `0.33.1` and enabled. No plugin upgrade, hook activation or host configuration change was performed. Actual Claude lifecycle events and native host behavior remain NOT VERIFIED.
+
+### Remaining gates
+
+1. Verify exact-head Linux and Windows CI for the remediation commit.
+2. Obtain independent security review of the complete branch; the Windows containment does not close all source-audit and agent-factory design questions.
+3. Implement and adversarially test Windows handle-relative, reparse-safe traversal/writes before enabling those capabilities on Windows.
+4. Validate actual Claude Code lifecycle behavior in a disposable plugin installation without changing the owner's active plugin.
+5. Keep model selection advisory: host-reported capability recommendations exist, but Orbit does not switch the active Claude model or know account quota/entitlement unless the host exposes authoritative signals.
+6. No PR, merge, tag, release, plugin installation or hook activation is authorized by this checkpoint.
 
 ---
 

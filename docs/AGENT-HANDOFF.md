@@ -1,9 +1,21 @@
 # Orbit Core — cross-agent continuity and handoff
 
 **Status:** maintained handoff contract plus a dated engineering snapshot, **not** authorization to merge, install, or release.
-**Last reviewed:** 2026-11-21 (Asia/Kolkata).
+**Last reviewed:** 2026-11-25 (Asia/Kolkata).
 **Project:** [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core). The historic Orbit-Core-MCP URL redirects to this repository.
 **Applies to:** ChatGPT, Claude Code, Codex, Antigravity and other authorized coding hosts. **Not** the separate Orbit Commander project (paused by owner).
+
+## 2026-11-25 ? v0.34 Windows verification and security containment
+
+- Correct repository checkout: `E:\SOFTWARE\Plugin\Orbit-Core` is the owner's primary checkout; work was isolated in a separate worktree and committed on `feat/v034-context-aware-intelligence-20261123`. The original primary checkout and active RAD security worktree were not changed.
+- Feature branch source base was `f08448ff75c9d87f280ad66ff022a5466a7f4eb4`; Windows security containment commit: [`fde77820b004be8f172de723f8ffc37bf773367e`](https://github.com/samjuniors/Orbit-Core/commit/fde77820b004be8f172de723f8ffc37bf773367e).
+- A disposable Windows junction-race reproduction confirmed that the previous specialist-candidate writer could escape the project root. The remediation fails closed for Windows candidate writes and source-content scans. This is containment, not a complete handle-relative implementation; Windows source audit and candidate persistence remain BLOCKED until safe handle-relative implementation and adversarial tests exist.
+- Windows Python 3.12 full suite: **833 PASS / 40 SKIPPED**. Focused source-audit/agent-factory tests: **22 PASS / 6 SKIPPED**. Skips are documented in `docs/CONTEXT-AWARE-INTELLIGENCE-PLAN.md`.
+- Isolated package validation passed: candidate bundle preparation, release readiness, strict desktop bundle parity, reproducible release package build and disposable ZIP/MCP stdio smoke (58 tools). Repository metadata remains `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`; this is not a v0.34 release.
+- Exact-head CI #45371214722 passed 5/5 for prior head `f08448f`; CI for remediation commit `fde7782` is NOT YET VERIFIED. Recheck exact-commit workflow jobs.
+- Claude Code CLI `2.1.307` is present. Installed `orbit-core` plugin remains `0.33.1` enabled. No install/update, hook activation, host config change or real lifecycle acceptance was performed. Active Claude host behavior remains NOT VERIFIED.
+- Model routing remains advisory; no active-session model switching or authoritative quota telemetry is implemented. Windows source scan and agent candidate write are blocked pending safe handle-relative implementation.
+- No v0.34 PR, merge, tag, release, plugin install or hook activation has been performed. Independent human security review remains required.
 
 ## 2026-11-22 — documentation merge and release disposition
 
