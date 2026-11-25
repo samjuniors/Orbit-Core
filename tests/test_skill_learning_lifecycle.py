@@ -6,6 +6,7 @@ not claim that a host installed, discovered, activated, or executed a skill.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 import tempfile
@@ -96,7 +97,7 @@ class SkillLearningLifecycleTests(unittest.TestCase):
         self.assertIn("not installed or activated", text)
         self.assertIn("untrusted reference data", text)
         self.assertIn("Independent", text)
-        self.assertEqual(oct(path.stat().st_mode & 0o777), "0o600")
+        if os.name != "nt":\n            self.assertEqual(oct(path.stat().st_mode & 0o777), "0o600")
 
     def test_one_task_is_insufficient_and_imported_history_is_excluded(self):
         self.add_accepted_task("one-task")
