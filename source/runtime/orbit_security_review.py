@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 
 import orbit_skill_plan
+import orbit_specialists
 
 BASELINE = (
     ("secrets_and_credentials", "Inspect tracked source/configuration for exposed credentials; redact all values."),
@@ -162,4 +163,197 @@ def plan(project_profile, objective, *, permission_state="UNKNOWN",
                  "scope trust boundaries and data sensitivity, discover approved tools, then run only "
                  "authorized checks and attach source-revision-bound evidence." if not denied else
                  "Respect permission denial; do not scan or switch to another tool."),
+    }
+
+
+# This bounded scanner is intentionally a static source-pattern review, not SAST.
+# It reuses Orbit's handle-relative, no-follow project traversal and never
+# returns source lines or secret values to the caller.
+_SOURCE_SUFFIXES = frozenset({
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".java",
+    ".kt", ".kts", ".swift", ".go", ".rs", ".cs", ".c", ".h", ".cpp",
+    ".hpp", ".php", ".rb", ".sh", ".ps1", ".bat", ".cmd", ".sql",
+    ".json", ".yaml", ".yml", ".toml", ".xml", ".properties",
+})
+_SOURCE_EXCLUDE = frozenset({
+    ".git", ".orbit", "node_modules", "vendor", "dist", "build",
+    "coverage", "__pycache__", ".venv", "venv", "target", ".next",
+    ".nuxt", ".svelte-kit", ".idea", ".vscode",
+})
+_SOURCE_PATTERNS = (
+    ("PRIVATE_KEY_MATERIAL", "HIGH",
+     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+     "Private-key material appears in a scanned source/configuration file.",
+     "Remove the key from the repository, rotate it, and use an approved secret store."),
+    ("AWS_ACCESS_KEY_ID", "HIGH",
+     re.compile(r"\\bAKIA[0-9A-Z]{16}\\b"),
+     "An AWS access-key identifier pattern appears in a scanned file.",
+     "Revoke/rotate the credential and inspect repository history and access logs."),
+    ("HARDCODED_CREDENTIAL", "HIGH",
+     re.compile(r"""(?i)\\b(?:api[_-]?key|client[_-]?secret|password|access[_-]?token|secret)\\b\\s*[:=]\\s*["'][^"']{8,}["']"""),
+     "A credential-like assignment appears to contain a literal value.",
+     "Verify whether it is live; rotate if exposed and load secrets from the host environment."),
+    ("TLS_VERIFICATION_DISABLED", "MEDIUM",
+     re.compile(r"(?i)(?:verify\\s*=\\s*False|rejectUnauthorized\\s*:\\s*false|ssl\\._create_unverified_context)"),
+     "TLS certificate verification appears to be disabled.",
+     "Restore certificate verification and use a trusted CA configuration."),
+    ("SHELL_TRUE", "MEDIUM",
+     re.compile(r"(?i)\\bshell\\s*=\\s*True\\b"),
+     "A subprocess call appears to enable shell parsing.",
+     "Prefer argument arrays with shell disabled; validate any unavoidable command input."),
+    ("UNSAFE_DESERIALIZATION", "MEDIUM",
+     re.compile(r"(?i)(?:pickle\\.loads?\\s*\\(|yaml\\.load\\s*\\()"),
+     "A potentially unsafe deserialization API appears in source.",
+     "Use safe data formats/loaders and strict schemas; verify caller-controlled input boundaries."),
+    ("DYNAMIC_CODE_EVALUATION", "MEDIUM",
+     re.compile(r"(?i)\\b(?:eval|exec)\\s*\\("),
+     "Dynamic code evaluation appears in source.",
+     "Avoid evaluating untrusted strings; replace with explicit parsers or dispatch tables."),
+    ("JWT_NONE_ALGORITHM", "HIGH",
+     re.compile(r"""(?i)\\b(?:alg|algorithm)\\s*[:=]\\s*["']none["']"""),
+     "A JWT algorithm configuration appears to allow the none algorithm.",
+     "Pin an explicit allowed signing algorithm and reject unsigned tokens."),
+)
+
+
+def scan_project(root, *, permission_state="UNKNOWN"):
+    """Run bounded, local-only source pattern checks under an approved workspace.
+
+    Findings are likely indicators, not verified vulnerabilities. This scanner
+    does not execute code, install tools, access the network, or return matched
+    source text. It fails closed on unsafe traversal and incomplete budgets.
+    """
+    import hashlib
+    import os
+    from pathlib import Path, PurePosixPath
+
+    if permission_state != "APPROVED":
+        return {
+            "status": "HOLD_PERMISSION_DENIED" if permission_state == "DENIED"
+                      else "HOLD_PERMISSION_UNKNOWN",
+            "findings": [], "findings_status": "NOT_SCANNED",
+            "source_files_scanned": 0, "source_snapshot_sha256": None,
+            "source_revision_verified": False, "project_code_executed": False,
+            "network_accessed": False,
+        }
+    base = Path(root)
+    if base.is_symlink() or not base.is_dir():
+        raise ValueError("Expected an existing non-symlink project root")
+    base = Path(os.path.abspath(base)) if os.name == "nt" else base.resolve(strict=True)
+    max_files, max_bytes, max_entries = 240, 8 * 1024 * 1024, 4000
+    files_seen = 0
+    bytes_read = 0
+    entries_seen = 0
+    reasons = set()
+    findings = []
+    snapshot = hashlib.sha256()
+    walker = orbit_specialists._visual_walk(base)
+    try:
+        for rel_dir, directory, dirs, names in walker:
+            if len(rel_dir) >= 10:
+                dirs[:] = []
+                reasons.add("MAX_DIRECTORY_DEPTH")
+                continue
+            dirs[:] = sorted(
+                d for d in dirs
+                if d not in _SOURCE_EXCLUDE and not d.startswith(".")
+            )
+            entries_seen += len(dirs) + len(names)
+            if entries_seen > max_entries:
+                reasons.add("MAX_DIRECTORY_ENTRIES")
+                break
+            for name in sorted(names):
+                if name.startswith("."):
+                    continue
+                rel = PurePosixPath(*(tuple(rel_dir) + (name,)))
+                if rel.suffix.lower() not in _SOURCE_SUFFIXES:
+                    continue
+                if files_seen >= max_files:
+                    reasons.add("MAX_SOURCE_FILES")
+                    break
+                try:
+                    stream, metadata = orbit_specialists._open_visual_source(directory, name)
+                    with stream:
+                        if type(getattr(metadata, "st_nlink", None)) is not int or metadata.st_nlink != 1:
+                            reasons.add("HARD_LINK_SOURCE_FILE")
+                            continue
+                        if metadata.st_size > 256 * 1024 or bytes_read + metadata.st_size > max_bytes:
+                            reasons.add("MAX_FILE_OR_BYTE_LIMIT")
+                            continue
+                        raw = stream.read(256 * 1024 + 1)
+                except orbit_specialists.UnsafeVisualSourceError:
+                    reasons.add("UNSAFE_OR_MISSING_SOURCE_FILE")
+                    continue
+                except (OSError, ValueError):
+                    reasons.add("UNREADABLE_SOURCE_FILE")
+                    continue
+                if len(raw) > 256 * 1024 or bytes_read + len(raw) > max_bytes:
+                    reasons.add("MAX_FILE_OR_BYTE_LIMIT")
+                    continue
+                try:
+                    text = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    reasons.add("NON_UTF8_SOURCE_SKIPPED")
+                    continue
+                files_seen += 1
+                bytes_read += len(raw)
+                relative = rel.as_posix()
+                digest = hashlib.sha256(raw).digest()
+                snapshot.update(relative.encode("utf-8") + b"\\0" + digest)
+                for line_number, line in enumerate(text.splitlines(), 1):
+                    for rule, severity, pattern, summary, remediation in _SOURCE_PATTERNS:
+                        if not pattern.search(line):
+                            continue
+                        # Known placeholders and environment indirection are not
+                        # treated as literal credential exposures.
+                        if rule == "HARDCODED_CREDENTIAL" and re.search(
+                            r"(?i)(?:example|placeholder|changeme|dummy|fake|"
+                            r"your[_ -]|process\\.env|os\\.environ|getenv|\\$\\{)",
+                            line,
+                        ):
+                            continue
+                        fingerprint = hashlib.sha256(
+                            (relative + "\\0" + str(line_number) + "\\0" + line).encode("utf-8")
+                        ).hexdigest()
+                        findings.append({
+                            "id": "ORBIT-" + rule,
+                            "severity": severity,
+                            "status": "LIKELY_NOT_VERIFIED",
+                            "file": relative,
+                            "line": line_number,
+                            "evidence_sha256": fingerprint,
+                            "summary": summary,
+                            "remediation_guidance": remediation,
+                            "source_text_returned": False,
+                        })
+                        if len(findings) >= 120:
+                            reasons.add("MAX_FINDINGS")
+                            break
+                    if len(findings) >= 120:
+                        break
+                if len(findings) >= 120:
+                    break
+            if files_seen >= max_files or len(findings) >= 120:
+                break
+    finally:
+        walker.close()
+    return {
+        "status": "STATIC_REVIEW_HINTS_FOUND" if findings else "NO_STATIC_HINTS_REVIEW_REQUIRED",
+        "findings_status": "LIKELY_NOT_VERIFIED" if findings else "NO_STATIC_HINTS_NOT_A_PASS",
+        "findings": findings,
+        "source_files_scanned": files_seen,
+        "source_bytes_scanned": bytes_read,
+        "source_snapshot_sha256": snapshot.hexdigest(),
+        "source_revision_verified": False,
+        "partial_reasons": sorted(reasons),
+        "scan_limits": {"max_files": max_files, "max_bytes": max_bytes,
+                        "max_entries": max_entries, "max_findings": 120},
+        "source_text_returned": False,
+        "secret_values_returned": False,
+        "project_code_executed": False,
+        "network_accessed": False,
+        "tool_installed_or_invoked": False,
+        "penetration_test_performed": False,
+        "security_certification": False,
+        "next": "Independently reproduce and triage each hint, review unscanned areas and source revision, remediate, then rerun relevant checks. No hints is not a security pass.",
     }
