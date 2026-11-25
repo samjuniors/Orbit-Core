@@ -162,11 +162,7 @@ class SkillLearningLifecycleTests(unittest.TestCase):
         ):
             with self.subTest(phrase=phrase):
                 with self.assertRaises(ValueError):
-                    self.approve(key) if phrase.startswith("Ignore") else (
-                        orbit_evidence.practice_review(
-                            self.conn, self.root, self.project,
-                            {"practice_key": key, "action": "approve",
-                             "practice_text": phrase, "confirm_write": True}))
+                    orbit_learning._reviewed_text(phrase)
 
     def test_project_root_isolation(self):
         self.add_accepted_task("api-validation")
