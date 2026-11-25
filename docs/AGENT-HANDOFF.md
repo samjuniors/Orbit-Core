@@ -311,3 +311,46 @@ At the end of each meaningful task, update **this single handoff record** only f
 4. Keep v0.33.1 unpublished until its exact-main release workflow, acceptance gates and owner authorization are satisfied.
 5. Reconcile the v0.34 plan/runtime mismatch with the #90/#91/#92 order; do not merge the 38-commit experiment as-is.
 6. Keep RAD P2 #138 isolated from product/release work.
+
+
+## 2026-11-25 22:44 IST — live nightly revalidation
+
+### Canonical repository and release state
+- Canonical repository revalidated: https://github.com/samjuniors/Orbit-Core
+- Main remains 2fdf4f329774b9644e75ac0df4d89738a7cd625f; VERSION=0.33.1; NEXT_VERSION=0.34.0.
+- Main exact-head CI #45167794202 remains PASS 5/5.
+- Latest published prerelease remains v0.33.0; latest stable-channel release remains v0.30.0. v0.33.1 and v0.34.0 are not published.
+- Live inventory: 159 branches (page 1 = 100, page 2 = 59, page 3 empty); 8 open issues; 43 open PRs (40 drafts, 3 non-drafts). No bulk cleanup was performed.
+
+### Focused v0.34 PR stack — all remain drafts
+- PR #178 — docs/roadmap/handoff refresh: https://github.com/samjuniors/Orbit-Core/pull/178. Head f305f1eea2b4f51f0da6158cf9a758e6b97b2c6f; 7 files. Exact-head push and pull-request runs #45526281822 and #45526293033 both PASS. No human review.
+- PR #179 — task-specific Team Builder model recommendations: https://github.com/samjuniors/Orbit-Core/pull/179. Head 1c1e949e96df3445ab64d109ab0b951204de183f; workflow run #45545884593 completed successfully. Recommendations remain advisory; no host model switch or provider execution is claimed.
+- PR #180 — project-scoped skill lifecycle tests: https://github.com/samjuniors/Orbit-Core/pull/180. Head 50ab30468a036c3803950d6cb20e7576682c204e; workflow run #45549132274 completed successfully. This is test coverage, not the complete Issue #90 runtime implementation.
+- PR #181 — resource-first specialist / role-factory safety tests: https://github.com/samjuniors/Orbit-Core/pull/181. Head b46fad39e5ec26a7af7cef8ef646d28342da6da4; workflow run #45548741789 completed successfully. This is test coverage, not authenticated native worker execution.
+- PR #182 — product-aware cybersecurity review planning: https://github.com/samjuniors/Orbit-Core/pull/182. Current head 54a78b863c10baea305f0adf9f1c96c7fa39c58c; 45 commits / 25 files; still draft. Prior CI failures exposed (1) a stale 57-tool assertion after adding tool 58, now fixed to 58, and (2) strict source/package parity after the generated desktop bundle was temporarily restored to main's old blob. The branch now carries the 58-tool desktop bundle required by the parity check. Latest exact-head runs #45664882357 and #45664888434 were pending at this checkpoint; recheck before any readiness decision.
+- PR #182's planner and bounded static pattern review are not SAST, a penetration test, scanner-discovery proof, or security certification. Tool names are caller-reported hints; host permission is not independently verified. No external scanner is installed or invoked.
+
+### v0.34 context-aware experiment — NOT APPROVED
+- Branch feat/v034-context-aware-intelligence-20261123 compares 100 commits ahead / 0 behind main and has no PR. Exact branch CI #45561811215 passed 5/5; its Windows job reports 835 tests, 13 skips.
+- The branch plan records deterministic disposable Windows junction-replacement reproductions in the previous implementation: agent candidate creation wrote outside the selected project, and structural inventory included a sibling-project path. Current branch containment fails closed on Windows: agent candidate writes return HOLD_WINDOWS_SAFE_WRITE_UNAVAILABLE; source audit and structural inventory return INCOMPLETE without reading/enumerating. This is containment, not a complete Windows implementation.
+- New POSIX static-review lead, not yet reproduced: orbit_source_audit.scan_source enumerates with path-based os.scandir and later opens full paths with leaf-only O_NOFOLLOW; this does not pin intermediate parent directories. orbit_project_audit.scan_project uses path-based directory traversal, and orbit_agent_factory.candidate checks/creates parents by pathname before the final O_NOFOLLOW open. A parent symlink/directory replacement may redirect reads or writes between those operations. Non-Windows traversal/writes remain enabled and need adversarial tests.
+- Created issue #183: https://github.com/samjuniors/Orbit-Core/issues/183. It tracks handle-relative traversal and candidate creation across platforms. Reuse existing orbit_specialists._visual_walk / _open_visual_source for handle-relative reads where appropriate; implement held-handle-relative creation for writes. Keep the broad 100-commit branch off main until scope and security review are complete.
+
+### Security-review finding deferred for exact package parity
+- During PR #182 review, evidence_sha256 was found to hash the matched source line. For credential-like findings this can become an offline guessing oracle even though raw source text is not returned.
+- A locator-only digest fix was prototyped, but strict prepare_release_candidate.py parity requires rebuilding the tracked desktop MCP bundle from the exact source. The local build environment was unavailable, so the source change was reverted rather than bypassing the parity gate.
+- Created issue #184: https://github.com/samjuniors/Orbit-Core/issues/184. Until the locator-only reference is implemented and the package rebuilt, do not describe the current line-derived digest as a safe redacted proof.
+
+### Fresh security research delta
+- OWASP ASVS 5.0.0 is the stable release (published 2025-05-30); OWASP's bleeding-edge build is preview-only. Pin stable, versioned requirement IDs in release evidence rather than tracking moving master.
+- OWASP MASVS is a living, risk-based mobile standard covering storage, crypto, auth, network, platform, code, resilience and privacy. It is not a substitute for secure architecture/threat modeling or backend controls.
+- NIST SSDF publications list SP 800-218 v1.1 as final and SP 800-218 Rev.1 v1.2 as a draft (published 2025-12-17). Use v1.1 as the current final baseline and track v1.2 as draft only; the GenAI community profile SP 800-218A is a separate final reference.
+- Semgrep Community Edition is a local SAST candidate; Trivy repository scanning covers vulnerabilities, misconfigurations, secrets and licenses; OSV-Scanner supports dependency/lockfile analysis and offline mode with a preloaded local database; OpenSSF Scorecard supplies supply-chain hygiene heuristics, not proof of application security.
+- Do not install or invoke these automatically. Discover already-installed tools, pin versions/rules/data, confirm license and network behavior, require explicit project/host permission, and report scanner coverage/limitations. OSV-Scanner offline mode avoids network after the database is provisioned; online mode can query OSV.dev/deps.dev and registries. Trivy local repo mode is preferable to remote URL mode for local-first review.
+
+### Execution environment and gates
+- Remote Arc DESKTOP-AND1FUJ last seen 2026-11-25T11:40:58Z and is currently OFFLINE. Desktop Commander reports no connected devices. A container git clone attempt failed because github.com DNS resolution was unavailable. No local checkout/test execution, owner-profile Claude/Codex/Antigravity acceptance, .orbit inspection or SQLite inspection occurred in this run.
+- Orbit ChatGPT plugin connector remains unavailable in the exposed integration registry; GitHub and Notion integrations were used.
+- GitHub branch-protection endpoint still returns 403 Resource not accessible by integration; required-check enforcement remains NOT VERIFIED.
+- No merge, release, install, deployment, paid API use or host permission change occurred.
+- Next: recheck PR #182 CI; obtain a real build environment to regenerate its bundle and implement #184; prioritize adversarial POSIX path-replacement tests and handle-relative work in #183; review #178–#182 independently; keep v0.33.1 and v0.34 unpublished until host acceptance, independent security review, packaging parity and all release gates pass.
