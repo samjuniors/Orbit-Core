@@ -1,6 +1,7 @@
 """Tests for product-aware cybersecurity review plans and honest evidence states."""
 from __future__ import annotations
 
+import hashlib
 import sys
 import tempfile
 import sqlite3
@@ -91,7 +92,12 @@ class SecurityReviewPlanTests(unittest.TestCase):
             self.assertNotIn(secret, serialized)
             self.assertNotIn("very-secret-value-123", serialized)
             self.assertTrue(all(x["status"] == "LIKELY_NOT_VERIFIED"
-                                and x["evidence_sha256"] for x in result["findings"]))
+                                and x["evidence_ref_sha256"] for x in result["findings"]))
+            for finding in result["findings"]:
+                expected_ref = hashlib.sha256(
+                    f"{finding['rule']}:{finding['file']}:{finding['line']}".encode("utf-8")
+                ).hexdigest()
+                self.assertEqual(finding["evidence_ref_sha256"], expected_ref)
             self.assertFalse(result["project_code_executed"])
             self.assertFalse(result["network_accessed"])
 
