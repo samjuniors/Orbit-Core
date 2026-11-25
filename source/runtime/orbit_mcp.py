@@ -747,7 +747,7 @@ TOOLS.append({
             'technologies':{'type':'array','maxItems':8,'items':{'type':'string','enum':sorted(orbit_skill_plan.TECHNOLOGIES)}},
             'operation':{'type':'string','enum':sorted(orbit_skill_plan.OPERATIONS)}},[]),
         'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
-        'available_security_tools':{'type':'array','maxItems':24,'items':string(64)}},
+        'available_security_tools':{'type':'array','maxItems':24,'items':string(64)},\n        'scan_source':{'type':'boolean'}},
         ['project_root','project','objective','project_profile'])
 })
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
@@ -815,9 +815,13 @@ def execute(conn, name, a):
         return orbit_team_builder.preview(conn,root,project_key(a),a)
     if name=='orbit_security_review_plan':
         root=project_root(a)
-        return orbit_security_review.plan(a['project_profile'], a['objective'],
+        result = orbit_security_review.plan(a['project_profile'], a['objective'],
             permission_state=a.get('permission_state','UNKNOWN'),
             available_security_tools=a.get('available_security_tools'))
+        if a.get('scan_source') is True:
+            result['static_scan'] = orbit_security_review.scan_project(
+                root, permission_state=a.get('permission_state','UNKNOWN'))
+        return result
     if name in {'orbit_autopilot_charter','orbit_autopilot_next','orbit_autopilot_decision'}:
         root=project_root(a)
         project=project_key(a)
