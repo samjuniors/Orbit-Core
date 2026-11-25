@@ -747,7 +747,8 @@ TOOLS.append({
             'technologies':{'type':'array','maxItems':8,'items':{'type':'string','enum':sorted(orbit_skill_plan.TECHNOLOGIES)}},
             'operation':{'type':'string','enum':sorted(orbit_skill_plan.OPERATIONS)}},[]),
         'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
-        'available_security_tools':{'type':'array','maxItems':24,'items':string(64)},\n        'scan_source':{'type':'boolean'}},
+        'available_security_tools':{'type':'array','maxItems':24,'items':string(64)},
+        'scan_source':{'type':'boolean'}},
         ['project_root','project','objective','project_profile'])
 })
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
