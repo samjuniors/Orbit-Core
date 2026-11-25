@@ -40,6 +40,8 @@ MAX_FILE_BYTES = 512 * 1024
 MAX_TOTAL_BYTES = 16 * 1024 * 1024
 MAX_FINDINGS = 100
 MAX_LINES_PER_SIGNAL = 20
+# Windows path-based traversal cannot guarantee handle-relative, reparse-safe opens.
+_WINDOWS_SAFE_RELATIVE_SCAN = (os.name != "nt")
 
 
 def _safe_name(name: str) -> bool:
@@ -138,7 +140,43 @@ def _python_signals(text, rel):
 def scan_source(root: Path) -> dict:
     """Read bounded source files and emit content-hash-backed static review leads."""
     root = Path(root)
-    if root.is_symlink() or not root.is_absolute() or not root.is_dir():
+    if not root.is_absolute():
+        raise ValueError("Project root must be an absolute directory")
+    if not _WINDOWS_SAFE_RELATIVE_SCAN:
+        # Fail closed on Windows until traversal and file opens are relative to
+        # verified directory handles. O_NOFOLLOW on the leaf does not protect
+        # intermediate junction/reparse-point components from replacement.
+        return {
+            "status": "INCOMPLETE",
+            "audit_scope": "SOURCE",
+            "scan_mode": "BLOCKED_UNSAFE_WINDOWS_PATH_TRAVERSAL",
+            "root_identity": hashlib.sha256(str(root).encode("utf-8", "surrogatepass")).hexdigest()[:16],
+            "inventory_snapshot_sha256": None,
+            "snapshot_semantics": "No source files were opened; no snapshot was produced.",
+            "limits": {
+                "max_files": MAX_FILES, "max_depth": MAX_DEPTH,
+                "max_entries_per_directory": MAX_ENTRIES_PER_DIR,
+                "max_file_bytes": MAX_FILE_BYTES, "max_total_bytes": MAX_TOTAL_BYTES,
+                "max_findings": MAX_FINDINGS,
+            },
+            "truncated": True,
+            "unreadable_paths": [],
+            "symlinks_skipped": 0,
+            "summary": {
+                "source_files": 0, "source_bytes_read": 0,
+                "python_files": 0, "python_files_parsed": 0,
+                "test_files": 0, "todo_markers": 0,
+                "languages_by_extension": {},
+            },
+            "findings": [], "findings_count": 0,
+            "audit_scope_description": "Source audit is blocked on Windows until handle-relative reparse-safe traversal is implemented. No source content was read.",
+            "scan_block_reason": "WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE",
+            "data_written": False, "source_contents_read": False,
+            "source_contents_returned": False, "source_contents_persisted": False,
+            "project_scripts_executed": False, "project_files_written": False,
+            "external_network_access": False,
+        }
+    if root.is_symlink() or not root.is_dir():
         raise ValueError("Project root must be an absolute, existing non-symlink directory")
     root = root.resolve(strict=True)
     if root == Path(root.anchor) or root == Path.home().resolve():

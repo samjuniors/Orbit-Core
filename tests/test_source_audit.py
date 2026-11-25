@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source" / "runtime"))
@@ -19,6 +20,7 @@ class SourceAuditTests(unittest.TestCase):
         self.root = Path(self.temp.name) / "project"
         self.root.mkdir()
 
+    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
     def test_source_review_signals_are_not_confirmed_defects_and_raw_code_is_not_returned(self):
         source = self.root / "main.py"
         source.write_text(
@@ -44,6 +46,7 @@ class SourceAuditTests(unittest.TestCase):
         self.assertNotIn("user_input", json.dumps(result))
         self.assertEqual(before, after)
 
+    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
     def test_content_change_changes_source_snapshot_even_when_size_is_unchanged(self):
         path = self.root / "main.py"
         path.write_text("x = 1\n", encoding="utf-8")
@@ -52,6 +55,7 @@ class SourceAuditTests(unittest.TestCase):
         second = orbit_source_audit.scan_source(self.root)
         self.assertNotEqual(first["inventory_snapshot_sha256"], second["inventory_snapshot_sha256"])
 
+    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
     def test_oversized_source_marks_scan_incomplete(self):
         path = self.root / "large.py"
         path.write_bytes(b"x" * (orbit_source_audit.MAX_FILE_BYTES + 1))
@@ -59,6 +63,17 @@ class SourceAuditTests(unittest.TestCase):
         self.assertEqual(result["status"], "INCOMPLETE")
         self.assertTrue(result["truncated"])
         self.assertIn("large.py", result["unreadable_paths"])
+
+    def test_windows_source_audit_fails_closed_without_opening_files(self):
+        (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
+        with mock.patch.object(orbit_source_audit, "_WINDOWS_SAFE_RELATIVE_SCAN", False):
+            result = orbit_source_audit.scan_source(self.root)
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertEqual(result["scan_mode"], "BLOCKED_UNSAFE_WINDOWS_PATH_TRAVERSAL")
+        self.assertEqual(result["scan_block_reason"], "WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE")
+        self.assertFalse(result["source_contents_read"])
+        self.assertIsNone(result["inventory_snapshot_sha256"])
+        self.assertEqual(result["findings"], [])
 
     def test_mcp_requires_read_consent_and_preview_does_not_write(self):
         (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
@@ -80,6 +95,7 @@ class SourceAuditTests(unittest.TestCase):
         finally:
             conn.close()
 
+    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
     def test_confirmed_source_reconcile_persists_scope_not_raw_contents(self):
         (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
         conn = sqlite3.connect(":memory:")

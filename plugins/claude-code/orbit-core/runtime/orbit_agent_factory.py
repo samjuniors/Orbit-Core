@@ -13,6 +13,8 @@ from pathlib import Path
 import orbit_specialists
 
 _ROLE = re.compile(r"[a-z][a-z0-9-]{1,39}\Z")
+# Windows needs handle-relative, reparse-safe directory creation before writes are enabled.
+_WINDOWS_SAFE_RELATIVE_WRITE = (os.name != "nt")
 _FORBIDDEN = re.compile(
     r"(?i)(?:ignore (?:all |your )?(?:system|developer|previous) instructions|"
     r"override (?:system|developer)|disable (?:security|permissions)|"
@@ -133,6 +135,16 @@ def candidate(root, project, args):
     if args.get("confirm_write") is not True:
         return {"status": "AGENT_DRAFT_PREVIEW_ONLY", "proposed": proposal,
                 "state_written": False}
+    if not _WINDOWS_SAFE_RELATIVE_WRITE:
+        return {
+            "status": "HOLD_WINDOWS_SAFE_WRITE_UNAVAILABLE",
+            "role": role,
+            "candidate_relative_path": proposal["candidate_relative_path"],
+            "candidate_sha256": digest,
+            "state_written": False,
+            "agent_spawned": False,
+            "reason": "Windows path-based directory creation is vulnerable to junction/reparse-point replacement. Preview remains available; writing is disabled until handle-relative creation is implemented.",
+        }
     for part in (base, directory, folder):
         if part.is_symlink() or part.exists() and not part.is_dir():
             raise ValueError("Unsafe agent candidate parent")
