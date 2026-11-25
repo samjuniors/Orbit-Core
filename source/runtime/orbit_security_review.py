@@ -186,31 +186,31 @@ _SOURCE_PATTERNS = (
      "Private-key material appears in a scanned source/configuration file.",
      "Remove the key from the repository, rotate it, and use an approved secret store."),
     ("AWS_ACCESS_KEY_ID", "HIGH",
-     re.compile(r"\\bAKIA[0-9A-Z]{16}\\b"),
+     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
      "An AWS access-key identifier pattern appears in a scanned file.",
      "Revoke/rotate the credential and inspect repository history and access logs."),
     ("HARDCODED_CREDENTIAL", "HIGH",
-     re.compile(r"""(?i)\\b(?:api[_-]?key|client[_-]?secret|password|access[_-]?token|secret)\\b\\s*[:=]\\s*["'][^"']{8,}["']"""),
+     re.compile(r"""(?i)\b(?:api[_-]?key|client[_-]?secret|password|access[_-]?token|secret)\b\s*[:=]\s*["'][^"']{8,}["']"""),
      "A credential-like assignment appears to contain a literal value.",
      "Verify whether it is live; rotate if exposed and load secrets from the host environment."),
     ("TLS_VERIFICATION_DISABLED", "MEDIUM",
-     re.compile(r"(?i)(?:verify\\s*=\\s*False|rejectUnauthorized\\s*:\\s*false|ssl\\._create_unverified_context)"),
+     re.compile(r"(?i)(?:verify\s*=\s*False|rejectUnauthorized\s*:\s*false|ssl\._create_unverified_context)"),
      "TLS certificate verification appears to be disabled.",
      "Restore certificate verification and use a trusted CA configuration."),
     ("SHELL_TRUE", "MEDIUM",
-     re.compile(r"(?i)\\bshell\\s*=\\s*True\\b"),
+     re.compile(r"(?i)\bshell\s*=\s*True\b"),
      "A subprocess call appears to enable shell parsing.",
      "Prefer argument arrays with shell disabled; validate any unavoidable command input."),
     ("UNSAFE_DESERIALIZATION", "MEDIUM",
-     re.compile(r"(?i)(?:pickle\\.loads?\\s*\\(|yaml\\.load\\s*\\()"),
+     re.compile(r"(?i)(?:pickle\.loads?\s*\(|yaml\.load\s*\()"),
      "A potentially unsafe deserialization API appears in source.",
      "Use safe data formats/loaders and strict schemas; verify caller-controlled input boundaries."),
     ("DYNAMIC_CODE_EVALUATION", "MEDIUM",
-     re.compile(r"(?i)\\b(?:eval|exec)\\s*\\("),
+     re.compile(r"(?i)\b(?:eval|exec)\s*\("),
      "Dynamic code evaluation appears in source.",
      "Avoid evaluating untrusted strings; replace with explicit parsers or dispatch tables."),
     ("JWT_NONE_ALGORITHM", "HIGH",
-     re.compile(r"""(?i)\\b(?:alg|algorithm)\\s*[:=]\\s*["']none["']"""),
+     re.compile(r"""(?i)\b(?:alg|algorithm)\s*[:=]\s*["']none["']"""),
      "A JWT algorithm configuration appears to allow the none algorithm.",
      "Pin an explicit allowed signing algorithm and reject unsigned tokens."),
 )
@@ -299,7 +299,7 @@ def scan_project(root, *, permission_state="UNKNOWN"):
                 bytes_read += len(raw)
                 relative = rel.as_posix()
                 digest = hashlib.sha256(raw).digest()
-                snapshot.update(relative.encode("utf-8") + b"\\0" + digest)
+                snapshot.update(relative.encode("utf-8") + b":" + digest)
                 for line_number, line in enumerate(text.splitlines(), 1):
                     for rule, severity, pattern, summary, remediation in _SOURCE_PATTERNS:
                         if not pattern.search(line):
@@ -308,12 +308,12 @@ def scan_project(root, *, permission_state="UNKNOWN"):
                         # treated as literal credential exposures.
                         if rule == "HARDCODED_CREDENTIAL" and re.search(
                             r"(?i)(?:example|placeholder|changeme|dummy|fake|"
-                            r"your[_ -]|process\\.env|os\\.environ|getenv|\\$\\{)",
+                            r"your[_ -]|process\.env|os\.environ|getenv|\$\{)",
                             line,
                         ):
                             continue
                         fingerprint = hashlib.sha256(
-                            (relative + "\\0" + str(line_number) + "\\0" + line).encode("utf-8")
+                            (relative + ":" + str(line_number) + ":" + line).encode("utf-8")
                         ).hexdigest()
                         findings.append({
                             "id": "ORBIT-" + rule,
