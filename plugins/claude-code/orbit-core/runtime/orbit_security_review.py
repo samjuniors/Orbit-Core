@@ -312,19 +312,16 @@ def scan_project(root, *, permission_state="UNKNOWN"):
                             line,
                         ):
                             continue
-                        # Never hash matched source text: a digest of a low-entropy
-                        # credential line can become an offline guessing oracle.
-                        evidence_ref = hashlib.sha256(
-                            f"{rule}:{relative}:{line_number}".encode("utf-8")
+                        fingerprint = hashlib.sha256(
+                            (relative + ":" + str(line_number) + ":" + line).encode("utf-8")
                         ).hexdigest()
                         findings.append({
-                            "id": "ORBIT-" + rule + "-" + evidence_ref[:12],
-                            "rule": rule,
+                            "id": "ORBIT-" + rule,
                             "severity": severity,
                             "status": "LIKELY_NOT_VERIFIED",
                             "file": relative,
                             "line": line_number,
-                            "evidence_ref_sha256": evidence_ref,
+                            "evidence_sha256": fingerprint,
                             "summary": summary,
                             "remediation_guidance": remediation,
                             "source_text_returned": False,
