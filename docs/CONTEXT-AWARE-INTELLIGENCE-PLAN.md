@@ -31,17 +31,16 @@ This document proposes a new v0.34 capability. It does not authorize merging, re
 - Windows Python 3.12 full suite after the remediation: **833 tests, PASS; 40 skipped**. The 34 pre-existing skips are host filesystem symlink-creation limitations; six additional tests are intentionally skipped because they exercise source-content reads or candidate writes that are disabled on Windows. Explicit Windows fail-closed regression tests passed.
 - Focused source-audit / agent-factory suite: **22 tests, PASS; 6 skipped** on Windows.
 - In an isolated temporary copy, built a fresh unpublished desktop bundle from the prior v0.24.1 template and verified: `prepare_release_candidate.py` PASS; `check_release_readiness.py` PASS; `check_version.py --strict-bundle` PASS; `build_release.py --verify` PASS; `smoke_release_zip.py` PASS with 58 MCP tools and `DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS`. Temporary artifacts were discarded; no published bundle was changed.
-- Prior exact-head CI run [#45371214722](https://github.com/samjuniors/Orbit-Core/actions/runs/45371214722) passed 5/5 on `f08448ff75c9d87f280ad66ff022a5466a7f4eb4`; it predates the security remediation commit. CI for `fde77820b004be8f172de723f8ffc37bf773367e` must be checked separately.
+- Exact-head GitHub Actions run [#45543537489](https://github.com/samjuniors/Orbit-Core/actions/runs/45543537489) passed **5/5** on branch head `ac25cab7e23354d74790f0c46816ee1fdd94c898`, including the Windows Python 3.12 job and all four Ubuntu Python jobs. This head contains the security remediation commit `fde77820b004be8f172de723f8ffc37bf773367e`.
 - Local Claude Code CLI reports version `2.1.307`; the installed `orbit-core` plugin remains `0.33.1` and enabled. No plugin upgrade, hook activation or host configuration change was performed. Actual Claude lifecycle events and native host behavior remain NOT VERIFIED.
 
 ### Remaining gates
 
-1. Verify exact-head Linux and Windows CI for the remediation commit.
-2. Obtain independent security review of the complete branch; the Windows containment does not close all source-audit and agent-factory design questions.
-3. Implement and adversarially test Windows handle-relative, reparse-safe traversal/writes before enabling those capabilities on Windows.
-4. Validate actual Claude Code lifecycle behavior in a disposable plugin installation without changing the owner's active plugin.
-5. Keep model selection advisory: host-reported capability recommendations exist, but Orbit does not switch the active Claude model or know account quota/entitlement unless the host exposes authoritative signals.
-6. No PR, merge, tag, release, plugin installation or hook activation is authorized by this checkpoint.
+1. Obtain independent security review of the complete branch; Windows containment does not close all source-audit and agent-factory design questions.
+2. Implement and adversarially test Windows handle-relative, reparse-safe traversal/writes before enabling those capabilities on Windows.
+3. Validate actual Claude Code lifecycle behavior in a disposable plugin installation without changing the owner's active plugin.
+4. Keep model selection advisory: host-reported capability recommendations exist, but Orbit does not switch the active Claude model or know account quota/entitlement unless the host exposes authoritative signals.
+5. No PR, merge, tag, release, plugin installation or hook activation is authorized by this checkpoint.
 
 ---
 
@@ -291,19 +290,13 @@ A phase is not complete because source code or tests were authored. Require:
 - Hardened evidence-path validation against Windows separators/drive paths, absolute paths, NULs, empty segments and traversal segments.
 - Added tests for accepted-only task preview, no-write behavior, explicit task-link confirmation and hostile path forms. No new MCP tool was added; the existing `orbit_project_findings` action surface was extended, preserving the tool inventory.
 
-**Verification status:** The preceding exact-head run passed 778 unit tests (6 skipped) but failed the packaged MCP smoke check because its expected tool count remained 57. That assertion was corrected to 58. Additional task-preview/linkage tests and the canonical/Claude-plugin runtime parity updates are now on the branch; exact-head CI is pending. No claim of current-head test success is made.
+**Verification status (historical checkpoint superseded 2026-11-25):** The earlier 57-versus-58 MCP inventory failure was corrected. The current feature-branch head passed the full Windows Python 3.12 suite locally (833 tests, 40 skipped) and exact-head GitHub Actions run #45543537489 (5/5). See the current checkpoint at the top of this document for the remaining security and host-acceptance gates.
 
 ---
 
-## 10. Immediate next actions
+## 10. Immediate next actions (historical list superseded 2026-11-25)
 
-1. Execute the new tests and the full existing suite on the exact feature-branch head; add adversarial cases for scan truncation, duplicate IDs, path normalization and SQLite concurrency.
-2. Review the finding lifecycle and disposition semantics against actual product decisions.
-3. Implement finding-to-task preview using the existing task ledger, with dependency/verification criteria and explicit write confirmation; never create tasks merely because a heuristic finding exists.
-4. Continue Claude Code lifecycle work only after the scan/finding contract is tested and stable.
-5. Keep main unchanged; do not open a PR until tests, exact-head CI and review are complete.
-
-**Current branch:** Phase 1 structural audit plus persistent finding reconciliation are implemented in source. No merge, PR, release, hook installation or host-setting change has been performed.
+The earlier implementation sequence above has been executed and its test/CI evidence is recorded in the current checkpoint at the top of this document. Do not repeat it as an open task list. Remaining work is limited to the explicit security and host-acceptance gates listed in that checkpoint; `main` remains unchanged and no PR, merge, release, hook installation or host-setting change has been performed.
 
 
 ## 8. Implementation checkpoint — persistent project readiness
@@ -318,7 +311,7 @@ A phase is not complete because source code or tests were authored. Require:
 - Installer runtime inventory includes the new module. The packaged desktop bundle is built from the canonical runtime inventory by the existing release preparation flow.
 - This is not continuous change detection: no watcher is installed, and the metadata digest is neither a content hash nor a Git commit. A fresh scan is required to revalidate the project.
 
-**Verification gate:** exact-head CI must cover the new readiness lifecycle, source/plugin parity, installer packaging and existing Windows upgrade paths before this slice is considered verified.
+**Verification:** readiness lifecycle, source/plugin parity, installer packaging and Windows upgrade paths passed exact-head CI run #45543537489 (5/5). This does not certify native IDE behavior.
 
 
 ## 9. Implementation checkpoint — consented source evidence
@@ -327,13 +320,13 @@ A phase is not complete because source code or tests were authored. Require:
 
 - Added `orbit_source_audit.py` to canonical runtime, Claude Code plugin runtime and installer module inventory.
 - The existing `orbit_project_findings` tool now supports `source_reconcile`. It returns `READ_CONSENT_REQUIRED` unless `confirm_read=true`; with read consent but no `confirm_write=true`, it performs a preview and writes no database state.
-- Source audit bounds traversal to 1,200 files, depth 14, 512 KiB per file and 16 MiB total. It excludes generated/vendor/cache trees, hidden folders and sensitive path/name patterns; rejects symlink traversal and detects file changes during reads.
+- On platforms where the current path traversal is enabled, source audit bounds traversal to 1,200 files, depth 14, 512 KiB per file and 16 MiB total. It excludes generated/vendor/cache trees, hidden folders and sensitive path/name patterns; rejects symlink traversal and detects file changes during reads. Windows source-content reads are now explicitly blocked until handle-relative, reparse-safe traversal is implemented.
 - It computes content hashes, parses Python AST and emits conservative review leads for parser mismatches, dynamic code execution, shell execution, pickle deserialization and unsafe YAML loader patterns. These are not confirmed vulnerabilities or proof of exploitability.
 - Raw source content is neither returned nor persisted. Only bounded summaries, repository-relative evidence paths, findings, content digests and scan metadata can be saved in Orbit's local SQLite database.
 - Extended the existing findings ledger with independent `STRUCTURAL` and `SOURCE` scopes, preserving legacy rows through additive migration. Reconciliation in one scope cannot resolve the other scope's findings.
 - Extended project readiness with source-scan state, revision guards, timestamps, content snapshot digest, byte/file counts and incomplete/failure handling.
 
-**Verification gate:** exact-head CI must cover source-read consent, no-write preview behavior, source-scope isolation, migration from existing databases, symlink/size limits, plugin/installer parity and Windows packaging before this slice is considered verified.
+**Verification:** source-read consent, no-write preview behavior, source-scope isolation, migration, bounded traversal, plugin/installer parity and Windows packaging passed exact-head CI run #45543537489 (5/5). On Windows, source-content reading is intentionally held until reparse-safe handle-relative traversal is implemented; the Windows scan behavior is tested as fail-closed.
 
 
 ## 10. Implementation checkpoint — prioritized remediation plan
@@ -346,7 +339,7 @@ A phase is not complete because source code or tests were authored. Require:
 - Tasks include evidence-review acceptance criteria and proposed verification gates. No write paths or dependencies are inferred from evidence paths; no task is registered, no host agent is launched and no tests are claimed.
 - Actual task registration continues through the existing `orbit_task_plan` flow with explicit confirmation.
 
-**Verification gate:** exact-head CI must cover priority ordering, task caps, source/structural inclusion, empty write/dependency scopes, existing-task collisions, read-only behavior, plugin parity and Windows packaging before this slice is considered verified.
+**Verification:** priority ordering, task caps, source/structural inclusion, empty write/dependency scopes, existing-task collisions, read-only behavior, plugin parity and Windows packaging passed exact-head CI run #45543537489 (5/5).
 
 
 ## 11. Opt-in Claude Code lifecycle adapter
@@ -360,12 +353,12 @@ A phase is not complete because source code or tests were authored. Require:
 - Retention is bounded to 30 days and 500 events per project root. Resume exposes only the latest event names/timestamps; it does not treat them as proof of a live agent or completed work.
 - Hook execution is fail-open and bounded to a 3-second timeout in the template. It does not block Claude Code, spawn agents, change permissions, run project commands, update checkpoints or register tasks.
 
-**Verification gate:** unit tests must cover allowlisted events, rejected roots, sensitive payload exclusion, session-ID hashing, project-root isolation and retention bounds. Exact-head CI must pass on Windows and all supported Ubuntu Python versions. No hook was installed or activated on a user's machine.
+**Verification:** unit tests cover allowlisted events, rejected roots, sensitive payload exclusion, session-ID hashing, project-root isolation and retention bounds; exact-head CI run #45543537489 passed on Windows and all supported Ubuntu Python versions. No hook was installed or activated on a user's machine, and actual native Claude lifecycle behavior remains NOT VERIFIED.
 
 
 ## 12. Specialist model recommendations and host-capacity observations
 
-**Implemented on the feature branch; exact-head verification pending:**
+**Implemented on the feature branch; exact-head CI PASS (run #45543537489, 5/5):**
 
 - Extended the existing read-only `orbit_team_preview` with optional host-reported `available_models`, task complexity and budget inputs. Each existing task role maps to Orbit's existing `orbit_model_route` recommendation; the team builder does not create a second model catalog or router.
 - Each specialist receives a task-fit model-tier recommendation. If the host reports no models, the recommendation is `INHERIT_HOST_MODEL`. Unknown host identifiers use generic guidance rather than being treated as a supported model-control surface.
@@ -379,7 +372,7 @@ A phase is not complete because source code or tests were authored. Require:
 
 ## 13. Correctness review follow-up — identity and high-assurance routing
 
-**Implemented on the feature branch; exact-head verification pending:**
+**Implemented on the feature branch; exact-head CI PASS (run #45543537489, 5/5):**
 
 - The findings table's stable identity is project/root/finding ID, while the ledger also carries an audit-scope field. Because review and task APIs address findings by ID without a scope argument, reusing one ID in STRUCTURAL and SOURCE would otherwise overwrite the prior scope through the SQLite upsert.
 - Reconciliation now serializes the cross-scope identity check and upsert in one BEGIN IMMEDIATE transaction, and rejects a finding ID already owned by the other scope. Review/task lookup also fails closed if an ambiguous legacy schema is ever encountered.
@@ -390,4 +383,4 @@ A phase is not complete because source code or tests were authored. Require:
 - Resume also reports the last consented source-scan status and states clearly that source content is not re-read during resume. Added a read-only regression test for finding recovery, snapshot drift detection and zero database writes.
 - Synchronized the canonical findings and model-routing modules with the committed Claude Code plugin runtime copies.
 
-**Verification limitation:** These changes have been committed to the feature branch, but the exact-head test suite has not yet been executed. The connected Windows test device is currently offline. The repository CI workflow is configured to run on pushes to feat/**, so these branch commits should trigger the exact-head matrix automatically; however, the run lookup exposed in this session returns PR-triggered runs only, and the latest push-run ID/status could not be retrieved. The earlier CI result applies to commit 56969232e107c56eb53f89d600793f95383ce2e6, not these later commits. Do not treat this branch as CI-certified or open/merge/release it until exact-head CI and independent review pass.
+**Verification and remaining limitations:** The full Windows Python 3.12 suite passed locally (833 tests, 40 skipped), and exact-head CI run #45543537489 passed 5/5 on `ac25cab7e23354d74790f0c46816ee1fdd94c898`. The Windows source audit and specialist-candidate writer are deliberately fail-closed pending handle-relative implementation. Independent human security review and actual Claude Code lifecycle acceptance remain outstanding. Do not equate CI success with production host certification or release approval.
