@@ -366,3 +366,34 @@ At the end of each meaningful task, update **this single handoff record** only f
 - Notion handoff, roadmap, decisions and research pages were updated; the new MASWE/MAS-L1 research delta was added to Research & References and Roadmap.
 - Environment remains blocked for local execution: Remote Arc Windows device offline, Desktop Commander unconnected, container clone failed DNS. No local checkout/tests, .orbit/SQLite inspection or owner-profile host acceptance. Orbit ChatGPT plugin connector is not exposed; GitHub and Notion integrations were used. Branch protection remains unverified (403).
 - No merge, release, installation, deployment, paid API use or host permission change. v0.33.1 and v0.34 remain unpublished.
+
+
+## 2026-11-26 — Live GitHub / Notion checkpoint
+
+**Main:** `2fdf4f329774b9644e75ac0df4d89738a7cd625f`, unchanged since 2026-11-23; `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`, main's MCP inventory 57 tools. Main CI evidence: [#45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202), PASS 5/5.
+
+**Release:** v0.33.0 remains latest published prerelease (tag target `0100e6d1d3e33c907f726c03004d209f7876837d`, published 2026-11-23 08:20:55 UTC, eight assets); v0.30.0 remains latest stable. v0.33.1/v0.34.0 are unpublished. `docs/RELEASE-ACCEPTANCE-v0.33.1.md` exists on this PR #178 branch but not on main; main's docs directory currently has only the v0.33.0 acceptance record.
+
+**PR #178:** branch `docs/orbit-nightly-handoff-20261123`, previous head `1dd728cc5f0a76b6eb6f6a3df2b219bfd31b58e7`, 18 commits / 7 files, OPEN / DRAFT / documentation-only. Exact-head push #45666137573 and pull_request #45666147503 both PASS 5/5 (Ubuntu Python 3.10–3.13; Windows Python 3.12). No review submissions or inline review threads. This checkpoint adds another docs-only commit; recheck its new exact-head CI and keep draft pending human review.
+
+**Focused v0.34 PRs (all OPEN / DRAFT; no human reviews):**
+- #179 `feat/v034-team-builder-model-routing-20261125` at `1c1e949e96df3445ab64d109ab0b951204de183f`, 7 commits / 7 files, CI 5/5. Advisory per-task model recommendations only; no host model switch or worker spawn.
+- #180 `feat/v034-skill-lifecycle-20261125` at `50ab30468a036c3803950d6cb20e7576682c204e`, 4 commits / 1 file, CI 5/5. Test-only; no host skill install/activation.
+- #181 `feat/v034-resource-first-specialists-20261125` at `b46fad39e5ec26a7af7cef8ef646d28342da6da4`, 1 commit / 1 file, CI 5/5. Regression coverage only; no live external resource discovery or native worker invocation.
+- #182 `feat/v034-security-review-plan-20261125` at `54a78b863c10baea305f0adf9f1c96c7fa39c58c`, 45 commits / 25 files; push #45664882357 and pull_request #45664888434 both PASS 5/5. Adds read-only `orbit_security_review_plan`; branch inventory is 58 tools. The bounded local pattern scan is not SAST, penetration testing or certification; permission is caller-reported and `host_permission_verified=false`. Keep draft.
+
+**Security blockers:**
+- [Issue #183](https://github.com/samjuniors/Orbit-Core/issues/183): disposable Windows junction-replacement tests reproduced the prior agent-candidate write escaping the selected project and structural inventory including a sibling-project path. Current experimental Windows paths fail closed (candidate writes HOLD; source/structural scans return INCOMPLETE). This is containment, not a complete fix. POSIX parent-directory replacement remains a static-review lead, not reproduced. Require held-root/directory handles, handle-relative no-follow reads/writes, Windows reparse-point-aware checks, adversarial Linux/Windows tests and independent review.
+- [Issue #184](https://github.com/samjuniors/Orbit-Core/issues/184): #182's `evidence_sha256` hashes the matched source line and can enable offline guessing of predictable credentials. A locator-only change was reverted because the tracked desktop MCP bundle could not be regenerated from exact source in the available build environment. Replace with a locator-only reference and accurate field name, add tests, rebuild the bundle from exact source, verify parity and rerun CI. Release blocker.
+
+**Broad v0.34 experiment:** `feat/v034-context-aware-intelligence-20261123` at `f08448ff75c9d87f280ad66ff022a5466a7f4eb4`, 100 ahead / 0 behind main, no PR. Exact CI #45561811215 PASS 5/5; Windows 835 tests, 13 skips. Keep unapproved; split only reviewed slices mapped to #90/#91/#92. Do not merge the 100-commit branch as a unit.
+
+**Research:** latest delta is 2026-11-25; no new sources were added 2026-11-26. It records OWASP ASVS 5.0.0/MASVS, NIST SSDF v1.1 final (v1.2 Rev.1 draft), MASWE v1.0.0 (78 weakness IDs; OWASP reports 36/78 without a MASTG test), MAS-L1 assumptions, and optional Semgrep CE, Trivy, OSV-Scanner and OpenSSF Scorecard. These are primary standards/vendor/project references, not proof of Orbit integration or scanner execution. No automatic installation/network scanning.
+
+**Decisions:** Decision 002 is adopted (Helm retired as active product; Orbit Core focus). Decision 001 remains proposed for owner adoption. Product order remains safe Team Builder → task-specific skills/tools → Orbit-mediated agent/bot coordination. RAD P2 #138 remains separate/on hold; Orbit Commander remains paused.
+
+**Previous nightly run:** Orbit Nightly Build run `77bdb0e4-e3a0-832c-991a-0be4a7ffe5bd` actually executed, scheduled 2026-11-25 22:00 IST, started 22:44:07 IST, completed 23:06:30 IST; recorded status `completed`, latest result ID matched, no failure flag, no user action, not truncated, delivery status unknown. It reported main CI 5/5, #182 CI 5/5, #178 CI pending then (both runs later passed 5/5), v0.34 CI 5/5, and #183/#184 follow-ups. No merge/release/install/deployment.
+
+**Execution limits:** Remote Arc `DESKTOP-AND1FUJ` is OFFLINE (last seen 2026-11-25 11:40:58 UTC); no local checkout/tests, owner-profile host acceptance, `.orbit` or SQLite inspection. Orbit ChatGPT plugin connector is not exposed. GitHub branch-protection endpoint returns 403; rulesets query is empty; required-check enforcement remains NOT VERIFIED. No merge, release, installation, deployment, paid API use or host permission change.
+
+**Next:** (1) resolve #184 in a build-capable environment and regenerate the exact desktop bundle; (2) implement #183 handle-relative traversal/writes and adversarial tests; (3) obtain independent human/security review for #178–#182; (4) split the 100-commit v0.34 branch; (5) reconnect Windows for owner-profile Claude/Codex/Antigravity acceptance; (6) keep v0.33.1 unpublished until all release gates and explicit owner go/no-go are recorded.
