@@ -280,3 +280,29 @@ The M3 engineering improvements and M4.1 optional compact project resume are mer
 - Context-aware branch: 100 commits ahead / 0 behind, no PR, CI #45561811215 PASS 5/5. Windows paths are fail-closed containment after the prior junction-replacement escape; handle-relative Windows implementation is still missing. POSIX parent-directory race lead is tracked in #183.
 - Mobile: MASWE v1.0.0 (2026-08-17) defines 78 stable weakness IDs; 36/78 currently have no MASTG test. Use MAS-L1 only when its assumptions fit, and leave untested weaknesses REVIEW_REQUIRED. Source: https://mas.owasp.org/news/2026/08/17/maswe-v100-release/ ; https://mas.owasp.org/Profiles/MAS-L1/
 - No release: v0.33.0 remains latest published prerelease, v0.30.0 latest stable; v0.33.1/v0.34 unpublished. No local/host acceptance or branch-protection verification occurred.
+
+
+## 2026-11-26 — Current roadmap and release disposition
+
+Main remains `2fdf4f329774b9644e75ac0df4d89738a7cd625f` (`VERSION=0.33.1`, `NEXT_VERSION=0.34.0`, 57-tool baseline). v0.33.0 is the latest published prerelease; v0.30.0 remains stable. v0.33.1 is source-only and unpublished.
+
+Approved order remains:
+1. Safe Team Builder foundation.
+2. Task-specific skills and tools.
+3. Orbit-mediated agent/bot coordination.
+
+Current focused v0.34 drafts:
+- #179 model recommendations (advisory only; CI 5/5).
+- #180 skill lifecycle acceptance tests (test-only; CI 5/5).
+- #181 resource-first specialist/role-factory regression tests (test-only; CI 5/5).
+- #182 product-aware cybersecurity planner (58-tool branch; CI 5/5; not SAST or certification; caller-reported permission only; no human review).
+
+All #178–#182 remain open drafts with no human review submissions or inline review threads. PR #178's pre-update head `1dd728cc5f0a76b6eb6f6a3df2b219bfd31b58e7` passed push #45666137573 and pull_request #45666147503, both 5/5. The current handoff append triggers new exact-head CI.
+
+P0 security blockers:
+- #183: reproduced Windows junction-replacement escape in the prior implementation; current experimental Windows behavior fails closed. POSIX parent-directory replacement is a static-review lead, not reproduced. Require handle-relative no-follow traversal/writes and adversarial cross-platform tests.
+- #184: source-line-derived `evidence_sha256` in #182 can enable offline guessing. Replace with locator-only reference, rebuild desktop bundle from exact source, prove source/package parity and rerun full CI.
+
+Broad v0.34 context branch `feat/v034-context-aware-intelligence-20261123` at `f08448ff75c9d87f280ad66ff022a5466a7f4eb4`, 100 ahead / 0 behind main, no PR, CI #45561811215 PASS 5/5 (Windows 835 tests, 13 skips). HOLD; reconcile to #90/#91/#92 and split into focused reviewable PRs.
+
+No v0.33.1 or v0.34 release until exact-head CI, package parity, #183/#184 disposition, owner-profile host acceptance, independent human security review, compatibility/release notes and explicit owner go/no-go are evidenced. Keep RAD P2 #138 separate/on hold. No automatic scanner installation or network scanning.
