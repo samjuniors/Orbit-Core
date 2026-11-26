@@ -306,3 +306,43 @@ P0 security blockers:
 Broad v0.34 context branch `feat/v034-context-aware-intelligence-20261123` at `f08448ff75c9d87f280ad66ff022a5466a7f4eb4`, 100 ahead / 0 behind main, no PR, CI #45561811215 PASS 5/5 (Windows 835 tests, 13 skips). HOLD; reconcile to #90/#91/#92 and split into focused reviewable PRs.
 
 No v0.33.1 or v0.34 release until exact-head CI, package parity, #183/#184 disposition, owner-profile host acceptance, independent human security review, compatibility/release notes and explicit owner go/no-go are evidenced. Keep RAD P2 #138 separate/on hold. No automatic scanner installation or network scanning.
+
+
+## 2026-11-26 — Nightly run 4 roadmap checkpoint (22:20 Asia/Kolkata)
+
+### Live state
+- Main remains 2fdf4f329774b9644e75ac0df4d89738a7cd625f, VERSION=0.33.1, NEXT_VERSION=0.34.0, 57-tool baseline. Main CI #45167794202 PASS 5/5.
+- Latest published prerelease is v0.33.0 (2026-11-23); latest stable is v0.30.0. No v0.33.1/v0.34 release.
+- 159 branches, 43 open PRs, 9 open issues. Main reports protected=false; no repository rulesets were returned. Required-check/review enforcement is not established.
+- PR #178 current pre-update head e63b86c passed exact push/PR CI 5/5, but remains draft with zero submitted reviews. This documentation append triggers new CI.
+- PRs #179–#182 remain draft. Exact-head CI: #179 run 45545884593 PASS; #180 45549132274 PASS; #181 45548741789 PASS; #182 45664882357 and 45664888434 PASS 5/5. Their capability limits and #184 privacy gate remain unchanged.
+
+### Approved order and new mission-supervisor work
+The approved sequence remains:
+1. Safe Team Builder foundation.
+2. Task-specific skills and tools.
+3. Orbit-mediated agent/bot coordination.
+
+New issue [#185](https://github.com/samjuniors/Orbit-Core/issues/185) defines a bounded multi-task mission supervisor. It is a new, scoped autonomy workstream, not evidence that autonomous missions already run. The current experimental branch contains a Mission Charter/DAG review and a local Codex runner that executes only one task per invocation, requires fresh interactive confirmation, and stops for independent review. Those modules are not on main.
+
+### Implementation contract for #185
+- Extend existing orbit_autopilot.py, orbit_autopilot_runner.py, orbit_tasks.py and existing append-only journals. Do not create another task database, agent framework or process launcher.
+- Obtain one explicit approval for a digest-bound, immutable charter (task set, dependency DAG, branch, write paths, parallelism, retry limits, daily launch budget and expiry). Caller-supplied approval references remain caller-reported; they are not identity proof or host permission.
+- Reuse the current isolated-clone Codex adapter. A provider-neutral adapter contract may describe start/observe/cancel/reconcile capabilities, but Claude Code and Antigravity dispatch must remain unavailable until a real signed-in host adapter and permission semantics are verified.
+- Run only DAG-ready tasks. Dependencies become runnable only after independent diff/path/security/test review and current REVIEW_ACCEPTED evidence.
+- Persist mission revision, task fingerprint, source HEAD, workspace identity, attempt lease, heartbeat and append-only lifecycle events. Bound time, output and launches. Verify process identity and supervisor-owned process-tree termination; never kill a PID recovered from SQLite without fresh OS identity evidence.
+- On restart, reconcile worker liveness with the host before resume; detect orphaned workers and fail closed. Replan only within the original charter. Pause/stop/expiry invalidate the active revision and stop only supervisor-owned processes.
+- Keep merge, release, deploy, credentials, dependency installation, data deletion, permission changes, new spend and scope expansion founder-only.
+- Do not add a background service, remote execution, cloud worker, or PC-off continuation in this issue.
+
+### Acceptance evidence required
+A disposable 3–5 task DAG must complete under one mission charter without repeated operator confirmation, while each task still receives independent review. Tests must cover dependency gating, no duplicate attempts, bounded recovery/replanning, pause/stop/expiry, restart/orphan handling, source/branch/task drift, path escapes, symlinks/hardlinks, ignored files, secrets and worker output limits. Run exact-head Linux and Windows CI and verify packaged runtime parity. Real host acceptance is separate from unit tests. Green CI alone does not authorize merge or release.
+
+### Security sequencing
+- [#183](https://github.com/samjuniors/Orbit-Core/issues/183) remains P0: Windows junction escape is contained by fail-closed behavior; POSIX parent-directory race is a static-review lead. Complete handle-relative no-follow reads/writes and adversarial Linux/Windows tests before enabling scans or candidate writes.
+- [#184](https://github.com/samjuniors/Orbit-Core/issues/184) remains P0: replace source-derived finding hash with a locator-only reference, rename the field to reflect its semantics, rebuild the desktop bundle from exact source and prove parity.
+- Broad branch feat/v034-context-aware-intelligence-20261123 is 100 commits ahead / 0 behind main at 8620e4a, CI #45561811215 PASS 5/5, but has no PR/review. Split only after scope/security reconciliation; never merge as a unit.
+- Do not publish v0.33.1/v0.34 until #183/#184, independent review, owner-profile host acceptance, package parity, compatibility, release notes and owner go/no-go are complete.
+
+### Environment blocker
+Remote Arc DESKTOP-AND1FUJ is offline; no Desktop Commander device is connected. Local source edits, Windows adversarial tests, bundle rebuild and .orbit/SQLite inspection are unavailable. Continue documentation/research through GitHub and Notion, but do not simulate local verification.
