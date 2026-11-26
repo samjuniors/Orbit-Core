@@ -397,3 +397,46 @@ At the end of each meaningful task, update **this single handoff record** only f
 **Execution limits:** Remote Arc `DESKTOP-AND1FUJ` is OFFLINE (last seen 2026-11-25 11:40:58 UTC); no local checkout/tests, owner-profile host acceptance, `.orbit` or SQLite inspection. Orbit ChatGPT plugin connector is not exposed. GitHub branch-protection endpoint returns 403; rulesets query is empty; required-check enforcement remains NOT VERIFIED. No merge, release, installation, deployment, paid API use or host permission change.
 
 **Next:** (1) resolve #184 in a build-capable environment and regenerate the exact desktop bundle; (2) implement #183 handle-relative traversal/writes and adversarial tests; (3) obtain independent human/security review for #178–#182; (4) split the 100-commit v0.34 branch; (5) reconnect Windows for owner-profile Claude/Codex/Antigravity acceptance; (6) keep v0.33.1 unpublished until all release gates and explicit owner go/no-go are recorded.
+
+
+## 2026-11-26 — Nightly run 4 live revalidation (22:20 Asia/Kolkata)
+
+**Canonical repository:** samjuniors/Orbit-Core; default branch main. This checkpoint supersedes older branch/issue counts but does not authorize merge, install, release or host changes.
+
+### Live GitHub state
+- Main HEAD: 2fdf4f329774b9644e75ac0df4d89738a7cd625f; VERSION=0.33.1; NEXT_VERSION=0.34.0.
+- Branch inventory: 159 branches (100 on page 1, 59 on page 2); 43 open PRs; 9 open issues.
+- Main exact-head CI [#45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) is completed PASS 5/5. The latest run for main is still this run (2026-11-23 11:43:53 UTC).
+- Latest published prerelease: [v0.33.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0), published 2026-11-23 08:20:55 UTC, eight assets. Latest stable: v0.30.0. No v0.33.1 or v0.34.0 release exists.
+- Repository governance: the branch-list API reports main.protected=false; the repository rulesets collection is empty. Required-check / review enforcement is therefore not configured through those mechanisms at this checkpoint. Do not change repository administration settings without owner direction.
+
+### Documentation PR #178
+- [PR #178](https://github.com/samjuniors/Orbit-Core/pull/178), branch docs/orbit-nightly-handoff-20261123, pre-update head e63b86c2aaa7f3ac2d201876d4336f36980dd263, OPEN / DRAFT, 20 commits / 7 files.
+- Exact-head push run [#45734263882](https://github.com/samjuniors/Orbit-Core/actions/runs/45734263882) and pull_request run [#45734274128](https://github.com/samjuniors/Orbit-Core/actions/runs/45734274128) completed PASS. The latter's five matrix jobs (Ubuntu Python 3.10–3.13 and Windows Python 3.12) all report success.
+- No submitted reviews or inline review threads exist. This new documentation append creates another commit and must receive fresh exact-head CI. Keep draft until CI and human review are complete.
+
+### Focused v0.34 drafts
+- [#179](https://github.com/samjuniors/Orbit-Core/pull/179), head 1c1e949e96df3445ab64d109ab0b951204de183f, exact CI [#45545884593](https://github.com/samjuniors/Orbit-Core/actions/runs/45545884593) PASS. Task-specific model recommendations remain advisory; no host model switch or worker spawn.
+- [#180](https://github.com/samjuniors/Orbit-Core/pull/180), head 50ab30468a036c3803950d6cb20e7576682c204e, exact CI [#45549132274](https://github.com/samjuniors/Orbit-Core/actions/runs/45549132274) PASS. Test-only; no host skill install/activation.
+- [#181](https://github.com/samjuniors/Orbit-Core/pull/181), head b46fad39e5ec26a7af7cef8ef646d28342da6da4, exact CI [#45548741789](https://github.com/samjuniors/Orbit-Core/actions/runs/45548741789) PASS. Regression coverage only; no live external resource crawler or native worker invocation.
+- [#182](https://github.com/samjuniors/Orbit-Core/pull/182), head 54a78b863c10baea305f0adf9f1c96c7fa39c58c, exact CI [#45664882357](https://github.com/samjuniors/Orbit-Core/actions/runs/45664882357) and [#45664888434](https://github.com/samjuniors/Orbit-Core/actions/runs/45664888434) PASS 5/5. Adds bounded local cybersecurity review planning (58-tool branch inventory); it is not full SAST, penetration testing or certification. Caller-reported permission is not host attestation. Keep draft because #184 remains open.
+- #179–#182 are still open drafts. No human review submissions or inline review threads were returned for #178 or #182; do not infer review approval from CI.
+
+### Security and autonomy issues
+- [#183](https://github.com/samjuniors/Orbit-Core/issues/183): a previous Windows junction-replacement implementation was reproduced writing an agent candidate outside the selected project and leaking a sibling path into structural inventory. The current experimental branch contains the Windows paths by failing closed (candidate write HOLD; source/structural scans INCOMPLETE without traversal). This is containment, not a complete Windows implementation. POSIX parent-directory replacement remains a static-review lead, not a reproduced exploit.
+- [#184](https://github.com/samjuniors/Orbit-Core/issues/184): #182's source-derived evidence_sha256 can act as an offline guessing oracle for predictable secrets. A locator-only source change was reverted to restore strict desktop bundle parity. Fix the field semantics, add tests, rebuild the exact desktop bundle and prove parity before any release.
+- New [#185](https://github.com/samjuniors/Orbit-Core/issues/185) specifies a bounded multi-task mission supervisor. It must extend the existing charter, task ledger, DAG and single-task Codex runner; no second task database or process launcher. One mission approval is limited to the immutable charter; host permissions remain separately enforced. Only DAG-ready tasks whose dependencies have independently reached REVIEW_ACCEPTED may advance. Worker output is untrusted. Pause/stop/expiry, heartbeat, output/time limits, process-tree ownership, safe orphan recovery and restart checkpoints are required. Claude Code and Antigravity remain future provider adapters until actual host execution and permission behavior are verified. This scope explicitly excludes background service, remote execution and PC-off continuation.
+- Experimental branch [feat/v034-context-aware-intelligence-20261123](https://github.com/samjuniors/Orbit-Core/tree/feat/v034-context-aware-intelligence-20261123) is 100 commits ahead / 0 behind main at 8620e4a3063852d2c99f6a157fc9ee688c989b6a; exact CI [#45561811215](https://github.com/samjuniors/Orbit-Core/actions/runs/45561811215) PASS 5/5. It has no PR or independent review. Do not merge it as a unit.
+
+### Fresh research and design implications
+- OpenAI's Codex harness/app-server separates the agent loop (thread/turn events, streaming, interruption and host approval) from application-owned product context, tools and policy. Treat it as a Codex adapter reference, not Orbit's provider-neutral core. [Codex as a platform](https://developers.openai.com/blog/codex-as-a-platform).
+- Claude Code and Antigravity expose host-native subagents, skills/rules, tool restrictions and lifecycle hooks. Hooks execute local commands; availability and permissions remain host-owned. Negotiate actual host capabilities and never report a planned dispatch as a spawned agent. [Claude subagents](https://code.claude.com/docs/en/sub-agents) · [Antigravity features](https://antigravity.google/docs/features).
+- OpenHands separates SDK/Agent Server execution from automation scheduling/dispatch. This supports a distinct Orbit mission supervisor and provider execution adapter; it does not justify importing a second runtime. [SDK](https://github.com/OpenHands/software-agent-sdk) · [Automation](https://github.com/OpenHands/automation).
+- Verification research supports independent review: a 2026 preprint reports critic-review gains on SWE-bench Verified and Terminal-Bench; LHTB 2.0 evaluates sustained progress over 3-hour runs with periodic verifier checkpoints. Treat these as evaluation evidence, not production guarantees. [Verification study](https://arxiv.org/abs/2610.34577) · [LHTB 2.0](https://arxiv.org/abs/2610.14146).
+
+### Execution environment and exact blockers
+- Remote Arc device DESKTOP-AND1FUJ is OFFLINE (last seen 2026-11-25 11:40:58 UTC); Desktop Commander has no connected devices. No local checkout, Linux/Windows adversarial test run, desktop bundle rebuild, owner-profile host acceptance or .orbit/SQLite inspection was possible.
+- Orbit ChatGPT plugin connector is not exposed in the available tools. Authorized GitHub and Notion integrations were used.
+- No runtime code was changed in this run. No merge, release, installation, deployment, paid model API use or host permission change occurred. Orbit Commander was not touched.
+
+**Next safe sequence:** (1) reconnect a build-capable Windows/Linux environment; (2) resolve #183 with handle-relative no-follow traversal/writes and adversarial tests; (3) resolve #184 and regenerate the tracked desktop bundle from exact source; (4) implement #185 by extending the existing runner/ledger with a mission-level state machine and provider-neutral adapter contract; (5) obtain independent security/human review and actual host acceptance. Keep v0.33.1/v0.34 unpublished until all release gates are satisfied.
