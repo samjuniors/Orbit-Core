@@ -1,6 +1,6 @@
 # v0.34.0 proposal — Context-Aware Intelligence & Continuity
 
-**Status:** IN PROGRESS / AUDIT-FIRST IMPLEMENTATION
+**Status:** IN PROGRESS / WINDOWS HANDLE-PINNING IMPLEMENTATION
 **Audit base:** `main` at `2fdf4f329774b9644e75ac0df4d89738a7cd625f` (2026-11-23)
 **Working branch:** `feat/v034-context-aware-intelligence-20261123`
 **Version context observed on main:** `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`
@@ -11,7 +11,7 @@ This document proposes a new v0.34 capability. It does not authorize merging, re
 
 ---
 
-## Current checkpoint ? 2026-11-25 (Windows security review)
+## Current checkpoint — 2026-11-27 (Windows handle-pinning implementation)
 
 **Working branch:** `feat/v034-context-aware-intelligence-20261123`
 **Prior Windows source/candidate containment commit:** `fde77820b004be8f172de723f8ffc37bf773367e`
@@ -23,27 +23,28 @@ This document proposes a new v0.34 capability. It does not authorize merging, re
 
 - A deterministic disposable test reproduced a junction replacement between path validation and `os.open` in `orbit_agent_factory.candidate`. The call reported `AGENT_CANDIDATE_DRAFTED` while writing `AGENT.md` outside the selected project. This was a confirmed project-boundary escape in the previous implementation.
 - A second deterministic junction-replacement test showed that metadata-only `orbit_project_audit.scan_project` could return `SCANNED` while including `src/test_secret.py` from outside the selected project. No file contents were read, but the path and inventory metadata crossed the selected project boundary.
-- Windows specialist-candidate **preview remains available**, but confirmed writes now fail closed with `HOLD_WINDOWS_SAFE_WRITE_UNAVAILABLE`. No project or host files are written by this hold path.
-- Windows source-content auditing returns `INCOMPLETE` with `WINDOWS_REPARSE_POINT_SAFE_RELATIVE_OPEN_UNAVAILABLE`; it performs no source reads and produces no source snapshot/findings.
-- Windows structural project auditing now returns `INCOMPLETE` with `BLOCKED_UNSAFE_WINDOWS_PATH_TRAVERSAL`; a regression test proves `os.scandir` is never called. The result explicitly says not to treat the blocked scan as an empty project.
-- Path-based source and structural traversal, plus candidate persistence, remain disabled on Windows until handle-relative, reparse-safe implementations exist.
-- Canonical runtime and committed Claude Code plugin copies are synchronized. Regression tests cover all three Windows hold paths: structural inventory, source-content scan and candidate persistence.
+- Windows specialist-candidate writes now use pinned root/ancestor directory handles, exclusive `CREATE_NEW`, reparse-point rejection and hard-link rejection. Candidate creation remains project-scoped and requires explicit `confirm_write`; it does not install or activate a host agent.
+- Windows source-content auditing is enabled through pinned directory handles and no-delete-share file handles. Reparse points and multiply-linked files are rejected; source reads remain bounded and raw contents are not returned or persisted.
+- Windows structural project auditing is enabled through pinned directory handles. A directory cannot be renamed/replaced while its descendants are scanned; child reparse points are rejected before traversal. Failed/raced paths make the scan `INCOMPLETE` rather than being treated as empty.
+- The new `orbit_windows_fs.py` adapter pins directories with Win32 handles opened without delete sharing, opens leaves with `FILE_FLAG_OPEN_REPARSE_POINT`, rejects reparse points and hard-linked files, and creates candidate files exclusively under the pinned resolved parent chain.
+- Canonical runtime and Claude Code plugin copies are synchronized. The installer now ships the helper module. Regression tests cover normal scans, directory-rename denial, junction swaps after enumeration, hard-link insertion before file open, and exclusive candidate writes.
 
-**Important limitation:** this is containment, not a complete Windows handle-relative implementation. Structural inventory, source-content scanning and agent-candidate persistence are unavailable on Windows. Do not describe these operations as cross-platform complete. Non-Windows path-based traversal/writes remain enabled and still require independent adversarial review.
+**Security boundary:** Windows scanning and candidate writes are now implemented and exercised on the connected Windows host, including deterministic junction-replacement and hard-link tests. The implementation uses pinned Win32 directory handles plus path opens under the pinned, rename-protected ancestors; it is not a formal security certification. Independent review of Win32 API semantics, POSIX traversal/writes, network shares, unusual filesystems and concurrent mutation remains a release gate.
 
 ### Verification evidence
 
-- Windows Python 3.12 full suite on the current source changes: **835 tests, PASS; 43 skipped; zero failures**. The 34 pre-existing skips are host filesystem symlink-creation limitations; six tests are intentionally skipped because source-content reads or candidate writes are disabled on Windows; three structural-inventory tests are skipped because Windows structural traversal is now also disabled. Explicit no-traversal, no-source-read and no-candidate-write guard tests passed.
-- Focused Windows tests: readiness **16/16 PASS**; structural audit **1 PASS / 4 SKIPPED**; source audit **2 PASS / 4 SKIPPED**; agent factory **14 PASS / 2 SKIPPED**; Claude plugin parity **4/4 PASS**. The readiness regression proves a blocked scan preserves the last complete snapshot/counts, does not claim drift, and does not fabricate an empty snapshot.
+- Focused Windows validation passed **56 tests** across filesystem adapter, structural audit, source audit, readiness, installer and protocol validation; four skips are OS symlink-creation restrictions. Nine Windows-specific adapter tests passed, including junction swaps between enumeration and pinning, hard-link insertion before source open, directory rename denial while pinned, and exclusive candidate writes.
+- Full Windows Python 3.12 suite passed: **845 tests, 36 skipped, zero failures** in 139.314 seconds after canonical/plugin mirror synchronization. The 36 skips are platform-specific or require symlink privileges unavailable on this host.
+- Installer runtime inventory now includes `orbit_windows_fs.py`; the disposable setup test confirms the module is included in the installed runtime plan. Readiness now records complete Windows scans normally, while retaining the incomplete-scan preservation guard for unavailable/unsafe conditions.
 - In a disposable temporary copy, `compileall` PASS; Windows GUI `py_compile` PASS; `prepare_release_candidate.py` PASS; `check_release_readiness.py` PASS; `check_version.py --strict-bundle` PASS; fresh `build_release.py --verify` PASS; `smoke_release_zip.py` PASS with 58 MCP tools and `DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS`. The three ZIP packages and checksum sidecars were generated only in the disposable copy. The desktop bundle/version was `0.33.1`; this is packaging validation, not a v0.34 release. No published or tracked bundle was modified.
 - A synthetic `SessionStart` payload through the Claude hook adapter recorded one minimal event in a temporary SQLite database and did not store the raw session ID or prompt/tool payload. This is an adapter smoke only; no Claude hook was activated and no native Claude Code lifecycle event was observed.
-- Exact-head GitHub Actions run [#45557560695](https://github.com/samjuniors/Orbit-Core/actions/runs/45557560695) passed **5/5** on code commit `b1512e5dc7075fe901301148bd40bd7afca33db2`: Ubuntu Python 3.10, 3.11, 3.12 and 3.13 plus Windows Python 3.12. The Windows job completed all previous-version upgrade rehearsals. The later acceptance/handoff record update is documentation-only; any further source/runtime/test change requires a fresh exact-head CI run.
+- Prior exact-head GitHub Actions run [#45557560695](https://github.com/samjuniors/Orbit-Core/actions/runs/45557560695) passed **5/5** on code commit `b1512e5dc7075fe901301148bd40bd7afca33db2`. It predates the new Windows handle-pinning implementation; fresh exact-head CI is required after this implementation is committed and pushed.
 - Local Claude Code CLI reports version `2.1.307`; the installed `orbit-core` plugin remains `0.33.1` and enabled. No plugin upgrade, hook activation or host configuration change was performed. Actual Claude lifecycle events and native host behavior remain NOT VERIFIED.
 
 ### Remaining gates
 
 1. Obtain independent security review of the complete branch, including non-Windows path traversal and candidate persistence; the Windows guards are containment, not a security certification.
-2. Implement and adversarially test handle-relative, reparse-safe directory traversal and file creation before re-enabling structural/source scans or candidate writes on Windows.
+2. Obtain independent security review of the Windows handle-pinning adapter and test it on supported local filesystems; keep network shares and unsupported filesystem semantics explicitly fail-closed until reviewed.
 3. Validate actual Claude Code lifecycle behavior in a disposable plugin installation without changing the owner's active plugin.
 4. Keep model selection advisory: host-reported capability recommendations exist, but Orbit does not switch the active Claude model or know account quota/entitlement unless the host exposes authoritative signals. Native model-switch observation is not yet verified.
 5. No PR, merge, tag, release, plugin installation or hook activation is authorized by this checkpoint.
@@ -326,13 +327,13 @@ The earlier implementation sequence above has been executed and its test/CI evid
 
 - Added `orbit_source_audit.py` to canonical runtime, Claude Code plugin runtime and installer module inventory.
 - The existing `orbit_project_findings` tool now supports `source_reconcile`. It returns `READ_CONSENT_REQUIRED` unless `confirm_read=true`; with read consent but no `confirm_write=true`, it performs a preview and writes no database state.
-- On platforms where the current path traversal is enabled, source audit bounds traversal to 1,200 files, depth 14, 512 KiB per file and 16 MiB total. It excludes generated/vendor/cache trees, hidden folders and sensitive path/name patterns; rejects symlink traversal and detects file changes during reads. Windows source-content reads are now explicitly blocked until handle-relative, reparse-safe traversal is implemented.
+- Source audit bounds traversal to 1,200 files, depth 14, 512 KiB per file and 16 MiB total. It excludes generated/vendor/cache trees, hidden folders and sensitive path/name patterns; rejects reparse-point and hard-link opens on Windows, and detects file changes during reads. Windows traversal uses pinned directory handles and no-delete-share leaf handles.
 - It computes content hashes, parses Python AST and emits conservative review leads for parser mismatches, dynamic code execution, shell execution, pickle deserialization and unsafe YAML loader patterns. These are not confirmed vulnerabilities or proof of exploitability.
 - Raw source content is neither returned nor persisted. Only bounded summaries, repository-relative evidence paths, findings, content digests and scan metadata can be saved in Orbit's local SQLite database.
 - Extended the existing findings ledger with independent `STRUCTURAL` and `SOURCE` scopes, preserving legacy rows through additive migration. Reconciliation in one scope cannot resolve the other scope's findings.
 - Extended project readiness with source-scan state, revision guards, timestamps, content snapshot digest, byte/file counts and incomplete/failure handling.
 
-**Verification:** source-read consent, no-write preview behavior, source-scope isolation, migration, bounded traversal, plugin/installer parity and Windows packaging passed exact-head CI run #45543537489 (5/5). On Windows, source-content reading is intentionally held until reparse-safe handle-relative traversal is implemented; the Windows scan behavior is tested as fail-closed.
+**Verification:** source-read consent, no-write preview behavior, source-scope isolation, migration, bounded traversal, plugin/installer parity and Windows packaging passed prior exact-head CI. The new Windows handle-pinning adapter has focused local junction-swap and hard-link regression coverage; exact-head CI for this change remains pending.
 
 
 ## 10. Implementation checkpoint — prioritized remediation plan
@@ -389,4 +390,4 @@ The earlier implementation sequence above has been executed and its test/CI evid
 - Resume also reports the last consented source-scan status and states clearly that source content is not re-read during resume. Added a read-only regression test for finding recovery, snapshot drift detection and zero database writes.
 - Synchronized the canonical findings and model-routing modules with the committed Claude Code plugin runtime copies.
 
-**Verification and remaining limitations:** The full Windows Python 3.12 suite passed locally (833 tests, 40 skipped), and exact-head CI run #45543537489 passed 5/5 on `ac25cab7e23354d74790f0c46816ee1fdd94c898`. The Windows source audit and specialist-candidate writer are deliberately fail-closed pending handle-relative implementation. Independent human security review and actual Claude Code lifecycle acceptance remain outstanding. Do not equate CI success with production host certification or release approval.
+**Verification and remaining limitations:** The earlier Windows containment pass and prior exact-head CI passed; the new handle-pinning implementation has focused Windows adversarial coverage and awaits a fresh full-suite run and exact-head CI. Independent security review and actual Claude Code lifecycle acceptance remain outstanding. Do not equate CI success with production host certification or release approval.

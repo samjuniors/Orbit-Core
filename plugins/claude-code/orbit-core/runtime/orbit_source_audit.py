@@ -15,6 +15,11 @@ from collections import Counter
 from itertools import islice
 from pathlib import Path
 
+try:
+    import orbit_windows_fs
+except ImportError:  # pragma: no cover - packaged import guard
+    orbit_windows_fs = None
+
 SOURCE_SUFFIXES = {
     ".py", ".pyi", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx",
     ".vue", ".svelte", ".go", ".rs", ".java", ".kt", ".kts", ".swift",
@@ -40,8 +45,10 @@ MAX_FILE_BYTES = 512 * 1024
 MAX_TOTAL_BYTES = 16 * 1024 * 1024
 MAX_FINDINGS = 100
 MAX_LINES_PER_SIGNAL = 20
-# Windows path-based traversal cannot guarantee handle-relative, reparse-safe opens.
-_WINDOWS_SAFE_RELATIVE_SCAN = (os.name != "nt")
+# Windows scans require the packaged Win32 handle-pinning adapter.
+_WINDOWS_SAFE_RELATIVE_SCAN = (
+    os.name != "nt" or (orbit_windows_fs is not None and orbit_windows_fs.WINDOWS_SAFE)
+)
 
 
 def _safe_name(name: str) -> bool:
@@ -176,10 +183,17 @@ def scan_source(root: Path) -> dict:
             "project_scripts_executed": False, "project_files_written": False,
             "external_network_access": False,
         }
-    if root.is_symlink() or not root.is_dir():
-        raise ValueError("Project root must be an absolute, existing non-symlink directory")
-    root = root.resolve(strict=True)
+    pins = None
+    if os.name == "nt" and _WINDOWS_SAFE_RELATIVE_SCAN:
+        pins = orbit_windows_fs.pin_directory_chain(root)
+        root = pins.root_path
+    else:
+        if root.is_symlink() or not root.is_dir():
+            raise ValueError("Project root must be an absolute, existing non-symlink directory")
+        root = root.resolve(strict=True)
     if root == Path(root.anchor) or root == Path.home().resolve():
+        if pins is not None:
+            pins.close()
         raise ValueError("Select a specific project directory")
 
     candidates = []
@@ -212,7 +226,13 @@ def scan_source(root: Path) -> dict:
                     if depth >= MAX_DEPTH:
                         truncated = True
                     else:
-                        stack.append((Path(entry.path), depth + 1))
+                        child = Path(entry.path)
+                        try:
+                            if pins is not None:
+                                pins.pin(child)
+                            stack.append((child, depth + 1))
+                        except OSError:
+                            unreadable.append(child.relative_to(root).as_posix())
                 elif entry.is_file(follow_symlinks=False):
                     suffix = Path(entry.name).suffix.casefold()
                     if suffix not in SOURCE_SUFFIXES or not _safe_name(entry.name):
@@ -220,7 +240,14 @@ def scan_source(root: Path) -> dict:
                     if any(part.casefold() in SENSITIVE_DIRS for part in Path(entry.path).relative_to(root).parts[:-1]):
                         continue
                     try:
-                        info = entry.stat(follow_symlinks=False)
+                        if pins is not None:
+                            fd = orbit_windows_fs.open_regular_file_fd(entry.path)
+                            try:
+                                info = os.fstat(fd)
+                            finally:
+                                os.close(fd)
+                        else:
+                            info = entry.stat(follow_symlinks=False)
                     except OSError:
                         unreadable.append(Path(entry.path).relative_to(root).as_posix())
                         continue
@@ -251,8 +278,11 @@ def scan_source(root: Path) -> dict:
     for path, observed in candidates:
         rel = path.relative_to(root).as_posix()
         try:
-            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
-            fd = os.open(str(path), flags)
+            if pins is not None:
+                fd = orbit_windows_fs.open_regular_file_fd(path)
+            else:
+                flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+                fd = os.open(str(path), flags)
             with os.fdopen(fd, "rb") as handle:
                 actual = os.fstat(handle.fileno())
                 if not stat.S_ISREG(actual.st_mode):

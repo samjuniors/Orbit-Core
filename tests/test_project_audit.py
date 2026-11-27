@@ -10,7 +10,7 @@ import orbit_project_audit
 
 
 class ProjectAuditTests(unittest.TestCase):
-    @unittest.skipIf(__import__("os").name == "nt", "Windows structural traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_project_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_reports_structural_signals_without_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -31,7 +31,7 @@ class ProjectAuditTests(unittest.TestCase):
             self.assertFalse(result["project_scripts_executed"])
             self.assertFalse(result["source_contents_read"])
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows structural traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_project_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_recognizes_test_directory_and_ci_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -46,7 +46,7 @@ class ProjectAuditTests(unittest.TestCase):
             self.assertIn(".github/workflows", result["discovered"]["ci_markers"])
             self.assertFalse(any(x["id"] == "TEST_STRUCTURE_NOT_DISCOVERED" for x in result["findings"]))
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows structural traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_project_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_high_assurance_profile_adds_security_documentation_review(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

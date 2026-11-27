@@ -12,6 +12,11 @@ from itertools import islice
 from collections import Counter
 from pathlib import Path
 
+try:
+    import orbit_windows_fs
+except ImportError:  # pragma: no cover - packaged import guard
+    orbit_windows_fs = None
+
 SKIP_DIRS = {
     ".git", ".hg", ".svn", ".orbit", ".venv", "venv", "__pycache__",
     ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".nox",
@@ -44,9 +49,10 @@ CI_MARKERS = {".github/workflows", ".gitlab-ci.yml", ".circleci", "azure-pipelin
 MAX_FILES = 2500
 MAX_DIRECTORIES = 600
 MAX_DEPTH = 14
-# Path-based scandir traversal cannot prevent a Windows junction/reparse-point
-# replacement between directory enumeration and the next path-based open.
-_WINDOWS_SAFE_RELATIVE_SCAN = (os.name != "nt")
+# Windows scans are enabled only when the handle-pinning Win32 adapter is packaged.
+_WINDOWS_SAFE_RELATIVE_SCAN = (
+    os.name != "nt" or (orbit_windows_fs is not None and orbit_windows_fs.WINDOWS_SAFE)
+)
 
 
 def _blocked_windows_scan(root: Path) -> dict:
@@ -120,10 +126,22 @@ def _is_test_file(rel: str, name: str) -> bool:
 def scan_project(root: Path, profile: dict | None = None) -> dict:
     """Return a bounded inventory and conservative structural gap signals."""
     root = Path(root)
-    if root.is_symlink() or not root.is_absolute() or not root.is_dir():
-        raise ValueError("Project root must be an absolute, existing non-symlink directory")
-    root = root.resolve(strict=True)
+    if not root.is_absolute():
+        raise ValueError("Project root must be an absolute directory")
+    pins = None
+    if os.name == "nt" and _WINDOWS_SAFE_RELATIVE_SCAN:
+        pins = orbit_windows_fs.pin_directory_chain(root)
+        # All resolved ancestors, including the volume/share root, remain
+        # pinned for the complete traversal. Descendant path opens cannot be
+        # redirected by replacing a parent component.
+        root = pins.root_path
+    else:
+        if root.is_symlink() or not root.is_dir():
+            raise ValueError("Project root must be an absolute, existing non-symlink directory")
+        root = root.resolve(strict=True)
     if root == Path(root.anchor) or root == Path.home().resolve():
+        if pins is not None:
+            pins.close()
         raise ValueError("Select a specific project directory")
     if not _WINDOWS_SAFE_RELATIVE_SCAN:
         return _blocked_windows_scan(root)
@@ -158,13 +176,26 @@ def scan_project(root: Path, profile: dict | None = None) -> dict:
                     rel = Path(entry.path).relative_to(root).as_posix()
                     directories.append(rel)
                     if depth < MAX_DEPTH:
-                        stack.append((Path(entry.path), depth + 1))
+                        child = Path(entry.path)
+                        try:
+                            if pins is not None:
+                                pins.pin(child)
+                            stack.append((child, depth + 1))
+                        except OSError:
+                            unreadable.append(child.relative_to(root).as_posix())
                     else:
                         truncated = True
                 elif entry.is_file(follow_symlinks=False):
                     rel = Path(entry.path).relative_to(root).as_posix()
                     try:
-                        stat = entry.stat(follow_symlinks=False)
+                        if pins is not None:
+                            fd = orbit_windows_fs.open_regular_file_fd(entry.path)
+                            try:
+                                stat = os.fstat(fd)
+                            finally:
+                                os.close(fd)
+                        else:
+                            stat = entry.stat(follow_symlinks=False)
                     except OSError:
                         unreadable.append(rel)
                         continue

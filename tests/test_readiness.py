@@ -160,7 +160,8 @@ class ProjectReadinessIntegrationTests(unittest.TestCase):
                 result = orbit_mcp.scan(
                     {"project_root": str(root), "project": "sample"}, conn
                 )
-                if __import__("os").name == "nt":
+                import orbit_project_audit
+                if not orbit_project_audit._WINDOWS_SAFE_RELATIVE_SCAN:
                     self.assertEqual(result["readiness"]["status"], "INCOMPLETE")
                     self.assertFalse(result["readiness"]["last_scan_complete"])
                     self.assertEqual(

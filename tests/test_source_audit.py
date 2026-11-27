@@ -20,7 +20,7 @@ class SourceAuditTests(unittest.TestCase):
         self.root = Path(self.temp.name) / "project"
         self.root.mkdir()
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_source_review_signals_are_not_confirmed_defects_and_raw_code_is_not_returned(self):
         source = self.root / "main.py"
         source.write_text(
@@ -46,7 +46,7 @@ class SourceAuditTests(unittest.TestCase):
         self.assertNotIn("user_input", json.dumps(result))
         self.assertEqual(before, after)
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_content_change_changes_source_snapshot_even_when_size_is_unchanged(self):
         path = self.root / "main.py"
         path.write_text("x = 1\n", encoding="utf-8")
@@ -55,7 +55,7 @@ class SourceAuditTests(unittest.TestCase):
         second = orbit_source_audit.scan_source(self.root)
         self.assertNotEqual(first["inventory_snapshot_sha256"], second["inventory_snapshot_sha256"])
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_oversized_source_marks_scan_incomplete(self):
         path = self.root / "large.py"
         path.write_bytes(b"x" * (orbit_source_audit.MAX_FILE_BYTES + 1))
@@ -95,7 +95,7 @@ class SourceAuditTests(unittest.TestCase):
         finally:
             conn.close()
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_confirmed_source_reconcile_persists_scope_not_raw_contents(self):
         (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
         conn = sqlite3.connect(":memory:")
