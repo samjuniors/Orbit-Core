@@ -388,12 +388,11 @@ def _visual_win_list(handle):
             offset += next_offset
 
 
-def _visual_walk(base):
-    """Yield (relative parts, directory handle, dirs, files) beneath a pinned root.
+def _visual_walk(base, skipped=None, unreadable=None):
+    """Yield relative entries through pinned handles; callers may prune dirs.
 
-    Top-down like os.walk; callers may prune ``dirs`` in place. Symlinks and
-    reparse points are omitted and never descended. Unreadable directories are
-    skipped, as os.walk does.
+    Optional mutable lists receive skipped symlink/reparse counts and unreadable
+    directory paths so bounded audits can fail closed rather than imply completeness.
     """
     import os
     import stat
@@ -410,10 +409,16 @@ def _visual_walk(base):
                 dirs, files = [], []
                 try:
                     for name, attributes in _visual_win_list(handle):
-                        if name in (".", "..") or attributes & _WIN_ATTR_REPARSE_POINT:
+                        if name in (".", ".."):
+                            continue
+                        if attributes & _WIN_ATTR_REPARSE_POINT:
+                            if skipped is not None:
+                                skipped[0] += 1
                             continue
                         (dirs if attributes & _WIN_ATTR_DIRECTORY else files).append(name)
                 except OSError:
+                    if unreadable is not None:
+                        unreadable.append(PurePosixPath(*parts).as_posix() or ".")
                     return
                 yield parts, handle, dirs, files
                 for name in dirs:
@@ -430,12 +435,20 @@ def _visual_walk(base):
         else:
             def is_link(name, dir_fd):
                 try:
-                    return stat.S_ISLNK(os.stat(name, dir_fd=dir_fd,
-                                                follow_symlinks=False).st_mode)
+                    linked = stat.S_ISLNK(os.stat(name, dir_fd=dir_fd,
+                                                  follow_symlinks=False).st_mode)
+                    if linked and skipped is not None:
+                        skipped[0] += 1
+                    return linked
                 except OSError:
                     return False  # the no-follow open below fails closed instead
 
-            walker = os.fwalk(".", topdown=True, follow_symlinks=False, dir_fd=root)
+            def onerror(exc):
+                if unreadable is not None:
+                    unreadable.append(str(getattr(exc, "filename", None) or "."))
+
+            walker = os.fwalk(".", topdown=True, onerror=onerror,
+                              follow_symlinks=False, dir_fd=root)
             try:
                 for path, dirs, files, dir_fd in walker:
                     dirs[:] = [d for d in dirs if not is_link(d, dir_fd)]

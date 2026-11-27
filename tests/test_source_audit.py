@@ -20,7 +20,7 @@ class SourceAuditTests(unittest.TestCase):
         self.root = Path(self.temp.name) / "project"
         self.root.mkdir()
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_source_review_signals_are_not_confirmed_defects_and_raw_code_is_not_returned(self):
         source = self.root / "main.py"
         source.write_text(
@@ -46,7 +46,7 @@ class SourceAuditTests(unittest.TestCase):
         self.assertNotIn("user_input", json.dumps(result))
         self.assertEqual(before, after)
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_content_change_changes_source_snapshot_even_when_size_is_unchanged(self):
         path = self.root / "main.py"
         path.write_text("x = 1\n", encoding="utf-8")
@@ -55,7 +55,7 @@ class SourceAuditTests(unittest.TestCase):
         second = orbit_source_audit.scan_source(self.root)
         self.assertNotEqual(first["inventory_snapshot_sha256"], second["inventory_snapshot_sha256"])
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_oversized_source_marks_scan_incomplete(self):
         path = self.root / "large.py"
         path.write_bytes(b"x" * (orbit_source_audit.MAX_FILE_BYTES + 1))
@@ -64,6 +64,7 @@ class SourceAuditTests(unittest.TestCase):
         self.assertTrue(result["truncated"])
         self.assertIn("large.py", result["unreadable_paths"])
 
+    @unittest.skipUnless(__import__("os").name == "nt", "Windows-only fail-closed adapter test")
     def test_windows_source_audit_fails_closed_without_opening_files(self):
         (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
         with mock.patch.object(orbit_source_audit, "_WINDOWS_SAFE_RELATIVE_SCAN", False):
@@ -95,7 +96,7 @@ class SourceAuditTests(unittest.TestCase):
         finally:
             conn.close()
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows source traversal is intentionally fail-closed")
+    @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_confirmed_source_reconcile_persists_scope_not_raw_contents(self):
         (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
         conn = sqlite3.connect(":memory:")
@@ -117,6 +118,46 @@ class SourceAuditTests(unittest.TestCase):
             self.assertNotIn("eval(input())", stored["summary"] + stored["evidence"])
         finally:
             conn.close()
+
+    @unittest.skipIf(__import__("os").name == "nt", "POSIX descriptor-relative audit test")
+    def test_posix_source_audit_skips_symlinks_and_rejects_hardlinks(self):
+        import os
+        (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
+        outside = Path(self.temp.name) / "outside.py"
+        outside.write_text("SECRET_OUTSIDE_ROOT", encoding="utf-8")
+        (self.root / "linked.py").symlink_to(outside)
+        os.link(self.root / "main.py", self.root / "hardlinked.py")
+        result = orbit_source_audit.scan_source(self.root)
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertEqual(result["summary"]["source_files"], 0)
+        self.assertEqual(result["symlinks_skipped"], 1)
+        self.assertIn("hardlinked.py", result["unreadable_paths"])
+        self.assertNotIn("SECRET_OUTSIDE_ROOT", json.dumps(result))
+
+    @unittest.skipIf(__import__("os").name == "nt", "POSIX descriptor-relative audit test")
+    def test_posix_source_audit_leaf_swap_to_symlink_fails_closed(self):
+        import os
+        source = self.root / "race.py"
+        source.write_text("value = 1\n", encoding="utf-8")
+        outside = Path(self.temp.name) / "outside.py"
+        outside.write_text("SECRET_OUTSIDE_ROOT", encoding="utf-8")
+        real_open = os.open
+        swapped = False
+
+        def racing_open(path, flags, *args, **kwargs):
+            nonlocal swapped
+            if path == "race.py" and kwargs.get("dir_fd") is not None and not swapped:
+                swapped = True
+                source.unlink()
+                source.symlink_to(outside)
+            return real_open(path, flags, *args, **kwargs)
+
+        with mock.patch.object(orbit_source_audit.os, "open", side_effect=racing_open):
+            result = orbit_source_audit.scan_source(self.root)
+        self.assertTrue(swapped)
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertIn("race.py", result["unreadable_paths"])
+        self.assertNotIn("SECRET_OUTSIDE_ROOT", json.dumps(result))
 
 
 if __name__ == "__main__":
