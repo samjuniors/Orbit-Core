@@ -138,7 +138,7 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
                 self.assertFalse(x["agent_spawned"])
         self.assertFalse((self.root / ".orbit").exists())
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows candidate writes are intentionally fail-closed")
+    @unittest.skipUnless(orbit_agent_factory._SAFE_RELATIVE_WRITE, "Safe relative write adapter unavailable")
     def test_candidate_preview_write_and_prevent_overwrite(self):
         x = self.agent()
         self.assertEqual(x["status"], "AGENT_DRAFT_PREVIEW_ONLY")
@@ -157,9 +157,9 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
         self.assertFalse(result["agent_spawned"])
 
     def test_windows_candidate_write_fails_closed_after_preview(self):
-        with mock.patch.object(orbit_agent_factory, "_WINDOWS_SAFE_RELATIVE_WRITE", False):
+        with mock.patch.object(orbit_agent_factory, "_SAFE_RELATIVE_WRITE", False):
             result = self.agent(confirm_write=True)
-        self.assertEqual(result["status"], "HOLD_WINDOWS_SAFE_WRITE_UNAVAILABLE")
+        self.assertEqual(result["status"], "HOLD_SAFE_RELATIVE_WRITE_UNAVAILABLE")
         self.assertFalse(result["state_written"])
         self.assertFalse(result["agent_spawned"])
         self.assertFalse((self.root / ".orbit").exists())
@@ -185,7 +185,7 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
         self.assertEqual(self.agent(confirm_write=True)["status"], "HOLD_EXISTING_CANDIDATE")
         self.assertEqual(path.read_text(), "OWNER CUSTOMIZED CONTENT")
 
-    @unittest.skipIf(__import__("os").name == "nt", "Windows candidate writes are intentionally fail-closed")
+    @unittest.skipUnless(orbit_agent_factory._SAFE_RELATIVE_WRITE, "Safe relative write adapter unavailable")
     def test_other_project_writes_do_not_share_agent_drafts(self):
         a = self.agent(confirm_write=True)
         b = self.agent(project_root=str(self.other))

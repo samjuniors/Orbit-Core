@@ -1,8 +1,8 @@
 # v0.34.0 proposal — Context-Aware Intelligence & Continuity
 
-**Status:** IN PROGRESS / WINDOWS HANDLE-PINNING IMPLEMENTATION
+**Status:** IN PROGRESS / WINDOWS HANDLE-PINNING + POSIX CANDIDATE-WRITE ADAPTER
 **Audit base:** `main` at `2fdf4f329774b9644e75ac0df4d89738a7cd625f` (2026-11-23)
-**Working branch:** `feat/v034-context-aware-intelligence-20261123`
+**Working branch:** `fix/v034-filesystem-security-20261127` (isolated repair copy; original dirty context-aware worktree preserved)
 **Version context observed on main:** `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`
 **Host implementation target:** Claude Code first; provider-neutral Orbit Core contracts retained.
 **Authority:** GitHub is implementation truth. Existing Orbit Core Notion decisions remain product-decision truth.
@@ -13,7 +13,7 @@ This document proposes a new v0.34 capability. It does not authorize merging, re
 
 ## Current checkpoint — 2026-11-27 (Windows handle-pinning implementation)
 
-**Working branch:** `feat/v034-context-aware-intelligence-20261123`
+**Working branch:** `fix/v034-filesystem-security-20261127` (isolated repair copy; original dirty context-aware worktree preserved)
 **Prior Windows source/candidate containment commit:** `fde77820b004be8f172de723f8ffc37bf773367e`
 
 **Latest Windows structural/readiness guard commit:** `50efb36d6987cd351859a6091c924a71c48767b3`
@@ -27,15 +27,15 @@ This document proposes a new v0.34 capability. It does not authorize merging, re
 - Windows source-content auditing is enabled through pinned directory handles and no-delete-share file handles. Reparse points and multiply-linked files are rejected; source reads remain bounded and raw contents are not returned or persisted.
 - Windows structural project auditing is enabled through pinned directory handles. A directory cannot be renamed/replaced while its descendants are scanned; child reparse points are rejected before traversal. Failed/raced paths make the scan `INCOMPLETE` rather than being treated as empty.
 - The new `orbit_windows_fs.py` adapter pins directories with Win32 handles opened without delete sharing, opens leaves with `FILE_FLAG_OPEN_REPARSE_POINT`, rejects reparse points and hard-linked files, and creates candidate files exclusively under the pinned resolved parent chain.
-- Canonical runtime and Claude Code plugin copies are synchronized. The installer now ships the helper module. Regression tests cover normal scans, directory-rename denial, junction swaps after enumeration, hard-link insertion before file open, and exclusive candidate writes.
+- Canonical runtime and Claude Code plugin copies are synchronized. The installer now ships both orbit_windows_fs.py and orbit_posix_fs.py; POSIX tests are added but require Linux CI. Regression tests cover normal scans, directory-rename denial, junction swaps after enumeration, hard-link insertion before file open, and exclusive candidate writes.
 
-**Security boundary:** Windows scanning and candidate writes are now implemented and exercised on the connected Windows host, including deterministic junction-replacement and hard-link tests. The implementation uses pinned Win32 directory handles plus path opens under the pinned, rename-protected ancestors; it is not a formal security certification. Independent review of Win32 API semantics, POSIX traversal/writes, network shares, unusual filesystems and concurrent mutation remains a release gate.
+**Security boundary:** Windows scanning and candidate writes are implemented and exercised on the connected Windows host, including deterministic junction-replacement and hard-link tests. POSIX candidate writes now use dir_fd/O_NOFOLLOW and O_EXCL; the Windows host cannot execute the POSIX tests, so Linux CI remains pending. POSIX project/source audit traversal is still path-based and must be moved to the existing descriptor-relative read helpers before this issue can close. Neither adapter is a formal security certification.
 
 ### Verification evidence
 
 - Focused Windows validation passed **56 tests** across filesystem adapter, structural audit, source audit, readiness, installer and protocol validation; four skips are OS symlink-creation restrictions. Nine Windows-specific adapter tests passed, including junction swaps between enumeration and pinning, hard-link insertion before source open, directory rename denial while pinned, and exclusive candidate writes.
-- Full Windows Python 3.12 suite passed: **845 tests, 36 skipped, zero failures** in 139.314 seconds after canonical/plugin mirror synchronization. The 36 skips are platform-specific or require symlink privileges unavailable on this host.
-- Installer runtime inventory now includes `orbit_windows_fs.py`; the disposable setup test confirms the module is included in the installed runtime plan. Readiness now records complete Windows scans normally, while retaining the incomplete-scan preservation guard for unavailable/unsafe conditions.
+- Full Windows Python 3.12 suite passed: **853 tests, 42 skipped, zero failures** in 135.725 seconds after POSIX candidate-write adapter integration and canonical/plugin mirror synchronization; eight POSIX-only tests are skipped on Windows. The remaining 42 skips are platform-specific or require symlink privileges unavailable on this host.
+- Installer runtime inventory now includes `orbit_windows_fs.py` and `orbit_posix_fs.py`; the disposable setup test confirms the modules are included in the installed runtime plan. Readiness now records complete Windows scans normally, while retaining the incomplete-scan preservation guard for unavailable/unsafe conditions.
 - In a disposable temporary copy, `compileall` PASS; Windows GUI `py_compile` PASS; `prepare_release_candidate.py` PASS; `check_release_readiness.py` PASS; `check_version.py --strict-bundle` PASS; fresh `build_release.py --verify` PASS; `smoke_release_zip.py` PASS with 58 MCP tools and `DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS`. The three ZIP packages and checksum sidecars were generated only in the disposable copy. The desktop bundle/version was `0.33.1`; this is packaging validation, not a v0.34 release. No published or tracked bundle was modified.
 - A synthetic `SessionStart` payload through the Claude hook adapter recorded one minimal event in a temporary SQLite database and did not store the raw session ID or prompt/tool payload. This is an adapter smoke only; no Claude hook was activated and no native Claude Code lifecycle event was observed.
 - Prior exact-head GitHub Actions run [#45557560695](https://github.com/samjuniors/Orbit-Core/actions/runs/45557560695) passed **5/5** on code commit `b1512e5dc7075fe901301148bd40bd7afca33db2`. It predates the new Windows handle-pinning implementation; fresh exact-head CI is required after this implementation is committed and pushed.

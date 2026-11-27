@@ -17,10 +17,15 @@ try:
 except ImportError:  # pragma: no cover - packaged import guard
     orbit_windows_fs = None
 
+try:
+    import orbit_posix_fs
+except ImportError:  # pragma: no cover - packaged import guard
+    orbit_posix_fs = None
+
 _ROLE = re.compile(r"[a-z][a-z0-9-]{1,39}\Z")
-# Windows writes require the packaged handle-pinning Win32 adapter.
-_WINDOWS_SAFE_RELATIVE_WRITE = (
-    os.name != "nt" or (orbit_windows_fs is not None and orbit_windows_fs.WINDOWS_SAFE)
+_SAFE_RELATIVE_WRITE = (
+    (os.name == "nt" and orbit_windows_fs is not None and orbit_windows_fs.WINDOWS_SAFE)
+    or (os.name != "nt" and orbit_posix_fs is not None and orbit_posix_fs.SAFE)
 )
 _FORBIDDEN = re.compile(
     r"(?i)(?:ignore (?:all |your )?(?:system|developer|previous) instructions|"
@@ -50,7 +55,7 @@ def _location(root, role):
     directory = base / "agent-candidates"
     folder = directory / ("orbit-" + role)
     path = folder / "AGENT.md"
-    if os.name == "nt" and _WINDOWS_SAFE_RELATIVE_WRITE:
+    if os.name == "nt" and orbit_windows_fs is not None and orbit_windows_fs.WINDOWS_SAFE:
         for relative in (".orbit", ".orbit/agent-candidates"):
             try:
                 orbit_windows_fs.safe_exists(root, relative, expected="directory")
@@ -65,6 +70,18 @@ def _location(root, role):
             )
         except (OSError, ValueError) as exc:
             raise ValueError("Agent candidate path contains an unsafe reparse point") from exc
+        return base, directory, folder, path
+    if os.name != "nt" and orbit_posix_fs is not None and orbit_posix_fs.SAFE:
+        for relative in (".orbit", ".orbit/agent-candidates"):
+            try:
+                orbit_posix_fs.safe_exists(root, relative, expected="directory")
+            except (OSError, ValueError) as exc:
+                raise ValueError("Agent candidate parent is not a safe project directory") from exc
+        try:
+            orbit_posix_fs.safe_exists(root, ".orbit/agent-candidates/" + folder.name, expected="any")
+            orbit_posix_fs.safe_exists(root, ".orbit/agent-candidates/" + folder.name + "/AGENT.md", expected="any")
+        except (OSError, ValueError) as exc:
+            raise ValueError("Agent candidate path contains an unsafe filesystem object") from exc
         return base, directory, folder, path
     if any(p.is_symlink() for p in (base, directory, folder, path)):
         raise ValueError("Agent candidate must not traverse a symlink")
@@ -110,9 +127,15 @@ def candidate(root, project, args):
     )
     for relative in profile_paths:
         candidate_path = source_root / relative
-        if os.name == "nt" and _WINDOWS_SAFE_RELATIVE_WRITE:
+        if os.name == "nt" and orbit_windows_fs is not None and orbit_windows_fs.WINDOWS_SAFE:
             try:
                 exists = orbit_windows_fs.safe_exists(source_root, relative, expected="any")
+            except (OSError, ValueError):
+                return {"status": "HOLD_OWNER_PROFILE_UNSAFE_PATH", "state_written": False,
+                        "agent_spawned": False}
+        elif os.name != "nt" and orbit_posix_fs is not None and orbit_posix_fs.SAFE:
+            try:
+                exists = orbit_posix_fs.safe_exists(source_root, relative, expected="any")
             except (OSError, ValueError):
                 return {"status": "HOLD_OWNER_PROFILE_UNSAFE_PATH", "state_written": False,
                         "agent_spawned": False}
@@ -160,7 +183,7 @@ def candidate(root, project, args):
         "host_agent_installed": False, "agent_spawned": False,
         "requires_owner_and_host_review": True,
     }
-    if os.name == "nt" and _WINDOWS_SAFE_RELATIVE_WRITE:
+    if os.name == "nt" and orbit_windows_fs is not None and orbit_windows_fs.WINDOWS_SAFE:
         try:
             already_exists = (
                 orbit_windows_fs.safe_exists(
@@ -173,6 +196,15 @@ def candidate(root, project, args):
         except (OSError, ValueError):
             return {"status": "HOLD_UNSAFE_CANDIDATE_PATH", "state_written": False,
                     "agent_spawned": False}
+    elif os.name != "nt" and orbit_posix_fs is not None and orbit_posix_fs.SAFE:
+        try:
+            already_exists = (
+                orbit_posix_fs.safe_exists(root, ".orbit/agent-candidates/" + folder.name, expected="any")
+                or orbit_posix_fs.safe_exists(root, ".orbit/agent-candidates/" + folder.name + "/AGENT.md", expected="any")
+            )
+        except (OSError, ValueError):
+            return {"status": "HOLD_UNSAFE_CANDIDATE_PATH", "state_written": False,
+                    "agent_spawned": False}
     else:
         already_exists = path.exists() or folder.exists()
     if already_exists:
@@ -181,15 +213,15 @@ def candidate(root, project, args):
     if args.get("confirm_write") is not True:
         return {"status": "AGENT_DRAFT_PREVIEW_ONLY", "proposed": proposal,
                 "state_written": False}
-    if not _WINDOWS_SAFE_RELATIVE_WRITE:
+    if not _SAFE_RELATIVE_WRITE:
         return {
-            "status": "HOLD_WINDOWS_SAFE_WRITE_UNAVAILABLE",
+            "status": "HOLD_SAFE_RELATIVE_WRITE_UNAVAILABLE",
             "role": role,
             "candidate_relative_path": proposal["candidate_relative_path"],
             "candidate_sha256": digest,
             "state_written": False,
             "agent_spawned": False,
-            "reason": "No safe Windows handle-pinning adapter is available; preview remains available and writes fail closed.",
+            "reason": "No safe descriptor-relative filesystem adapter is available; preview remains available and writes fail closed.",
         }
     if os.name == "nt":
         pins = None
@@ -215,6 +247,24 @@ def candidate(root, project, args):
         finally:
             if pins is not None:
                 pins.close()
+        return {"status": "AGENT_CANDIDATE_DRAFTED", "state_written": True,
+                **{k: v for k, v in proposal.items() if k != "candidate_markdown"}}
+    if os.name != "nt":
+        parent_fd = None
+        try:
+            parent_fd = orbit_posix_fs.ensure_directories(
+                root, (".orbit", "agent-candidates", folder.name)
+            )
+            orbit_posix_fs.write_new_file(parent_fd, "AGENT.md", body)
+        except FileExistsError:
+            return {"status": "HOLD_EXISTING_CANDIDATE", "state_written": False,
+                    **{k: v for k, v in proposal.items() if k != "candidate_markdown"}}
+        except (OSError, ValueError):
+            return {"status": "HOLD_UNSAFE_CANDIDATE_PATH", "state_written": False,
+                    "agent_spawned": False}
+        finally:
+            if parent_fd is not None:
+                os.close(parent_fd)
         return {"status": "AGENT_CANDIDATE_DRAFTED", "state_written": True,
                 **{k: v for k, v in proposal.items() if k != "candidate_markdown"}}
     for part in (base, directory, folder):
