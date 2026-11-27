@@ -440,3 +440,53 @@ At the end of each meaningful task, update **this single handoff record** only f
 - No runtime code was changed in this run. No merge, release, installation, deployment, paid model API use or host permission change occurred. Orbit Commander was not touched.
 
 **Next safe sequence:** (1) reconnect a build-capable Windows/Linux environment; (2) resolve #183 with handle-relative no-follow traversal/writes and adversarial tests; (3) resolve #184 and regenerate the tracked desktop bundle from exact source; (4) implement #185 by extending the existing runner/ledger with a mission-level state machine and provider-neutral adapter contract; (5) obtain independent security/human review and actual host acceptance. Keep v0.33.1/v0.34 unpublished until all release gates are satisfied.
+
+
+## 2026-11-27 — Morning live revalidation
+
+Canonical repository: [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core). This checkpoint records live GitHub/Notion/automation evidence; it does not authorize merge, release, installation, deployment or host permission changes.
+
+### Main and releases
+- Main remains `2fdf4f329774b9644e75ac0df4d89738a7cd625f`; the latest main commit is still the 2026-11-23 deterministic Git line-ending fix. `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`, 57-tool main baseline.
+- Main CI [#45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) is completed PASS 5/5 (Ubuntu Python 3.10–3.13 and Windows Python 3.12).
+- Latest published prerelease remains [v0.33.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0), published 2026-11-23 08:20:55 UTC with four packages and four SHA-256 sidecars. Latest stable remains v0.30.0. v0.33.1 and v0.34.0 are unpublished.
+- GitHub main branch metadata reports `protected=false`; the branch-protection object has enforcement off and no required checks. No repository ruleset was found in the prior authorized ruleset read. This is a governance risk; no admin settings were changed.
+
+### Documentation handoff PR #178
+- [PR #178](https://github.com/samjuniors/Orbit-Core/pull/178), branch `docs/orbit-nightly-handoff-20261123`, head `3eb8b51a2d866357bc2041ad6224b75373a45976`, 22 commits / 7 documentation files, OPEN / DRAFT / mergeable.
+- New commits from the 2026-11-26 nightly: `ff4a341806beeb4ab26447c792f9fc3d786f2687` (handoff) and `3eb8b51a2d866357bc2041ad6224b75373a45976` (roadmap / mission-supervisor acceptance).
+- Exact-head push CI [#45863566602](https://github.com/samjuniors/Orbit-Core/actions/runs/45863566602) and pull-request CI [#45863571895](https://github.com/samjuniors/Orbit-Core/actions/runs/45863571895) are both completed PASS 5/5, including Windows Python 3.12. No submitted reviews or inline review threads; keep draft pending human documentation review.
+- This 2026-11-27 checkpoint is being appended as a documentation-only commit; its new exact-head CI must be checked separately.
+
+### Focused v0.34 drafts
+- [#179](https://github.com/samjuniors/Orbit-Core/pull/179), `feat/v034-team-builder-model-routing-20261125`, head `1c1e949e96df3445ab64d109ab0b951204de183f`, CI [#45545884593](https://github.com/samjuniors/Orbit-Core/actions/runs/45545884593) PASS 5/5. Recommendations only; no host model switch or worker spawn.
+- [#180](https://github.com/samjuniors/Orbit-Core/pull/180), `feat/v034-skill-lifecycle-20261125`, head `50ab30468a036c3803950d6cb20e7576682c204e`, CI [#45549132274](https://github.com/samjuniors/Orbit-Core/actions/runs/45549132274) PASS 5/5. Test-only; no host skill install/activation.
+- [#181](https://github.com/samjuniors/Orbit-Core/pull/181), `feat/v034-resource-first-specialists-20261125`, head `b46fad39e5ec26a7af7cef8ef646d28342da6da4`, CI [#45548741789](https://github.com/samjuniors/Orbit-Core/actions/runs/45548741789) PASS 5/5. Regression tests only; no live external resource crawler or native worker spawn.
+- [#182](https://github.com/samjuniors/Orbit-Core/pull/182), `feat/v034-security-review-plan-20261125`, head `54a78b863c10baea305f0adf9f1c96c7fa39c58c`, 45 commits / 25 files. Push [#45664882357](https://github.com/samjuniors/Orbit-Core/actions/runs/45664882357) and PR [#45664888434](https://github.com/samjuniors/Orbit-Core/actions/runs/45664888434) CI PASS 5/5. Adds bounded `orbit_security_review_plan` (58-tool branch inventory); not full SAST/pentest/certification, and caller-reported permission is not host attestation.
+- All #179–#182 remain OPEN / DRAFT. No human reviews or inline review threads were returned for #178–#182.
+
+### Broad v0.34 branch and security issues
+- `feat/v034-context-aware-intelligence-20261123` is at `8620e4a3063852d2c99f6a157fc9ee688c989b6a`, 100 commits ahead / 0 behind main, no PR. Exact-head CI [#45561811215](https://github.com/samjuniors/Orbit-Core/actions/runs/45561811215) PASS 5/5. Do not merge this branch as a unit.
+- [Issue #183](https://github.com/samjuniors/Orbit-Core/issues/183) remains OPEN. Disposable Windows junction-replacement tests reproduced an earlier project-boundary escape. Current experimental Windows paths fail closed (candidate write HOLD; source/structural scans INCOMPLETE); this is containment, not a complete fix. POSIX parent-directory replacement remains a static-review lead, not a reproduced exploit.
+- [Issue #184](https://github.com/samjuniors/Orbit-Core/issues/184) remains OPEN. PR #182's source-line-derived `evidence_sha256` can enable offline guessing of predictable secrets. A locator-only source change was reverted to preserve strict desktop-bundle parity; fix the field semantics, add tests, rebuild from exact source and verify parity before release.
+- [Issue #185](https://github.com/samjuniors/Orbit-Core/issues/185) was opened 2026-11-26 for a bounded multi-task mission supervisor. It is a proposed implementation workstream, not implemented autonomy. Reuse the existing Mission Charter, DAG/task ledger, append-only journal and one-task Codex runner; one approval binds only an immutable bounded charter. Require independent review before dependants run; keep host permissions separate. No background service, remote execution or PC-off continuation.
+
+### Research and decisions
+- The 2026-11-26 research delta is now recorded in Notion Research & References: primary Codex/Agents API security docs, official Claude Code subagent and Google Antigravity docs, OpenHands SDK/Automation repositories, plus three arXiv evaluation preprints on independent verification, long-horizon checkpoints and trajectory summaries. Vendor docs/repositories are primary sources; arXiv findings are preprints and benchmark-specific, not production guarantees. No new external sources were added on 2026-11-27.
+- Decision 002 remains ADOPTED (Helm retired; Orbit Core focus); Decision 001 release/versioning policy remains PROPOSED. Approved product order remains safe Team Builder → task-specific skills/tools → Orbit-mediated agent/bot coordination. RAD P2 #138 remains separate/on hold; Orbit Commander remains paused.
+
+### Previous nightly execution
+- Orbit Nightly Build run `e39566bf-ab3c-8332-9c4d-f8887587f4fd` actually executed: scheduled 2026-11-26 22:00 IST, started 22:20:49 IST, completed 22:31:13 IST; recorded status `completed`. Latest result run ID matches; not a failure message, no user action required, not truncated; delivery status unknown.
+- Recorded work: appended handoff/roadmap docs in PR #178 (commits above), added issue #185, updated four Notion records. No runtime merge, release, install or deployment.
+
+### Environment and limitations
+- Remote Arc device `DESKTOP-AND1FUJ` remains OFFLINE; last seen 2026-11-25 11:40:58 UTC. No local checkout/tests, desktop bundle rebuild, owner-profile Claude/Codex/Antigravity acceptance, or `.orbit`/SQLite inspection occurred.
+- Orbit ChatGPT plugin connector is not exposed. GitHub and Notion integrations were available and used. No local machine was operated in this checkpoint.
+
+### Next safe actions
+1. Resolve #184 in a build-capable environment and prove exact desktop bundle/source parity.
+2. Resolve #183 with handle-relative no-follow traversal/writes, Windows reparse-point protections and adversarial Linux/Windows tests.
+3. Obtain human review of #178–#182; keep all drafts until reviewed.
+4. Reconcile/split the 100-commit v0.34 branch into focused issue-mapped PRs; implement #185 only by extending existing state/runner architecture.
+5. Reconnect Windows for real owner-profile host/permission/stop/expiry acceptance.
+6. Keep v0.33.1 unpublished until exact-head CI, package parity, independent security review, host acceptance and explicit owner go/no-go are recorded.
