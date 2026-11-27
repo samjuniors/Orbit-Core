@@ -64,6 +64,7 @@ class SourceAuditTests(unittest.TestCase):
         self.assertTrue(result["truncated"])
         self.assertIn("large.py", result["unreadable_paths"])
 
+    @unittest.skipUnless(__import__("os").name == "nt", "Windows-only fail-closed adapter test")
     def test_windows_source_audit_fails_closed_without_opening_files(self):
         (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
         with mock.patch.object(orbit_source_audit, "_WINDOWS_SAFE_RELATIVE_SCAN", False):
