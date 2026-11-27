@@ -123,6 +123,53 @@ def _is_test_file(rel: str, name: str) -> bool:
     )
 
 
+def _scan_posix_inventory(root):
+    """Inventory POSIX projects through pinned directory descriptors."""
+    import orbit_specialists
+    skipped = [0]
+    unreadable = []
+    files = []
+    directories = []
+    truncated = False
+    for parts, dir_fd, dirs, names in orbit_specialists._visual_walk(
+            root, skipped=skipped, unreadable=unreadable):
+        depth = len(parts)
+        dirs[:] = sorted((name for name in dirs if name.casefold() not in SKIP_DIRS),
+                         key=str.casefold)
+        names = sorted(names, key=str.casefold)
+        if len(dirs) + len(names) > MAX_FILES + MAX_DIRECTORIES:
+            truncated = True
+        if depth >= MAX_DEPTH:
+            if dirs:
+                truncated = True
+            dirs[:] = []
+        for name in dirs:
+            if len(directories) >= MAX_DIRECTORIES:
+                truncated = True
+                dirs[:] = []
+                break
+            directories.append("/".join(parts + (name,)))
+        for name in names:
+            if len(files) >= MAX_FILES:
+                truncated = True
+                dirs[:] = []
+                break
+            relative = "/".join(parts + (name,))
+            try:
+                stream, info = orbit_specialists._open_visual_source(dir_fd, name)
+                stream.close()
+                if info.st_nlink != 1:
+                    unreadable.append(relative)
+                    continue
+            except OSError:
+                unreadable.append(relative)
+                continue
+            files.append({"path": relative, "name": name, "size": info.st_size,
+                          "mtime_ns": info.st_mtime_ns,
+                          "suffix": Path(name).suffix.lower()})
+    return files, directories, skipped[0], unreadable, truncated
+
+
 def scan_project(root: Path, profile: dict | None = None) -> dict:
     """Return a bounded inventory and conservative structural gap signals."""
     root = Path(root)
@@ -146,12 +193,16 @@ def scan_project(root: Path, profile: dict | None = None) -> dict:
     if not _WINDOWS_SAFE_RELATIVE_SCAN:
         return _blocked_windows_scan(root)
 
-    files = []
-    directories = []
-    skipped_symlinks = 0
-    unreadable = []
-    truncated = False
-    stack = [(root, 0)]
+    if os.name != "nt":
+        files, directories, skipped_symlinks, unreadable, truncated = _scan_posix_inventory(root)
+        stack = []
+    else:
+        files = []
+        directories = []
+        skipped_symlinks = 0
+        unreadable = []
+        truncated = False
+        stack = [(root, 0)]
     while stack:
         folder, depth = stack.pop()
         try:

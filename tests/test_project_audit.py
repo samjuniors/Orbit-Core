@@ -1,4 +1,5 @@
 """Tests for bounded read-only project structure audit."""
+import os
 import sys
 import tempfile
 import unittest
@@ -7,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source" / "runtime"))
 import orbit_project_audit
+import orbit_posix_fs
 
 
 class ProjectAuditTests(unittest.TestCase):
@@ -92,6 +94,40 @@ class ProjectAuditTests(unittest.TestCase):
                 self.skipTest("Symlink creation unavailable")
             with self.assertRaises(ValueError):
                 orbit_project_audit.scan_project(link)
+
+
+    @unittest.skipUnless(orbit_posix_fs.SAFE, "POSIX dir_fd/O_NOFOLLOW support required")
+    def test_posix_structural_scan_skips_symlinks_without_leaking_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = base / "project"
+            outside = base / "outside"
+            root.mkdir()
+            outside.mkdir()
+            (outside / "secret.py").write_text("secret = True", encoding="utf-8")
+            (root / "src").mkdir()
+            (root / "src" / "main.py").write_text("pass", encoding="utf-8")
+            (root / "src" / "escape").symlink_to(outside, target_is_directory=True)
+            (root / "leak.py").symlink_to(outside / "secret.py")
+            result = orbit_project_audit.scan_project(root)
+            self.assertEqual(result["status"], "SCANNED")
+            self.assertEqual(result["symlinks_skipped"], 2)
+            self.assertEqual(result["summary"]["files"], 1)
+            self.assertEqual(result["summary"]["source_files"], 1)
+
+    @unittest.skipUnless(orbit_posix_fs.SAFE, "POSIX dir_fd/O_NOFOLLOW support required")
+    def test_posix_structural_scan_marks_hard_linked_file_incomplete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "main.py"
+            source.write_text("pass", encoding="utf-8")
+            try:
+                os.link(source, root / "linked.py")
+            except OSError as exc:
+                self.skipTest("Hard-link creation unavailable: " + str(exc))
+            result = orbit_project_audit.scan_project(root)
+            self.assertEqual(result["status"], "INCOMPLETE")
+            self.assertIn("linked.py", result["unreadable_paths"])
 
 
 if __name__ == "__main__":
