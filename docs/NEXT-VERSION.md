@@ -371,3 +371,10 @@ Remote Arc DESKTOP-AND1FUJ is offline; no Desktop Commander device is connected.
 ### Release gate
 
 No v0.33.1/v0.34 publication until #183/#184, #188 reliability disposition, exact-head Linux/Windows CI, package parity, compatibility, release notes, independent security review, signed-in host acceptance and owner go/no-go are recorded. CI alone is insufficient.
+
+
+### 2026-11-27 17:05 UTC — exact-head CI results
+
+- PR #178 documentation head `7bd44acb0358f4aabf104bb744f371e8356ff143`: [#46038299281](https://github.com/samjuniors/Orbit-Core/actions/runs/46038299281) PASS 5/5, including Windows Python 3.12. Still draft; human review outstanding.
+- PR #187 mission-supervisor head `03b1770214023b4eb3cd3c5a0725d415b5941ef1`: [#46037740696](https://github.com/samjuniors/Orbit-Core/actions/runs/46037740696) PASS 5/5, including Windows Python 3.12 (850 tests, 13 skips). The lock-directory parent symlink/reparse review lead remains open.
+- #188 now records the daemon update-check thread as one hypothesis for the intermittent shared-DB child crash; this is not a confirmed root cause. Test enabled/disabled update-check behavior on fresh cache and add explicit bounded thread shutdown before changing the release gate.
