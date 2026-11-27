@@ -346,3 +346,28 @@ A disposable 3–5 task DAG must complete under one mission charter without repe
 
 ### Environment blocker
 Remote Arc DESKTOP-AND1FUJ is offline; no Desktop Commander device is connected. Local source edits, Windows adversarial tests, bundle rebuild and .orbit/SQLite inspection are unavailable. Continue documentation/research through GitHub and Notion, but do not simulate local verification.
+
+
+## 2026-11-27 — v0.34 execution order and acceptance update
+
+**Main baseline:** `2fdf4f329774b9644e75ac0df4d89738a7cd625f` / VERSION 0.33.1 / NEXT_VERSION 0.34.0. No new release is published. Keep main and published packages unchanged.
+
+### Priority order
+
+1. **P0 filesystem containment (#183 / PR #186):** review the Windows handle-pinning and POSIX dir_fd/O_NOFOLLOW implementation independently. Define supported filesystem semantics. Current Windows identity uses a 64-bit file index; Microsoft documents that ReFS file IDs are 128-bit and the 64-bit value is not guaranteed unique, while network filesystem metadata may be partial. Use FileIdInfo or fail closed outside explicitly tested filesystems. Keep Windows adversarial junction/hard-link tests and POSIX parent-swap tests mandatory.
+2. **P0 finding privacy (#184 / PR #182):** remove source-line-derived hashes, use a locator-only reference, rename the output field to match semantics, rebuild the desktop MCP package from exact source and prove strict source/runtime/package parity.
+3. **P1 mission supervisor (#185 / PR #187):** continue the bounded, sequential Codex CLI increment only. Pause/resume must be authorized by recorded charter PAUSE+RESUME events; the 2026-11-27 patch adds tampered-checkpoint and live-resume tests. Finish exact-head Windows CI. Fix the shared temp lock-directory parent-symlink/reparse risk before treating the lock as a safety boundary. Do not claim native Claude/Antigravity worker dispatch, parallelism, automatic replanning, background execution or PC-off continuation.
+4. **P1 subprocess reliability (#188):** investigate the intermittent native crash in `test_mcp_process_and_shared_db`. Repeated reruns passing are not a root-cause fix; run repeated isolated iterations and inspect child shutdown, MCP stdio, SQLite/WAL lifetimes and native imports.
+5. **Governance and acceptance:** obtain human review, reconcile stacked branches with main, complete owner-profile host acceptance and independent security review.
+
+### Current branch/PR posture
+
+- #178 documentation-only draft, exact-head PR CI rerun PASS 5/5; no human review.
+- #179–#182 focused drafts; recorded CI PASS 5/5; no human reviews. Their claims remain bounded (advisory model recommendations, lifecycle/safety tests, static security planning).
+- #186 filesystem security draft, exact-head push CI PASS 5/5, stacked on the 100-commit context-aware branch; no independent review.
+- #187 mission supervisor draft, current head `03b1770214023b4eb3cd3c5a0725d415b5941ef1`; Ubuntu matrix PASS, Windows Python 3.12 in progress at the last check. Also stacked on the context-aware branch.
+- The broad `feat/v034-context-aware-intelligence-20261123` branch is 100 commits ahead of main and has no PR; do not merge as a unit.
+
+### Release gate
+
+No v0.33.1/v0.34 publication until #183/#184, #188 reliability disposition, exact-head Linux/Windows CI, package parity, compatibility, release notes, independent security review, signed-in host acceptance and owner go/no-go are recorded. CI alone is insufficient.
