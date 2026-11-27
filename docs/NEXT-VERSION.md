@@ -26,7 +26,7 @@ Focused drafts #179–#182 remain unreviewed. Their prior exact-head CI was 5/5,
 v0.33.1 remains unpublished and acceptance-incomplete. Require #183/#184/#189 remediation or independent documented disposition, #188 root-cause evidence, exact-head CI, package parity, owner-profile Claude/Codex/Antigravity acceptance, host permission expiry/revocation evidence, independent human security review, compatibility/release notes and owner go/no-go. No green-CI-only release.
 
 ### Current environment
-161 branches, 43 open PRs, 10 open issues. Rulesets list is empty; main branch protection API returned 403, so enforcement is unverified. Remote Arc DESKTOP-AND1FUJ and Desktop Commander are offline/unavailable; no local test, bundle rebuild, owner-profile acceptance or `.orbit`/SQLite inspection was performed. Orbit ChatGPT plugin connector is not exposed; GitHub and Notion were used. Orbit Commander remains paused; RAD P2 #138 remains separate.
+161 branches, 45 open PRs, 11 open issues. Rulesets list is empty; main branch protection API returned 403, so enforcement is unverified. Remote Arc DESKTOP-AND1FUJ and Desktop Commander are offline/unavailable; no local test, bundle rebuild, owner-profile acceptance or `.orbit`/SQLite inspection was performed. Orbit ChatGPT plugin connector is not exposed; GitHub and Notion were used. Orbit Commander remains paused; RAD P2 #138 remains separate.
 
 ## 2026-11-24 — Current main and roadmap disposition
 
