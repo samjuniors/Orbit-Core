@@ -1,9 +1,43 @@
 # Orbit Core — cross-agent continuity and handoff
 
-**Last reviewed:** 2026-11-25 06:56 Asia/Kolkata.
+**Last reviewed:** 2026-11-27 22:46 Asia/Kolkata.
 **Canonical repository:** https://github.com/samjuniors/Orbit-Core. Revalidate live state before every resume.
 **Scope:** provider-neutral Orbit Core only. Orbit Commander remains separately paused and out of scope.
 **Current baseline:** main VERSION=0.33.1 / NEXT_VERSION=0.34.0; v0.33.0 prerelease published; v0.33.1 and v0.34.0 are not published.
+
+## 2026-11-27 — Nightly live revalidation
+
+### Canonical GitHub and release state
+- Canonical repository: [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core). Main ref is `2fdf4f329774b9644e75ac0df4d89738a7cd625f`; `VERSION=0.33.1`; `NEXT_VERSION=0.34.0`. The last main CI run [#45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) completed successfully (5/5) on 2026-11-23; no newer main-branch run was returned.
+- Releases: [v0.33.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0) remains the latest published prerelease (2026-11-23, eight package/checksum assets); v0.30.0 remains the latest stable release. v0.33.1 and v0.34.0 are unpublished.
+- Live inventory: 161 branches (100 on page 1 + 61 on page 2), 43 open PRs, 10 open issues. Repository is public, writable, and not archived. Rulesets API returned an empty list; main branch-protection endpoint returned 403, so required-review/check enforcement is NOT VERIFIED.
+- Main combined commit-status endpoint returned no status rows; Actions run #45167794202 is the available main CI evidence.
+
+### Current focused development
+- [PR #178](https://github.com/samjuniors/Orbit-Core/pull/178) is OPEN / DRAFT / docs-only, based on main. Live pre-update head was `58831d39d81075beec9846057b27fba05779ef3e`; exact-head runs [#46039214019](https://github.com/samjuniors/Orbit-Core/actions/runs/46039214019) and [#46039209679](https://github.com/samjuniors/Orbit-Core/actions/runs/46039209679) completed successfully. This checkpoint appends a new docs-only commit, so verify its new exact-head CI and keep the PR draft until human review.
+- [PR #186](https://github.com/samjuniors/Orbit-Core/pull/186) is OPEN / DRAFT at `f81eb1f051cc6afee00ac10ed1e8619ae3b10633`, stacked on experimental base `8620e4a`, not main. Exact-head CI [#45993595975](https://github.com/samjuniors/Orbit-Core/actions/runs/45993595975) passed 5/5. It adds descriptor-relative POSIX operations and Windows reparse-aware project-root handling. Independent review remains required; Microsoft documents 128-bit ReFS file IDs and warns that the legacy 64-bit file index is not guaranteed unique. Use `FILE_ID_INFO`/FileIdInfo where supported, or fail closed on unsupported/ambiguous filesystems. Do not claim #183 is closed.
+- [PR #187](https://github.com/samjuniors/Orbit-Core/pull/187) is OPEN / DRAFT at `79a6b9b740e7953273d1c424779781fb6c6e367c`, stacked on the same experimental base, not main. Previous exact-head run [#46037740696](https://github.com/samjuniors/Orbit-Core/actions/runs/46037740696) passed 5/5 (Windows: 850 tests / 13 skips as reported in the PR). A documentation-only follow-up now describes the mission lock as best-effort local serialization, not a security boundary; re-run CI on the new head. The code-level lock parent-directory issue is tracked by [#189](https://github.com/samjuniors/Orbit-Core/issues/189).
+- PR #187 implements a foreground, sequential local Codex CLI supervisor only. It does not implement native Claude Code or Antigravity worker dispatch, parallel execution, remote/background execution, PC-off continuation, authenticated reviewer identity, auto-merge or release.
+- PRs #179–#182 remain open drafts; their prior exact-head CI passed 5/5, but no human review/host acceptance is established. #179 is advisory model routing; #180 is skill lifecycle test coverage; #181 is specialist regression coverage; #182 is bounded static security planning, not SAST or penetration testing.
+
+### Open reliability/security gates
+- [#183](https://github.com/samjuniors/Orbit-Core/issues/183): project filesystem boundary. [PR #186](https://github.com/samjuniors/Orbit-Core/pull/186) is progress but remains stacked on the 100-commit experimental branch and needs independent Windows/POSIX and supported-filesystem review.
+- [#184](https://github.com/samjuniors/Orbit-Core/issues/184): source-line-derived security finding digest may enable offline guessing. Still a release blocker until replaced by a locator-only reference, renamed accurately, tested, and desktop package regenerated from exact source with parity verified.
+- [#185](https://github.com/samjuniors/Orbit-Core/issues/185) / [PR #187](https://github.com/samjuniors/Orbit-Core/pull/187): bounded multi-task mission supervisor; experimental, Codex-only and foreground-only.
+- [#188](https://github.com/samjuniors/Orbit-Core/issues/188): intermittent native child crashes in `test_mcp_process_and_shared_db`. Observed Linux Python 3.10 (`-6`, double-free/corruption) and Linux Python 3.13 (`-11`, SIGSEGV); reruns passed and Windows passed, but root cause is unknown. The updater's startup daemon thread is a hypothesis only. Python's official threading docs say daemon threads are abruptly stopped at interpreter shutdown and resources may not be released; this makes the hypothesis plausible, not proven. Required: at least 20 fresh-cache runs on Linux 3.10 and 3.13 with update check enabled/disabled, preserve child stderr/exit code/faulthandler, block the fetch during shutdown in a deterministic test, and verify bounded thread lifecycle/cache writes. Do not permanently disable update checks or mark fixed based on reruns.
+- [#189](https://github.com/samjuniors/Orbit-Core/issues/189): mission lock parent-directory symlink/reparse risk. The leaf `O_NOFOLLOW` does not pin the parent; Windows reparse handling is absent. Require a private per-user directory pinned by handle, directory-relative lock creation, adversarial POSIX/Windows tests, and independent review.
+- The 100-commit branch `feat/v034-context-aware-intelligence-20261123` at `8620e4a3063852d2c99f6a157fc9ee688c989b6a` remains unapproved for bulk merge. Reconcile its accepted work to #90/#91/#92 and split into reviewable changes.
+- Keep RAD P2 #138 and PRs #136–#147 separate and on hold. Orbit Commander remains paused and out of scope.
+
+### Research delta (primary sources)
+- [Python 3.12 threading documentation](https://docs.python.org/3.12/library/threading.html): daemon threads are abruptly stopped at interpreter shutdown; use explicit signalling and graceful lifecycle when cleanup matters. This supports investigation of #188 but does not prove causation.
+- [Microsoft FILE_ID_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info) and [BY_HANDLE_FILE_INFORMATION](https://learn.microsoft.com/en-us/windows/desktop/api/fileapi/ns-fileapi-by_handle_file_information): file identity is filesystem-specific; ReFS uses 128-bit identifiers and a 64-bit index is not guaranteed unique. Use FileIdInfo where available or fail closed when identity cannot be established.
+- [GetFileInformationByHandleEx](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandleex) is the documented handle-based retrieval API for FileIdInfo.
+
+### Environment and next actions
+- Remote Arc DESKTOP-AND1FUJ is OFFLINE (last seen 2026-11-27 11:51:32 UTC); Desktop Commander has no connected devices. No local checkout, Windows/Linux adversarial execution, desktop bundle rebuild, owner-profile Claude/Codex/Antigravity acceptance, or `.orbit`/SQLite inspection occurred.
+- Orbit ChatGPT plugin connector is not exposed; authorized GitHub and Notion integrations were used. No paid API spend, install, deployment, merge or release occurred.
+- Next: (1) verify exact-head CI for new PR #178 and #187 docs commits; (2) address #189 lock-directory safety; (3) finish #186 filesystem independent review and supported-filesystem policy; (4) resolve #184 digest privacy and bundle parity; (5) run the #188 discriminator experiment on Linux; (6) continue #185 only after lock/review gates; (7) keep all v0.34 work out of main until its base is reconciled and reviewed.
 
 ## 2026-11-25 — Morning live revalidation
 
