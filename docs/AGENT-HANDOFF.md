@@ -10,7 +10,7 @@
 ### Canonical GitHub and release state
 - Canonical repository: [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core). Main ref is `2fdf4f329774b9644e75ac0df4d89738a7cd625f`; `VERSION=0.33.1`; `NEXT_VERSION=0.34.0`. The last main CI run [#45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) completed successfully (5/5) on 2026-11-23; no newer main-branch run was returned.
 - Releases: [v0.33.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0) remains the latest published prerelease (2026-11-23, eight package/checksum assets); v0.30.0 remains the latest stable release. v0.33.1 and v0.34.0 are unpublished.
-- Live inventory: 161 branches (100 on page 1 + 61 on page 2), 43 open PRs, 10 open issues. Repository is public, writable, and not archived. Rulesets API returned an empty list; main branch-protection endpoint returned 403, so required-review/check enforcement is NOT VERIFIED.
+- Live inventory: 161 branches (100 on page 1 + 61 on page 2), 45 open PRs, 11 open issues. Repository is public, writable, and not archived. Rulesets API returned an empty list; main branch-protection endpoint returned 403, so required-review/check enforcement is NOT VERIFIED.
 - Main combined commit-status endpoint returned no status rows; Actions run #45167794202 is the available main CI evidence.
 
 ### Current focused development
