@@ -14,7 +14,7 @@ A single interactive local confirmation authorizes the bounded charter. The supe
 2. Selects only a DAG-ready task already named in the charter.
 3. Passes an immutable task context through the provider-neutral execution-adapter contract. The only implemented adapter delegates to the existing Codex CLI runner in a disposable local clone with its existing sandbox and time/output limits.
 4. Records the actual isolated changed paths in the existing task ledger as `REPORTED_DONE`.
-5. Stops and waits for an independent reviewer to accept or request rework.
+5. Stops and waits for a reviewer to record acceptance or request rework.
 6. Requires the exact reviewed isolated diff to be committed to the approved source branch.
 7. Advances only after the existing review ledger says `REVIEW_ACCEPTED` and the source handoff is independently reconciled.
 8. Repeats within the original charter; completion never implies merge, release or deployment.

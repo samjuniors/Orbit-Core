@@ -460,6 +460,7 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
                             "attempt_number": archived["attempt_number"],
                             "attempt_limit": archived["attempt_limit"],
                             "task_left_in_rework": True,
+                            "reviewer_identity_authenticated": False,
                         })
                     return {"status": run["state"], "task_status": "REWORK",
                             "retry": archived}
