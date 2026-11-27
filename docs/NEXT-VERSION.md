@@ -1,5 +1,33 @@
 # Orbit Core — roadmap and current engineering status
 
+## 2026-11-27 — Current roadmap and acceptance gates
+
+**Live source:** [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core), revalidated 2026-11-27 22:46 Asia/Kolkata. Main remains `2fdf4f329774b9644e75ac0df4d89738a7cd625f`; `VERSION=0.33.1`; `NEXT_VERSION=0.34.0`. Latest published prerelease is v0.33.0; latest stable is v0.30.0. v0.33.1 and v0.34.0 are unpublished.
+
+### Approved product order and current slices
+1. Safe Team Builder foundation (reuse the existing project task ledger and preview; do not create a second registry).
+2. Task-specific skills and tools.
+3. Orbit-mediated agent/bot coordination.
+
+Focused drafts #179–#182 remain unreviewed. Their prior exact-head CI was 5/5, but model recommendations are advisory, skill PR is test-only, specialist PR adds regression coverage, and the cybersecurity planner is bounded pattern review rather than SAST/penetration testing.
+
+### P0 security and reliability
+- **#183 filesystem containment:** draft [PR #186](https://github.com/samjuniors/Orbit-Core/pull/186), head `f81eb1f`, CI #45993595975 PASS 5/5, but stacked on the unapproved context-aware branch. Independent review must settle Windows reparse/handle identity and POSIX descriptor-relative semantics. Microsoft notes ReFS file IDs are 128-bit and the legacy 64-bit index is not guaranteed unique; use FileIdInfo or fail closed on unsupported/ambiguous filesystems.
+- **#184 digest privacy:** do not ship source-line-derived `evidence_sha256`; replace with a locator-only reference and accurate field name, add regression tests, rebuild the desktop MCP bundle from exact source, verify parity and rerun exact-head CI.
+- **#189 mission lock directory:** PR #187's leaf `O_NOFOLLOW` does not pin the parent directory. Use a per-user private directory pinned by handle and directory-relative leaf creation; Windows reparse-aware validation or fail closed. Until then the lock is best-effort local serialization, not a security boundary.
+- **#188 intermittent MCP child crash:** two observed Linux native failures in the shared-DB subprocess test (Python 3.10 exit -6; Python 3.13 exit -11); reruns passed and Windows passed, but root cause is unknown. The updater daemon thread is only a hypothesis. Run 20+ fresh-cache iterations with update check enabled/disabled on both Linux versions, preserve child stderr/exit code/faulthandler, and add deterministic blocked-fetch shutdown lifecycle coverage. Do not mask by permanently disabling updates or relying on reruns.
+
+### P1 bounded autonomy
+- [#185 / PR #187](https://github.com/samjuniors/Orbit-Core/pull/187) adds a bounded, sequential foreground Codex CLI mission supervisor with a provider-neutral adapter contract. No native Claude Code/Antigravity dispatch, parallel execution, background service, remote execution, PC-off continuation, authenticated reviewer identity or autonomous merge/release is implemented.
+- PR #187 exact-head CI #46037740696 passed 5/5 at previous code head; a documentation correction now qualifies its lock as best-effort and requires new exact-head CI. New issue #189 tracks the code fix.
+- Do not merge PR #186 or #187 separately into main while each is stacked on the unapproved 100-commit base `feat/v034-context-aware-intelligence-20261123` (`8620e4a`). Reconcile/split accepted base work first.
+
+### Release posture
+v0.33.1 remains unpublished and acceptance-incomplete. Require #183/#184/#189 remediation or independent documented disposition, #188 root-cause evidence, exact-head CI, package parity, owner-profile Claude/Codex/Antigravity acceptance, host permission expiry/revocation evidence, independent human security review, compatibility/release notes and owner go/no-go. No green-CI-only release.
+
+### Current environment
+161 branches, 43 open PRs, 10 open issues. Rulesets list is empty; main branch protection API returned 403, so enforcement is unverified. Remote Arc DESKTOP-AND1FUJ and Desktop Commander are offline/unavailable; no local test, bundle rebuild, owner-profile acceptance or `.orbit`/SQLite inspection was performed. Orbit ChatGPT plugin connector is not exposed; GitHub and Notion were used. Orbit Commander remains paused; RAD P2 #138 remains separate.
+
 ## 2026-11-24 — Current main and roadmap disposition
 
 **Canonical repository:** https://github.com/samjuniors/Orbit-Core. GitHub is implementation truth; the Notion decisions hub owns product decisions. Revalidate live state before every resume.
