@@ -377,6 +377,13 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
             return {"status": "HOLD_RECONCILE_POSSIBLE_HOST_PROCESS",
                     "worker_running_verified": False}
         if run["state"] == "PAUSED" and mission_row["state"] == "ACTIVE":
+            if not _observed_pause_resume(
+                    conn, root, project, mission, run["mission_revision"], revision):
+                run = _set_state(
+                    conn, run, "RECOVERY_REQUIRED",
+                    result="mission resumed without recorded pause/resume events")
+                _event(conn, run, "MISSION_REVISION_MISMATCH", run["state"])
+                return {"status": run["state"]}
             run = _set_state(conn, run, "RUNNING", revision=revision)
             _event(conn, run, "MISSION_RESUMED", "RUNNING",
                    payload={"mission_revision": revision})
@@ -405,7 +412,9 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
             return {"status": run["state"]}
         if current["status"] == "PAUSED":
             if run["state"] != "PAUSED":
-                run = _set_state(conn, run, "PAUSED", revision=mission_row["revision"])
+                # Keep the last approved active revision so a later resume
+                # can verify both the PAUSE and RESUME charter events.
+                run = _set_state(conn, run, "PAUSED")
                 _event(conn, run, "MISSION_PAUSED", "PAUSED",
                        payload={"mission_revision": mission_row["revision"]})
             sleep(float(poll_seconds))
@@ -416,12 +425,9 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
             return {"status": run["state"]}
         if mission_row["revision"] != run["mission_revision"]:
             # A changed revision is adopted only after a recorded pause/resume.
-            observed_resume = (
-                run["state"] == "PAUSED"
-                or _observed_pause_resume(
-                    conn, root, project, mission, run["mission_revision"],
-                    mission_row["revision"])
-            )
+            observed_resume = _observed_pause_resume(
+                conn, root, project, mission, run["mission_revision"],
+                mission_row["revision"])
             if not observed_resume:
                 run = _set_state(conn, run, "RECOVERY_REQUIRED",
                                  result="mission revision changed without observed pause/resume")
