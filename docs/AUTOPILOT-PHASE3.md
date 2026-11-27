@@ -52,21 +52,22 @@ For each task, the supervisor records `REPORTED_DONE` with the actual isolated d
 - Run the trusted tests appropriate to the task.
 - Use the normal Orbit task review workflow to record `REVIEW_ACCEPTED` or `REWORK`.
 - If accepted, copy/commit the exact reviewed changes to the charter's approved source branch.
+- If `REWORK` is recorded, the supervisor archives the rejected isolated attempt and may retry the same task only while the charter's total attempt limit remains. The reviewer feedback is passed to the next isolated attempt as data; it cannot change the approved goal, dependencies or writable paths. Exhausting the limit leaves the task in `REWORK` and blocks the mission.
 - Resume the mission command.
 
-The supervisor checks that the source commit is a descendant of the task's original HEAD and that its changed paths and file bytes match the isolated worker output. It does not create the commit itself.
+The supervisor checks that the source commit is a descendant of the task's original HEAD and that its changed paths and file bytes match the isolated worker output. For a rejected attempt, it verifies that the source branch has not moved and that the rejected isolated diff still matches the recorded task report before archiving it. It does not create the commit itself. Review verdicts and reviewer identity are caller-reported; the supervisor does not authenticate the human reviewer.
 
 ## Explicit limitations
 
 - The adapter contract is provider-neutral, but only CodexCLIAdapter is implemented. Claude Code and Antigravity adapters are not implemented or host-verified; no provider/model switching is performed.
 - The process is foreground-only. It cannot continue when the terminal/PC is shut down.
 - The local approval is operator input, not cryptographic identity proof.
-- Task acceptance is never inferred from model output. Independent review and source handoff remain mandatory.
-- Failed/ambiguous runs stop for reconciliation; automatic retries and autonomous scope expansion are not enabled.
+- Task acceptance is never inferred from model output. A separate review step and exact source handoff remain mandatory; the local ledger records the caller-reported verdict but does not authenticate reviewer identity.
+- Reviewer-directed rework can retry the same task within the charter attempt limit. Failed/ambiguous host runs still stop for reconciliation; automatic retry of uncertain worker failures and autonomous scope expansion are not enabled.
 - Persisted PID values are never killed after a supervisor restart. Possible orphan processes fail closed for manual host reconciliation.
 - Model recommendations remain advisory; no model switching, quota claims or fabricated cost/token telemetry.
 - Merge, release, publish, deployment, secrets, permission changes, deletion and scope expansion remain outside the charter.
 
 ## Verification
 
-Synthetic tests use disposable Git repositories and fake Codex process adapters. They verify a three-task dependency chain under one mission approval, independent review gates, exact source handoff, no auto-acceptance, and append-only event records. Passing synthetic tests does not certify the real Codex host, Windows process-tree behavior, security boundaries, or release readiness.
+Synthetic tests use disposable Git repositories and fake Codex process adapters. They verify a three-task dependency chain under one mission approval, review gates, exact source handoff, no auto-acceptance, bounded reviewer-directed rework with preserved scope/feedback, attempt-limit exhaustion, and append-only event records. Passing synthetic tests does not certify the real Codex host, Windows process-tree behavior, security boundaries, reviewer identity, or release readiness.

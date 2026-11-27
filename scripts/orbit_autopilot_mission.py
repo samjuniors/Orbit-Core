@@ -37,6 +37,7 @@ class MissionTaskContext:
     mission_revision: int
     task_key: str
     max_seconds: int
+    rework_feedback: str = ""
 
 
 class MissionExecutionAdapter(Protocol):
@@ -67,7 +68,7 @@ class CodexCLIAdapter:
             conn, context.project_root, context.project, context.mission_id,
             context.mission_revision, operator_confirmed=True,
             codex_path=self.codex_path, max_seconds=context.max_seconds,
-            launch=self.launch)
+            launch=self.launch, rework_feedback=context.rework_feedback)
 
 
 def _now():
@@ -424,11 +425,55 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
                 return {"status": run["state"], "runner": runner._public(job)}
 
             report = _record_local_report(conn, root, project, job)
-            if report["status"] in {"REWORK", "FAILED", "BLOCKED", "CANCELLED"}:
+            if report["status"] == "REWORK":
+                archived = runner.archive_rework(
+                    conn, root, project, mission, mission_row["revision"],
+                    confirm_write=True)
+                if archived["status"] == "REWORK_ARCHIVED_REQUEUED":
+                    run = _set_state(
+                        conn, run, "RUNNING", task_key=job["task_key"],
+                        result="reviewer-directed rework requeued within charter")
+                    _event(
+                        conn, run, "TASK_REWORK_REQUEUED", run["state"],
+                        task_key=job["task_key"],
+                        payload={
+                            "attempt_number": archived["attempt_number"],
+                            "attempt_limit": archived["attempt_limit"],
+                            "review_evidence_sha256": hashlib.sha256(
+                                _task(conn, root, project, job["task_key"])[
+                                    "review_evidence"].encode("utf-8")).hexdigest(),
+                            "write_scope_unchanged": True,
+                            "task_spec_unchanged": True,
+                            "reviewer_identity_authenticated": False,
+                            "new_operator_approval_required": False,
+                        })
+                    review_started = None
+                    continue
+                if archived["status"] == "REWORK_ARCHIVED_ATTEMPT_LIMIT":
+                    run = _set_state(
+                        conn, run, "BLOCKED",
+                        result="charter attempt limit exhausted after reviewer-recorded REWORK")
+                    _event(
+                        conn, run, "TASK_RETRY_LIMIT_REACHED", run["state"],
+                        task_key=job["task_key"],
+                        payload={
+                            "attempt_number": archived["attempt_number"],
+                            "attempt_limit": archived["attempt_limit"],
+                            "task_left_in_rework": True,
+                        })
+                    return {"status": run["state"], "task_status": "REWORK",
+                            "retry": archived}
                 run = _set_state(conn, run, "BLOCKED",
-                                 result="task review requires explicit rework/replanning")
-                _event(conn, run, "TASK_REWORK_REQUIRED", run["state"],
-                       task_key=job["task_key"],
+                                 result="rework provenance or archive gate failed")
+                _event(conn, run, "TASK_REWORK_ARCHIVE_BLOCKED", run["state"],
+                       task_key=job["task_key"], payload=archived)
+                return {"status": run["state"], "task_status": "REWORK",
+                        "retry": archived}
+            if report["status"] in {"FAILED", "BLOCKED", "CANCELLED"}:
+                run = _set_state(conn, run, "BLOCKED",
+                                 result="worker failure requires explicit reconciliation")
+                _event(conn, run, "TASK_RUN_FAILURE_REQUIRES_RECONCILIATION",
+                       run["state"], task_key=job["task_key"],
                        payload={"task_status": report["status"]})
                 return {"status": run["state"], "task_status": report["status"]}
             if report["status"] not in {"REPORTED_DONE", "REVIEW_ACCEPTED"}:
@@ -508,11 +553,19 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
 
         adapter: MissionExecutionAdapter = CodexCLIAdapter(
             codex_path=codex_path, launch=launch)
+        task_record = _task(conn, root, project, plan["task_key"])
+        if task_record is None:
+            run = _set_state(conn, run, "BLOCKED",
+                             result="scheduled task disappeared before adapter launch")
+            _event(conn, run, "MISSION_TASK_DISAPPEARED", run["state"],
+                   task_key=plan["task_key"])
+            return {"status": run["state"]}
         task_context = MissionTaskContext(
             project_root=Path(root), project=project, mission_id=mission,
             mission_revision=mission_row["revision"], task_key=plan["task_key"],
             max_seconds=min(runner.MAX_SECONDS, max(1, max_seconds -
-                int(time.monotonic() - started))))
+                int(time.monotonic() - started))),
+            rework_feedback=task_record["review_evidence"] or "")
         result = adapter.execute_task(conn, task_context)
         _event(conn, run, "TASK_RUN_FINISHED", result["status"],
                task_key=result.get("task_key", plan["task_key"]),

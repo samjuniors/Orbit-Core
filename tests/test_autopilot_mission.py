@@ -118,29 +118,32 @@ class MissionSupervisorTests(unittest.TestCase):
             json.dumps({"type": "turn.completed"}) + "\n")
         return Exited()
 
-    def reviewer_and_commit(self):
+    def reviewer_and_commit(self, mission_id=None, *, root=None, project=None):
         """Simulate a separate reviewer after inspecting the isolated diff."""
-        job = runner._job(self.db, self.root, self.project, self.mission)
+        mission_id = mission_id or self.mission
+        root = root or self.root
+        project = project or self.project
+        job = runner._job(self.db, root, project, mission_id)
         self.assertEqual(job["state"], "REVIEW_REQUIRED")
-        task = mission._task(self.db, self.root, self.project, job["task_key"])
+        task = mission._task(self.db, root, project, job["task_key"])
         self.assertEqual(task["status"], "REPORTED_DONE")
         reviewed = orbit_tasks.review(self.db, {
-            "project": self.project, "task_key": job["task_key"],
+            "project": project, "task_key": job["task_key"],
             "expected_revision": task["revision"], "verdict": "ACCEPT",
             "review_evidence": "Independent fixture review inspected the isolated diff and verified the expected files.",
             "confirm_write": True,
-        }, self.root)
+        }, root)
         self.assertEqual(reviewed["status"], "REVIEW_ACCEPTED")
 
         work = Path(job["workspace"])
         changed = json.loads(job["changed_paths"])
         for name in changed:
             source = work / name
-            destination = self.root / name
+            destination = root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(source.read_bytes())
-        git(self.root, "add", "--", *changed)
-        git(self.root, "commit", "-m", "reviewed " + job["task_key"])
+        git(root, "add", "--", *changed)
+        git(root, "commit", "-m", "reviewed " + job["task_key"])
 
     def test_one_charter_approval_runs_three_tasks_with_review_gates(self):
         accepted = []
@@ -269,7 +272,7 @@ class MissionSupervisorTests(unittest.TestCase):
                 "SELECT COUNT(*) FROM orbit_autopilot_runner_jobs").fetchone()[0], 0)
             check.close()
 
-    def test_rework_stops_mission_without_automatic_retry(self):
+    def test_rework_stops_when_charter_attempt_limit_is_one(self):
         first = mission.run_mission(
             self.db, self.root, self.project, self.mission, 1,
             operator_confirmed=True, codex_path=str(self.codex),
@@ -289,11 +292,106 @@ class MissionSupervisorTests(unittest.TestCase):
             self.db, self.root, self.project, self.mission, 1,
             operator_confirmed=True, codex_path=str(self.codex),
             max_seconds=5, review_wait_seconds=2, poll_seconds=0.05,
-            launch=lambda *args: self.fail("rework must not auto-retry"))
+            launch=lambda *args: self.fail("attempt limit must prevent another launch"))
         self.assertEqual(second["status"], "BLOCKED")
         self.assertEqual(second["task_status"], "REWORK")
-        self.assertEqual(runner._job(self.db, self.root, self.project, self.mission)["state"],
-                         "REVIEW_REQUIRED")
+        self.assertIsNone(runner._job(self.db, self.root, self.project, self.mission))
+        history = self.db.execute(
+            "SELECT review_verdict FROM orbit_autopilot_runner_history "
+            "WHERE project=? AND project_root=? AND mission_id=?",
+            (self.project, str(self.root), self.mission)).fetchall()
+        self.assertEqual([row[0] for row in history], ["REWORK"])
+        self.assertEqual(mission._task(
+            self.db, self.root, self.project, "api")["status"], "REWORK")
+
+    def test_rework_retries_once_within_charter_and_preserves_scope(self):
+        retry_mission = "bounded-rework"
+        retry_project = "retry-fixture"
+        retry_root = Path(self.tmp.name, "retry-repo").resolve()
+        retry_root.mkdir()
+        git(retry_root, "init", "-b", "feat/mission-test")
+        git(retry_root, "config", "user.email", "orbit-test@example.invalid")
+        git(retry_root, "config", "user.name", "Orbit Test")
+        (retry_root / "README.md").write_text("# Retry fixture\\n")
+        git(retry_root, "add", "README.md")
+        git(retry_root, "commit", "-m", "retry fixture baseline")
+        planned = orbit_tasks.plan(self.db, {
+            "project": retry_project, "task_key": "api", "step": "IMPLEMENT",
+            "role": "backend", "goal": "Add the API implementation",
+            "reason": "Bounded reviewer-directed retry fixture",
+            "write_paths": ["src/api/"], "depends_on": [],
+            "confirm_write": True,
+        }, retry_root)
+        self.assertEqual(planned["status"], "PLANNED")
+        fields = dict(self.charter_fields)
+        fields.update({
+            "mission_id": retry_mission,
+            "objective": "Complete one API task with one bounded reviewer-directed retry",
+            "branch": "feat/mission-test",
+            "task_keys": ["api"],
+            "allowed_paths": ["src/api/"],
+            "max_attempts_per_task": 2,
+        })
+        preview = orbit_autopilot.charter(
+            self.db, retry_root, retry_project, {**fields, "action": "preview"})
+        activated = orbit_autopilot.charter(
+            self.db, retry_root, retry_project,
+            {**fields, "action": "activate",
+             "expected_digest": preview["charter_digest"],
+             "approval_reference": "bounded-rework-approval-reference",
+             "confirm_write": True})
+        self.assertEqual(activated["status"], "CHARTER_RECORDED")
+        before = mission._task(self.db, retry_root, retry_project, "api")
+        original_spec = (before["goal"], before["reason"],
+                         before["write_paths"], before["depends_on"])
+        prompts = []
+        review_count = 0
+
+        def launch(work, prompt, logs, executable):
+            prompts.append(prompt)
+            return self.launch(work, prompt, logs, executable)
+
+        def review_wait(_seconds):
+            nonlocal review_count
+            job = runner._job(self.db, retry_root, retry_project, retry_mission)
+            task = mission._task(self.db, retry_root, retry_project, job["task_key"])
+            if review_count == 0:
+                result = orbit_tasks.review(self.db, {
+                    "project": retry_project, "task_key": job["task_key"],
+                    "expected_revision": task["revision"], "verdict": "REWORK",
+                    "review_evidence": "Correct the API response contract while staying inside src/api/.",
+                    "confirm_write": True,
+                }, retry_root)
+                self.assertEqual(result["status"], "REWORK")
+            else:
+                self.reviewer_and_commit(
+                    retry_mission, root=retry_root, project=retry_project)
+            review_count += 1
+
+        result = mission.run_mission(
+            self.db, retry_root, retry_project, retry_mission, 1,
+            operator_confirmed=True, codex_path=str(self.codex),
+            max_seconds=30, review_wait_seconds=5, poll_seconds=0.05,
+            launch=launch, sleep=review_wait)
+        self.assertEqual(result["status"], "COMPLETED")
+        self.assertEqual(review_count, 2)
+        self.assertEqual(len(prompts), 2)
+        self.assertIn("Correct the API response contract", prompts[1])
+        self.assertIn("does not authorize any change to the approved goal", prompts[1])
+        after = mission._task(self.db, retry_root, retry_project, "api")
+        self.assertEqual((after["goal"], after["reason"],
+                          after["write_paths"], after["depends_on"]), original_spec)
+        history = self.db.execute(
+            "SELECT review_verdict FROM orbit_autopilot_runner_history "
+            "WHERE project=? AND project_root=? AND mission_id=? ORDER BY started_at",
+            (retry_project, str(retry_root), retry_mission)).fetchall()
+        self.assertEqual([row[0] for row in history], ["REWORK", "ACCEPT"])
+        state = mission.status(self.db, retry_root, retry_project, retry_mission)
+        requeued = [item for item in state["timeline"]
+                    if item["event"] == "TASK_REWORK_REQUEUED"]
+        self.assertEqual(len(requeued), 1)
+        self.assertTrue(requeued[0]["payload"]["write_scope_unchanged"])
+        self.assertTrue(requeued[0]["payload"]["task_spec_unchanged"])
 
     def test_second_supervisor_is_held_by_exclusive_process_lock(self):
         with mission._mission_lock(self.root, self.project, self.mission) as acquired:
