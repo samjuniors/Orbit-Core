@@ -234,6 +234,28 @@ def _all_accepted(conn, root, project, keys):
     return True
 
 
+def _task_state_summary(conn, root, project, keys):
+    summary = []
+    for key in keys:
+        task = _task(conn, root, project, key)
+        if task is None:
+            summary.append({"task_key": key, "status": "MISSING",
+                            "depends_on": []})
+            continue
+        try:
+            dependencies = json.loads(task["depends_on"])
+            if not isinstance(dependencies, list) or any(
+                    not isinstance(item, str) for item in dependencies):
+                dependencies = ["UNREADABLE"]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            dependencies = ["UNREADABLE"]
+        summary.append({
+            "task_key": key, "status": task["status"],
+            "depends_on": dependencies,
+        })
+    return summary
+
+
 def status(conn, root, project, mission):
     run = _run(conn, root, project, mission)
     if run is None:
@@ -451,8 +473,8 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
                     continue
                 if archived["status"] == "REWORK_ARCHIVED_ATTEMPT_LIMIT":
                     run = _set_state(
-                        conn, run, "BLOCKED",
-                        result="charter attempt limit exhausted after reviewer-recorded REWORK")
+                        conn, run, "RUNNING", task_key=job["task_key"],
+                        result="attempt limit exhausted for this task; continue only DAG-ready independent tasks")
                     _event(
                         conn, run, "TASK_RETRY_LIMIT_REACHED", run["state"],
                         task_key=job["task_key"],
@@ -460,10 +482,11 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
                             "attempt_number": archived["attempt_number"],
                             "attempt_limit": archived["attempt_limit"],
                             "task_left_in_rework": True,
+                            "independent_tasks_may_continue": True,
                             "reviewer_identity_authenticated": False,
                         })
-                    return {"status": run["state"], "task_status": "REWORK",
-                            "retry": archived}
+                    review_started = None
+                    continue
                 run = _set_state(conn, run, "BLOCKED",
                                  result="rework provenance or archive gate failed")
                 _event(conn, run, "TASK_REWORK_ARCHIVE_BLOCKED", run["state"],
@@ -547,10 +570,35 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
                 run = _set_state(conn, run, "COMPLETED", completed=task_limit)
                 _event(conn, run, "MISSION_COMPLETED", run["state"])
                 return {"status": run["state"], "completed_tasks": task_limit}
+            task_states = _task_state_summary(
+                conn, root, project, charter["task_keys"])
+            rework_tasks = [
+                item["task_key"] for item in task_states
+                if item["status"] == "REWORK"
+            ]
+            if rework_tasks:
+                run = _set_state(
+                    conn, run, "BLOCKED",
+                    result="unresolved REWORK tasks block only their dependent DAG paths")
+                _event(
+                    conn, run, "MISSION_BLOCKED_BY_REWORK", run["state"],
+                    payload={
+                        "scheduler_status": plan["status"],
+                        "rework_tasks": rework_tasks,
+                        "unresolved_tasks": task_states,
+                        "task_graph_changed": False,
+                    })
+                return {
+                    "status": run["state"], "block_reason": "REWORK",
+                    "scheduler": plan, "tasks": task_states,
+                    "completed_tasks": completed,
+                }
             run = _set_state(conn, run, "BLOCKED", result=plan["status"])
             _event(conn, run, "MISSION_SCHEDULER_BLOCKED", run["state"],
-                   payload={"scheduler_status": plan["status"]})
-            return {"status": run["state"], "scheduler": plan}
+                   payload={"scheduler_status": plan["status"],
+                            "unresolved_tasks": task_states})
+            return {"status": run["state"], "scheduler": plan,
+                    "tasks": task_states, "completed_tasks": completed}
 
         adapter: MissionExecutionAdapter = CodexCLIAdapter(
             codex_path=codex_path, launch=launch)

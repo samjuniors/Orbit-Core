@@ -284,7 +284,7 @@ class MissionSupervisorTests(unittest.TestCase):
         reviewed = orbit_tasks.review(self.db, {
             "project": self.project, "task_key": job["task_key"],
             "expected_revision": task["revision"], "verdict": "REWORK",
-            "review_evidence": "Independent reviewer found a specific issue requiring a new task plan.",
+            "review_evidence": "Reviewer-recorded feedback requires a new task plan.",
             "confirm_write": True,
         }, self.root)
         self.assertEqual(reviewed["status"], "REWORK")
@@ -294,7 +294,13 @@ class MissionSupervisorTests(unittest.TestCase):
             max_seconds=5, review_wait_seconds=2, poll_seconds=0.05,
             launch=lambda *args: self.fail("attempt limit must prevent another launch"))
         self.assertEqual(second["status"], "BLOCKED")
-        self.assertEqual(second["task_status"], "REWORK")
+        self.assertEqual(second["block_reason"], "REWORK")
+        self.assertEqual(second["completed_tasks"], 0)
+        self.assertEqual(second["tasks"], [
+            {"task_key": "api", "status": "REWORK", "depends_on": []},
+            {"task_key": "docs", "status": "PLANNED", "depends_on": ["api"]},
+            {"task_key": "smoke", "status": "PLANNED", "depends_on": ["docs"]},
+        ])
         self.assertIsNone(runner._job(self.db, self.root, self.project, self.mission))
         history = self.db.execute(
             "SELECT review_verdict FROM orbit_autopilot_runner_history "
@@ -303,6 +309,94 @@ class MissionSupervisorTests(unittest.TestCase):
         self.assertEqual([row[0] for row in history], ["REWORK"])
         self.assertEqual(mission._task(
             self.db, self.root, self.project, "api")["status"], "REWORK")
+
+    def test_attempt_exhaustion_continues_independent_dag_tasks_only(self):
+        replan_mission = "dag-replan"
+        replan_project = "dag-replan-fixture"
+        replan_root = Path(self.tmp.name, "dag-replan-repo").resolve()
+        replan_root.mkdir()
+        git(replan_root, "init", "-b", "feat/mission-test")
+        git(replan_root, "config", "user.email", "orbit-test@example.invalid")
+        git(replan_root, "config", "user.name", "Orbit Test")
+        (replan_root / "README.md").write_text("# DAG replan fixture\\n")
+        git(replan_root, "add", "README.md")
+        git(replan_root, "commit", "-m", "DAG replan baseline")
+        tasks = [
+            ("api", "Add the API implementation", ["src/api/"], []),
+            ("docs", "Document the approved API", ["docs/"], []),
+            ("smoke", "Add the API smoke test", ["tests/"], ["api"]),
+        ]
+        for key, goal, paths, deps in tasks:
+            planned = orbit_tasks.plan(self.db, {
+                "project": replan_project, "task_key": key, "step": "IMPLEMENT",
+                "role": "backend" if key == "api" else "writer",
+                "goal": goal, "reason": "Bounded DAG replan fixture",
+                "write_paths": paths, "depends_on": deps, "confirm_write": True,
+            }, replan_root)
+            self.assertEqual(planned["status"], "PLANNED")
+        fields = dict(self.charter_fields)
+        fields.update({
+            "mission_id": replan_mission,
+            "objective": "Finish independent work while preserving a blocked dependency",
+            "task_keys": ["api", "docs", "smoke"],
+            "allowed_paths": ["src/api/", "docs/", "tests/"],
+            "max_attempts_per_task": 1,
+        })
+        preview = orbit_autopilot.charter(
+            self.db, replan_root, replan_project, {**fields, "action": "preview"})
+        activated = orbit_autopilot.charter(
+            self.db, replan_root, replan_project,
+            {**fields, "action": "activate",
+             "expected_digest": preview["charter_digest"],
+             "approval_reference": "dag-replan-approval-reference",
+             "confirm_write": True})
+        self.assertEqual(activated["status"], "CHARTER_RECORDED")
+        review_count = 0
+
+        def review_wait(_seconds):
+            nonlocal review_count
+            job = runner._job(self.db, replan_root, replan_project, replan_mission)
+            self.assertIsNotNone(job)
+            task = mission._task(
+                self.db, replan_root, replan_project, job["task_key"])
+            if job["task_key"] == "api":
+                result = orbit_tasks.review(self.db, {
+                    "project": replan_project, "task_key": "api",
+                    "expected_revision": task["revision"], "verdict": "REWORK",
+                    "review_evidence": "Correct the API contract before its dependent smoke test can proceed.",
+                    "confirm_write": True,
+                }, replan_root)
+                self.assertEqual(result["status"], "REWORK")
+            elif job["task_key"] == "docs":
+                self.reviewer_and_commit(
+                    replan_mission, root=replan_root, project=replan_project)
+            else:
+                self.fail("A task depending on the unresolved API must not launch")
+            review_count += 1
+
+        result = mission.run_mission(
+            self.db, replan_root, replan_project, replan_mission, 1,
+            operator_confirmed=True, codex_path=str(self.codex),
+            max_seconds=30, review_wait_seconds=5, poll_seconds=0.05,
+            launch=self.launch, sleep=review_wait)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["block_reason"], "REWORK")
+        self.assertEqual(result["completed_tasks"], 1)
+        self.assertEqual(review_count, 2)
+        statuses = {item["task_key"]: item["status"] for item in result["tasks"]}
+        self.assertEqual(statuses, {
+            "api": "REWORK", "docs": "REVIEW_ACCEPTED", "smoke": "PLANNED"})
+        smoke = next(item for item in result["tasks"] if item["task_key"] == "smoke")
+        self.assertEqual(smoke["depends_on"], ["api"])
+        state = mission.status(self.db, replan_root, replan_project, replan_mission)
+        events = [item["event"] for item in state["timeline"]]
+        self.assertIn("TASK_RETRY_LIMIT_REACHED", events)
+        self.assertIn("TASK_REVIEW_ACCEPTED", events)
+        self.assertIn("MISSION_BLOCKED_BY_REWORK", events)
+        blocked = next(item for item in state["timeline"]
+                       if item["event"] == "MISSION_BLOCKED_BY_REWORK")
+        self.assertFalse(blocked["payload"]["task_graph_changed"])
+        self.assertEqual(blocked["payload"]["rework_tasks"], ["api"])
 
     def test_rework_retries_once_within_charter_and_preserves_scope(self):
         retry_mission = "bounded-rework"
