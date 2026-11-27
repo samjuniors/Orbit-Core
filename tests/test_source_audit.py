@@ -118,6 +118,46 @@ class SourceAuditTests(unittest.TestCase):
         finally:
             conn.close()
 
+    @unittest.skipIf(__import__("os").name == "nt", "POSIX descriptor-relative audit test")
+    def test_posix_source_audit_skips_symlinks_and_rejects_hardlinks(self):
+        import os
+        (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
+        outside = Path(self.temp.name) / "outside.py"
+        outside.write_text("SECRET_OUTSIDE_ROOT", encoding="utf-8")
+        (self.root / "linked.py").symlink_to(outside)
+        os.link(self.root / "main.py", self.root / "hardlinked.py")
+        result = orbit_source_audit.scan_source(self.root)
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertEqual(result["summary"]["source_files"], 0)
+        self.assertEqual(result["symlinks_skipped"], 1)
+        self.assertIn("hardlinked.py", result["unreadable_paths"])
+        self.assertNotIn("SECRET_OUTSIDE_ROOT", json.dumps(result))
+
+    @unittest.skipIf(__import__("os").name == "nt", "POSIX descriptor-relative audit test")
+    def test_posix_source_audit_leaf_swap_to_symlink_fails_closed(self):
+        import os
+        source = self.root / "race.py"
+        source.write_text("value = 1\n", encoding="utf-8")
+        outside = Path(self.temp.name) / "outside.py"
+        outside.write_text("SECRET_OUTSIDE_ROOT", encoding="utf-8")
+        real_open = os.open
+        swapped = False
+
+        def racing_open(path, flags, *args, **kwargs):
+            nonlocal swapped
+            if path == "race.py" and kwargs.get("dir_fd") is not None and not swapped:
+                swapped = True
+                source.unlink()
+                source.symlink_to(outside)
+            return real_open(path, flags, *args, **kwargs)
+
+        with mock.patch.object(orbit_source_audit.os, "open", side_effect=racing_open):
+            result = orbit_source_audit.scan_source(self.root)
+        self.assertTrue(swapped)
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertIn("race.py", result["unreadable_paths"])
+        self.assertNotIn("SECRET_OUTSIDE_ROOT", json.dumps(result))
+
 
 if __name__ == "__main__":
     unittest.main()
