@@ -312,8 +312,11 @@ def scan_project(root, *, permission_state="UNKNOWN"):
                             line,
                         ):
                             continue
-                        fingerprint = hashlib.sha256(
-                            (relative + ":" + str(line_number) + ":" + line).encode("utf-8")
+                        # This is a stable finding locator, not a content digest.
+                        # Never hash matched source text: predictable credentials can
+                        # otherwise be tested offline against the returned digest.
+                        evidence_ref = hashlib.sha256(
+                            (rule + ":" + relative + ":" + str(line_number)).encode("utf-8")
                         ).hexdigest()
                         findings.append({
                             "id": "ORBIT-" + rule,
@@ -321,7 +324,7 @@ def scan_project(root, *, permission_state="UNKNOWN"):
                             "status": "LIKELY_NOT_VERIFIED",
                             "file": relative,
                             "line": line_number,
-                            "evidence_sha256": fingerprint,
+                            "evidence_ref_sha256": evidence_ref,
                             "summary": summary,
                             "remediation_guidance": remediation,
                             "source_text_returned": False,

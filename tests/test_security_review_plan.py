@@ -1,6 +1,7 @@
 """Tests for product-aware cybersecurity review plans and honest evidence states."""
 from __future__ import annotations
 
+import hashlib
 import sys
 import tempfile
 import sqlite3
@@ -91,7 +92,30 @@ class SecurityReviewPlanTests(unittest.TestCase):
             self.assertNotIn(secret, serialized)
             self.assertNotIn("very-secret-value-123", serialized)
             self.assertTrue(all(x["status"] == "LIKELY_NOT_VERIFIED"
-                                and x["evidence_sha256"] for x in result["findings"]))
+                                and x["evidence_ref_sha256"] for x in result["findings"]))
+            self.assertFalse(any("evidence_sha256" in x for x in result["findings"]))
+
+            # Changing only a matched credential must change the source snapshot,
+            # but not the locator reference for the same rule/path/line.
+            first_refs = [(x["id"], x["file"], x["line"], x["evidence_ref_sha256"])
+                          for x in result["findings"]]
+            for finding in result["findings"]:
+                locator = (finding["id"].removeprefix("ORBIT-") + ":"
+                           + finding["file"] + ":" + str(finding["line"]))
+                expected = hashlib.sha256(locator.encode("utf-8")).hexdigest()
+                self.assertEqual(finding["evidence_ref_sha256"], expected)
+            (src / "vulnerable.py").write_text(
+                'KEY = "AKIA0000000000000000"\n'
+                'PASSWORD = "different-secret-value-456"\n'
+                'subprocess.run(command, shell=True)\n',
+                encoding="utf-8")
+            changed = orbit_security_review.scan_project(
+                root, permission_state="APPROVED")
+            changed_refs = [(x["id"], x["file"], x["line"], x["evidence_ref_sha256"])
+                            for x in changed["findings"]]
+            self.assertEqual(first_refs, changed_refs)
+            self.assertNotEqual(result["source_snapshot_sha256"],
+                                changed["source_snapshot_sha256"])
             self.assertFalse(result["project_code_executed"])
             self.assertFalse(result["network_accessed"])
 
