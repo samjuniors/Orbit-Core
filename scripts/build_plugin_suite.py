@@ -105,6 +105,10 @@ def claude_code_files(root=ROOT, source=None):
         "repository": "https://github.com/samjuniors/Orbit-Core", "license": "MIT"})
     claude[".mcp.json"] = json_bytes({"mcpServers": {"orbit-core-mcp": {
         "command": "${ORBIT_PYTHON:-python}", "args": ["${CLAUDE_PLUGIN_ROOT}/runtime/orbit_mcp.py"]}}})
+    readme = root / "source" / "claude-code" / "README.md"
+    if not readme.is_file():
+        raise ValueError("Claude Code plugin README missing from canonical source")
+    claude["README.md"] = readme.read_bytes()
     for name, body in source.items():
         if not name.startswith("agents/") or name == "agents/orbit-lead-agent.md":
             continue
