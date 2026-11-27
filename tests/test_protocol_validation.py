@@ -51,10 +51,19 @@ class ProtocolValidationTests(unittest.TestCase):
         with zipfile.ZipFile(bundle_path) as bundle:
             manifest = json.loads(bundle.read('manifest.json'))
             self.assertEqual(manifest['version'], version)
+            # A published bundle is immutable while this development
+            # branch advances. Validate its own packaged runtime inventory,
+            # then compile current source separately; do not require unreleased
+            # modules to appear in an already-published artifact.
+            packaged = sorted(name for name in bundle.namelist()
+                              if name.startswith('server/') and name.endswith('.py'))
+            self.assertIn('server/orbit_mcp.py', packaged)
+            self.assertIn('server/orbit_tasks.py', packaged)
+            for name in packaged:
+                with self.subTest(packaged_runtime=name):
+                    compile(bundle.read(name), name, 'exec')
             for source in sorted((ROOT / 'source/runtime').glob('*.py')):
-                with self.subTest(source=source.name):
-                    compile(bundle.read('server/' + source.name),
-                            'server/' + source.name, 'exec')
+                with self.subTest(current_source=source.name):
                     compile(source.read_bytes(), str(source), 'exec')
 
     def test_initialize_rejects_invalid_params(self):
