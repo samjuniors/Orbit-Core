@@ -106,15 +106,22 @@ class WindowsFilesystemTests(unittest.TestCase):
         secret = self.outside / "outside-secret.py"
         secret.write_text("SHOULD_NEVER_BE_INVENTORIED", encoding="utf-8")
         original_pin = orbit_windows_fs.PinSet.pin
+        swapped = False
 
         def swap_before_pin(pin_set, path):
-            if Path(path) == victim:
+            nonlocal swapped
+            candidate = Path(path)
+            if (candidate.name.casefold() == victim.name.casefold()
+                    and candidate.parent.name.casefold() == self.root.name.casefold()
+                    and not swapped):
+                swapped = True
                 os.rename(victim, self.root / "victim-original")
                 self._junction(victim, self.outside)
             return original_pin(pin_set, path)
 
         with mock.patch.object(orbit_windows_fs.PinSet, "pin", swap_before_pin):
             result = orbit_project_audit.scan_project(self.root)
+        self.assertTrue(swapped, "The junction replacement must occur before the descendant pin")
         self.assertEqual(result["status"], "INCOMPLETE")
         self.assertEqual(result["summary"]["files"], 0)
         self.assertFalse(any("outside-secret.py" in path
@@ -126,15 +133,22 @@ class WindowsFilesystemTests(unittest.TestCase):
         secret = self.outside / "outside-secret.py"
         secret.write_text("SHOULD_NEVER_BE_READ", encoding="utf-8")
         original_pin = orbit_windows_fs.PinSet.pin
+        swapped = False
 
         def swap_before_pin(pin_set, path):
-            if Path(path) == victim:
+            nonlocal swapped
+            candidate = Path(path)
+            if (candidate.name.casefold() == victim.name.casefold()
+                    and candidate.parent.name.casefold() == self.root.name.casefold()
+                    and not swapped):
+                swapped = True
                 os.rename(victim, self.root / "victim-original")
                 self._junction(victim, self.outside)
             return original_pin(pin_set, path)
 
         with mock.patch.object(orbit_windows_fs.PinSet, "pin", swap_before_pin):
             result = orbit_source_audit.scan_source(self.root)
+        self.assertTrue(swapped, "The junction replacement must occur before the descendant pin")
         self.assertEqual(result["status"], "INCOMPLETE")
         self.assertFalse(result["source_contents_read"])
         self.assertNotIn("SHOULD_NEVER_BE_READ", str(result))
@@ -149,7 +163,8 @@ class WindowsFilesystemTests(unittest.TestCase):
 
         def replace_with_hardlink(path, **kwargs):
             nonlocal swapped
-            if Path(path) == source and not swapped:
+            candidate = Path(path)
+            if candidate.name.casefold() == source.name.casefold() and candidate.parent.name.casefold() == self.root.name.casefold() and not swapped:
                 swapped = True
                 source.unlink()
                 os.link(external, source)
@@ -157,6 +172,7 @@ class WindowsFilesystemTests(unittest.TestCase):
 
         with mock.patch.object(orbit_windows_fs, "open_regular_file_fd", replace_with_hardlink):
             result = orbit_source_audit.scan_source(self.root)
+        self.assertTrue(swapped, "The hard-link replacement must occur before the file open")
         self.assertEqual(result["status"], "INCOMPLETE")
         self.assertFalse(result["source_contents_read"])
         self.assertNotIn("EXTERNAL_CONTENT_MUST_NOT_BE_READ", str(result))

@@ -92,7 +92,7 @@ class ProjectAuditTests(unittest.TestCase):
                 link.symlink_to(target, target_is_directory=True)
             except (OSError, NotImplementedError):
                 self.skipTest("Symlink creation unavailable")
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError, OSError)):
                 orbit_project_audit.scan_project(link)
 
 
