@@ -197,6 +197,68 @@ class MissionSupervisorTests(unittest.TestCase):
         self.assertEqual(second["status"], "COMPLETED")
         self.assertEqual(second["completed_tasks"], 3)
 
+    def test_paused_run_without_charter_resume_events_fails_closed(self):
+        first = mission.run_mission(
+            self.db, self.root, self.project, self.mission, 1,
+            operator_confirmed=True, codex_path=str(self.codex),
+            max_seconds=2, review_wait_seconds=1, poll_seconds=0.05,
+            launch=self.launch, sleep=lambda _seconds: None)
+        self.assertEqual(first["status"], "WAITING_REVIEW")
+
+        # Simulate an inconsistent/tampered supervisor checkpoint: the mission
+        # charter is still ACTIVE and no PAUSE/RESUME events authorize adoption.
+        self.db.execute("""UPDATE orbit_autopilot_mission_runs
+            SET state='PAUSED' WHERE project=? AND project_root=? AND mission_id=?""",
+            (self.project, str(self.root), self.mission))
+        self.db.commit()
+        second = mission.run_mission(
+            self.db, self.root, self.project, self.mission, 1,
+            operator_confirmed=True, codex_path=str(self.codex),
+            max_seconds=5, review_wait_seconds=2, poll_seconds=0.05,
+            launch=lambda *args: self.fail("unverified resume must not launch a worker"),
+            sleep=lambda _seconds: None)
+        self.assertEqual(second["status"], "RECOVERY_REQUIRED")
+        self.assertEqual(mission._run(
+            self.db, self.root, self.project, self.mission)["state"],
+            "RECOVERY_REQUIRED")
+
+    def test_live_pause_resume_uses_recorded_charter_events(self):
+        sleep_calls = 0
+
+        def pause_resume_and_review(_seconds):
+            nonlocal sleep_calls
+            sleep_calls += 1
+            if sleep_calls == 1:
+                paused = orbit_autopilot.charter(self.db, self.root, self.project, {
+                    "mission_id": self.mission, "action": "pause",
+                    "expected_revision": 1, "confirm_write": True})
+                self.assertEqual(paused["status"], "PAUSED")
+            elif sleep_calls == 2:
+                resume_args = {
+                    "mission_id": self.mission, "action": "resume",
+                    "expected_revision": 2, "reported_branch": "feat/mission-test",
+                    "approval_reference": "live-resume-approval-reference",
+                }
+                preview = orbit_autopilot.charter(
+                    self.db, self.root, self.project, resume_args)
+                self.assertEqual(preview["status"], "PREVIEW_ONLY")
+                resumed = orbit_autopilot.charter(self.db, self.root, self.project, {
+                    **resume_args,
+                    "expected_resume_digest": preview["resume_review_digest"],
+                    "confirm_write": True})
+                self.assertEqual(resumed["status"], "ACTIVE")
+            else:
+                self.reviewer_and_commit()
+
+        result = mission.run_mission(
+            self.db, self.root, self.project, self.mission, 1,
+            operator_confirmed=True, codex_path=str(self.codex),
+            max_seconds=60, review_wait_seconds=5, poll_seconds=0.05,
+            launch=self.launch, sleep=pause_resume_and_review)
+        self.assertEqual(result["status"], "COMPLETED")
+        self.assertGreaterEqual(sleep_calls, 5)
+        self.assertEqual(result["completed_tasks"], 3)
+
     def test_cold_pause_resume_revision_is_adopted_only_from_charter_events(self):
         first = mission.run_mission(
             self.db, self.root, self.project, self.mission, 1,
