@@ -13,8 +13,10 @@ import secrets
 import tempfile
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol
 
 import orbit_autopilot
 import orbit_autopilot_runner as runner
@@ -23,6 +25,49 @@ import orbit_tasks
 MAX_PROCESS_SECONDS = 3600
 MAX_POLL_SECONDS = 2.0
 DEFAULT_REVIEW_WAIT_SECONDS = 3600
+
+
+@dataclass(frozen=True)
+class MissionTaskContext:
+    """Provider-neutral, immutable task scope passed to an execution adapter."""
+
+    project_root: Path
+    project: str
+    mission_id: str
+    mission_revision: int
+    task_key: str
+    max_seconds: int
+
+
+class MissionExecutionAdapter(Protocol):
+    """Contract for one bounded task invocation; adapters cannot accept/review work."""
+
+    adapter_id: str
+    provider_id: str
+    host_native: bool
+
+    def execute_task(self, conn, context: MissionTaskContext) -> dict:
+        """Execute exactly one task and return the existing runner result envelope."""
+        ...
+
+
+class CodexCLIAdapter:
+    """Current implementation: existing local Codex runner, not an IDE-native worker."""
+
+    adapter_id = "codex-cli-isolated-clone"
+    provider_id = "codex"
+    host_native = False
+
+    def __init__(self, *, codex_path=None, launch=runner._codex_process):
+        self.codex_path = codex_path
+        self.launch = launch
+
+    def execute_task(self, conn, context: MissionTaskContext) -> dict:
+        return runner.run_once(
+            conn, context.project_root, context.project, context.mission_id,
+            context.mission_revision, operator_confirmed=True,
+            codex_path=self.codex_path, max_seconds=context.max_seconds,
+            launch=self.launch)
 
 
 def _now():
@@ -461,14 +506,22 @@ def _run_mission_locked(conn, root, project, mission, revision, *,
                    payload={"scheduler_status": plan["status"]})
             return {"status": run["state"], "scheduler": plan}
 
-        result = runner.run_once(
-            conn, root, project, mission, mission_row["revision"],
-            operator_confirmed=True, codex_path=codex_path,
+        adapter: MissionExecutionAdapter = CodexCLIAdapter(
+            codex_path=codex_path, launch=launch)
+        task_context = MissionTaskContext(
+            project_root=Path(root), project=project, mission_id=mission,
+            mission_revision=mission_row["revision"], task_key=plan["task_key"],
             max_seconds=min(runner.MAX_SECONDS, max(1, max_seconds -
-                int(time.monotonic() - started))), launch=launch)
+                int(time.monotonic() - started))))
+        result = adapter.execute_task(conn, task_context)
         _event(conn, run, "TASK_RUN_FINISHED", result["status"],
                task_key=result.get("task_key", plan["task_key"]),
                payload={"runner_status": result["status"],
+                        "execution_adapter": adapter.adapter_id,
+                        "provider_id": adapter.provider_id,
+                        "host_native": adapter.host_native,
+                        "model_selection_verified": False,
+                        "provider_usage_verified": False,
                         "worker_killed_verified": result.get("worker_killed_verified", False)})
         if result["status"] == "REVIEW_REQUIRED":
             review_started = time.monotonic()

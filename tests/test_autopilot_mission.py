@@ -166,6 +166,16 @@ class MissionSupervisorTests(unittest.TestCase):
         self.assertEqual(state["status"], "COMPLETED")
         self.assertFalse(state["worker_running_verified"])
         self.assertEqual(state["event_integrity_warnings"], 0)
+        finished = [item for item in state["timeline"]
+                    if item["event"] == "TASK_RUN_FINISHED"]
+        self.assertEqual(len(finished), 3)
+        self.assertTrue(all(item["payload"]["execution_adapter"] ==
+                            "codex-cli-isolated-clone" for item in finished))
+        self.assertTrue(all(item["payload"]["provider_id"] == "codex"
+                            and item["payload"]["host_native"] is False
+                            and item["payload"]["model_selection_verified"] is False
+                            and item["payload"]["provider_usage_verified"] is False
+                            for item in finished))
 
     def test_cold_resume_after_review_wait_timeout_continues_mission(self):
         first = mission.run_mission(

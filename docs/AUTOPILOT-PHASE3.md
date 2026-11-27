@@ -2,7 +2,7 @@
 
 **Status:** Development implementation; not a release certification.
 **Branch:** `feat/v034-autonomous-mission-supervisor-20261127`
-**Execution adapter:** Local Codex CLI, foreground process, isolated temporary Git clones.
+**Execution adapter:** Provider-neutral one-task contract; current implementation is local Codex CLI, foreground process, isolated temporary Git clones. No Claude Code or Antigravity adapter is implemented.
 
 ## What changed
 
@@ -12,7 +12,7 @@ A single interactive local confirmation authorizes the bounded charter. The supe
 
 1. Revalidates the active charter revision, branch, task specification fingerprint and expiry.
 2. Selects only a DAG-ready task already named in the charter.
-3. Runs the existing Codex CLI adapter in a disposable local clone with the existing sandbox and time/output limits.
+3. Passes an immutable task context through the provider-neutral execution-adapter contract. The only implemented adapter delegates to the existing Codex CLI runner in a disposable local clone with its existing sandbox and time/output limits.
 4. Records the actual isolated changed paths in the existing task ledger as `REPORTED_DONE`.
 5. Stops and waits for an independent reviewer to accept or request rework.
 6. Requires the exact reviewed isolated diff to be committed to the approved source branch.
@@ -58,7 +58,7 @@ The supervisor checks that the source commit is a descendant of the task's origi
 
 ## Explicit limitations
 
-- This is not native Claude Code, Antigravity or IDE subagent spawning. The first adapter is a local Codex CLI process.
+- The adapter contract is provider-neutral, but only CodexCLIAdapter is implemented. Claude Code and Antigravity adapters are not implemented or host-verified; no provider/model switching is performed.
 - The process is foreground-only. It cannot continue when the terminal/PC is shut down.
 - The local approval is operator input, not cryptographic identity proof.
 - Task acceptance is never inferred from model output. Independent review and source handoff remain mandatory.
