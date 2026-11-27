@@ -534,3 +534,10 @@ Canonical repository: [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbi
 5. Obtain human review of #178–#187; keep drafts until their base/stacking strategy is reconciled.
 6. Split only approved v0.34 slices from the 100-commit experimental branch onto focused branches based on main after dependencies are understood; do not merge that branch as a unit.
 7. Complete signed-in owner-profile host acceptance and independent security review before release consideration.
+
+
+### 2026-11-27 17:05 UTC — exact-head CI completion and #188 investigation lead
+
+- PR #178 current head `7bd44acb0358f4aabf104bb744f371e8356ff143` completed [pull_request run #46038299281](https://github.com/samjuniors/Orbit-Core/actions/runs/46038299281) PASS 5/5, including Windows Python 3.12. This verifies the current documentation head; PR remains draft with no human review.
+- PR #187 current head `03b1770214023b4eb3cd3c5a0725d415b5941ef1` completed [run #46037740696](https://github.com/samjuniors/Orbit-Core/actions/runs/46037740696) PASS 5/5. Windows Python 3.12 ran 850 tests with 13 skips. This verifies CI tests, not owner-profile host permission behavior.
+- Issue #188 static investigation found a plausible but unconfirmed cause: `orbit_mcp.main` starts an untracked daemon update-check thread; `orbit_updates._fetch` uses urllib with an 8-second timeout; the short-lived shared-DB subprocess test does not set `ORBIT_UPDATE_CHECK=0`. Compare fresh-cache runs with update check enabled/disabled and add a bounded thread-lifecycle/shutdown test. Do not mark #188 fixed without root-cause evidence.
