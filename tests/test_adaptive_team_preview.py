@@ -101,6 +101,16 @@ class AdaptiveTeamPreviewTests(unittest.TestCase):
         self.assertTrue(by_key["tests"]["model_recommendation"]["no_switch_executed"])
         self.assertEqual(by_key["tests"]["model_recommendation"]["available_models_reported"], 2)
 
+    def test_model_recommendation_rejects_invalid_host_report(self):
+        with self.assertRaises(ValueError):
+            orbit_team_builder.preview(
+                self.conn, self.root, self.project,
+                self.args(available_models=["x" * 101]))
+        with self.assertRaises(ValueError):
+            orbit_team_builder.preview(
+                self.conn, self.root, self.project,
+                self.args(budget="unlimited"))
+
     def test_dynamic_kind_and_bot_to_bot_handoff(self):
         self.add_task("format", "writer", "Format generated notes",
                       "REVIEW_ACCEPTED")

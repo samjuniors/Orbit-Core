@@ -52,6 +52,25 @@ LEADS = {
 BOT_WORDS = frozenset({"repeatable", "repeated", "lint", "format", "snapshot",
                         "routine", "batch", "scheduled", "generated"})
 
+MODEL_ROLES = {
+    "project-manager": "orbit-project-manager", "research": "orbit-research",
+    "writer": "orbit-writer", "creative-director": "orbit-creative-director",
+    "ux": "orbit-ux", "architect": "orbit-architect",
+    "software-engineer": "orbit-software-engineer", "frontend": "orbit-frontend",
+    "backend": "orbit-backend", "data": "orbit-data", "devops": "orbit-devops",
+    "integrator": "orbit-integrator", "qa": "orbit-qa",
+    "reviewer": "orbit-reviewer", "security": "orbit-security",
+}
+MODEL_TASKS = {
+    "project-manager": "documentation", "research": "research",
+    "writer": "documentation", "creative-director": "design", "ux": "design",
+    "architect": "architecture", "software-engineer": "implementation",
+    "frontend": "implementation", "backend": "implementation",
+    "data": "implementation", "devops": "implementation",
+    "integrator": "implementation", "qa": "qa", "reviewer": "review",
+    "security": "security",
+}
+
 
 def _selection(args):
     selected = args.get("tasks")
