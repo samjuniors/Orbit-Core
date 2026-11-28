@@ -406,3 +406,25 @@ No v0.33.1/v0.34 publication until #183/#184, #188 reliability disposition, exac
 - PR #178 documentation head `7bd44acb0358f4aabf104bb744f371e8356ff143`: [#46038299281](https://github.com/samjuniors/Orbit-Core/actions/runs/46038299281) PASS 5/5, including Windows Python 3.12. Still draft; human review outstanding.
 - PR #187 mission-supervisor head `03b1770214023b4eb3cd3c5a0725d415b5941ef1`: [#46037740696](https://github.com/samjuniors/Orbit-Core/actions/runs/46037740696) PASS 5/5, including Windows Python 3.12 (850 tests, 13 skips). The lock-directory parent symlink/reparse review lead remains open.
 - #188 now records the daemon update-check thread as one hypothesis for the intermittent shared-DB child crash; this is not a confirmed root cause. Test enabled/disabled update-check behavior on fresh cache and add explicit bounded thread shutdown before changing the release gate.
+
+
+## 2026-11-28 — v0.34 priorities and release gate revalidation
+
+**Main baseline:** `2fdf4f329774b9644e75ac0df4d89738a7cd625f`; VERSION 0.33.1 / NEXT_VERSION 0.34.0. v0.33.0 remains the latest published prerelease; v0.30.0 remains stable. No v0.33.1/v0.34 release.
+
+### Priority order
+1. **P0 #183 / PR #186 — filesystem containment:** exact-head CI 5/5, but PR remains stacked on the unapproved 100-commit v0.34 branch. Windows identity currently relies on legacy 64-bit file index; ReFS uses 128-bit IDs and SMB/network identity semantics need an explicit tested support policy. Use FileIdInfo or fail closed; independent review required.
+2. **P0 #184 / PR #182 — finding privacy:** locator-only `evidence_ref_sha256`, privacy tests and committed desktop bundle are now present on draft PR #182. Exact CI #45980372422 passed 5/5 and strict source parity passed. Issue remains open until reviewed and merged to main.
+3. **P0 #189 / PR #187 — mission lock:** parent lock directory is not pinned; POSIX symlink parent was confirmed in a disposable review check. Keep lock best-effort only; implement private per-user handle-pinned directory and relative lock creation with Windows reparse handling and adversarial tests.
+4. **P1 #188 — subprocess reliability:** original Linux Python 3.10 double-free and Python 3.13 SIGSEGV observed; reruns passing are not root-cause evidence. Run 20+ fresh-cache enabled/disabled tests on both versions, plus deterministic blocked-fetch shutdown test. Updater daemon-thread causation remains a hypothesis.
+5. **P1 #185 / PR #187 — mission supervisor:** foreground, sequential Codex CLI only. Continue only after lock and review gates; no native Claude/Antigravity dispatch or background autonomy claim.
+6. **Governance:** main branch currently reports `protected=false` and required status-check enforcement off. Owner decision needed to configure required CI/review controls.
+
+### Branch/release posture
+- PR #178 docs-only current head `167ea834228b1edf1795a5d805a23d79ea80d60c`; push #46041736579 and PR #46041743870 both PASS 5/5. Still draft; human review pending.
+- PR #182 privacy fix current head `a4fcaf563ff61db678344cf82ed4eab34a76a5b1`, base main, CI 5/5; human review pending.
+- PR #186 head `f81eb1f051cc6afee00ac10ed1e8619ae3b10633`, CI 5/5, stacked on v0.34 experiment.
+- PR #187 head `79a6b9b740e7953273d1c424779781fb6c6e367c`, CI 5/5, stacked on v0.34 experiment.
+- Broad v0.34 branch `8620e4a3063852d2c99f6a157fc9ee688c989b6a`, 100 ahead / 0 behind, no PR. Do not merge as a unit.
+
+No v0.33.1/v0.34 publication until #183/#184/#189, #188 reliability disposition, exact-head CI, source/package parity, independent security review, owner-profile host acceptance, compatibility/release notes and explicit owner go/no-go are recorded.
