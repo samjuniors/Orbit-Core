@@ -68,8 +68,8 @@ Linux cloud container, disposable worktrees:
 | Full unit suite | PASS (886 passed, 19 skipped; Windows-only tests skipped here) |
 | `build_release --verify` (3 ZIPs), `smoke_release_zip` | PASS, 59 tools |
 | Upgrade rehearsal from v0.32.0 and v0.33.0 (codex + antigravity) | PASS |
-| Exact-head Linux/Windows CI | PENDING |
-| Windows FileIdInfo and mission-mutex tests on a real Windows PC | NOT RUN |
+| Exact-head Linux/Windows CI on `841d784` ([run #46105837103](https://github.com/samjuniors/Orbit-Core/actions/runs/46105837103)) | PASS 5/5 |
+| Windows FileIdInfo and mission-mutex tests on a real Windows PC (owner's DESKTOP-4MRHICM, Python 3.13, disposable clone of `841d784` in %TEMP%, deleted after) | PASS: `tests.test_windows_fs` 12/12 including both 128-bit file-ID tests; `tests.test_autopilot_mission` 22 run, 0 failed, 7 POSIX-only skipped, including `test_second_supervisor_is_held_by_exclusive_process_lock` on the named-mutex path |
 | Independent human security review | NOT DONE |
 | Signed-in host acceptance (Codex, Claude Code, Antigravity) | NOT VERIFIED |
 
