@@ -51,6 +51,7 @@ def main() -> int:
                     "ORBIT_UPDATE_HOME": str(cache),
                     "PYTHONFAULTHANDLER": "1",
                     "PYTHONUNBUFFERED": "1",
+                    "ORBIT_MCP_STRESS_LOGS": "1",
                 })
                 started = time.monotonic()
                 try:
