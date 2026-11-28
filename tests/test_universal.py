@@ -193,7 +193,7 @@ class UniversalSetupTests(unittest.TestCase):
                 print(f'[mcp-child] returncode={run.returncode}', file=sys.stderr)
                 if run.stderr:
                     print('[mcp-child stderr begin]', file=sys.stderr)
-                    print(run.stderr, file=sys.stderr, end='' if run.stderr.endswith('\\n') else '\\n')
+                    print(run.stderr, file=sys.stderr, end='' if run.stderr.endswith(chr(10)) else chr(10))
                     print('[mcp-child stderr end]', file=sys.stderr)
             self.assertEqual(run.returncode,0,run.stderr)
             return [json.loads(x) for x in run.stdout.splitlines()]
