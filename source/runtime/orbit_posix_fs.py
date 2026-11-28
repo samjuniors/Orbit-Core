@@ -37,8 +37,16 @@ class BeneathUnavailable(OSError):
     """The kernel cannot confine a lookup beneath a directory (no openat2)."""
 
 
-class PartialWriteError(OSError):
-    """The file was created beneath root but its content was not fully written."""
+class WriteRolledBackError(OSError):
+    """Writing failed after create; the new file was removed through its held parent."""
+
+
+class CleanupFailedError(OSError):
+    """Writing failed after create and the new file could not be removed."""
+
+
+class UnsafeOwnershipError(OSError):
+    """A candidate directory is writable or owned by someone other than this user."""
 
 
 class MovedAfterCreateError(OSError):
@@ -205,6 +213,38 @@ def write_new_file(parent_fd, name, content):
             os.close(fd)
 
 
+def require_private_dirs(root, relative_parts, *, allow_missing=False):
+    """Fail closed unless no other local user can rename the candidate chain.
+
+    The root must not be group/other writable. Every directory below it must be
+    owned by the effective user and not group/other writable; the last one must
+    be private (0700). Existing directories are checked, not just new ones.
+    """
+    uid = os.geteuid()
+    current = open_root(root)
+    try:
+        info = os.fstat(current)
+        if info.st_mode & 0o022:
+            raise UnsafeOwnershipError("Project root is writable by group or others")
+        parts = tuple(relative_parts)
+        for index, raw in enumerate(parts):
+            try:
+                child = _open_dir_at(current, raw)
+            except FileNotFoundError:
+                if allow_missing:
+                    return  # check existing components before creating new ones
+                raise
+            os.close(current)
+            current = child
+            info = os.fstat(current)
+            private = index == len(parts) - 1
+            if info.st_uid != uid or info.st_mode & (0o077 if private else 0o022):
+                raise UnsafeOwnershipError(
+                    "Candidate directory is not owned by this user or is too permissive")
+    finally:
+        os.close(current)
+
+
 def beneath_available(root):
     """Probe openat2 against root before any directory is created."""
     if not (SAFE and BENEATH_PLATFORM):
@@ -243,8 +283,25 @@ def create_beneath(root, relative, content):
              | getattr(os, "O_CLOEXEC", 0))
     resolve = _RESOLVE_BENEATH | _RESOLVE_NO_SYMLINKS | _RESOLVE_NO_MAGICLINKS
     path = "/".join(parts)
+    name = parts[-1]
     root_fd = open_root(root)
+    parent_fd = -1
     try:
+        # Hold the parent (resolved beneath root) for rollback; the file itself is
+        # still created only by the root-relative openat2 call below.
+        if len(parts) > 1:
+            parent_fd = _openat2(root_fd, "/".join(parts[:-1]),
+                                 os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC, 0, resolve)
+            if parent_fd < 0:
+                code = -parent_fd
+                if code == errno.ENOSYS:
+                    raise BeneathUnavailable(code, "openat2 unavailable", os.fspath(relative))
+                if code in (errno.ELOOP, errno.EXDEV):
+                    raise UnsafePathError(code, "Path escapes the project or crosses a link",
+                                          os.fspath(relative))
+                raise OSError(code, os.strerror(code), os.fspath(relative))
+        else:
+            parent_fd = os.dup(root_fd)
         for _ in range(3):
             fd = _openat2(root_fd, path, flags, 0o600, resolve)
             if fd != -errno.EAGAIN:
@@ -259,6 +316,7 @@ def create_beneath(root, relative, content):
                 raise UnsafePathError(code, "Path escapes the project or crosses a link",
                                       os.fspath(relative))
             raise OSError(code, os.strerror(code), os.fspath(relative))
+        info = None
         try:
             info = os.fstat(fd)
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
@@ -269,10 +327,23 @@ def create_beneath(root, relative, content):
                 stream.flush()
                 os.fsync(stream.fileno())
         except OSError as exc:
-            # The file exists beneath root but may be empty or partial; report it.
-            raise PartialWriteError(exc.errno or errno.EIO,
-                                    "Candidate file created but not fully written",
-                                    os.fspath(relative)) from exc
+            if fd >= 0:
+                os.close(fd)
+                fd = -1
+            code = exc.errno or errno.EIO
+            # Roll back only if the name in the held parent is still our inode.
+            try:
+                if info is None:
+                    raise OSError(errno.EIO, "created file identity unknown")
+                here = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+                if (here.st_dev, here.st_ino) != (info.st_dev, info.st_ino):
+                    raise OSError(errno.ESTALE, "created file moved")
+                os.unlink(name, dir_fd=parent_fd)
+            except OSError as cleanup:
+                raise CleanupFailedError(code, "Candidate write failed and the file could "
+                                         "not be removed", os.fspath(relative)) from cleanup
+            raise WriteRolledBackError(code, "Candidate write failed; file removed",
+                                       os.fspath(relative)) from exc
         finally:
             if fd >= 0:
                 os.close(fd)
@@ -290,4 +361,6 @@ def create_beneath(root, relative, content):
             raise MovedAfterCreateError(errno.ESTALE, "Created file is no longer at its path",
                                         os.fspath(relative))
     finally:
+        if parent_fd >= 0:
+            os.close(parent_fd)
         os.close(root_fd)

@@ -257,7 +257,11 @@ def candidate(root, project, args):
                 raise orbit_posix_fs.BeneathUnavailable("openat2 unavailable")
             # Directories may be created through descriptors; the file itself is
             # created only by one openat2 call confined beneath the project root.
+            # Other local users must not be able to rename the candidate chain.
+            # Check what exists before creating anything, then the full chain.
+            orbit_posix_fs.require_private_dirs(root, parts, allow_missing=True)
             os.close(orbit_posix_fs.ensure_directories(root, parts))
+            orbit_posix_fs.require_private_dirs(root, parts)
             orbit_posix_fs.create_beneath(root, "/".join(parts + ("AGENT.md",)), body)
         except orbit_posix_fs.BeneathUnavailable:
             return {"status": "HOLD_SAFE_RELATIVE_WRITE_UNAVAILABLE", "role": role,
@@ -265,11 +269,22 @@ def candidate(root, project, args):
                     "candidate_sha256": digest, "state_written": False,
                     "agent_spawned": False,
                     "reason": "The kernel cannot confine file creation beneath the project (openat2 unavailable); preview remains available and writes fail closed."}
-        except orbit_posix_fs.PartialWriteError:
-            return {"status": "HOLD_CANDIDATE_WRITE_INCOMPLETE", "state_written": False,
-                    "partial_file_may_exist": True, "agent_spawned": False,
+        except orbit_posix_fs.UnsafeOwnershipError:
+            return {"status": "HOLD_UNSAFE_CANDIDATE_DIRECTORY", "state_written": False,
+                    "agent_spawned": False,
                     "candidate_relative_path": proposal["candidate_relative_path"],
-                    "reason": "AGENT.md was created inside the project but not fully written; review or remove it before retrying."}
+                    "reason": "The project root must not be group/other writable, and .orbit candidate folders must be owned by you (the candidate folder 0700); preview remains available."}
+        except orbit_posix_fs.WriteRolledBackError:
+            return {"status": "HOLD_CANDIDATE_WRITE_FAILED", "state_written": False,
+                    "rolled_back": True, "agent_spawned": False,
+                    "candidate_relative_path": proposal["candidate_relative_path"],
+                    "reason": "Writing AGENT.md failed; the new file was removed."}
+        except orbit_posix_fs.CleanupFailedError:
+            return {"status": "HOLD_CANDIDATE_CLEANUP_FAILED", "state_written": False,
+                    "rolled_back": False, "partial_file_may_exist": True,
+                    "agent_spawned": False,
+                    "candidate_relative_path": proposal["candidate_relative_path"],
+                    "reason": "Writing AGENT.md failed and the new file could not be removed; an empty or partial file may remain at this path or where its folder was moved."}
         except orbit_posix_fs.MovedAfterCreateError:
             return {"status": "HOLD_CANDIDATE_MOVED_AFTER_CREATE", "state_written": True,
                     "location_verified": False, "agent_spawned": False,
