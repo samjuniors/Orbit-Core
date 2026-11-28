@@ -251,11 +251,15 @@ def candidate(root, project, args):
                 **{k: v for k, v in proposal.items() if k != "candidate_markdown"}}
     if os.name != "nt":
         parent_fd = None
+        parts = (".orbit", "agent-candidates", folder.name)
         try:
-            parent_fd = orbit_posix_fs.ensure_directories(
-                root, (".orbit", "agent-candidates", folder.name)
-            )
+            parent_fd = orbit_posix_fs.ensure_directories(root, parts)
             orbit_posix_fs.write_new_file(parent_fd, "AGENT.md", body)
+            # The descriptor follows a renamed directory; fail closed and remove
+            # the file if the candidate folder is no longer inside the project.
+            if not orbit_posix_fs.same_directory_at(root, parts, parent_fd):
+                os.unlink("AGENT.md", dir_fd=parent_fd)
+                raise orbit_posix_fs.UnsafePathError("Candidate folder moved during write")
         except FileExistsError:
             return {"status": "HOLD_EXISTING_CANDIDATE", "state_written": False,
                     **{k: v for k, v in proposal.items() if k != "candidate_markdown"}}

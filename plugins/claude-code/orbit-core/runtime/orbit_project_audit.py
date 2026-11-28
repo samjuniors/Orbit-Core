@@ -338,7 +338,7 @@ def scan_project(root: Path, profile: dict | None = None) -> dict:
     return {
         "status": "INCOMPLETE" if not complete else "SCANNED",
         "scan_mode": "READ_ONLY_FILESYSTEM_METADATA",
-        "root_identity": hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:16],
+        "root_identity": hashlib.sha256(str(root).encode("utf-8", "surrogatepass")).hexdigest()[:16],
         "inventory_snapshot_sha256": snapshot,
         "snapshot_semantics": "Path, size and modification-time metadata only; not a content hash or Git revision.",
         "limits": {"max_files": MAX_FILES, "max_directories": MAX_DIRECTORIES, "max_depth": MAX_DEPTH},

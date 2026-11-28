@@ -116,6 +116,12 @@ class SecurityReviewPlanTests(unittest.TestCase):
             self.assertEqual(first_refs, changed_refs)
             self.assertNotEqual(result["source_snapshot_sha256"],
                                 changed["source_snapshot_sha256"])
+            # The snapshot is keyed: an unkeyed content hash must not reproduce it.
+            raw = (src / "vulnerable.py").read_bytes()
+            unkeyed = hashlib.sha256(
+                b"src/vulnerable.py:" + hashlib.sha256(raw).digest()).hexdigest()
+            self.assertNotEqual(changed["source_snapshot_sha256"], unkeyed)
+            self.assertTrue(changed["source_snapshot_keyed_per_process"])
             self.assertFalse(result["project_code_executed"])
             self.assertFalse(result["network_accessed"])
 

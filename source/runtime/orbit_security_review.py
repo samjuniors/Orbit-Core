@@ -6,7 +6,14 @@ certification, or release security attestation.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import re
+import secrets
+
+# Per-process key: the snapshot detects source changes within one MCP session,
+# but cannot be used offline to test guessed file contents (credentials).
+_SNAPSHOT_KEY = secrets.token_bytes(32)
 
 import orbit_skill_plan
 import orbit_specialists
@@ -246,7 +253,7 @@ def scan_project(root, *, permission_state="UNKNOWN"):
     entries_seen = 0
     reasons = set()
     findings = []
-    snapshot = hashlib.sha256()
+    snapshot = hmac.new(_SNAPSHOT_KEY, digestmod=hashlib.sha256)
     walker = orbit_specialists._visual_walk(base)
     try:
         for rel_dir, directory, dirs, names in walker:
@@ -299,7 +306,7 @@ def scan_project(root, *, permission_state="UNKNOWN"):
                 bytes_read += len(raw)
                 relative = rel.as_posix()
                 digest = hashlib.sha256(raw).digest()
-                snapshot.update(relative.encode("utf-8") + b":" + digest)
+                snapshot.update(relative.encode("utf-8", "surrogatepass") + b":" + digest)
                 for line_number, line in enumerate(text.splitlines(), 1):
                     for rule, severity, pattern, summary, remediation in _SOURCE_PATTERNS:
                         if not pattern.search(line):
@@ -316,7 +323,7 @@ def scan_project(root, *, permission_state="UNKNOWN"):
                         # Never hash matched source text: predictable credentials can
                         # otherwise be tested offline against the returned digest.
                         evidence_ref = hashlib.sha256(
-                            (rule + ":" + relative + ":" + str(line_number)).encode("utf-8")
+                            (rule + ":" + relative + ":" + str(line_number)).encode("utf-8", "surrogatepass")
                         ).hexdigest()
                         findings.append({
                             "id": "ORBIT-" + rule,
@@ -347,6 +354,7 @@ def scan_project(root, *, permission_state="UNKNOWN"):
         "source_files_scanned": files_seen,
         "source_bytes_scanned": bytes_read,
         "source_snapshot_sha256": snapshot.hexdigest(),
+        "source_snapshot_keyed_per_process": True,
         "source_revision_verified": False,
         "partial_reasons": sorted(reasons),
         "scan_limits": {"max_files": max_files, "max_bytes": max_bytes,

@@ -39,6 +39,29 @@ class WindowsFilesystemTests(unittest.TestCase):
         self.assertEqual(vol_a, vol_b)
         self.assertNotEqual(id_a, id_b)
 
+    def test_rooted_relative_path_and_nul_component_are_rejected(self):
+        with self.assertRaises(ValueError):
+            orbit_windows_fs.safe_exists(self.root, "\\outside")
+        with self.assertRaises(ValueError):
+            orbit_windows_fs.ensure_directories(self.root, ("bad\x00name",))
+        # Ordinary names containing "x" or "0" are valid components.
+        pins, created = orbit_windows_fs.ensure_directories(self.root, ("box0",))
+        pins.close()
+        self.assertTrue(created.is_dir())
+
+    def test_created_file_outside_pinned_parent_is_removed(self):
+        target = self.root / "AGENT.md"
+        real = orbit_windows_fs._final_path
+
+        def elsewhere(handle):
+            value = real(handle)
+            return os.path.join(os.path.dirname(value), "..", "outside", "AGENT.md")
+
+        with mock.patch.object(orbit_windows_fs, "_final_path", elsewhere):
+            with self.assertRaises(orbit_windows_fs.UnsafePathError):
+                orbit_windows_fs.write_new_file(target, "body")
+        self.assertFalse(target.exists())
+
     def test_missing_128_bit_file_id_fails_closed(self):
         with mock.patch.object(orbit_windows_fs, "_GetFileInformationByHandleEx",
                                return_value=False):

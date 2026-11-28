@@ -56,6 +56,17 @@ class SourceAuditTests(unittest.TestCase):
         self.assertNotEqual(first["inventory_snapshot_sha256"], second["inventory_snapshot_sha256"])
 
     @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
+    @unittest.skipIf(sys.platform == "win32", "POSIX allows non-UTF-8 filename bytes")
+    def test_non_utf8_filename_does_not_abort_scan(self):
+        name = b"bad\xff.py"
+        try:
+            with open(bytes(self.root) + b"/" + name, "w", encoding="utf-8") as handle:
+                handle.write("value = eval(user_input)\nimport ast\nast.parse(\n")
+        except OSError:
+            self.skipTest("Filesystem rejects non-UTF-8 names")
+        result = orbit_source_audit.scan_source(self.root)
+        json.dumps(result)
+
     def test_oversized_source_marks_scan_incomplete(self):
         path = self.root / "large.py"
         path.write_bytes(b"x" * (orbit_source_audit.MAX_FILE_BYTES + 1))

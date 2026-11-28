@@ -81,7 +81,7 @@ def _python_signals(text, rel):
     except (SyntaxError, ValueError, RecursionError) as exc:
         line = getattr(exc, 'lineno', None) or 0
         findings.append({
-            "id": "SOURCE_PYTHON_PARSE_" + hashlib.sha256(rel.encode("utf-8")).hexdigest()[:10].upper(),
+            "id": "SOURCE_PYTHON_PARSE_" + hashlib.sha256(rel.encode("utf-8", "surrogatepass")).hexdigest()[:10].upper(),
             "category": "verification",
             "severity": "LOW",
             "confidence": "LOW",
@@ -129,7 +129,7 @@ def _python_signals(text, rel):
     findings = []
     for rule, hit in sorted(hits.items()):
         lines = sorted(set(hit["lines"]))[:MAX_LINES_PER_SIGNAL]
-        path_hash = hashlib.sha256(rel.encode("utf-8")).hexdigest()[:10].upper()
+        path_hash = hashlib.sha256(rel.encode("utf-8", "surrogatepass")).hexdigest()[:10].upper()
         confidence = "MEDIUM" if rule in {"SUBPROCESS_SHELL_TRUE", "YAML_LOADER"} else "LOW"
         findings.append({
             "id": f"SOURCE_{rule}_{path_hash}",
@@ -541,7 +541,7 @@ def scan_source(root: Path) -> dict:
         "status": "SCANNED" if complete else "INCOMPLETE",
         "audit_scope": "SOURCE",
         "scan_mode": "BOUNDED_READ_ONLY_SOURCE_CONTENT_ANALYSIS",
-        "root_identity": hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:16],
+        "root_identity": hashlib.sha256(str(root).encode("utf-8", "surrogatepass")).hexdigest()[:16],
         "inventory_snapshot_sha256": digest.hexdigest(),
         "snapshot_semantics": "SHA256 over repository-relative source paths, byte lengths and per-file content SHA256; not a Git revision.",
         "limits": {

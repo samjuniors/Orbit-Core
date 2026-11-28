@@ -32,6 +32,8 @@ if WINDOWS_SAFE:
 
     _GENERIC_READ = 0x80000000
     _GENERIC_WRITE = 0x40000000
+    _DELETE = 0x00010000
+    _FILE_DISPOSITION_INFO_CLASS = 4  # FILE_INFO_BY_HANDLE_CLASS.FileDispositionInfo
     _FILE_LIST_DIRECTORY = 0x0001
     _FILE_READ_ATTRIBUTES = 0x0080
     _FILE_SHARE_READ = 0x00000001
@@ -76,6 +78,11 @@ if WINDOWS_SAFE:
         wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD
     ]
     _GetFileInformationByHandleEx.restype = wintypes.BOOL
+    _SetFileInformationByHandle = _kernel32.SetFileInformationByHandle
+    _SetFileInformationByHandle.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD
+    ]
+    _SetFileInformationByHandle.restype = wintypes.BOOL
 
     _CreateFileW = _kernel32.CreateFileW
     _CreateFileW.argtypes = [
@@ -289,8 +296,24 @@ def open_regular_file_fd(path: Path | str, *, create_new=False, write=False):
     """Open a single-link regular file without following reparse points or allowing rename."""
     path = Path(path)
     access = (_GENERIC_WRITE | _FILE_READ_ATTRIBUTES) if write else (_GENERIC_READ | _FILE_READ_ATTRIBUTES)
+    if create_new:
+        access |= _DELETE  # lets us remove a file created through a swapped parent
     flags = _FILE_FLAG_SEQUENTIAL_SCAN
     handle, info = _open_handle(path, access, flags, create_new=create_new)
+    # A pinned parent can still be converted into a junction while empty. Check
+    # where the opened handle really is, not where the path pointed beforehand.
+    expected = os.path.normcase(os.path.normpath(os.path.abspath(os.fspath(path))))
+    try:
+        actual = _final_path(handle)
+    except OSError:
+        actual = None
+    if actual != expected:
+        if create_new:
+            delete = ctypes.c_ubyte(1)
+            _SetFileInformationByHandle(handle, _FILE_DISPOSITION_INFO_CLASS,
+                                        ctypes.byref(delete), ctypes.sizeof(delete))
+        _CloseHandle(handle)
+        raise UnsafePathError("Opened file is outside its pinned parent directories", str(path))
     attrs = info.dwFileAttributes
     if attrs & _FILE_ATTRIBUTE_REPARSE_POINT:
         _CloseHandle(handle)
@@ -334,7 +357,7 @@ def ensure_directories(root: Path | str, relative_parts: tuple[str, ...] | list[
         current = pins.root_path
         for part in relative_parts:
             if (not isinstance(part, str) or not part or part in {".", ".."}
-                    or any(ch in part for ch in "\\\\/:\\x00")):
+                    or any(ch in part for ch in "\\/:\x00")):
                 raise ValueError("Invalid directory component")
             current = current / part
             try:
@@ -351,9 +374,10 @@ def ensure_directories(root: Path | str, relative_parts: tuple[str, ...] | list[
 def safe_exists(root: Path | str, relative: Path | str, *, expected: str = "file") -> bool:
     """Inspect a repository-relative path while pinning each ancestor directory."""
     rel = Path(relative)
-    if rel.is_absolute() or not rel.parts or any(part in {"", ".", ".."} for part in rel.parts):
+    # A rooted path such as "\\foo" has an anchor but is not is_absolute() on Windows.
+    if rel.is_absolute() or rel.anchor or rel.drive or not rel.parts or any(part in {"", ".", ".."} for part in rel.parts):
         raise ValueError("Expected a normalized project-relative path")
-    if any("\\\\" in part or ":" in part or "\x00" in part for part in rel.parts):
+    if any("\\" in part or ":" in part or "\x00" in part for part in rel.parts):
         raise ValueError("Invalid project-relative path")
     handles: list[PinnedDirectory] = []
     try:

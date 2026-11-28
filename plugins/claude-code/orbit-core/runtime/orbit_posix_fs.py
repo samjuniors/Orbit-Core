@@ -143,6 +143,28 @@ def ensure_directories(root, relative_parts):
         raise
 
 
+def same_directory_at(root, relative_parts, fd):
+    """True if root/relative_parts (walked without following links) is fd's directory.
+
+    A held descriptor follows its directory if it is renamed, so a write through
+    it is only inside the project if the directory is still at this location.
+    """
+    expected = os.fstat(fd)
+    current = open_root(root)
+    try:
+        for raw in relative_parts:
+            try:
+                child = _open_dir_at(current, raw)
+            except FileNotFoundError:
+                return False
+            os.close(current)
+            current = child
+        actual = os.fstat(current)
+        return (actual.st_dev, actual.st_ino) == (expected.st_dev, expected.st_ino)
+    finally:
+        os.close(current)
+
+
 def write_new_file(parent_fd, name, content):
     """Exclusively create a private regular file relative to a held parent fd."""
     name = _component(name)
