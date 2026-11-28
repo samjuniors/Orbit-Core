@@ -697,7 +697,7 @@ def _mission_lock(root, project, mission):
 
 @contextmanager
 def _windows_mutex_lock(digest):
-    # A session-local named kernel mutex has no filesystem path, so there is no
+    # A machine-wide named kernel mutex has no filesystem path, so there is no
     # parent directory, junction or reparse point to redirect (issue #189).
     # Existence of the object means held; the kernel destroys it when the
     # owning process exits, so a crash cannot leave a stale lock.
@@ -712,7 +712,11 @@ def _windows_mutex_lock(digest):
     except (ImportError, OSError, AttributeError):
         yield LOCK_UNSAFE
         return
-    handle = kernel32.CreateMutexW(None, False, "Local\\orbit-mission-" + digest)
+    # Global\ (not Local\): Terminal Services sessions sharing one project and
+    # database must serialize too. Mutexes need no SeCreateGlobalPrivilege; if
+    # another user holds the name with a restrictive DACL, creation fails and
+    # the lock fails closed (LOCK_UNSAFE).
+    handle = kernel32.CreateMutexW(None, False, "Global\\orbit-mission-" + digest)
     if not handle:
         yield LOCK_UNSAFE
         return

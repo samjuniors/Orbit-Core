@@ -62,6 +62,19 @@ class WindowsFilesystemTests(unittest.TestCase):
                 orbit_windows_fs.write_new_file(target, "body")
         self.assertFalse(target.exists())
 
+    def test_created_directory_outside_pinned_parent_fails_closed(self):
+        real = orbit_windows_fs._final_path
+
+        def elsewhere_for_new(handle):
+            value = real(handle)
+            if value.endswith("agent-candidates"):
+                return os.path.join(os.path.dirname(value), "..", "outside", "agent-candidates")
+            return value
+
+        with mock.patch.object(orbit_windows_fs, "_final_path", elsewhere_for_new):
+            with self.assertRaises(orbit_windows_fs.UnsafePathError):
+                orbit_windows_fs.ensure_directories(self.root, (".orbit", "agent-candidates"))
+
     def test_missing_128_bit_file_id_fails_closed(self):
         with mock.patch.object(orbit_windows_fs, "_GetFileInformationByHandleEx",
                                return_value=False):

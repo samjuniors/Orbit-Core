@@ -254,7 +254,8 @@ def scan_project(root, *, permission_state="UNKNOWN"):
     reasons = set()
     findings = []
     snapshot = hmac.new(_SNAPSHOT_KEY, digestmod=hashlib.sha256)
-    walker = orbit_specialists._visual_walk(base)
+    walk_truncated = [False]
+    walker = orbit_specialists._visual_walk(base, truncated=walk_truncated)
     try:
         for rel_dir, directory, dirs, names in walker:
             if len(rel_dir) >= 10:
@@ -356,7 +357,7 @@ def scan_project(root, *, permission_state="UNKNOWN"):
         "source_snapshot_sha256": snapshot.hexdigest(),
         "source_snapshot_keyed_per_process": True,
         "source_revision_verified": False,
-        "partial_reasons": sorted(reasons),
+        "partial_reasons": sorted(reasons | ({"WALK_ENTRY_BUDGET"} if walk_truncated[0] else set())),
         "scan_limits": {"max_files": max_files, "max_bytes": max_bytes,
                         "max_entries": max_entries, "max_findings": 120},
         "source_text_returned": False,

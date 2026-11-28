@@ -345,6 +345,19 @@ def create_directory(path: Path | str) -> bool:
     raise _last_error(value)
 
 
+def _remove_escaped_directory(path: Path) -> None:
+    """Best-effort removal of an empty folder created through a swapped parent."""
+    try:
+        handle, _info = _open_handle(path, _FILE_READ_ATTRIBUTES, _FILE_FLAG_BACKUP_SEMANTICS)
+        try:
+            actual = _final_path(handle)
+        finally:
+            _CloseHandle(handle)
+        os.rmdir(actual)  # removes only an empty directory
+    except OSError:
+        pass
+
+
 def ensure_directories(root: Path | str, relative_parts: tuple[str, ...] | list[str]) -> tuple[PinSet, Path]:
     """Create/pin a directory chain beneath a pinned project root.
 
@@ -360,11 +373,19 @@ def ensure_directories(root: Path | str, relative_parts: tuple[str, ...] | list[
                     or any(ch in part for ch in "\\/:\x00")):
                 raise ValueError("Invalid directory component")
             current = current / part
+            # Verify the real final path of every folder: a pinned empty parent
+            # can be turned into a junction, so a path-based create may land
+            # outside the project even though the parent handle is still held.
             try:
-                pins.pin(current)
+                handle = pin_directory(current, expected_final_path=current)
             except FileNotFoundError:
                 create_directory(current)
-                pins.pin(current)
+                try:
+                    handle = pin_directory(current, expected_final_path=current)
+                except UnsafePathError:
+                    _remove_escaped_directory(current)
+                    raise
+            pins.handles.append(handle)
         return pins, current
     except Exception:
         pins.close()

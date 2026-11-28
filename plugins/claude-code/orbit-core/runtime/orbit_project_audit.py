@@ -131,8 +131,9 @@ def _scan_posix_inventory(root):
     files = []
     directories = []
     truncated = False
+    walk_truncated = [False]
     for parts, dir_fd, dirs, names in orbit_specialists._visual_walk(
-            root, skipped=skipped, unreadable=unreadable):
+            root, skipped=skipped, unreadable=unreadable, truncated=walk_truncated):
         depth = len(parts)
         dirs[:] = sorted((name for name in dirs if name.casefold() not in SKIP_DIRS),
                          key=str.casefold)
@@ -167,7 +168,7 @@ def _scan_posix_inventory(root):
             files.append({"path": relative, "name": name, "size": info.st_size,
                           "mtime_ns": info.st_mtime_ns,
                           "suffix": Path(name).suffix.lower()})
-    return files, directories, skipped[0], unreadable, truncated
+    return files, directories, skipped[0], unreadable, truncated or walk_truncated[0]
 
 
 def scan_project(root: Path, profile: dict | None = None) -> dict:

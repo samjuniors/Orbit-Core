@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import sqlite3
 import sys
 import tempfile
@@ -127,6 +128,34 @@ def snapshot(root):
     body = path.read_text(encoding='utf-8')
     return {'revision': hashlib.sha256(body.encode('utf-8')).hexdigest(), 'content': body[:6000], 'exists': True,
             'content_trust': UNTRUSTED}
+
+
+def source_snapshot_key():
+    """Per-installation key for source-audit snapshots, kept next to the local DB.
+
+    Snapshots stay comparable across restarts on this machine but cannot be
+    recomputed elsewhere from guessed file contents. Returns None (per-process
+    key fallback) if the key file cannot be created or read safely.
+    """
+    path = db_path().parent / 'source-snapshot.key'
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0)
+        try:
+            fd = os.open(str(path), flags)
+        except FileNotFoundError:
+            fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0)
+                         | getattr(os, 'O_BINARY', 0), 0o600)
+            with os.fdopen(fd, 'wb') as out:
+                out.write(secrets.token_bytes(32))
+                out.flush()
+                os.fsync(out.fileno())
+            fd = os.open(str(path), flags)
+        with os.fdopen(fd, 'rb') as stream:
+            key = stream.read(33)
+        return key if len(key) == 32 else None
+    except OSError:
+        return None
 
 
 def db_connect():
@@ -1154,14 +1183,14 @@ def execute(conn, name, a):
                         'message': 'Source inspection reads bounded project source files. Set confirm_read=true only when this read is authorized.',
                         'source_contents_read': False, 'data_written': False}
             if a.get('confirm_write') is not True:
-                audit = orbit_source_audit.scan_source(root)
+                audit = orbit_source_audit.scan_source(root, source_snapshot_key())
                 return {'status': 'PREVIEW_ONLY', 'audit_scope': 'SOURCE',
                         'source_audit': audit, 'data_written': False,
                         'note': 'No source contents or findings were persisted. Set confirm_write=true to save readiness metadata and SOURCE-scope findings.'}
             orbit_readiness.setup(conn)
             token = orbit_readiness.begin_source_scan(conn, project, root)
             try:
-                audit = orbit_source_audit.scan_source(root)
+                audit = orbit_source_audit.scan_source(root, source_snapshot_key())
                 readiness = orbit_readiness.complete_source_scan(conn, project, root, token, audit)
             except Exception as exc:
                 orbit_readiness.fail_source_scan(conn, project, root, token, type(exc).__name__)

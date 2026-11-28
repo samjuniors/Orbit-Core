@@ -67,6 +67,33 @@ class SourceAuditTests(unittest.TestCase):
         result = orbit_source_audit.scan_source(self.root)
         json.dumps(result)
 
+    @unittest.skipUnless(orbit_source_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
+    def test_source_snapshot_is_keyed_not_a_plain_content_hash(self):
+        import hashlib
+        (self.root / "main.py").write_text('KEY = "guessable"\n', encoding="utf-8")
+        key = b"k" * 32
+        first = orbit_source_audit.scan_source(self.root, key)
+        self.assertEqual(first["inventory_snapshot_sha256"],
+                         orbit_source_audit.scan_source(self.root, key)["inventory_snapshot_sha256"])
+        self.assertNotEqual(first["inventory_snapshot_sha256"],
+                            orbit_source_audit.scan_source(self.root, b"x" * 32)["inventory_snapshot_sha256"])
+        raw = (self.root / "main.py").read_bytes()
+        plain = hashlib.sha256()
+        path = b"main.py"
+        plain.update(len(path).to_bytes(4, "big")); plain.update(path)
+        plain.update(len(raw).to_bytes(8, "big")); plain.update(hashlib.sha256(raw).digest())
+        self.assertNotEqual(first["inventory_snapshot_sha256"], plain.hexdigest())
+
+    def test_source_snapshot_key_persists_privately(self):
+        import os
+        with mock.patch.dict(os.environ, {"ORBIT_LOCAL_DB": str(Path(self.temp.name) / "db" / "m.sqlite3")}):
+            first = orbit_mcp.source_snapshot_key()
+            self.assertEqual(len(first), 32)
+            self.assertEqual(orbit_mcp.source_snapshot_key(), first)
+            key_file = Path(self.temp.name) / "db" / "source-snapshot.key"
+            if os.name != "nt":
+                self.assertEqual(key_file.stat().st_mode & 0o777, 0o600)
+
     def test_oversized_source_marks_scan_incomplete(self):
         path = self.root / "large.py"
         path.write_bytes(b"x" * (orbit_source_audit.MAX_FILE_BYTES + 1))

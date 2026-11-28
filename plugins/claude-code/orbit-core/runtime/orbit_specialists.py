@@ -388,12 +388,28 @@ def _visual_win_list(handle):
             offset += next_offset
 
 
-def _visual_walk(base, skipped=None, unreadable=None):
+_WALK_MAX_DIR_ENTRIES = 10000
+_WALK_MAX_TOTAL_ENTRIES = 200000
+_WALK_MAX_DEPTH = 64
+
+
+def _visual_walk(base, skipped=None, unreadable=None, truncated=None):
     """Yield relative entries through pinned handles; callers may prune dirs.
 
     Optional mutable lists receive skipped symlink/reparse counts and unreadable
     directory paths so bounded audits can fail closed rather than imply completeness.
+    Listing stops at per-directory, total and depth budgets before entries are
+    materialized; truncated[0] is then set so callers can report INCOMPLETE.
     """
+    budget = [_WALK_MAX_TOTAL_ENTRIES]
+
+    def over_budget(count):
+        if count >= _WALK_MAX_DIR_ENTRIES or budget[0] <= 0:
+            if truncated is not None:
+                truncated[0] = True
+            return True
+        budget[0] -= 1
+        return False
     import os
     import stat
     from pathlib import PurePosixPath
@@ -407,10 +423,16 @@ def _visual_walk(base, skipped=None, unreadable=None):
 
             def walk(parts, handle):
                 dirs, files = [], []
+                if len(parts) > _WALK_MAX_DEPTH:
+                    if truncated is not None:
+                        truncated[0] = True
+                    return
                 try:
                     for name, attributes in _visual_win_list(handle):
                         if name in (".", ".."):
                             continue
+                        if over_budget(len(dirs) + len(files)):
+                            break
                         if attributes & _WIN_ATTR_REPARSE_POINT:
                             if skipped is not None:
                                 skipped[0] += 1
@@ -447,15 +469,45 @@ def _visual_walk(base, skipped=None, unreadable=None):
                 if unreadable is not None:
                     unreadable.append(str(getattr(exc, "filename", None) or "."))
 
-            walker = os.fwalk(".", topdown=True, onerror=onerror,
-                              follow_symlinks=False, dir_fd=root)
-            try:
-                for path, dirs, files, dir_fd in walker:
-                    dirs[:] = [d for d in dirs if not is_link(d, dir_fd)]
-                    yield (PurePosixPath(path).parts, dir_fd, dirs,
-                           [f for f in files if not is_link(f, dir_fd)])
-            finally:
-                walker.close()
+            dir_flags = (os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+                         | getattr(os, "O_CLOEXEC", 0))
+
+            def walk(parts, dir_fd):
+                # Replaces os.fwalk, which lists a whole directory before any
+                # caller budget can apply.
+                if len(parts) > _WALK_MAX_DEPTH:
+                    if truncated is not None:
+                        truncated[0] = True
+                    return
+                dirs, files = [], []
+                try:
+                    with os.scandir(dir_fd) as iterator:
+                        for entry in iterator:
+                            if over_budget(len(dirs) + len(files)):
+                                break
+                            try:
+                                is_dir = entry.is_dir(follow_symlinks=False)
+                            except OSError:
+                                is_dir = False
+                            (dirs if is_dir else files).append(entry.name)
+                except OSError as exc:
+                    onerror(exc)
+                    return
+                dirs[:] = [d for d in dirs if not is_link(d, dir_fd)]
+                yield parts, dir_fd, dirs, [f for f in files if not is_link(f, dir_fd)]
+                for name in dirs:  # the caller may have pruned dirs in place
+                    try:
+                        child = os.open(name, dir_flags, dir_fd=dir_fd)
+                    except OSError as exc:
+                        if unreadable is not None:
+                            unreadable.append("/".join(parts + (name,)))
+                        continue
+                    try:
+                        yield from walk(parts + (name,), child)
+                    finally:
+                        os.close(child)
+
+            yield from walk((), root)
     finally:
         _visual_close_root(root)
 
@@ -543,7 +595,8 @@ def scan_visual_project(root):
     candidate_count = 0
     max_files, max_bytes, max_entries = 160, 4 * 1024 * 1024, 2400
 
-    walker = _visual_walk(base)
+    walk_truncated = [False]
+    walker = _visual_walk(base, truncated=walk_truncated)
     try:
         for rel_dir, directory, dirs, names in walker:
             depth = len(rel_dir)
@@ -702,7 +755,7 @@ def scan_visual_project(root):
                                            if any(part in k.lower() for part in
                                                   ("react", "vue", "svelte", "lucide",
                                                    "radix", "shadcn", "motion", "icon"))} ,
-        "partial_reasons": sorted(reasons),
+        "partial_reasons": sorted(reasons | ({"WALK_ENTRY_BUDGET"} if walk_truncated[0] else set())),
         "not_scanned_or_guaranteed": "Dynamic routes, runtime-rendered states, remote assets, native UI, and unrecognized code patterns.",
         "expected_browser_qa_states": ["default", "loading", "empty", "error", "partial"],
         "screen_inventory_complete": False,

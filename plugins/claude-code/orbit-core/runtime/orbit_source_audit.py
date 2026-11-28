@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import hmac
 import os
+import secrets
 import re
 import stat
 import sys
@@ -145,7 +147,16 @@ def _python_signals(text, rel):
     return findings, 1
 
 
-def _scan_source_posix(root: Path) -> dict:
+# Fallback when no persisted key is supplied: still keyed, never a plain content
+# hash, so a returned snapshot cannot be used to test guessed file contents.
+_PROCESS_SNAPSHOT_KEY = secrets.token_bytes(32)
+
+
+def _snapshot_digest(key):
+    return hmac.new(key or _PROCESS_SNAPSHOT_KEY, digestmod=hashlib.sha256)
+
+
+def _scan_source_posix(root: Path, snapshot_key=None) -> dict:
     """Audit POSIX source through a pinned root and descriptor-relative opens."""
     import orbit_posix_fs
 
@@ -160,7 +171,7 @@ def _scan_source_posix(root: Path) -> dict:
         os.close(root_fd)
         raise ValueError("Select a specific project directory")
 
-    digest = hashlib.sha256()
+    digest = _snapshot_digest(snapshot_key)
     languages = Counter()
     unreadable = []
     findings = []
@@ -313,7 +324,7 @@ def _scan_source_posix(root: Path) -> dict:
         "scan_mode": "BOUNDED_DESCRIPTOR_RELATIVE_POSIX_SOURCE_CONTENT_ANALYSIS",
         "root_identity": root_identity,
         "inventory_snapshot_sha256": digest.hexdigest(),
-        "snapshot_semantics": "SHA256 over repository-relative source paths, byte lengths and per-file content SHA256; not a Git revision.",
+        "snapshot_semantics": "Keyed HMAC-SHA256 over repository-relative source paths, byte lengths and per-file content SHA256; local to this installation, not a Git revision.",
         "limits": {"max_files": MAX_FILES, "max_depth": MAX_DEPTH,
                    "max_entries_per_directory": MAX_ENTRIES_PER_DIR,
                    "max_total_entries": MAX_TOTAL_ENTRIES,
@@ -335,11 +346,15 @@ def _scan_source_posix(root: Path) -> dict:
     }
 
 
-def scan_source(root: Path) -> dict:
-    """Read bounded source files and emit content-hash-backed static review leads."""
+def scan_source(root: Path, snapshot_key=None) -> dict:
+    """Read bounded source files and emit content-hash-backed static review leads.
+
+    snapshot_key keys the inventory snapshot so it can be compared across runs on
+    this installation but not reproduced elsewhere from guessed file contents.
+    """
     root = Path(root)
     if os.name != "nt":
-        return _scan_source_posix(root)
+        return _scan_source_posix(root, snapshot_key)
     if not root.is_absolute():
         raise ValueError("Project root must be an absolute directory")
     if not _WINDOWS_SAFE_RELATIVE_SCAN:
@@ -393,14 +408,24 @@ def scan_source(root: Path) -> dict:
     unreadable = []
     skipped_symlinks = 0
     truncated = False
+    entries_seen = 0
     stack = [(root, 0)]
     while stack:
         folder, depth = stack.pop()
+        # Aggregate budget: a tree of empty directories must not pin handles and
+        # grow the stack without bound before any file limit is reached.
+        remaining = MAX_TOTAL_ENTRIES - entries_seen
+        if remaining <= 0:
+            truncated = True
+            break
         try:
             with os.scandir(folder) as iterator:
-                entries = list(islice(iterator, MAX_ENTRIES_PER_DIR + 1))
-                if len(entries) > MAX_ENTRIES_PER_DIR:
+                limit = min(MAX_ENTRIES_PER_DIR, remaining)
+                entries = list(islice(iterator, limit + 1))
+                if len(entries) > limit:
                     truncated = True
+                    entries = entries[:limit]
+                entries_seen += len(entries)
                 entries.sort(key=lambda entry: entry.name.casefold())
         except OSError:
             unreadable.append(folder.relative_to(root).as_posix() or ".")
@@ -457,7 +482,7 @@ def scan_source(root: Path) -> dict:
                 unreadable.append(Path(entry.path).relative_to(root).as_posix())
 
     candidates.sort(key=lambda pair: pair[0].relative_to(root).as_posix().casefold())
-    digest = hashlib.sha256()
+    digest = _snapshot_digest(snapshot_key)
     languages = Counter()
     test_files = 0
     python_files = 0
@@ -543,7 +568,7 @@ def scan_source(root: Path) -> dict:
         "scan_mode": "BOUNDED_READ_ONLY_SOURCE_CONTENT_ANALYSIS",
         "root_identity": hashlib.sha256(str(root).encode("utf-8", "surrogatepass")).hexdigest()[:16],
         "inventory_snapshot_sha256": digest.hexdigest(),
-        "snapshot_semantics": "SHA256 over repository-relative source paths, byte lengths and per-file content SHA256; not a Git revision.",
+        "snapshot_semantics": "Keyed HMAC-SHA256 over repository-relative source paths, byte lengths and per-file content SHA256; local to this installation, not a Git revision.",
         "limits": {
             "max_files": MAX_FILES,
             "max_depth": MAX_DEPTH,
