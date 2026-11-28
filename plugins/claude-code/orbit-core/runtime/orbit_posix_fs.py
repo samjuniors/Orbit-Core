@@ -221,6 +221,10 @@ def create_beneath(root, relative, content):
     lookup, so the file can only be created inside the project. Parent
     directories must already exist. Raises BeneathUnavailable where openat2 is
     missing; never falls back to a path- or child-descriptor-based create.
+
+    Threat model: this is a point-in-time guarantee about where the file is
+    created. A process running as the same user can still rename the file or its
+    folders afterwards; post-creation renames are outside this boundary.
     """
     _require_safe()
     if not BENEATH_PLATFORM:
