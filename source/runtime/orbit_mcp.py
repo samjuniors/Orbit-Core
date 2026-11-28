@@ -1306,8 +1306,8 @@ def write_frame(response):
 
 def main():
     conn=db_connect()
-    orbit_updates.start_background_check()  # metadata-only; never blocks MCP startup
     try:
+        orbit_updates.start_background_check()  # metadata-only; never blocks MCP startup
         while True:
             raw = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
             if not raw:
@@ -1326,6 +1326,10 @@ def main():
             if response is not None:
                 write_frame(response)
     finally:
+        if not orbit_updates.shutdown_background_check():
+            sys.stderr.write(
+                "Orbit update metadata check did not stop before shutdown; "
+                "its cache write has been cancelled.\\n")
         orbit_preview.shutdown_all()
         conn.close()
 
