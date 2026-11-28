@@ -11,7 +11,7 @@ Orbit connects to the coding environment you already use. It helps turn requirem
 **[Get started](#quick-start) · [Claude Code plugin](#claude-code-install-as-a-plugin) · [How it works](#how-it-works) · [Documentation](#documentation) · [AI agent handoff](docs/AGENT-HANDOFF.md) · [Roadmap](docs/NEXT-VERSION.md) · [Releases](https://github.com/samjuniors/Orbit-Core/releases)**
 
 > [!IMPORTANT]
-> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. Published packages have separate stable/prerelease channels. As checked on 2026-11-23, **v0.32.0** is the newest published prerelease and **v0.30.0** the newest stable-channel release. A prerelease is not a production certification, and a stable-channel label is not a security or production certificate either. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
+> **Publication and safety:** See the [GitHub Releases page](https://github.com/samjuniors/Orbit-Core/releases) for the current published version and verified downloads. Published packages have separate stable/prerelease channels. As checked on 2026-11-24, **v0.33.0** is the newest published prerelease; main currently contains VERSION=0.33.1, which is not yet published. **v0.30.0** remains the newest stable-channel release. A prerelease is not a production certification, and a stable-channel label is not a security or production certificate either. Check the individual release notes and [current Swarm acceptance record](docs/SWARM-ENGINEERING-ACCEPTANCE.md) for genuine IDE permissions, installation/rollback, security and cross-device limitations. Orbit does not infer live-host acceptance from green CI.
 
 ## Why Orbit Core?
 
@@ -109,7 +109,7 @@ If PowerShell's local-script policy blocks `Orbit.ps1`, use `py -3.12 .\orbit_cl
 & "$HOME\.orbit-universal\bin\orbit.cmd" update --channel candidate --hosts antigravity codex --apply
 ```
 
-- `stable` is the **default** published release channel; `candidate` explicitly opts into published prereleases. As checked on 2026-11-23, the [v0.30.0 release](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) is the latest stable and [v0.32.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.32.0) is the newest prerelease. Always use [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases) for the live list. The updater will not silently downgrade an installed newer prerelease. From v0.32.0, a stable-channel `--check` against a newer installed prerelease just reports the older release and changes nothing. **v0.31.0 installs only:** that check can instead show a downgrade-block error, still with no changes; use `--channel candidate` to check your prerelease track.
+- `stable` is the **default** published release channel; `candidate` explicitly opts into published prereleases. As checked on 2026-11-24, the [v0.30.0 release](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.30.0) is the latest stable and [v0.33.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0) is the newest prerelease. Always use [GitHub Releases](https://github.com/samjuniors/Orbit-Core/releases) for the live list. The updater will not silently downgrade an installed newer prerelease. From v0.32.0, a stable-channel `--check` against a newer installed prerelease just reports the older release and changes nothing. **v0.31.0 installs only:** that check can instead show a downgrade-block error, still with no changes; use `--channel candidate` to check your prerelease track.
 - `--check` reads release metadata only. Without `--apply`, the update CLI verifies a package but does **not execute** downloaded installer code. It does **not** show the precise target-file change plan until the selected release installer runs; for that plan without writing files, run the verified ZIP's `orbit_setup.py install` or `update` **without** `--apply`.
 - `--apply` runs the selected checksum-verified published installer and makes only the selected host/scope changes with backup/customization guards. Save work first; restart the host IDE afterward and check the actual MCP response. GitHub checksums verify published bytes, **not independent publisher signing**.
 
@@ -228,7 +228,7 @@ The CI matrix covers Ubuntu with Python **3.10–3.13** and Windows with Python 
 | [Security](SECURITY.md) | Threat boundaries, approval caveats and known gaps |
 | [Roadmap](docs/NEXT-VERSION.md) | M1–M5 implementation and outstanding acceptance gates |
 | [Release and QA checklist](docs/RELEASE-PROCESS.md) | Repeatable checks and automatic publication workflow for every version |
-| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.32.0.md) | v0.32.0 release evidence and remaining host gates ([v0.31.0 record](docs/RELEASE-ACCEPTANCE-v0.31.0.md)) |
+| [Release acceptance](docs/RELEASE-ACCEPTANCE-v0.33.0.md) | v0.33.0 prerelease evidence and remaining host gates; [v0.33.1 source-only acceptance](docs/RELEASE-ACCEPTANCE-v0.33.1.md) |
 | [Changelog](CHANGELOG.md) | Recorded source and release changes |
 
 ## Security and project status

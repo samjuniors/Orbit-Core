@@ -1,4 +1,57 @@
-# Orbit Core — current v0.33 integration and acceptance gate (2026-11-18)
+# Orbit Core — roadmap and current engineering status
+
+## 2026-11-27 — Current roadmap and acceptance gates
+
+**Live source:** [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core), revalidated 2026-11-27 22:46 Asia/Kolkata. Main remains `2fdf4f329774b9644e75ac0df4d89738a7cd625f`; `VERSION=0.33.1`; `NEXT_VERSION=0.34.0`. Latest published prerelease is v0.33.0; latest stable is v0.30.0. v0.33.1 and v0.34.0 are unpublished.
+
+### Approved product order and current slices
+1. Safe Team Builder foundation (reuse the existing project task ledger and preview; do not create a second registry).
+2. Task-specific skills and tools.
+3. Orbit-mediated agent/bot coordination.
+
+Focused drafts #179–#182 remain unreviewed. Their prior exact-head CI was 5/5, but model recommendations are advisory, skill PR is test-only, specialist PR adds regression coverage, and the cybersecurity planner is bounded pattern review rather than SAST/penetration testing.
+
+### P0 security and reliability
+- **#183 filesystem containment:** draft [PR #186](https://github.com/samjuniors/Orbit-Core/pull/186), head `f81eb1f`, CI #45993595975 PASS 5/5, but stacked on the unapproved context-aware branch. Independent review must settle Windows reparse/handle identity and POSIX descriptor-relative semantics. Microsoft notes ReFS file IDs are 128-bit and the legacy 64-bit index is not guaranteed unique; use FileIdInfo or fail closed on unsupported/ambiguous filesystems.
+- **#184 digest privacy:** do not ship source-line-derived `evidence_sha256`; replace with a locator-only reference and accurate field name, add regression tests, rebuild the desktop MCP bundle from exact source, verify parity and rerun exact-head CI.
+- **#189 mission lock directory:** PR #187's leaf `O_NOFOLLOW` does not pin the parent directory. Use a per-user private directory pinned by handle and directory-relative leaf creation; Windows reparse-aware validation or fail closed. Until then the lock is best-effort local serialization, not a security boundary.
+- **#188 intermittent MCP child crash:** two observed Linux native failures in the shared-DB subprocess test (Python 3.10 exit -6; Python 3.13 exit -11); reruns passed and Windows passed, but root cause is unknown. The updater daemon thread is only a hypothesis. Run 20+ fresh-cache iterations with update check enabled/disabled on both Linux versions, preserve child stderr/exit code/faulthandler, and add deterministic blocked-fetch shutdown lifecycle coverage. Do not mask by permanently disabling updates or relying on reruns.
+
+### P1 bounded autonomy
+- [#185 / PR #187](https://github.com/samjuniors/Orbit-Core/pull/187) adds a bounded, sequential foreground Codex CLI mission supervisor with a provider-neutral adapter contract. No native Claude Code/Antigravity dispatch, parallel execution, background service, remote execution, PC-off continuation, authenticated reviewer identity or autonomous merge/release is implemented.
+- PR #187 exact-head CI #46037740696 passed 5/5 at previous code head; a documentation correction now qualifies its lock as best-effort and requires new exact-head CI. New issue #189 tracks the code fix.
+- Do not merge PR #186 or #187 separately into main while each is stacked on the unapproved 100-commit base `feat/v034-context-aware-intelligence-20261123` (`8620e4a`). Reconcile/split accepted base work first.
+
+### Release posture
+v0.33.1 remains unpublished and acceptance-incomplete. Require #183/#184/#189 remediation or independent documented disposition, #188 root-cause evidence, exact-head CI, package parity, owner-profile Claude/Codex/Antigravity acceptance, host permission expiry/revocation evidence, independent human security review, compatibility/release notes and owner go/no-go. No green-CI-only release.
+
+### Current environment
+161 branches, 45 open PRs, 11 open issues. Rulesets list is empty; main branch protection API returned 403, so enforcement is unverified. Remote Arc DESKTOP-AND1FUJ and Desktop Commander are offline/unavailable; no local test, bundle rebuild, owner-profile acceptance or `.orbit`/SQLite inspection was performed. Orbit ChatGPT plugin connector is not exposed; GitHub and Notion were used. Orbit Commander remains paused; RAD P2 #138 remains separate.
+
+## 2026-11-24 — Current main and roadmap disposition
+
+**Canonical repository:** https://github.com/samjuniors/Orbit-Core. GitHub is implementation truth; the Notion decisions hub owns product decisions. Revalidate live state before every resume.
+
+- Main HEAD: [2fdf4f329774b9644e75ac0df4d89738a7cd625f](https://github.com/samjuniors/Orbit-Core/commit/2fdf4f329774b9644e75ac0df4d89738a7cd625f); VERSION=0.33.1; NEXT_VERSION=0.34.0.
+- Published baseline: [v0.33.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0), published 2026-11-23. v0.30.0 remains latest stable-channel release. v0.33.1 is source-only and unpublished.
+- Main exact-head CI [run #45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) passed 5/5. This is hosted CI evidence, not owner-profile acceptance or production certification.
+- [v0.33.1 release acceptance](RELEASE-ACCEPTANCE-v0.33.1.md) remains SOURCE MERGED / RELEASE NOT PUBLISHED / ACCEPTANCE INCOMPLETE. Owner-profile Claude/Codex/Antigravity acceptance, timed native permission expiry/revocation and independent human security review remain outstanding.
+- Approved product order remains: **safe Team Builder foundation → task-specific skills/tools → Orbit-mediated agent/bot coordination**. Continue mapping increments to [#90](https://github.com/samjuniors/Orbit-Core/issues/90), [#91](https://github.com/samjuniors/Orbit-Core/issues/91) and [#92](https://github.com/samjuniors/Orbit-Core/issues/92). Do not expand scope merely because a branch exists.
+- Documentation-only [draft PR #178](https://github.com/samjuniors/Orbit-Core/pull/178) had two exact-head workflow runs (#45304020786 and #45304012954) pass 5/5, including Windows Python 3.12, at pre-update head 47de86f742679d61725381637ff56de7a770ef5e. It has no human review. This current handoff/roadmap refresh changes the branch again; rerun exact-head CI and keep the PR draft pending review.
+- Experimental branch [feat/v034-context-aware-intelligence-20261123](https://github.com/samjuniors/Orbit-Core/tree/feat/v034-context-aware-intelligence-20261123) is 94 commits ahead / 0 behind main at [f08448ff75c9d87f280ad66ff022a5466a7f4eb4](https://github.com/samjuniors/Orbit-Core/commit/f08448ff75c9d87f280ad66ff022a5466a7f4eb4). Exact-head CI [run #45371214722](https://github.com/samjuniors/Orbit-Core/actions/runs/45371214722) passed 5/5, including Windows Python 3.12. The branch has no PR or independent review and is not approved for merge/release. Its plan now acknowledges an in-progress audit-first implementation; the earlier 57-tool smoke failure was fixed on later commits, but green CI does not close scope or security review.
+- The v0.34 branch contains bounded structural inventory, consented static source review, revision-aware findings/readiness state and optional Claude lifecycle telemetry. It remains a broad multi-module change that has not been reconciled to #90/#91/#92. Do not merge it as a unit.
+- **Security review lead, not a confirmed vulnerability:** the source-audit path enumeration/open sequence does not yet demonstrate Windows handle-level reparse-point identity continuity. Existing tests do not demonstrate child reparse-point replacement, hard-link behavior or Windows TOCTOU resistance. Require adversarial Windows tests and a fail-closed design before approving that slice.
+- Keep RAD P2 [issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) and draft PRs #136–#147 separate from product feature work; OS-isolation acceptance remains blocked.
+- Current provider-neutral handoff is maintained in [docs/AGENT-HANDOFF.md](AGENT-HANDOFF.md) and the Notion [Cross-Agent Handoff & Current State](https://app.notion.com/p/4224f681d488816c9e9efbdc8be38488). Remote Arc DESKTOP-AND1FUJ remains offline; no local checkout, owner-profile host acceptance or .orbit/SQLite inspection was available. The Orbit ChatGPT plugin connector was not exposed; GitHub and Notion integrations were used. Main branch protection remains NOT VERIFIED because the GitHub API returned 403.
+
+**Next safe engineering step:** finish review of the documentation handoff; then reconcile the v0.34 experiment to the approved #90/#91/#92 order and split accepted work into focused PRs. First close the Windows source-audit reparse-point/TOCTOU review gap with adversarial tests. Do not merge, install or publish from the experimental branch. Do not publish v0.33.1 until all owner-profile, security, packaging and release acceptance gates are verified.
+
+**Historical material below:** The following v0.33 integration notes are retained as dated evidence from 2026-11-18 through 2026-11-22. They are not the current repository or release snapshot; revalidate GitHub and Notion before acting.
+
+---
+
+## Historical v0.33 integration checkpoint (2026-11-18)
+
 
 **Continuity note (2026-11-22):** Cross-agent resumption rules are maintained in [AGENT-HANDOFF.md](AGENT-HANDOFF.md). This v0.33 candidate intentionally uses the manual-main-only release workflow documented in [RELEASE-PROCESS.md](RELEASE-PROCESS.md); do not copy the current mainline tag-push prerelease trigger into this candidate. Revalidate host/SQLite state and exact branch heads before resuming. This note does not authorize publication.
 
@@ -231,3 +284,147 @@ Neither published prerelease nor these host reports constitute production certif
 ## v0.26.0 source candidate (2026-10-29)
 
 The M3 engineering improvements and M4.1 optional compact project resume are merged into development source. `release/v0.26.0-candidate` is preparing a compatible **minor** candidate because the accumulated work adds user-facing capabilities, not just fixes. Its `VERSION=0.26.0` and `NEXT_VERSION=0.26.1` are **source metadata** until a separately authorized release. CI builds unpublished test ZIP/MCPB artifacts and checks bundle parity, SQLite upgrade behavior and Linux/Windows regressions. Do not mark the live native-host, installer, browser or Issue #9 security gates PASS based on this work; publication is separately approval-gated.
+
+
+## 2026-11-25 22:44 IST — v0.34 live disposition
+
+- Main remains 2fdf4f329774b9644e75ac0df4d89738a7cd625f, VERSION 0.33.1 / NEXT_VERSION 0.34.0; main CI #45167794202 PASS 5/5. v0.33.0 remains the latest published prerelease; v0.30.0 remains latest stable. Do not publish v0.33.1 or v0.34.0 yet.
+- Open work: 43 PRs (40 drafts, 3 non-drafts) and 8 issues. The four new v0.34 draft PRs are #179 (advisory Team Builder model recommendations), #180 (skill lifecycle tests only), #181 (resource-first specialist/role-factory tests only), and #182 (product-aware security review planner plus bounded local pattern checks). #178 remains a docs-only draft; exact-head CI is green, but no human review is recorded.
+- PR #182 is currently 45 commits / 25 files and remains draft. The stale 57-tool assertion is corrected to 58. The tracked Claude desktop bundle is restored to the 58-tool artifact required by strict source/package parity. Latest exact-head runs #45664882357 and #45664888434 were pending at this checkpoint. Earlier failures were inspected; do not treat them as resolved until the new exact-head runs finish.
+- The first implementation of evidence_sha256 hashes matched source text. A locator-only alternative was reverted because the tracked bundle could not be regenerated in the available environment; issue #184 tracks the privacy-safe fix and exact bundle rebuild. No raw source values are returned, but the digest design remains a release blocker.
+- The broad context-aware branch is 100 commits ahead / 0 behind main, has no PR, and exact-head CI #45561811215 passed 5/5 (Windows: 835 tests, 13 skips). It records a reproduced Windows junction-replacement boundary defect in the previous implementation; current branch containment disables candidate writes and source/structural scans on Windows. Do not re-enable those paths until handle-relative implementation and adversarial acceptance.
+- Static review found an additional POSIX parent-directory race lead in path-based source/structural traversal and candidate creation; not yet reproduced. Issue #183 tracks handle-relative traversal/writes on all platforms. Existing orbit_specialists._visual_walk and _open_visual_source are reusable read-side primitives; candidate creation needs held-directory-relative operations.
+- Security-planner scope remains narrow: product-aware checklist plus bounded regex source hints, not full SAST, scanner discovery, pentest, or certification. Permission is caller-reported; host permission is not independently verified. Do not claim a security pass from zero pattern hits.
+- Research: pin OWASP ASVS stable v5.0.0; treat bleeding-edge ASVS as preview. Map mobile work to risk-selected MASVS profiles. Use NIST SP 800-218 v1.1 as final baseline and track SP 800-218 Rev.1 v1.2 as draft. Evaluate installed Semgrep CE, Trivy, OSV-Scanner offline mode and OpenSSF Scorecard as optional resource-first tools; no automatic installation/network scan.
+- Environment: Remote Arc Windows device offline, Desktop Commander unconnected, container GitHub clone failed DNS. No local tests, .orbit/SQLite inspection or owner-profile host acceptance. Orbit ChatGPT plugin integration not exposed. Branch protection remains NOT VERIFIED (403).
+- Release gate: no merge or release until exact-head CI is green, package source parity is rebuilt from exact source, #183/#184 security issues are resolved or explicitly accepted after independent review, host acceptance is evidenced, and release notes/compatibility are verified.
+
+
+## Final live checkpoint — 2026-11-25
+
+- PR #178 prior docs head c613bb7f9266c4c957cb567cf8724e05817b33f4 passed exact-head push #45665192614 and pull_request #45665200445, both 5/5. No human review; keep draft. This additional documentation checkpoint triggers another CI run.
+- PR #182 code head 54a78b863c10baea305f0adf9f1c96c7fa39c58c passed exact-head push #45664882357 and pull_request #45664888434, both 5/5 including Windows upgrade rehearsals. Keep draft due #184 evidence-digest privacy issue, caller-reported permission and missing independent review.
+- PRs #179–#181 remain draft and CI-verified, but their limits remain: advisory model recommendations only; tests do not implement skill activation or native worker execution.
+- Context-aware branch: 100 commits ahead / 0 behind, no PR, CI #45561811215 PASS 5/5. Windows paths are fail-closed containment after the prior junction-replacement escape; handle-relative Windows implementation is still missing. POSIX parent-directory race lead is tracked in #183.
+- Mobile: MASWE v1.0.0 (2026-08-17) defines 78 stable weakness IDs; 36/78 currently have no MASTG test. Use MAS-L1 only when its assumptions fit, and leave untested weaknesses REVIEW_REQUIRED. Source: https://mas.owasp.org/news/2026/08/17/maswe-v100-release/ ; https://mas.owasp.org/Profiles/MAS-L1/
+- No release: v0.33.0 remains latest published prerelease, v0.30.0 latest stable; v0.33.1/v0.34 unpublished. No local/host acceptance or branch-protection verification occurred.
+
+
+## 2026-11-26 — Current roadmap and release disposition
+
+Main remains `2fdf4f329774b9644e75ac0df4d89738a7cd625f` (`VERSION=0.33.1`, `NEXT_VERSION=0.34.0`, 57-tool baseline). v0.33.0 is the latest published prerelease; v0.30.0 remains stable. v0.33.1 is source-only and unpublished.
+
+Approved order remains:
+1. Safe Team Builder foundation.
+2. Task-specific skills and tools.
+3. Orbit-mediated agent/bot coordination.
+
+Current focused v0.34 drafts:
+- #179 model recommendations (advisory only; CI 5/5).
+- #180 skill lifecycle acceptance tests (test-only; CI 5/5).
+- #181 resource-first specialist/role-factory regression tests (test-only; CI 5/5).
+- #182 product-aware cybersecurity planner (58-tool branch; CI 5/5; not SAST or certification; caller-reported permission only; no human review).
+
+All #178–#182 remain open drafts with no human review submissions or inline review threads. PR #178's pre-update head `1dd728cc5f0a76b6eb6f6a3df2b219bfd31b58e7` passed push #45666137573 and pull_request #45666147503, both 5/5. The current handoff append triggers new exact-head CI.
+
+P0 security blockers:
+- #183: reproduced Windows junction-replacement escape in the prior implementation; current experimental Windows behavior fails closed. POSIX parent-directory replacement is a static-review lead, not reproduced. Require handle-relative no-follow traversal/writes and adversarial cross-platform tests.
+- #184: source-line-derived `evidence_sha256` in #182 can enable offline guessing. Replace with locator-only reference, rebuild desktop bundle from exact source, prove source/package parity and rerun full CI.
+
+Broad v0.34 context branch `feat/v034-context-aware-intelligence-20261123` at `f08448ff75c9d87f280ad66ff022a5466a7f4eb4`, 100 ahead / 0 behind main, no PR, CI #45561811215 PASS 5/5 (Windows 835 tests, 13 skips). HOLD; reconcile to #90/#91/#92 and split into focused reviewable PRs.
+
+No v0.33.1 or v0.34 release until exact-head CI, package parity, #183/#184 disposition, owner-profile host acceptance, independent human security review, compatibility/release notes and explicit owner go/no-go are evidenced. Keep RAD P2 #138 separate/on hold. No automatic scanner installation or network scanning.
+
+
+## 2026-11-26 — Nightly run 4 roadmap checkpoint (22:20 Asia/Kolkata)
+
+### Live state
+- Main remains 2fdf4f329774b9644e75ac0df4d89738a7cd625f, VERSION=0.33.1, NEXT_VERSION=0.34.0, 57-tool baseline. Main CI #45167794202 PASS 5/5.
+- Latest published prerelease is v0.33.0 (2026-11-23); latest stable is v0.30.0. No v0.33.1/v0.34 release.
+- 159 branches, 43 open PRs, 9 open issues. Main reports protected=false; no repository rulesets were returned. Required-check/review enforcement is not established.
+- PR #178 current pre-update head e63b86c passed exact push/PR CI 5/5, but remains draft with zero submitted reviews. This documentation append triggers new CI.
+- PRs #179–#182 remain draft. Exact-head CI: #179 run 45545884593 PASS; #180 45549132274 PASS; #181 45548741789 PASS; #182 45664882357 and 45664888434 PASS 5/5. Their capability limits and #184 privacy gate remain unchanged.
+
+### Approved order and new mission-supervisor work
+The approved sequence remains:
+1. Safe Team Builder foundation.
+2. Task-specific skills and tools.
+3. Orbit-mediated agent/bot coordination.
+
+New issue [#185](https://github.com/samjuniors/Orbit-Core/issues/185) defines a bounded multi-task mission supervisor. It is a new, scoped autonomy workstream, not evidence that autonomous missions already run. The current experimental branch contains a Mission Charter/DAG review and a local Codex runner that executes only one task per invocation, requires fresh interactive confirmation, and stops for independent review. Those modules are not on main.
+
+### Implementation contract for #185
+- Extend existing orbit_autopilot.py, orbit_autopilot_runner.py, orbit_tasks.py and existing append-only journals. Do not create another task database, agent framework or process launcher.
+- Obtain one explicit approval for a digest-bound, immutable charter (task set, dependency DAG, branch, write paths, parallelism, retry limits, daily launch budget and expiry). Caller-supplied approval references remain caller-reported; they are not identity proof or host permission.
+- Reuse the current isolated-clone Codex adapter. A provider-neutral adapter contract may describe start/observe/cancel/reconcile capabilities, but Claude Code and Antigravity dispatch must remain unavailable until a real signed-in host adapter and permission semantics are verified.
+- Run only DAG-ready tasks. Dependencies become runnable only after independent diff/path/security/test review and current REVIEW_ACCEPTED evidence.
+- Persist mission revision, task fingerprint, source HEAD, workspace identity, attempt lease, heartbeat and append-only lifecycle events. Bound time, output and launches. Verify process identity and supervisor-owned process-tree termination; never kill a PID recovered from SQLite without fresh OS identity evidence.
+- On restart, reconcile worker liveness with the host before resume; detect orphaned workers and fail closed. Replan only within the original charter. Pause/stop/expiry invalidate the active revision and stop only supervisor-owned processes.
+- Keep merge, release, deploy, credentials, dependency installation, data deletion, permission changes, new spend and scope expansion founder-only.
+- Do not add a background service, remote execution, cloud worker, or PC-off continuation in this issue.
+
+### Acceptance evidence required
+A disposable 3–5 task DAG must complete under one mission charter without repeated operator confirmation, while each task still receives independent review. Tests must cover dependency gating, no duplicate attempts, bounded recovery/replanning, pause/stop/expiry, restart/orphan handling, source/branch/task drift, path escapes, symlinks/hardlinks, ignored files, secrets and worker output limits. Run exact-head Linux and Windows CI and verify packaged runtime parity. Real host acceptance is separate from unit tests. Green CI alone does not authorize merge or release.
+
+### Security sequencing
+- [#183](https://github.com/samjuniors/Orbit-Core/issues/183) remains P0: Windows junction escape is contained by fail-closed behavior; POSIX parent-directory race is a static-review lead. Complete handle-relative no-follow reads/writes and adversarial Linux/Windows tests before enabling scans or candidate writes.
+- [#184](https://github.com/samjuniors/Orbit-Core/issues/184) remains P0: replace source-derived finding hash with a locator-only reference, rename the field to reflect its semantics, rebuild the desktop bundle from exact source and prove parity.
+- Broad branch feat/v034-context-aware-intelligence-20261123 is 100 commits ahead / 0 behind main at 8620e4a, CI #45561811215 PASS 5/5, but has no PR/review. Split only after scope/security reconciliation; never merge as a unit.
+- Do not publish v0.33.1/v0.34 until #183/#184, independent review, owner-profile host acceptance, package parity, compatibility, release notes and owner go/no-go are complete.
+
+### Environment blocker
+Remote Arc DESKTOP-AND1FUJ is offline; no Desktop Commander device is connected. Local source edits, Windows adversarial tests, bundle rebuild and .orbit/SQLite inspection are unavailable. Continue documentation/research through GitHub and Notion, but do not simulate local verification.
+
+
+## 2026-11-27 — v0.34 execution order and acceptance update
+
+**Main baseline:** `2fdf4f329774b9644e75ac0df4d89738a7cd625f` / VERSION 0.33.1 / NEXT_VERSION 0.34.0. No new release is published. Keep main and published packages unchanged.
+
+### Priority order
+
+1. **P0 filesystem containment (#183 / PR #186):** review the Windows handle-pinning and POSIX dir_fd/O_NOFOLLOW implementation independently. Define supported filesystem semantics. Current Windows identity uses a 64-bit file index; Microsoft documents that ReFS file IDs are 128-bit and the 64-bit value is not guaranteed unique, while network filesystem metadata may be partial. Use FileIdInfo or fail closed outside explicitly tested filesystems. Keep Windows adversarial junction/hard-link tests and POSIX parent-swap tests mandatory.
+2. **P0 finding privacy (#184 / PR #182):** remove source-line-derived hashes, use a locator-only reference, rename the output field to match semantics, rebuild the desktop MCP package from exact source and prove strict source/runtime/package parity.
+3. **P1 mission supervisor (#185 / PR #187):** continue the bounded, sequential Codex CLI increment only. Pause/resume must be authorized by recorded charter PAUSE+RESUME events; the 2026-11-27 patch adds tampered-checkpoint and live-resume tests. Finish exact-head Windows CI. Fix the shared temp lock-directory parent-symlink/reparse risk before treating the lock as a safety boundary. Do not claim native Claude/Antigravity worker dispatch, parallelism, automatic replanning, background execution or PC-off continuation.
+4. **P1 subprocess reliability (#188):** investigate the intermittent native crash in `test_mcp_process_and_shared_db`. Repeated reruns passing are not a root-cause fix; run repeated isolated iterations and inspect child shutdown, MCP stdio, SQLite/WAL lifetimes and native imports.
+5. **Governance and acceptance:** obtain human review, reconcile stacked branches with main, complete owner-profile host acceptance and independent security review.
+
+### Current branch/PR posture
+
+- #178 documentation-only draft, exact-head PR CI rerun PASS 5/5; no human review.
+- #179–#182 focused drafts; recorded CI PASS 5/5; no human reviews. Their claims remain bounded (advisory model recommendations, lifecycle/safety tests, static security planning).
+- #186 filesystem security draft, exact-head push CI PASS 5/5, stacked on the 100-commit context-aware branch; no independent review.
+- #187 mission supervisor draft, current head `03b1770214023b4eb3cd3c5a0725d415b5941ef1`; Ubuntu matrix PASS, Windows Python 3.12 in progress at the last check. Also stacked on the context-aware branch.
+- The broad `feat/v034-context-aware-intelligence-20261123` branch is 100 commits ahead of main and has no PR; do not merge as a unit.
+
+### Release gate
+
+No v0.33.1/v0.34 publication until #183/#184, #188 reliability disposition, exact-head Linux/Windows CI, package parity, compatibility, release notes, independent security review, signed-in host acceptance and owner go/no-go are recorded. CI alone is insufficient.
+
+
+### 2026-11-27 17:05 UTC — exact-head CI results
+
+- PR #178 documentation head `7bd44acb0358f4aabf104bb744f371e8356ff143`: [#46038299281](https://github.com/samjuniors/Orbit-Core/actions/runs/46038299281) PASS 5/5, including Windows Python 3.12. Still draft; human review outstanding.
+- PR #187 mission-supervisor head `03b1770214023b4eb3cd3c5a0725d415b5941ef1`: [#46037740696](https://github.com/samjuniors/Orbit-Core/actions/runs/46037740696) PASS 5/5, including Windows Python 3.12 (850 tests, 13 skips). The lock-directory parent symlink/reparse review lead remains open.
+- #188 now records the daemon update-check thread as one hypothesis for the intermittent shared-DB child crash; this is not a confirmed root cause. Test enabled/disabled update-check behavior on fresh cache and add explicit bounded thread shutdown before changing the release gate.
+
+
+## 2026-11-28 — v0.34 priorities and release gate revalidation
+
+**Main baseline:** `2fdf4f329774b9644e75ac0df4d89738a7cd625f`; VERSION 0.33.1 / NEXT_VERSION 0.34.0. v0.33.0 remains the latest published prerelease; v0.30.0 remains stable. No v0.33.1/v0.34 release.
+
+### Priority order
+1. **P0 #183 / PR #186 — filesystem containment:** exact-head CI 5/5, but PR remains stacked on the unapproved 100-commit v0.34 branch. Windows identity currently relies on legacy 64-bit file index; ReFS uses 128-bit IDs and SMB/network identity semantics need an explicit tested support policy. Use FileIdInfo or fail closed; independent review required.
+2. **P0 #184 / PR #182 — finding privacy:** locator-only `evidence_ref_sha256`, privacy tests and committed desktop bundle are now present on draft PR #182. Exact CI #45980372422 passed 5/5 and strict source parity passed. Issue remains open until reviewed and merged to main.
+3. **P0 #189 / PR #187 — mission lock:** parent lock directory is not pinned; POSIX symlink parent was confirmed in a disposable review check. Keep lock best-effort only; implement private per-user handle-pinned directory and relative lock creation with Windows reparse handling and adversarial tests.
+4. **P1 #188 — subprocess reliability:** original Linux Python 3.10 double-free and Python 3.13 SIGSEGV observed; reruns passing are not root-cause evidence. Run 20+ fresh-cache enabled/disabled tests on both versions, plus deterministic blocked-fetch shutdown test. Updater daemon-thread causation remains a hypothesis.
+5. **P1 #185 / PR #187 — mission supervisor:** foreground, sequential Codex CLI only. Continue only after lock and review gates; no native Claude/Antigravity dispatch or background autonomy claim.
+6. **Governance:** main branch currently reports `protected=false` and required status-check enforcement off. Owner decision needed to configure required CI/review controls.
+
+### Branch/release posture
+- PR #178 docs-only current head `167ea834228b1edf1795a5d805a23d79ea80d60c`; push #46041736579 and PR #46041743870 both PASS 5/5. Still draft; human review pending.
+- PR #182 privacy fix current head `a4fcaf563ff61db678344cf82ed4eab34a76a5b1`, base main, CI 5/5; human review pending.
+- PR #186 head `f81eb1f051cc6afee00ac10ed1e8619ae3b10633`, CI 5/5, stacked on v0.34 experiment.
+- PR #187 head `79a6b9b740e7953273d1c424779781fb6c6e367c`, CI 5/5, stacked on v0.34 experiment.
+- Broad v0.34 branch `8620e4a3063852d2c99f6a157fc9ee688c989b6a`, 100 ahead / 0 behind, no PR. Do not merge as a unit.
+
+No v0.33.1/v0.34 publication until #183/#184/#189, #188 reliability disposition, exact-head CI, source/package parity, independent security review, owner-profile host acceptance, compatibility/release notes and explicit owner go/no-go are recorded.

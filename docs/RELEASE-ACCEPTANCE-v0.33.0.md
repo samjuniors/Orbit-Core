@@ -1,6 +1,16 @@
 # Orbit Core v0.33.0 — release acceptance and outstanding gates
 
-**Status:** UNPUBLISHED DRAFT / OWNER RELEASE APPROVAL ON HOLD. Candidate installations in this record use disposable project-local profiles.
+**Status:** PUBLISHED PRERELEASE (2026-11-23) / PRODUCTION HOST ACCEPTANCE NOT VERIFIED. Publication does not certify production readiness. Candidate installations in this record use disposable project-local profiles.
+
+## 2026-11-23 — Post-publication revalidation
+
+- [v0.33.0 prerelease](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0) was published 2026-11-23 08:20:55 UTC after owner-triggered [workflow run #45137788352](https://github.com/samjuniors/Orbit-Core/actions/runs/45137788352) completed successfully from main. The annotated tag points to 0100e6d1d3e33c907f726c03004d209f7876837d; the tag object is unsigned. Eight release assets are present (four packages and four SHA-256 sidecars).
+- Current main HEAD is [2fdf4f329774b9644e75ac0df4d89738a7cd625f](https://github.com/samjuniors/Orbit-Core/commit/2fdf4f329774b9644e75ac0df4d89738a7cd625f), with VERSION=0.33.1 and NEXT_VERSION=0.34.0. Exact-head [CI run #45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) passed 5/5. v0.33.1 is source-only and has not been published. See the [v0.33.1 acceptance record](RELEASE-ACCEPTANCE-v0.33.1.md) for the patch-release gates.
+- [PR #175](https://github.com/samjuniors/Orbit-Core/pull/175) delivered the v0.33.1 Claude Code Windows ORBIT_PYTHON override; [PR #176](https://github.com/samjuniors/Orbit-Core/pull/176) delivered Claude Code publisher attribution. [Issue #130](https://github.com/samjuniors/Orbit-Core/issues/130) is closed as completed after the v0.33.0 stock-agent installer fix shipped.
+- Unchanged limitations: host-enforced timed native permission expiry/active revocation BLOCKED; owner-profile native specialist delivery and migration/rollback NOT VERIFIED; independent human security review NOT DONE; complete real-product visual/browser QA NOT VERIFIED. [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) remains a separate open OS-isolation workstream.
+- The dated pre-publication tables and checkpoints below remain historical evidence; this post-publication status supersedes their “not published” disposition.
+
+
 
 **Date:** 2026-11-18. **Versioned candidate branch:** `release/v0.33.0-candidate-20261118`, [stacked draft PR #135](https://github.com/samjuniors/Orbit-Core/pull/135), based on the source integration [draft PR #133](https://github.com/samjuniors/Orbit-Core/pull/133). Combined sources: [visual policy PR #131](https://github.com/samjuniors/Orbit-Core/pull/131) and [approval, specialist-return and tracing PR #132](https://github.com/samjuniors/Orbit-Core/pull/132). The latest evidence-bearing integrated commit before this record was `5eedd154dea0f203a23303236e4ee51d4cdf9088`. Evidence MUST be rechecked on the final candidate/tag commit if changed.
 
@@ -278,4 +288,4 @@ Host: Claude Code 2.1.307 on Windows 11 build 26200. Each check used an isolated
 | v0.33.1 local gates (Python 3.12) | **PASS**: `prepare_release_candidate`, `check_release_readiness`, `check_version --strict-bundle` (0.33.1), 769 unit tests OK (33 skipped), `build_release --verify`, `smoke_release_zip`. |
 | Agent `tools:` allowlist enforcement in a signed-in Claude Code session | **NOT VERIFIED.** The isolated profile has no sign-in, and the owner's install is still v0.32.0, which has no allowlists. |
 
-Unchanged: host-enforced timed native grant expiry and active revocation remain **BLOCKED**. Specialist delivery and migration/rollback in the owner's own Codex and Antigravity profiles remain **NOT VERIFIED**. No independent human security review has been performed. [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) is still open. v0.33.1 is unmerged and unpublished.
+Unchanged: host-enforced timed native grant expiry and active revocation remain **BLOCKED**. Specialist delivery and migration/rollback in the owner's own Codex and Antigravity profiles remain **NOT VERIFIED**. No independent human security review has been performed. [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) is still open. v0.33.1 is merged into main by PR #175 at a90f1b398a2be9a3807277f560360598ef247e36 and remains unpublished; current main HEAD is 2fdf4f329774b9644e75ac0df4d89738a7cd625f. Owner-profile installation/rollback of v0.33.1 remains NOT RUN.
