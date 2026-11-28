@@ -201,7 +201,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Repeat shared-database MCP subprocess test with fresh caches
-        run: python scripts/stress_mcp_subprocess.py --iterations 20 --modes enabled disabled
+        run: python scripts/stress_mcp_subprocess.py --iterations 100 --modes enabled disabled
       - name: Preserve every iteration log, including child stderr and faulthandler output
         if: always()
         uses: actions/upload-artifact@v4
