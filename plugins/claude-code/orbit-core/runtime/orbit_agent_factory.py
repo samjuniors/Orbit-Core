@@ -265,6 +265,16 @@ def candidate(root, project, args):
                     "candidate_sha256": digest, "state_written": False,
                     "agent_spawned": False,
                     "reason": "The kernel cannot confine file creation beneath the project (openat2 unavailable); preview remains available and writes fail closed."}
+        except orbit_posix_fs.PartialWriteError:
+            return {"status": "HOLD_CANDIDATE_WRITE_INCOMPLETE", "state_written": False,
+                    "partial_file_may_exist": True, "agent_spawned": False,
+                    "candidate_relative_path": proposal["candidate_relative_path"],
+                    "reason": "AGENT.md was created inside the project but not fully written; review or remove it before retrying."}
+        except orbit_posix_fs.MovedAfterCreateError:
+            return {"status": "HOLD_CANDIDATE_MOVED_AFTER_CREATE", "state_written": True,
+                    "location_verified": False, "agent_spawned": False,
+                    "candidate_relative_path": proposal["candidate_relative_path"],
+                    "reason": "AGENT.md was created inside the project but was no longer at this path after writing; its current location is not verified."}
         except FileExistsError:
             return {"status": "HOLD_EXISTING_CANDIDATE", "state_written": False,
                     **{k: v for k, v in proposal.items() if k != "candidate_markdown"}}

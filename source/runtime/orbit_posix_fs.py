@@ -37,6 +37,14 @@ class BeneathUnavailable(OSError):
     """The kernel cannot confine a lookup beneath a directory (no openat2)."""
 
 
+class PartialWriteError(OSError):
+    """The file was created beneath root but its content was not fully written."""
+
+
+class MovedAfterCreateError(OSError):
+    """Best-effort check: the created file is no longer at its path beneath root."""
+
+
 class _OpenHow(ctypes.Structure):
     _fields_ = [("flags", ctypes.c_uint64), ("mode", ctypes.c_uint64),
                 ("resolve", ctypes.c_uint64)]
@@ -234,10 +242,11 @@ def create_beneath(root, relative, content):
     flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
              | getattr(os, "O_CLOEXEC", 0))
     resolve = _RESOLVE_BENEATH | _RESOLVE_NO_SYMLINKS | _RESOLVE_NO_MAGICLINKS
+    path = "/".join(parts)
     root_fd = open_root(root)
     try:
         for _ in range(3):
-            fd = _openat2(root_fd, "/".join(parts), flags, 0o600, resolve)
+            fd = _openat2(root_fd, path, flags, 0o600, resolve)
             if fd != -errno.EAGAIN:
                 break
         if fd < 0:
@@ -250,17 +259,35 @@ def create_beneath(root, relative, content):
                 raise UnsafePathError(code, "Path escapes the project or crosses a link",
                                       os.fspath(relative))
             raise OSError(code, os.strerror(code), os.fspath(relative))
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise UnsafePathError("Created file is not a single-link regular file")
+            with os.fdopen(fd, "wb") as stream:
+                fd = -1
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except OSError as exc:
+            # The file exists beneath root but may be empty or partial; report it.
+            raise PartialWriteError(exc.errno or errno.EIO,
+                                    "Candidate file created but not fully written",
+                                    os.fspath(relative)) from exc
+        finally:
+            if fd >= 0:
+                os.close(fd)
+        # Best-effort detection only: the open file follows a renamed folder, so
+        # confirm the written inode is still at its path beneath root right now.
+        check = _openat2(root_fd, path, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, 0, resolve)
+        if check < 0:
+            raise MovedAfterCreateError(-check, "Created file is no longer at its path",
+                                        os.fspath(relative))
+        try:
+            now = os.fstat(check)
+        finally:
+            os.close(check)
+        if (now.st_dev, now.st_ino) != (info.st_dev, info.st_ino):
+            raise MovedAfterCreateError(errno.ESTALE, "Created file is no longer at its path",
+                                        os.fspath(relative))
     finally:
         os.close(root_fd)
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise UnsafePathError("Created file is not a single-link regular file")
-        with os.fdopen(fd, "wb") as stream:
-            fd = -1
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-    finally:
-        if fd >= 0:
-            os.close(fd)

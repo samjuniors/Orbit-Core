@@ -1,6 +1,7 @@
 """Regression coverage for bounded session learning and project-only agent drafts."""
 from __future__ import annotations
 
+import os
 import sqlite3
 import sys
 import tempfile
@@ -175,6 +176,43 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
         self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_PATH")
         self.assertFalse(result["state_written"])
         self.assertFalse((outside / "AGENT.md").exists())
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_moved_after_create_is_reported_not_drafted(self):
+        import orbit_posix_fs
+        outside = self.root.parent / "outside3"
+        real = orbit_posix_fs._openat2
+        calls = []
+
+        def create_then_move(dir_fd, path, flags, mode, resolve):
+            fd = real(dir_fd, path, flags, mode, resolve)
+            if not calls and flags & os.O_CREAT and fd >= 0:
+                calls.append(path)
+                # The open file follows its folder out of the project before writing.
+                self.root.joinpath(*path.split("/")[:-1]).rename(outside)
+            return fd
+
+        with mock.patch.object(orbit_posix_fs, "_openat2", create_then_move):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_CANDIDATE_MOVED_AFTER_CREATE")
+        self.assertFalse(result["location_verified"])
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_write_failure_is_reported_as_incomplete(self):
+        import orbit_posix_fs
+        import stat
+        real_fsync = os.fsync
+
+        def fail_on_files(fd):
+            if stat.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError(5, "EIO")
+            return real_fsync(fd)
+
+        with mock.patch.object(orbit_posix_fs.os, "fsync", fail_on_files):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_CANDIDATE_WRITE_INCOMPLETE")
+        self.assertTrue(result["partial_file_may_exist"])
+        self.assertTrue((self.root / result["candidate_relative_path"]).exists())
 
     @unittest.skipIf(sys.platform == "win32", "POSIX adapter")
     def test_candidate_write_fails_closed_without_openat2(self):
