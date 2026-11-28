@@ -74,3 +74,20 @@ Linux cloud container, disposable worktrees:
 | Signed-in host acceptance (Codex, Claude Code, Antigravity) | NOT VERIFIED |
 
 Not publishable until exact-head CI passes, owner review is complete and the owner runs `Publish versioned release`. Publish v0.33.1 first; v0.34.0 then needs an upgrade rehearsal from the v0.33.1 tag.
+
+## 2026-11-28 — v0.33.1 to v0.34.0 upgrade rehearsal
+
+The immutable v0.33.1 tag is now available, so scripts/smoke_upgrade_previous.py recognizes 0.33.1 as a supported prior source version.
+
+Windows disposable rehearsal on DESKTOP-4MRHICM (Python 3.13.17), using a fresh clone of PR head ece56ff and a detached worktree at tag v0.33.1:
+
+| Check | Result |
+|---|---|
+| prepare_release_candidate.py | PASS (generated=false; candidate bundle already exact) |
+| check_release_readiness.py | PASS |
+| build_release.py --verify | PASS (220-file Universal Setup ZIP; Antigravity plugin and plugin suite verified) |
+| smoke_upgrade_previous.py --previous-root <v0.33.1> --hosts codex antigravity | PASS: DISPOSABLE_STOCK_UPGRADE_PASS |
+
+The disposable rehearsal verified both Codex and Antigravity installer targets. A customized installed Orbit-managed file correctly blocked the upgrade without being overwritten; the subsequent stock upgrade preserved custom AGENTS.md, .orbit/STATE.md, the existing database bytes, and the v0.33.1 runtime. Preview mode made no changes, and the v0.34.0 runtime matched the candidate package. The Antigravity agent backup/preservation check also passed.
+
+All fixtures and the checkout were under the Windows user's temporary directory, not the F: working copy. This is disposable installer/migration evidence only; it does not certify a signed-in IDE session or real user profile.
