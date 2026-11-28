@@ -88,6 +88,6 @@ Windows disposable rehearsal on DESKTOP-4MRHICM (Python 3.13.17), using a fresh 
 | build_release.py --verify | PASS (220-file Universal Setup ZIP; Antigravity plugin and plugin suite verified) |
 | smoke_upgrade_previous.py --previous-root <v0.33.1> --hosts codex antigravity | PASS: DISPOSABLE_STOCK_UPGRADE_PASS |
 
-The disposable rehearsal verified both Codex and Antigravity installer targets. A customized installed Orbit-managed file correctly blocked the upgrade without being overwritten; the subsequent stock upgrade preserved custom AGENTS.md, .orbit/STATE.md, the existing database bytes, and the v0.33.1 runtime. Preview mode made no changes, and the v0.34.0 runtime matched the candidate package. The Antigravity agent backup/preservation check also passed.
+The disposable rehearsal verified both Codex and Antigravity installer targets. A customized installed Orbit-managed file correctly blocked the upgrade without being overwritten; the subsequent stock upgrade preserved custom AGENTS.md, .orbit/STATE.md, the existing database bytes, and the v0.33.1 runtime. Preview mode made no changes, and the v0.34.0 runtime matched the candidate package. The Antigravity agent backup/preservation check also passed. The CI matrix now checks out immutable tag v0.33.1 and repeats this rehearsal on Python 3.12 under both Linux and Windows.
 
 All fixtures and the checkout were under the Windows user's temporary directory, not the F: working copy. This is disposable installer/migration evidence only; it does not certify a signed-in IDE session or real user profile.
