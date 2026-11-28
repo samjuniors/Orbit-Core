@@ -1,12 +1,30 @@
-# v0.34.0 — Development acceptance record
+# v0.34.0 — Release candidate acceptance record
 
-**Status:** DEVELOPMENT HOLD — not a release candidate
+**Status:** REVIEW HOLD — draft PR #191; not merged or published
 **Repository:** samjuniors/Orbit-Core
-**Branch:** fix/v034-filesystem-security-20261127
-**Version metadata:** VERSION=0.33.1, NEXT_VERSION=0.34.0
+**Branch:** claude/funny-bell-sxccz9
+**Reviewed source HEAD:** `16ec829f215171505f1a7f75b95802dafbcf776a`
+**Version metadata:** VERSION=0.34.0, NEXT_VERSION=0.35.0
 **Decision authority:** Owner approval is required for PR/merge, release version bump, installation, host configuration and publication.
 
 This record separates implementation evidence from security certification, native-host acceptance and publication. It does not authorize those actions.
+
+## Current gate summary — 2026-11-28
+
+- Exact-head GitHub Actions run [#46126664765](https://github.com/samjuniors/Orbit-Core/actions/runs/46126664765): **PASS**.
+- Local Windows Python 3.13 full suite on this exact checkout: **910 tests passed, 55 skipped, 0 failures** in 205.652 seconds. Skips include POSIX-only checks and tests requiring Windows symlink-creation privileges.
+- Focused security/reliability subset within that run: **199 tests passed, 26 skipped, 0 failures** across filesystem adapters, audits, findings/readiness, mission supervisor/runner, updater notifications and MCP shared-database behavior.
+- `prepare_release_candidate.py`: **PASS**, `generated=false`; committed v0.34.0 desktop bundle is already source-parity clean.
+- `check_release_readiness.py`: **PASS**.
+- `check_version.py --strict-bundle`: **PASS**.
+- `build_release.py --verify`: **PASS** for the Universal Setup, Antigravity plugin and Plugin Suite ZIPs.
+- `smoke_release_zip.py`: **PASS**, 59 tools; explicitly not a real IDE, desktop UI or browser test.
+- CodeRabbit's review of prior head `6538313` reported 22 Major findings. The owner recorded fixes for three Codex findings and selected CodeRabbit findings in `16ec829`; 19 Major findings and remaining lower-severity comments were still untriaged in that review. A new incremental CodeRabbit review and a Codex review of `16ec829` have been requested; both are pending at this record update.
+- Open privacy follow-up: `orbit_source_audit.inventory_snapshot_sha256` remains an unkeyed content-derived digest persisted in the readiness ledger. It needs a locally persisted key or a redesigned non-content-derived identifier; the per-process HMAC in the security-review planner does **not** fix this separate field.
+- Independent human security review: **NOT DONE**. Signed-in native-host acceptance (Codex, Claude Code, Antigravity): **NOT VERIFIED**.
+- Publication and merge: **NOT APPROVED**. Do not publish while security/review gates remain open.
+
+The full-suite result supersedes the earlier focused-only validation snapshot; the focused subset is listed separately for traceability.
 
 ## Capability acceptance
 
@@ -54,7 +72,7 @@ This is a tested containment design, not a formal proof or independent security 
 4. Keep model routing advisory unless a supported host API for observing and switching the active model is verified and separately authorized.
 5. Only after those gates, prepare a reviewed release branch: update VERSION/NEXT_VERSION, installer/runtime version declarations, CHANGELOG, README/quickstart and this acceptance record together.
 
-**Current verdict:** Windows structural/source scanning and specialist-candidate creation are enabled through handle-pinning adapters; POSIX structural/source traversal now has descriptor-relative implementations. The 858-test Windows suite (46 skipped), exact-head 5/5 Ubuntu/Windows CI, disposable package/MCP smoke and Claude plugin directory validation pass. The security review packet is prepared, but independent security review and native Claude lifecycle acceptance remain outstanding. The plugin listing still has a non-blocking missing-icon warning. Keep v0.34 on DEVELOPMENT HOLD.
+**Historical verdict for the earlier development-hold checkpoint:** Windows structural/source scanning and specialist-candidate creation were enabled through handle-pinning adapters; POSIX structural/source traversal had descriptor-relative implementations. The earlier 858-test Windows suite (46 skipped), 5/5 CI, disposable package/MCP smoke and Claude plugin directory validation passed. The current status is superseded by the dated integrated-candidate and current gate summaries above; do not treat this historical hold as the latest status.
 
 ## 2026-11-28 — Integrated v0.34.0 release candidate
 
@@ -73,7 +91,7 @@ Linux cloud container, disposable worktrees:
 | Independent human security review | NOT DONE |
 | Signed-in host acceptance (Codex, Claude Code, Antigravity) | NOT VERIFIED |
 
-Not publishable until exact-head CI passes, owner review is complete and the owner runs `Publish versioned release`. Publish v0.33.1 first; v0.34.0 then needs an upgrade rehearsal from the v0.33.1 tag.
+Historical checkpoint note: this entry predates publication of v0.33.1 and the current `16ec829` head. The v0.33.1 publication prerequisite and disposable upgrade rehearsal are now satisfied; the current review/security hold and owner decision remain as stated in the summary above.
 
 ## 2026-11-28 — v0.33.1 to v0.34.0 upgrade rehearsal
 
