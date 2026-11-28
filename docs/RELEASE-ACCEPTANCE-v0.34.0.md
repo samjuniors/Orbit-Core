@@ -55,3 +55,22 @@ This is a tested containment design, not a formal proof or independent security 
 5. Only after those gates, prepare a reviewed release branch: update VERSION/NEXT_VERSION, installer/runtime version declarations, CHANGELOG, README/quickstart and this acceptance record together.
 
 **Current verdict:** Windows structural/source scanning and specialist-candidate creation are enabled through handle-pinning adapters; POSIX structural/source traversal now has descriptor-relative implementations. The 858-test Windows suite (46 skipped), exact-head 5/5 Ubuntu/Windows CI, disposable package/MCP smoke and Claude plugin directory validation pass. The security review packet is prepared, but independent security review and native Claude lifecycle acceptance remain outstanding. The plugin listing still has a non-blocking missing-icon warning. Keep v0.34 on DEVELOPMENT HOLD.
+
+## 2026-11-28 — Integrated v0.34.0 release candidate
+
+Branch `claude/funny-bell-sxccz9`, based on main `fae73b3`. Merges context-aware intelligence, filesystem security (PR #186), mission supervisor with the #189 lock fix (PR #187), security review planner (PR #182), resource-first specialists (PR #181), skill lifecycle (PR #180) and Team Builder model routing (PR #179). Conflicts were additive (installer runtime list, tool inventory, tests); no test was dropped. Adds the 128-bit FileIdInfo root identity for #183 and bumps VERSION to 0.34.0 / NEXT_VERSION to 0.35.0.
+
+Linux cloud container, disposable worktrees:
+
+| Check | Result |
+|---|---|
+| `check_release_readiness`, `check_version --strict-bundle`, `prepare_release_candidate` (`generated=false` after regeneration) | PASS |
+| Full unit suite | PASS (886 passed, 19 skipped; Windows-only tests skipped here) |
+| `build_release --verify` (3 ZIPs), `smoke_release_zip` | PASS, 59 tools |
+| Upgrade rehearsal from v0.32.0 and v0.33.0 (codex + antigravity) | PASS |
+| Exact-head Linux/Windows CI | PENDING |
+| Windows FileIdInfo and mission-mutex tests on a real Windows PC | NOT RUN |
+| Independent human security review | NOT DONE |
+| Signed-in host acceptance (Codex, Claude Code, Antigravity) | NOT VERIFIED |
+
+Not publishable until exact-head CI passes, owner review is complete and the owner runs `Publish versioned release`. Publish v0.33.1 first; v0.34.0 then needs an upgrade rehearsal from the v0.33.1 tag.

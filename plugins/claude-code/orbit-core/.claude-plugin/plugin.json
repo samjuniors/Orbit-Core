@@ -1,6 +1,6 @@
 {
   "name": "orbit-core",
-  "version": "0.33.1",
+  "version": "0.34.0",
   "displayName": "Orbit Core",
   "description": "Orbit Core local workflow, MCP and specialist agents",
   "author": {
