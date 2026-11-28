@@ -138,6 +138,15 @@ jobs:
       - name: Rehearse v0.32.0 to candidate preserving prior user state
         if: matrix.python-version == '3.12'
         run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.32.0 --hosts codex antigravity
+      - name: Check out immutable published v0.33.0 prerelease for upgrade rehearsal
+        if: matrix.python-version == '3.12'
+        uses: actions/checkout@v4
+        with:
+          ref: v0.33.0
+          path: previous-0.33.0
+      - name: Rehearse v0.33.0 to candidate preserving prior user state
+        if: matrix.python-version == '3.12'
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.33.0 --hosts codex antigravity
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle
