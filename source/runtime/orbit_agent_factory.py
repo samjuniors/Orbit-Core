@@ -256,9 +256,16 @@ def candidate(root, project, args):
             parent_fd = orbit_posix_fs.ensure_directories(root, parts)
             orbit_posix_fs.write_new_file(parent_fd, "AGENT.md", body)
             # The descriptor follows a renamed directory; fail closed and remove
-            # the file if the candidate folder is no longer inside the project.
-            if not orbit_posix_fs.same_directory_at(root, parts, parent_fd):
-                os.unlink("AGENT.md", dir_fd=parent_fd)
+            # the file unless the candidate folder is verifiably inside the project.
+            try:
+                contained = orbit_posix_fs.same_directory_at(root, parts, parent_fd)
+            except (OSError, ValueError):
+                contained = False
+            if not contained:
+                try:
+                    os.unlink("AGENT.md", dir_fd=parent_fd)
+                except OSError:
+                    pass
                 raise orbit_posix_fs.UnsafePathError("Candidate folder moved during write")
         except FileExistsError:
             return {"status": "HOLD_EXISTING_CANDIDATE", "state_written": False,

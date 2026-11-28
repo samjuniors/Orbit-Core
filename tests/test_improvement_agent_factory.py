@@ -175,6 +175,24 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
         self.assertFalse(result["state_written"])
         self.assertFalse((outside / "AGENT.md").exists())
 
+    @unittest.skipIf(sys.platform == "win32", "POSIX descriptor race")
+    def test_candidate_removed_when_containment_check_raises(self):
+        import orbit_posix_fs
+        outside = self.root.parent / "outside2"
+        real_write = orbit_posix_fs.write_new_file
+
+        def move_symlink_then_write(parent_fd, name, content):
+            candidates = self.root / ".orbit" / "agent-candidates"
+            moved = [p for p in candidates.iterdir()][0]
+            moved.rename(outside)
+            moved.symlink_to(outside, target_is_directory=True)  # makes the re-walk raise
+            return real_write(parent_fd, name, content)
+
+        with mock.patch.object(orbit_posix_fs, "write_new_file", move_symlink_then_write):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_PATH")
+        self.assertFalse((outside / "AGENT.md").exists())
+
     def test_windows_candidate_write_fails_closed_after_preview(self):
         with mock.patch.object(orbit_agent_factory, "_SAFE_RELATIVE_WRITE", False):
             result = self.agent(confirm_write=True)

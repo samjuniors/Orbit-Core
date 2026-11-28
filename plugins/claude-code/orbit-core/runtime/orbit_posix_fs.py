@@ -144,25 +144,45 @@ def ensure_directories(root, relative_parts):
 
 
 def same_directory_at(root, relative_parts, fd):
-    """True if root/relative_parts (walked without following links) is fd's directory.
+    """True only if fd's directory is root/relative_parts and lies under root.
 
-    A held descriptor follows its directory if it is renamed, so a write through
-    it is only inside the project if the directory is still at this location.
+    A held descriptor follows its directory if it is renamed. The downward walk
+    checks the exact location; it alone can be fooled by an ancestor that moves
+    while the walk descends through it. The upward walk uses "..", which always
+    resolves to a directory's real current parent, and must reach root's inode
+    in exactly len(relative_parts) steps.
     """
+    parts = tuple(relative_parts)
     expected = os.fstat(fd)
-    current = open_root(root)
+    root_fd = open_root(root)
     try:
-        for raw in relative_parts:
-            try:
-                child = _open_dir_at(current, raw)
-            except FileNotFoundError:
+        root_info = os.fstat(root_fd)
+        current = os.dup(root_fd)
+        try:
+            for raw in parts:
+                try:
+                    child = _open_dir_at(current, raw)
+                except FileNotFoundError:
+                    return False
+                os.close(current)
+                current = child
+            actual = os.fstat(current)
+            if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
                 return False
+        finally:
             os.close(current)
-            current = child
-        actual = os.fstat(current)
-        return (actual.st_dev, actual.st_ino) == (expected.st_dev, expected.st_ino)
+        current = os.dup(fd)
+        try:
+            for _ in parts:
+                parent = os.open("..", _dir_flags(), dir_fd=current)
+                os.close(current)
+                current = parent
+            top = os.fstat(current)
+            return (top.st_dev, top.st_ino) == (root_info.st_dev, root_info.st_ino)
+        finally:
+            os.close(current)
     finally:
-        os.close(current)
+        os.close(root_fd)
 
 
 def write_new_file(parent_fd, name, content):

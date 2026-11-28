@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +25,25 @@ class PosixFilesystemTests(unittest.TestCase):
         self.root.mkdir()
         self.outside = self.base / "outside"
         self.outside.mkdir()
+
+    def test_same_directory_at_rejects_ancestor_moved_during_walk(self):
+        parts = (".orbit", "agent-candidates", "x")
+        fd = orbit_posix_fs.ensure_directories(self.root, parts)
+        self.addCleanup(os.close, fd)
+        self.assertTrue(orbit_posix_fs.same_directory_at(self.root, parts, fd))
+        real_open = orbit_posix_fs._open_dir_at
+        moved = []
+
+        def open_then_move(parent_fd, name):
+            child = real_open(parent_fd, name)
+            if name == ".orbit" and not moved:
+                # The walk now holds .orbit; move it out before descending further.
+                (self.root / ".orbit").rename(self.outside / ".orbit")
+                moved.append(True)
+            return child
+
+        with mock.patch.object(orbit_posix_fs, "_open_dir_at", open_then_move):
+            self.assertFalse(orbit_posix_fs.same_directory_at(self.root, parts, fd))
 
     def test_root_walk_rejects_symlink_ancestor(self):
         real = self.base / "real"
