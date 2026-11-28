@@ -17,19 +17,25 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "source" / "runtime"))
 
 import orbit_autopilot
+import orbit_autopilot_mission
 import orbit_autopilot_runner
 import orbit_mcp
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Unreleased Orbit Autopilot local one-task supervisor")
-    parser.add_argument("action", choices=("preview", "run", "stop", "status", "review-handoff"))
+        description="Unreleased Orbit Autopilot bounded local mission supervisor")
+    parser.add_argument("action", choices=(
+        "preview", "run", "mission", "stop", "status", "timeline", "review-handoff"))
     parser.add_argument("--project-root", required=True,
                         help="Exact existing clean feature-branch Git project root")
     parser.add_argument("--project", required=True)
     parser.add_argument("--mission-id", required=True)
     parser.add_argument("--revision", type=int, default=1)
+    parser.add_argument("--max-seconds", type=int, default=3600,
+                        help="Foreground mission time budget, maximum 3600 seconds")
+    parser.add_argument("--review-wait-seconds", type=int, default=3600,
+                        help="Wait for independent task review, maximum 3600 seconds")
     parser.add_argument("--apply", action="store_true",
                         help="For review-handoff: explicitly record a verified, reviewed source handoff")
     parser.add_argument("--local-db",
@@ -48,10 +54,19 @@ def main(argv=None):
         os.environ["ORBIT_LOCAL_DB"] = str(target)
     conn = orbit_mcp.db_connect()
     orbit_autopilot_runner.setup(conn)
+    orbit_autopilot_mission.setup(conn)
     try:
         if args.action == "status":
-            result = orbit_autopilot_runner._public(
-                orbit_autopilot_runner._job(conn, root, project, mission))
+            result = {
+                "mission": orbit_autopilot.charter(conn, root, project, {
+                    "mission_id": mission, "action": "status"}),
+                "supervisor": orbit_autopilot_mission.status(
+                    conn, root, project, mission),
+                "runner": orbit_autopilot_runner._public(
+                    orbit_autopilot_runner._job(conn, root, project, mission)),
+            }
+        elif args.action == "timeline":
+            result = orbit_autopilot_mission.timeline(conn, root, project, mission)
         elif args.action == "preview":
             result = orbit_autopilot_runner.preview(
                 conn, root, project, mission, args.revision)
@@ -81,6 +96,48 @@ def main(argv=None):
                     conn, root, project, mission, args.revision, confirm_write=True)
             else:
                 result = plan
+        elif args.action == "mission":
+            charter = orbit_autopilot.charter(conn, root, project, {
+                "mission_id": mission, "action": "status"})
+            if charter["status"] != "ACTIVE" or charter.get("revision") != args.revision:
+                print(json.dumps({"status": "HOLD_MISSION_NOT_ACTIVE_OR_STALE",
+                                  "mission": charter}, indent=2), flush=True)
+                return 2
+            body = charter["charter"]
+            prior_run = orbit_autopilot_mission.status(conn, root, project, mission)
+            resuming = prior_run["status"] in {"WAITING_REVIEW", "PAUSED", "RUNNING"}
+            challenge = "RUN MISSION " + mission + " " + str(args.revision)
+            if not sys.stdin.isatty() or not sys.stdout.isatty():
+                print("BLOCKED: mission execution requires an interactive local terminal",
+                      file=sys.stderr)
+                return 2
+            print(json.dumps({
+                "mission_id": mission, "mission_revision": args.revision,
+                "objective": body["objective"], "task_keys": body["task_keys"],
+                "allowed_paths": body["allowed_paths"], "branch": body["branch"],
+                "expires_at": body["expires_at"],
+                "max_attempts_per_task": body["max_attempts_per_task"],
+                "execution_adapter": "local Codex CLI in isolated temporary clones",
+                "existing_run_state": prior_run["status"],
+                "approval_scope": "One local approval authorizes this bounded charter; every task still stops for independent review and exact source handoff.",
+                "merge_release_deploy_authorized": False,
+            }, indent=2), flush=True)
+            if resuming:
+                print("Resuming the existing mission approval; the supervisor revalidates the original charter and revision before continuing.",
+                      flush=True)
+            else:
+                try:
+                    response = input("Type " + repr(challenge) + " to approve the mission: ")
+                except (EOFError, KeyboardInterrupt):
+                    print("BLOCKED: mission approval cancelled", file=sys.stderr)
+                    return 2
+                if response != challenge:
+                    print("BLOCKED: mission approval not supplied", file=sys.stderr)
+                    return 2
+            result = orbit_autopilot_mission.run_mission(
+                conn, root, project, mission, args.revision,
+                operator_confirmed=True, max_seconds=args.max_seconds,
+                review_wait_seconds=args.review_wait_seconds)
         else:
             plan = orbit_autopilot_runner.preview(
                 conn, root, project, mission, args.revision)
@@ -112,7 +169,8 @@ def main(argv=None):
         return 0 if result["status"] in {
             "READY_FOR_LOCAL_OPERATOR_REVIEW", "REVIEW_REQUIRED",
             "STOP_REQUESTED", "STOPPED", "NO_RUN",
-            "REVIEW_HANDOFF_READY", "REVIEW_HANDOFF_RECORDED"} else 2
+            "REVIEW_HANDOFF_READY", "REVIEW_HANDOFF_RECORDED",
+            "COMPLETED", "WAITING_REVIEW", "PAUSED"} else 2
     finally:
         conn.close()
 
