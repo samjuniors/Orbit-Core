@@ -3,7 +3,7 @@
 **Status:** REVIEW HOLD — draft PR #191; not merged or published
 **Repository:** samjuniors/Orbit-Core
 **Branch:** claude/funny-bell-sxccz9
-**Reviewed source HEAD:** `16ec829f215171505f1a7f75b95802dafbcf776a`
+**Reviewed source HEAD:** `beda7af819337430c97c453a92d2bf3bd40a815c`
 **Version metadata:** VERSION=0.34.0, NEXT_VERSION=0.35.0
 **Decision authority:** Owner approval is required for PR/merge, release version bump, installation, host configuration and publication.
 
@@ -11,20 +11,20 @@ This record separates implementation evidence from security certification, nativ
 
 ## Current gate summary — 2026-11-28
 
-- Exact-head GitHub Actions run [#46126664765](https://github.com/samjuniors/Orbit-Core/actions/runs/46126664765): **PASS**.
-- Local Windows Python 3.13 full suite on this exact checkout: **910 tests passed, 55 skipped, 0 failures** in 205.652 seconds. Skips include POSIX-only checks and tests requiring Windows symlink-creation privileges.
-- Focused security/reliability subset within that run: **199 tests passed, 26 skipped, 0 failures** across filesystem adapters, audits, findings/readiness, mission supervisor/runner, updater notifications and MCP shared-database behavior.
-- `prepare_release_candidate.py`: **PASS**, `generated=false`; committed v0.34.0 desktop bundle is already source-parity clean.
+- Exact-head GitHub Actions run [#46134522074](https://github.com/samjuniors/Orbit-Core/actions/runs/46134522074): Linux Python 3.10/3.11/3.12/3.13 unit jobs and both MCP subprocess stress jobs **PASS**; Windows Python 3.12 unit/MCP and historical-upgrade job **IN PROGRESS** at this record update.
+- Local Windows Python 3.13 full suite on the immediately preceding code head `f8aea07`: **922 tests passed, 67 skipped, 0 failures** in 233.746 seconds. The exact current head `beda7af` then passed the focused filesystem/agent-factory/Windows adapter set: **51 tests, 21 skipped, 0 failures**; this includes the platform-independent openat2 ABI allowlist test.
+- `prepare_release_candidate.py` on `beda7af`: **PASS**, `generated=false`, bundle SHA-256 `ad138047fdb21795d66489c836cb664017927755c36476742ee80d023c7ca1c6`.
 - `check_release_readiness.py`: **PASS**.
 - `check_version.py --strict-bundle`: **PASS**.
-- `build_release.py --verify`: **PASS** for the Universal Setup, Antigravity plugin and Plugin Suite ZIPs.
-- `smoke_release_zip.py`: **PASS**, 59 tools; explicitly not a real IDE, desktop UI or browser test.
-- CodeRabbit's review of prior head `6538313` reported 22 Major findings. The owner recorded fixes for three Codex findings and selected CodeRabbit findings in `16ec829`; 19 Major findings and remaining lower-severity comments were still untriaged in that review. A new incremental CodeRabbit review and a Codex review of `16ec829` have been requested; both are pending at this record update.
+- Antigravity plugin and Plugin Suite rebuilt from current source; `build_release.py --verify`: **PASS**. Universal Setup SHA-256 `9a4643eb3b61f56f26a36dd16053f4ff48de1af91de787d5968192fd6c8c602f`; Antigravity ZIP SHA-256 `08b76778e1f02c9ea4c15fe0289303117401b3ec577ea48265d221c6f7c4c282`; Plugin Suite ZIP SHA-256 `ad62c1c1601dcdc089a89943bf89f06908a2006634ac13a51af6c2c6755f1964`.
+- `smoke_release_zip.py`: **PASS**, 59 tools; this is a disposable install/stdio smoke test, not a real IDE, desktop UI or browser test.
+- POSIX confirmed candidate writes now fail closed unless Linux 5.6+ `openat2` is available on an allowlisted 64-bit ABI. The project root must be owned by the effective user and not group/other writable; `.orbit`, `.orbit/agent-candidates` and the candidate directory must be owned by that user with mode 0700. Existing projects with a 0755 `.orbit` need its permissions corrected before confirmed candidate writes; previews remain available. Same-UID post-create renames are explicitly outside the OS security boundary and are reported by a best-effort post-write check.
+- CodeRabbit's review of prior head `6538313` reported 22 Major findings. The owner recorded fixes for three Codex findings and selected CodeRabbit findings, but 19 Major findings and lower-severity comments from that review remain untriaged. A fresh CodeRabbit review request was rate-limited; Codex review could not run because a repository review environment is not configured.
 - Open privacy follow-up: `orbit_source_audit.inventory_snapshot_sha256` remains an unkeyed content-derived digest persisted in the readiness ledger. It needs a locally persisted key or a redesigned non-content-derived identifier; the per-process HMAC in the security-review planner does **not** fix this separate field.
 - Independent human security review: **NOT DONE**. Signed-in native-host acceptance (Codex, Claude Code, Antigravity): **NOT VERIFIED**.
-- Publication and merge: **NOT APPROVED**. Do not publish while security/review gates remain open.
+- Publication and merge: **NOT APPROVED**. Keep PR #191 in draft; do not publish while security/review gates remain open.
 
-The full-suite result supersedes the earlier focused-only validation snapshot; the focused subset is listed separately for traceability.
+The full-suite result above is one commit behind the exact current head; the latest head has focused local validation plus the exact-head CI matrix in progress.
 
 ## Capability acceptance
 
@@ -34,7 +34,7 @@ The full-suite result supersedes the earlier focused-only validation snapshot; t
 | Source-content audit | IMPLEMENTED / Windows adapter tested; POSIX adapter added | Windows reads use pinned ancestors and no-delete-share leaf handles. POSIX reads use a pinned root descriptor, descriptor-relative directory traversal and O_NOFOLLOW leaf opens. Both reject multiply-linked files; raw source is not returned or persisted. POSIX regression tests passed in exact-head Linux CI. |
 | Findings ledger and reconciliation | IMPLEMENTED / TESTED | Stable finding identity, scope separation, review/disposition and revision-guarded task linking; no automatic task creation from unreviewed findings. |
 | Audit-to-plan preview | IMPLEMENTED / TESTED | Read-only planning and dependency previews; consequential task creation requires review/confirmation. |
-| Specialist candidate | IMPLEMENTED / Windows tested; POSIX adapter added | Windows uses pinned Win32 handles; POSIX uses dir_fd/O_NOFOLLOW and O_EXCL. POSIX regression tests passed in exact-head Linux CI; no host agent is registered, installed or activated. |
+| Specialist candidate | IMPLEMENTED / Windows tested; POSIX adapter added | Windows uses pinned Win32 handles. POSIX uses root-relative openat2 exclusive creation on allowlisted 64-bit Linux ABIs, with private-directory ownership/mode checks; unsupported systems remain preview-only. Same-UID post-create renames are outside the OS boundary and are reported as unverified. POSIX regression tests passed in exact-head Linux CI; no host agent is registered, installed or activated. |
 | Claude Code lifecycle adapter | Adapter IMPLEMENTED / synthetic smoke PASS | Optional hooks are not auto-loaded. Actual native Claude Code event delivery remains NOT VERIFIED. |
 | Model selection | ADVISORY ONLY | Host-reported model names inform recommendations. Orbit does not switch the active model, provider or account. |
 | Quota/capacity | ADVISORY / UNKNOWN without host evidence | Caller-reported context/rate/worker signals are not authoritative subscription quota or billing telemetry. |
