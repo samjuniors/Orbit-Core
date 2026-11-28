@@ -29,6 +29,22 @@ class WindowsFilesystemTests(unittest.TestCase):
         self.outside = Path(self.temp.name) / "outside"
         self.outside.mkdir()
 
+    def test_root_identity_uses_128_bit_file_id(self):
+        # ReFS file IDs are 128-bit; the 64-bit index is not unique there.
+        with orbit_windows_fs.pin_directory(self.root) as a, \
+                orbit_windows_fs.pin_directory(self.outside) as b:
+            vol_a, id_a = orbit_windows_fs._file_id(a.handle, self.root)
+            vol_b, id_b = orbit_windows_fs._file_id(b.handle, self.outside)
+        self.assertEqual(len(id_a), 16)
+        self.assertEqual(vol_a, vol_b)
+        self.assertNotEqual(id_a, id_b)
+
+    def test_missing_128_bit_file_id_fails_closed(self):
+        with mock.patch.object(orbit_windows_fs, "_GetFileInformationByHandleEx",
+                               return_value=False):
+            with self.assertRaises(orbit_windows_fs.UnsafePathError):
+                orbit_windows_fs.pin_directory_chain(self.root)
+
     def test_pinned_directory_denies_rename_until_released(self):
         child = self.root / "child"
         child.mkdir()

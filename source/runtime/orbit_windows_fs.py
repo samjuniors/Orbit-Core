@@ -66,6 +66,17 @@ if WINDOWS_SAFE:
             ("nFileIndexLow", wintypes.DWORD),
         ]
 
+    class _FILE_ID_INFO(ctypes.Structure):
+        _fields_ = [("VolumeSerialNumber", ctypes.c_ulonglong),
+                    ("FileId", ctypes.c_ubyte * 16)]
+
+    _FILE_ID_INFO_CLASS = 18  # FILE_INFO_BY_HANDLE_CLASS.FileIdInfo
+    _GetFileInformationByHandleEx = _kernel32.GetFileInformationByHandleEx
+    _GetFileInformationByHandleEx.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD
+    ]
+    _GetFileInformationByHandleEx.restype = wintypes.BOOL
+
     _CreateFileW = _kernel32.CreateFileW
     _CreateFileW.argtypes = [
         wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
@@ -128,6 +139,24 @@ def _open_handle(path: Path | str, access: int, flags: int, *, create_new=False)
         _CloseHandle(handle)
         raise error
     return handle, info
+
+
+def _file_id(handle, path) -> tuple[int, bytes]:
+    """Full 128-bit volume/file identity (FileIdInfo).
+
+    The 64-bit index from GetFileInformationByHandle is not unique on ReFS and
+    may be partial on network filesystems, so it is never used as identity.
+    A filesystem that cannot report FileIdInfo fails closed.
+    """
+    info = _FILE_ID_INFO()
+    if not _GetFileInformationByHandleEx(
+            handle, _FILE_ID_INFO_CLASS, ctypes.byref(info), ctypes.sizeof(info)):
+        raise UnsafePathError(
+            "Filesystem cannot report a 128-bit file identity; refusing", str(path))
+    file_id = bytes(info.FileId)
+    if info.VolumeSerialNumber == 0 or file_id == bytes(16):
+        raise UnsafePathError("Filesystem reported an empty file identity; refusing", str(path))
+    return info.VolumeSerialNumber, file_id
 
 
 def _final_path(handle) -> str:
@@ -243,17 +272,9 @@ def pin_directory_chain(path: Path | str) -> PinSet:
         # Re-open the final canonical path only after every ancestor is pinned.
         # Its volume/file ID must be identical to the original selected handle.
         canonical_root = pins.handles[-1]
-        selected_id = (
-            selected.info.dwVolumeSerialNumber,
-            selected.info.nFileIndexHigh,
-            selected.info.nFileIndexLow,
-        )
-        canonical_id = (
-            canonical_root.info.dwVolumeSerialNumber,
-            canonical_root.info.nFileIndexHigh,
-            canonical_root.info.nFileIndexLow,
-        )
-        if selected_id != canonical_id or selected_id == (0, 0, 0):
+        selected_id = _file_id(selected.handle, original)
+        canonical_id = _file_id(canonical_root.handle, resolved)
+        if selected_id != canonical_id:
             raise UnsafePathError("Project root identity changed while pinning ancestors", str(original))
         pins.root_path = resolved
         return pins
