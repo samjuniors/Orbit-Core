@@ -156,42 +156,38 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(), unchanged)
         self.assertFalse(result["agent_spawned"])
 
-    @unittest.skipIf(sys.platform == "win32", "POSIX descriptor race")
-    def test_candidate_folder_moved_out_during_write_fails_closed(self):
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_folder_moved_out_before_create_fails_closed(self):
         import orbit_posix_fs
         outside = self.root.parent / "outside"
-        real_write = orbit_posix_fs.write_new_file
+        real_ensure = orbit_posix_fs.ensure_directories
 
-        def move_then_write(parent_fd, name, content):
-            # Rename the held candidate folder out of the project before writing.
-            candidates = self.root / ".orbit" / "agent-candidates"
-            moved = [p for p in candidates.iterdir()][0]
-            moved.rename(outside)
-            return real_write(parent_fd, name, content)
+        def ensure_then_move(root, parts):
+            fd = real_ensure(root, parts)
+            # Move the candidate folder out and leave a symlink at its old path.
+            folder = self.root.joinpath(*parts)
+            folder.rename(outside)
+            folder.symlink_to(outside, target_is_directory=True)
+            return fd
 
-        with mock.patch.object(orbit_posix_fs, "write_new_file", move_then_write):
+        with mock.patch.object(orbit_posix_fs, "ensure_directories", ensure_then_move):
             result = self.agent(confirm_write=True)
         self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_PATH")
         self.assertFalse(result["state_written"])
         self.assertFalse((outside / "AGENT.md").exists())
 
-    @unittest.skipIf(sys.platform == "win32", "POSIX descriptor race")
-    def test_candidate_removed_when_containment_check_raises(self):
+    @unittest.skipIf(sys.platform == "win32", "POSIX adapter")
+    def test_candidate_write_fails_closed_without_openat2(self):
+        import errno
         import orbit_posix_fs
-        outside = self.root.parent / "outside2"
-        real_write = orbit_posix_fs.write_new_file
-
-        def move_symlink_then_write(parent_fd, name, content):
-            candidates = self.root / ".orbit" / "agent-candidates"
-            moved = [p for p in candidates.iterdir()][0]
-            moved.rename(outside)
-            moved.symlink_to(outside, target_is_directory=True)  # makes the re-walk raise
-            return real_write(parent_fd, name, content)
-
-        with mock.patch.object(orbit_posix_fs, "write_new_file", move_symlink_then_write):
+        with mock.patch.object(orbit_posix_fs, "BENEATH_PLATFORM", True), \
+                mock.patch.object(orbit_agent_factory, "_SAFE_RELATIVE_WRITE", True), \
+                mock.patch.object(orbit_posix_fs, "_openat2", return_value=-errno.ENOSYS):
             result = self.agent(confirm_write=True)
-        self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_PATH")
-        self.assertFalse((outside / "AGENT.md").exists())
+        self.assertEqual(result["status"], "HOLD_SAFE_RELATIVE_WRITE_UNAVAILABLE")
+        self.assertFalse(result["state_written"])
+        self.assertFalse(any(self.root.rglob("AGENT.md")))
+        self.assertEqual(self.agent()["status"], "AGENT_DRAFT_PREVIEW_ONLY")
 
     def test_windows_candidate_write_fails_closed_after_preview(self):
         with mock.patch.object(orbit_agent_factory, "_SAFE_RELATIVE_WRITE", False):

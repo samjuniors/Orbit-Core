@@ -25,7 +25,8 @@ except ImportError:  # pragma: no cover - packaged import guard
 _ROLE = re.compile(r"[a-z][a-z0-9-]{1,39}\Z")
 _SAFE_RELATIVE_WRITE = (
     (os.name == "nt" and orbit_windows_fs is not None and orbit_windows_fs.WINDOWS_SAFE)
-    or (os.name != "nt" and orbit_posix_fs is not None and orbit_posix_fs.SAFE)
+    or (os.name != "nt" and orbit_posix_fs is not None and orbit_posix_fs.SAFE
+        and orbit_posix_fs.BENEATH_PLATFORM)
 )
 _FORBIDDEN = re.compile(
     r"(?i)(?:ignore (?:all |your )?(?:system|developer|previous) instructions|"
@@ -250,32 +251,26 @@ def candidate(root, project, args):
         return {"status": "AGENT_CANDIDATE_DRAFTED", "state_written": True,
                 **{k: v for k, v in proposal.items() if k != "candidate_markdown"}}
     if os.name != "nt":
-        parent_fd = None
         parts = (".orbit", "agent-candidates", folder.name)
         try:
-            parent_fd = orbit_posix_fs.ensure_directories(root, parts)
-            orbit_posix_fs.write_new_file(parent_fd, "AGENT.md", body)
-            # The descriptor follows a renamed directory; fail closed and remove
-            # the file unless the candidate folder is verifiably inside the project.
-            try:
-                contained = orbit_posix_fs.same_directory_at(root, parts, parent_fd)
-            except (OSError, ValueError):
-                contained = False
-            if not contained:
-                try:
-                    os.unlink("AGENT.md", dir_fd=parent_fd)
-                except OSError:
-                    pass
-                raise orbit_posix_fs.UnsafePathError("Candidate folder moved during write")
+            if not orbit_posix_fs.beneath_available(root):
+                raise orbit_posix_fs.BeneathUnavailable("openat2 unavailable")
+            # Directories may be created through descriptors; the file itself is
+            # created only by one openat2 call confined beneath the project root.
+            os.close(orbit_posix_fs.ensure_directories(root, parts))
+            orbit_posix_fs.create_beneath(root, "/".join(parts + ("AGENT.md",)), body)
+        except orbit_posix_fs.BeneathUnavailable:
+            return {"status": "HOLD_SAFE_RELATIVE_WRITE_UNAVAILABLE", "role": role,
+                    "candidate_relative_path": proposal["candidate_relative_path"],
+                    "candidate_sha256": digest, "state_written": False,
+                    "agent_spawned": False,
+                    "reason": "The kernel cannot confine file creation beneath the project (openat2 unavailable); preview remains available and writes fail closed."}
         except FileExistsError:
             return {"status": "HOLD_EXISTING_CANDIDATE", "state_written": False,
                     **{k: v for k, v in proposal.items() if k != "candidate_markdown"}}
         except (OSError, ValueError):
             return {"status": "HOLD_UNSAFE_CANDIDATE_PATH", "state_written": False,
                     "agent_spawned": False}
-        finally:
-            if parent_fd is not None:
-                os.close(parent_fd)
         return {"status": "AGENT_CANDIDATE_DRAFTED", "state_written": True,
                 **{k: v for k, v in proposal.items() if k != "candidate_markdown"}}
     for part in (base, directory, folder):

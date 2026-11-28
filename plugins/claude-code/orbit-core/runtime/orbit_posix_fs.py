@@ -6,8 +6,11 @@ close descriptors returned by open_root() and ensure_directories().
 """
 from __future__ import annotations
 
+import ctypes
+import errno
 import os
 import stat
+import sys
 from pathlib import Path
 
 SAFE = (
@@ -18,6 +21,36 @@ SAFE = (
     and os.mkdir in os.supports_dir_fd
     and os.stat in os.supports_dir_fd
 )
+
+
+# openat2(2), Linux 5.6+. Same syscall number on every Linux architecture.
+_OPENAT2_NR = 437
+_RESOLVE_NO_MAGICLINKS = 0x02
+_RESOLVE_NO_SYMLINKS = 0x04
+_RESOLVE_BENEATH = 0x08
+# Only Linux offers an atomic "create beneath this directory" primitive. Other
+# POSIX systems fail closed for confirmed writes; previews remain available.
+BENEATH_PLATFORM = sys.platform.startswith("linux")
+
+
+class BeneathUnavailable(OSError):
+    """The kernel cannot confine a lookup beneath a directory (no openat2)."""
+
+
+class _OpenHow(ctypes.Structure):
+    _fields_ = [("flags", ctypes.c_uint64), ("mode", ctypes.c_uint64),
+                ("resolve", ctypes.c_uint64)]
+
+
+def _openat2(dir_fd, path, flags, mode, resolve):
+    """Return a new fd, or a negative errno."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.syscall.restype = ctypes.c_long
+    how = _OpenHow(flags, mode, resolve)
+    result = libc.syscall(ctypes.c_long(_OPENAT2_NR), ctypes.c_int(dir_fd),
+                          ctypes.c_char_p(os.fsencode(path)), ctypes.byref(how),
+                          ctypes.c_size_t(ctypes.sizeof(how)))
+    return result if result >= 0 else -ctypes.get_errno()
 
 
 class UnsafePathError(OSError):
@@ -143,48 +176,6 @@ def ensure_directories(root, relative_parts):
         raise
 
 
-def same_directory_at(root, relative_parts, fd):
-    """True only if fd's directory is root/relative_parts and lies under root.
-
-    A held descriptor follows its directory if it is renamed. The downward walk
-    checks the exact location; it alone can be fooled by an ancestor that moves
-    while the walk descends through it. The upward walk uses "..", which always
-    resolves to a directory's real current parent, and must reach root's inode
-    in exactly len(relative_parts) steps.
-    """
-    parts = tuple(relative_parts)
-    expected = os.fstat(fd)
-    root_fd = open_root(root)
-    try:
-        root_info = os.fstat(root_fd)
-        current = os.dup(root_fd)
-        try:
-            for raw in parts:
-                try:
-                    child = _open_dir_at(current, raw)
-                except FileNotFoundError:
-                    return False
-                os.close(current)
-                current = child
-            actual = os.fstat(current)
-            if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
-                return False
-        finally:
-            os.close(current)
-        current = os.dup(fd)
-        try:
-            for _ in parts:
-                parent = os.open("..", _dir_flags(), dir_fd=current)
-                os.close(current)
-                current = parent
-            top = os.fstat(current)
-            return (top.st_dev, top.st_ino) == (root_info.st_dev, root_info.st_ino)
-        finally:
-            os.close(current)
-    finally:
-        os.close(root_fd)
-
-
 def write_new_file(parent_fd, name, content):
     """Exclusively create a private regular file relative to a held parent fd."""
     name = _component(name)
@@ -196,6 +187,71 @@ def write_new_file(parent_fd, name, content):
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
             raise UnsafePathError("Created candidate is not a single-link regular file")
+        with os.fdopen(fd, "wb") as stream:
+            fd = -1
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def beneath_available(root):
+    """Probe openat2 against root before any directory is created."""
+    if not (SAFE and BENEATH_PLATFORM):
+        return False
+    root_fd = open_root(root)
+    try:
+        fd = _openat2(root_fd, ".", os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0),
+                      0, _RESOLVE_BENEATH)
+    finally:
+        os.close(root_fd)
+    if fd >= 0:
+        os.close(fd)
+        return True
+    return False
+
+
+def create_beneath(root, relative, content):
+    """Exclusively create root/relative with one openat2 call confined beneath root.
+
+    The kernel resolves every component beneath the pinned root fd, rejects
+    symlinks and magic links, and returns EAGAIN if a concurrent rename races the
+    lookup, so the file can only be created inside the project. Parent
+    directories must already exist. Raises BeneathUnavailable where openat2 is
+    missing; never falls back to a path- or child-descriptor-based create.
+    """
+    _require_safe()
+    if not BENEATH_PLATFORM:
+        raise BeneathUnavailable(errno.ENOSYS, "openat2 is Linux-only")
+    parts = _relative_parts(relative)
+    data = content.encode("utf-8") if isinstance(content, str) else bytes(content)
+    flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+             | getattr(os, "O_CLOEXEC", 0))
+    resolve = _RESOLVE_BENEATH | _RESOLVE_NO_SYMLINKS | _RESOLVE_NO_MAGICLINKS
+    root_fd = open_root(root)
+    try:
+        for _ in range(3):
+            fd = _openat2(root_fd, "/".join(parts), flags, 0o600, resolve)
+            if fd != -errno.EAGAIN:
+                break
+        if fd < 0:
+            code = -fd
+            if code == errno.ENOSYS:
+                raise BeneathUnavailable(code, "openat2 unavailable", os.fspath(relative))
+            if code == errno.EEXIST:
+                raise FileExistsError(code, os.strerror(code), os.fspath(relative))
+            if code in (errno.ELOOP, errno.EXDEV):
+                raise UnsafePathError(code, "Path escapes the project or crosses a link",
+                                      os.fspath(relative))
+            raise OSError(code, os.strerror(code), os.fspath(relative))
+    finally:
+        os.close(root_fd)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise UnsafePathError("Created file is not a single-link regular file")
         with os.fdopen(fd, "wb") as stream:
             fd = -1
             stream.write(data)

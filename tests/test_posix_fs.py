@@ -1,6 +1,7 @@
 """Adversarial tests for descriptor-relative POSIX project filesystem operations."""
 from __future__ import annotations
 
+import errno
 import os
 import sys
 import tempfile
@@ -26,24 +27,31 @@ class PosixFilesystemTests(unittest.TestCase):
         self.outside = self.base / "outside"
         self.outside.mkdir()
 
-    def test_same_directory_at_rejects_ancestor_moved_during_walk(self):
-        parts = (".orbit", "agent-candidates", "x")
-        fd = orbit_posix_fs.ensure_directories(self.root, parts)
-        self.addCleanup(os.close, fd)
-        self.assertTrue(orbit_posix_fs.same_directory_at(self.root, parts, fd))
-        real_open = orbit_posix_fs._open_dir_at
-        moved = []
+    @unittest.skipUnless(orbit_posix_fs.BENEATH_PLATFORM, "openat2 is Linux-only")
+    def test_create_beneath_writes_only_inside_root(self):
+        parts = (".orbit", "candidates")
+        os.close(orbit_posix_fs.ensure_directories(self.root, parts))
+        orbit_posix_fs.create_beneath(self.root, ".orbit/candidates/AGENT.md", "body")
+        self.assertEqual((self.root / ".orbit/candidates/AGENT.md").read_text(), "body")
+        with self.assertRaises(FileExistsError):
+            orbit_posix_fs.create_beneath(self.root, ".orbit/candidates/AGENT.md", "again")
+        with self.assertRaises(ValueError):
+            orbit_posix_fs.create_beneath(self.root, "../outside/AGENT.md", "x")
 
-        def open_then_move(parent_fd, name):
-            child = real_open(parent_fd, name)
-            if name == ".orbit" and not moved:
-                # The walk now holds .orbit; move it out before descending further.
-                (self.root / ".orbit").rename(self.outside / ".orbit")
-                moved.append(True)
-            return child
+    @unittest.skipUnless(orbit_posix_fs.BENEATH_PLATFORM, "openat2 is Linux-only")
+    def test_create_beneath_rejects_ancestor_replaced_by_symlink(self):
+        (self.outside / "candidates").mkdir()
+        os.symlink(self.outside, self.root / ".orbit")
+        with self.assertRaises(orbit_posix_fs.UnsafePathError):
+            orbit_posix_fs.create_beneath(self.root, ".orbit/candidates/AGENT.md", "x")
+        self.assertFalse((self.outside / "candidates" / "AGENT.md").exists())
 
-        with mock.patch.object(orbit_posix_fs, "_open_dir_at", open_then_move):
-            self.assertFalse(orbit_posix_fs.same_directory_at(self.root, parts, fd))
+    def test_create_beneath_fails_closed_without_openat2(self):
+        with mock.patch.object(orbit_posix_fs, "BENEATH_PLATFORM", True), \
+                mock.patch.object(orbit_posix_fs, "_openat2", return_value=-errno.ENOSYS):
+            with self.assertRaises(orbit_posix_fs.BeneathUnavailable):
+                orbit_posix_fs.create_beneath(self.root, "AGENT.md", "x")
+        self.assertFalse((self.root / "AGENT.md").exists())
 
     def test_root_walk_rejects_symlink_ancestor(self):
         real = self.base / "real"
