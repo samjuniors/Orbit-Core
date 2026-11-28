@@ -1,6 +1,6 @@
 # Orbit Core — cross-agent continuity and handoff
 
-**Last reviewed:** 2026-11-27 22:46 Asia/Kolkata.
+**Last reviewed:** 2026-11-28 06:14 Asia/Kolkata.
 **Canonical repository:** https://github.com/samjuniors/Orbit-Core. Revalidate live state before every resume.
 **Scope:** provider-neutral Orbit Core only. Orbit Commander remains separately paused and out of scope.
 **Current baseline:** main VERSION=0.33.1 / NEXT_VERSION=0.34.0; v0.33.0 prerelease published; v0.33.1 and v0.34.0 are not published.
@@ -575,3 +575,38 @@ Canonical repository: [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbi
 - PR #178 current head `7bd44acb0358f4aabf104bb744f371e8356ff143` completed [pull_request run #46038299281](https://github.com/samjuniors/Orbit-Core/actions/runs/46038299281) PASS 5/5, including Windows Python 3.12. This verifies the current documentation head; PR remains draft with no human review.
 - PR #187 current head `03b1770214023b4eb3cd3c5a0725d415b5941ef1` completed [run #46037740696](https://github.com/samjuniors/Orbit-Core/actions/runs/46037740696) PASS 5/5. Windows Python 3.12 ran 850 tests with 13 skips. This verifies CI tests, not owner-profile host permission behavior.
 - Issue #188 static investigation found a plausible but unconfirmed cause: `orbit_mcp.main` starts an untracked daemon update-check thread; `orbit_updates._fetch` uses urllib with an 8-second timeout; the short-lived shared-DB subprocess test does not set `ORBIT_UPDATE_CHECK=0`. Compare fresh-cache runs with update check enabled/disabled and add a bounded thread-lifecycle/shutdown test. Do not mark #188 fixed without root-cause evidence.
+
+
+## 2026-11-28 — Morning live revalidation
+
+**Verified at:** 2026-11-28 06:14 Asia/Kolkata. Revalidate live state before resuming.
+
+### Canonical source and releases
+- Main remains `2fdf4f329774b9644e75ac0df4d89738a7cd625f`; `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`, 57-tool baseline. Main exact CI [#45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202) passed 5/5 (Ubuntu Python 3.10–3.13 and Windows Python 3.12; last main run 2026-11-23).
+- Latest published prerelease remains [v0.33.0](https://github.com/samjuniors/Orbit-Core/releases/tag/v0.33.0), published 2026-11-23 08:20:55 UTC with eight package/checksum assets. Latest stable remains v0.30.0. v0.33.1 and v0.34.0 are unpublished.
+- Live inventory: 45 open PRs and 11 open non-PR issues. Main branch API reports `protected=false`, protection disabled and required status-check enforcement off. This is a confirmed governance gap, not merely unknown; no settings were changed.
+
+### Exact current PR/CI state
+- [PR #178](https://github.com/samjuniors/Orbit-Core/pull/178), docs-only, OPEN/DRAFT, base main, current head `167ea834228b1edf1795a5d805a23d79ea80d60c`, 34 commits / 7 files. Exact-head push [#46041736579](https://github.com/samjuniors/Orbit-Core/actions/runs/46041736579) and pull_request [#46041743870](https://github.com/samjuniors/Orbit-Core/actions/runs/46041743870) both completed PASS 5/5, including Windows Python 3.12. No submitted human review or inline review threads. Keep draft pending human documentation review.
+- [PR #182](https://github.com/samjuniors/Orbit-Core/pull/182), branch `feat/v034-security-review-plan-20261125`, head `a4fcaf563ff61db678344cf82ed4eab34a76a5b1`, base main, OPEN/DRAFT. The #184 privacy fix is now implemented here: locator-only `evidence_ref_sha256 = SHA256(rule:relative_path:line_number)`; old source-line-derived `evidence_sha256` is absent. Tests prove matched-secret changes do not alter the locator reference while the aggregate snapshot hash changes. Updated Claude Desktop MCP bundle is committed. Exact CI [#45980372422](https://github.com/samjuniors/Orbit-Core/actions/runs/45980372422) PASS 5/5; strict source-parity check passed. Bundle SHA-256: `43f8abcd0353ca9ab8b11697210c33a5bbf93a3c09254e6a07fe8aaefa91cf33`; `generated=false` means CI verified the committed binary, it did not regenerate it. Issue #184 remains OPEN until human review and merge put the fix on main.
+- [PR #186](https://github.com/samjuniors/Orbit-Core/pull/186), branch `fix/v034-filesystem-security-20261127`, head `f81eb1f051cc6afee00ac10ed1e8619ae3b10633`, 11 commits / 28 files, base `feat/v034-context-aware-intelligence-20261123` (not main), OPEN/DRAFT. Exact CI [#45993595975](https://github.com/samjuniors/Orbit-Core/actions/runs/45993595975) PASS 5/5. Adds POSIX descriptor-relative operations and Windows handle/reparse-aware handling. ReFS/SMB identity gate remains: implementation compares legacy 64-bit file index; Microsoft documents ReFS 128-bit IDs and warns the 64-bit index is not guaranteed unique. Use full FileIdInfo identity where supported or explicitly restrict/fail closed; test the filesystem matrix. Issue #183 remains OPEN pending this and independent review.
+- [PR #187](https://github.com/samjuniors/Orbit-Core/pull/187), branch `feat/v034-autonomous-mission-supervisor-20261127`, head `79a6b9b740e7953273d1c424779781fb6c6e367c`, 8 commits / 7 files, base `feat/v034-context-aware-intelligence-20261123` (not main), OPEN/DRAFT. Exact CI [#46040958891](https://github.com/samjuniors/Orbit-Core/actions/runs/46040958891) PASS 5/5. Foreground, sequential local Codex CLI only; no native Claude/Antigravity dispatch, parallelism, background/remote execution or PC-off continuation. Issue #189 remains OPEN: parent lock directory is not pinned; treat lock as best-effort serialization only until private per-user directory is handle-pinned and adversarially tested.
+- PRs #179–#181 remain OPEN/DRAFT on main; their previously recorded exact-head CI passed 5/5. #179 is advisory model recommendation, #180 lifecycle test coverage, #181 specialist safety regression coverage; do not overstate these as host execution.
+- Broad branch `feat/v034-context-aware-intelligence-20261123` is exactly 100 commits ahead / 0 behind main at `8620e4a3063852d2c99f6a157fc9ee688c989b6a`, no PR. Keep unmerged; #186/#187 are stacked on it.
+
+### Open reliability/security issues
+- [#183](https://github.com/samjuniors/Orbit-Core/issues/183): Windows junction escape was reproduced in earlier code; current Windows branch uses fail-closed behavior for unsupported operations. POSIX parent-directory race remains a static-review lead. #186 is progress, not acceptance; ReFS/SMB identity and independent review remain.
+- [#184](https://github.com/samjuniors/Orbit-Core/issues/184): locator-only fix is implemented on draft #182 with exact-head CI and package parity; issue remains open pending human review/merge.
+- [#188](https://github.com/samjuniors/Orbit-Core/issues/188): intermittent Linux subprocess crash remains unresolved. Original Ubuntu Python 3.10 failure: child exit -6, `double free or corruption (out)`; Python 3.13: exit -11/SIGSEGV. Later reruns and Windows CI passed but do not prove root cause. The updater daemon-thread explanation is a hypothesis only. The planned 20+ fresh-cache enabled/disabled runs and blocked-fetch shutdown experiment have NOT been run in this checkpoint.
+- [#189](https://github.com/samjuniors/Orbit-Core/issues/189): POSIX parent-symlink acceptance in mission lock path was confirmed in a disposable review check; no project-data escape was demonstrated. Windows reparse handling is also required. No merge/release until private directory pinning, relative lock creation, adversarial tests and independent review.
+
+### Previous nightly execution
+- Orbit Nightly Build run `23464352-8f78-8324-a3de-af63c3b3561f` actually executed: scheduled 2026-11-27 22:00 IST, started 22:46:24 IST, completed 22:58:24 IST; recorded status `completed`. Latest result run ID matches, content not truncated, no failure message, no user action required; delivery status unknown.
+- Recorded outcome: #186 CI 5/5, #187 CI 5/5, #178 handoff updated, #188 original crash logs inspected, #189 lock-parent issue recorded, Notion handoff/roadmap/decisions/research synchronized. No runtime merge, release, install or deployment.
+
+### Environment and next safe actions
+- Remote Arc `DESKTOP-AND1FUJ` was last reported offline 2026-11-27 11:51:32 UTC. No local checkout, local Windows/Linux adversarial tests, #188 20-run experiment, owner-profile Claude/Codex/Antigravity acceptance, or `.orbit`/SQLite inspection occurred in this checkpoint. No Orbit ChatGPT plugin connector was exposed; GitHub and Notion integrations were used.
+- P0: obtain independent review of #186 and resolve ReFS/SMB identity semantics; obtain human review/merge disposition for #182/#184; fix #189 lock parent identity; run the #188 discriminator experiment on Linux.
+- P1: reconcile/split the 100-commit v0.34 branch; review #178–#187 individually; reconnect Windows for owner-profile host acceptance.
+- Keep v0.33.1 unpublished until security/reliability disposition, exact-head CI, package parity, independent review, owner-profile host acceptance and explicit owner go/no-go are recorded. Keep RAD P2 #138 and PRs #136–#147 separate/on hold; Orbit Commander remains paused.
+- No merge, release, install, deployment, paid API spend or host permission change occurred in this checkpoint.
