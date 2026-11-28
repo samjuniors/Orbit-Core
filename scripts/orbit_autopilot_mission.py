@@ -673,49 +673,113 @@ def timeline(conn, root, project, mission):
     return status(conn, root, project, mission)
 
 
+LOCK_ACQUIRED = "ACQUIRED"
+LOCK_HELD = "HELD"
+LOCK_UNSAFE = "UNSAFE"
+
+
 @contextmanager
 def _mission_lock(root, project, mission):
-    """OS-released exclusive lock; a crashed supervisor cannot leave a stale lease."""
-    identity = "\\0".join((str(Path(root).resolve()), project, mission))
-    name = hashlib.sha256(identity.encode("utf-8")).hexdigest() + ".lock"
-    folder = Path(tempfile.gettempdir()) / "orbit-mission-locks"
-    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path = folder / name
-    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_BINARY", 0)
-    flags |= getattr(os, "O_NOFOLLOW", 0)
-    fd = os.open(path, flags, 0o600)
-    acquired = False
-    unlock = None
+    """OS-released exclusive lock; a crashed supervisor cannot leave a stale lease.
+
+    Yields LOCK_ACQUIRED, LOCK_HELD (another supervisor owns it) or LOCK_UNSAFE
+    (the lock location could not be pinned and validated; fail closed).
+    """
+    identity = "\0".join((str(Path(root).resolve()), project, mission))
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    if os.name == "nt":
+        with _windows_mutex_lock(digest) as state:
+            yield state
+    else:
+        with _posix_flock_lock(digest) as state:
+            yield state
+
+
+@contextmanager
+def _windows_mutex_lock(digest):
+    # A session-local named kernel mutex has no filesystem path, so there is no
+    # parent directory, junction or reparse point to redirect (issue #189).
+    # Existence of the object means held; the kernel destroys it when the
+    # owning process exits, so a crash cannot leave a stale lock.
     try:
-        if not os.path.isfile(path):
-            yield False
-            return
-        if os.name == "nt":
-            import msvcrt
-            if os.fstat(fd).st_size == 0:
-                os.write(fd, b"\\0")
-                os.fsync(fd)
-            os.lseek(fd, 0, os.SEEK_SET)
-            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-            unlock = lambda: msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            unlock = lambda: fcntl.flock(fd, fcntl.LOCK_UN)
-        acquired = True
-        yield True
-    except (OSError, ImportError):
-        if not acquired:
-            yield False
-        else:
-            raise
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateMutexW.restype = wintypes.HANDLE
+        kernel32.CreateMutexW.argtypes = (
+            wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    except (ImportError, OSError, AttributeError):
+        yield LOCK_UNSAFE
+        return
+    handle = kernel32.CreateMutexW(None, False, "Local\\orbit-mission-" + digest)
+    if not handle:
+        yield LOCK_UNSAFE
+        return
+    try:
+        error_already_exists = 183
+        yield (LOCK_HELD if ctypes.get_last_error() == error_already_exists
+               else LOCK_ACQUIRED)
     finally:
-        if unlock is not None:
-            try:
-                unlock()
-            except OSError:
-                pass
-        os.close(fd)
+        kernel32.CloseHandle(handle)
+
+
+@contextmanager
+def _posix_flock_lock(digest):
+    import fcntl
+    import stat
+    if os.open not in os.supports_dir_fd or not hasattr(os, "O_NOFOLLOW") \
+            or not hasattr(os, "O_DIRECTORY"):
+        yield LOCK_UNSAFE
+        return
+    uid = os.geteuid()
+    folder = Path(tempfile.gettempdir()) / f"orbit-mission-locks-{uid}"
+    try:
+        os.mkdir(folder, 0o700)
+    except FileExistsError:
+        pass
+    except OSError:
+        yield LOCK_UNSAFE
+        return
+    # Pin the directory by descriptor; O_NOFOLLOW rejects a symlinked folder and
+    # every later operation is relative to this descriptor, never the pathname.
+    try:
+        dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        yield LOCK_UNSAFE
+        return
+    fd = None
+    try:
+        info = os.fstat(dir_fd)
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != uid
+                or info.st_mode & 0o077):
+            yield LOCK_UNSAFE
+            return
+        try:
+            fd = os.open(digest + ".lock",
+                         os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600,
+                         dir_fd=dir_fd)
+        except OSError:
+            yield LOCK_UNSAFE
+            return
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != uid
+                or info.st_nlink != 1 or info.st_mode & 0o077):
+            yield LOCK_UNSAFE
+            return
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            yield LOCK_HELD
+            return
+        try:
+            yield LOCK_ACQUIRED
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        os.close(dir_fd)
 
 
 def run_mission(conn, root, project, mission, revision, *,
@@ -725,8 +789,11 @@ def run_mission(conn, root, project, mission, revision, *,
                 poll_seconds=0.5, launch=runner._codex_process,
                 sleep=time.sleep):
     """Serialize mission supervisors across processes on this machine."""
-    with _mission_lock(root, project, mission) as acquired:
-        if not acquired:
+    with _mission_lock(root, project, mission) as lock:
+        if lock == LOCK_UNSAFE:
+            return {"status": "HOLD_MISSION_LOCK_UNSAFE",
+                    "worker_running_verified": False}
+        if lock != LOCK_ACQUIRED:
             return {"status": "HOLD_SUPERVISOR_ALREADY_RUNNING",
                     "worker_running_verified": False}
         return _run_mission_locked(

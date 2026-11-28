@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -550,8 +551,8 @@ class MissionSupervisorTests(unittest.TestCase):
         self.assertTrue(requeued[0]["payload"]["task_spec_unchanged"])
 
     def test_second_supervisor_is_held_by_exclusive_process_lock(self):
-        with mission._mission_lock(self.root, self.project, self.mission) as acquired:
-            self.assertTrue(acquired)
+        with mission._mission_lock(self.root, self.project, self.mission) as lock:
+            self.assertEqual(lock, mission.LOCK_ACQUIRED)
             result = mission.run_mission(
                 self.db, self.root, self.project, self.mission, 1,
                 operator_confirmed=True,
@@ -617,3 +618,72 @@ class MissionSupervisorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipIf(os.name == "nt", "POSIX lock-directory adversarial checks")
+class MissionLockDirectoryTests(unittest.TestCase):
+    """Issue #189: the lock directory is pinned by descriptor and validated."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self.tmp.name)
+        patcher = mock.patch.object(mission.tempfile, "gettempdir",
+                                    return_value=str(self.base))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.tmp.cleanup)
+        self.folder = self.base / f"orbit-mission-locks-{os.geteuid()}"
+        self.outside = self.base / "outside"
+        self.outside.mkdir(mode=0o700)
+
+    def lock_state(self):
+        with mission._mission_lock(self.base, "p", "m") as lock:
+            return lock
+
+    def lock_name(self):
+        with mission._mission_lock(self.base, "p", "m"):
+            pass
+        names = os.listdir(self.folder)
+        self.assertEqual(len(names), 1)
+        return names[0]
+
+    def test_private_directory_is_created_and_lock_acquired(self):
+        self.assertEqual(self.lock_state(), mission.LOCK_ACQUIRED)
+        self.assertEqual(self.folder.stat().st_mode & 0o777, 0o700)
+
+    def test_symlinked_lock_directory_fails_closed(self):
+        self.folder.symlink_to(self.outside, target_is_directory=True)
+        self.assertEqual(self.lock_state(), mission.LOCK_UNSAFE)
+        self.assertEqual(os.listdir(self.outside), [])
+
+    def test_shared_permission_lock_directory_fails_closed(self):
+        self.folder.mkdir(mode=0o700)
+        os.chmod(self.folder, 0o777)
+        self.assertEqual(self.lock_state(), mission.LOCK_UNSAFE)
+
+    def test_symlinked_lock_file_fails_closed(self):
+        name = self.lock_name()
+        (self.folder / name).unlink()
+        (self.folder / name).symlink_to(self.outside / "target")
+        self.assertEqual(self.lock_state(), mission.LOCK_UNSAFE)
+        self.assertFalse((self.outside / "target").exists())
+
+    def test_hard_linked_lock_file_fails_closed(self):
+        name = self.lock_name()
+        os.link(self.folder / name, self.outside / "alias")
+        self.assertEqual(self.lock_state(), mission.LOCK_UNSAFE)
+
+    def test_parent_replacement_after_pinning_does_not_redirect(self):
+        with mission._mission_lock(self.base, "p", "m") as lock:
+            self.assertEqual(lock, mission.LOCK_ACQUIRED)
+            self.folder.rename(self.base / "moved")
+            self.folder.symlink_to(self.outside, target_is_directory=True)
+        self.assertEqual(os.listdir(self.outside), [])
+        self.assertEqual(len(os.listdir(self.base / "moved")), 1)
+
+    def test_unsafe_lock_holds_supervisor_without_launch(self):
+        self.folder.symlink_to(self.outside, target_is_directory=True)
+        result = mission.run_mission(
+            None, self.base, "p", "m", 1, operator_confirmed=True,
+            launch=lambda *args: self.fail("unsafe lock must not launch"))
+        self.assertEqual(result["status"], "HOLD_MISSION_LOCK_UNSAFE")

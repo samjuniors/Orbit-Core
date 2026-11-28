@@ -19,7 +19,7 @@ A single interactive local confirmation authorizes the bounded charter. The supe
 7. Advances only after the existing review ledger says `REVIEW_ACCEPTED` and the source handoff is independently reconciled.
 8. Repeats within the original charter; completion never implies merge, release or deployment.
 
-The supervisor has a local durable run record, a best-effort local serialization lock, and an append-only event timeline whose hash covers event metadata as well as payload. The lock directory is not yet a security boundary: issue [#189](https://github.com/samjuniors/Orbit-Core/issues/189) tracks the parent-directory symlink/reparse risk; do not rely on it for hostile multi-user isolation until the directory is pinned by handle and adversarial tests pass. The local mission command remains a development CLI; it is not exposed as an MCP action, stable installed command or background service.
+The supervisor has a local durable run record, a best-effort local serialization lock, and an append-only event timeline whose hash covers event metadata as well as payload. Issue [#189](https://github.com/samjuniors/Orbit-Core/issues/189) remediation: on POSIX the per-user lock directory is pinned by descriptor and validated (not a symlink, owned by the effective user, no group/other permissions) and the lock file is created relative to that descriptor with `O_NOFOLLOW` and checked for owner and single link; on Windows the lock is a session-local named kernel mutex with no filesystem path. Any validation failure returns `HOLD_MISSION_LOCK_UNSAFE`. The lock remains local serialization, not a multi-user security boundary, until independent review accepts it. The local mission command remains a development CLI; it is not exposed as an MCP action, stable installed command or background service.
 
 ## Run it
 
@@ -65,7 +65,7 @@ The supervisor checks that the source commit is a descendant of the task's origi
 - The local approval is operator input, not cryptographic identity proof.
 - Task acceptance is never inferred from model output. A separate review step and exact source handoff remain mandatory; the local ledger records the caller-reported verdict but does not authenticate reviewer identity.
 - Reviewer-directed rework can retry the same task within the charter attempt limit; after exhaustion, only independent DAG-ready tasks may continue. Failed/ambiguous host runs still stop for reconciliation; automatic retry of uncertain worker failures and autonomous scope expansion are not enabled.
-- The current mission lock opens a leaf with `O_NOFOLLOW` where available but does not yet pin its parent directory; see [#189](https://github.com/samjuniors/Orbit-Core/issues/189). Treat it as best-effort local serialization only, not a security boundary.
+- The mission lock fails closed (`HOLD_MISSION_LOCK_UNSAFE`) when its POSIX directory or lock file cannot be pinned and validated, or when the Windows mutex cannot be created; see [#189](https://github.com/samjuniors/Orbit-Core/issues/189). POSIX adversarial tests run in CI; the Windows mutex path is covered only by the existing concurrent-supervisor test on Windows CI. Independent security review is still required.
 - Persisted PID values are never killed after a supervisor restart. Possible orphan processes fail closed for manual host reconciliation.
 - Model recommendations remain advisory; no model switching, quota claims or fabricated cost/token telemetry.
 - Merge, release, publish, deployment, secrets, permission changes, deletion and scope expansion remain outside the charter.
