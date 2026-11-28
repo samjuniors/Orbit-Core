@@ -13,6 +13,18 @@ import orbit_posix_fs
 
 class ProjectAuditTests(unittest.TestCase):
     @unittest.skipUnless(orbit_project_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
+    def test_empty_directory_change_changes_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "main.py").write_text("print('hello')", encoding="utf-8")
+            before = orbit_project_audit.scan_project(root)
+            (root / "tests").mkdir()
+            after = orbit_project_audit.scan_project(root)
+            self.assertNotEqual(before["inventory_snapshot_sha256"],
+                                after["inventory_snapshot_sha256"])
+
+    @unittest.skipUnless(orbit_project_audit._WINDOWS_SAFE_RELATIVE_SCAN, "Safe traversal adapter unavailable")
     def test_reports_structural_signals_without_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

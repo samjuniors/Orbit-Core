@@ -287,6 +287,12 @@ def scan_project(root: Path, profile: dict | None = None) -> dict:
         digest.update(rel)
         digest.update(item["size"].to_bytes(8, "big"))
         digest.update(item["mtime_ns"].to_bytes(8, "big", signed=True))
+    # Directories drive findings too (e.g. an empty tests/), so they are part of
+    # the snapshot; the "D" marker keeps them distinct from file records.
+    for path in directories:
+        rel = path.encode("utf-8", "surrogatepass")
+        digest.update(b"D" + len(rel).to_bytes(4, "big"))
+        digest.update(rel)
     snapshot = digest.hexdigest()
 
     findings = []

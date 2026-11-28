@@ -281,7 +281,7 @@ def _claim(conn, root, project, mission, plan):
 
 
 def _update(conn, root, project, mission, token, state, *, workspace=None,
-            worker_pid=None, result=None, changed_paths=None):
+            worker_pid=None, result=None, changed_paths=None, only_from_running=False):
     now = _now()
     fields = ["state=?", "updated_at=?", "heartbeat_at=?"]
     values = [state, now, now]
@@ -300,15 +300,18 @@ def _update(conn, root, project, mission, token, state, *, workspace=None,
     values.extend([project, str(root), mission, token])
     # NEVER overwrite a concurrent STOP_REQUESTED event with a heartbeat or
     # a delayed RUNNING update from the worker's launching thread.
-    clause = " AND state='RUNNING'" if state == RUNNING else ""
+    clause = " AND state='RUNNING'" if state == RUNNING or only_from_running else ""
     with conn:
         affected = conn.execute(
             "UPDATE orbit_autopilot_runner_jobs SET " + ", ".join(fields) +
             " WHERE project=? AND project_root=? AND mission_id=? AND run_id=?" + clause,
             values,
         ).rowcount
+    if affected != 1 and only_from_running:
+        return False  # lost to a concurrent STOP_REQUESTED; caller honours the stop
     if affected != 1:
         raise RuntimeError("Autopilot run identity changed while executing")
+    return True
 
 
 def _heartbeat(conn, root, project, mission, token):
@@ -620,9 +623,14 @@ def run_once(conn, root, project, mission, revision, *, operator_confirmed=False
                     "reason": "Codex failed, was denied, or lacked an unambiguous completed turn"}
         in_scope, paths, result = _review_changes(
             work, plan["write_paths"], expected_head=plan["source_head_verified"])
-        _update(conn, root, project, mission, token,
-                "REVIEW_REQUIRED" if in_scope else "BLOCKED",
-                result=result, changed_paths=paths if in_scope else None)
+        # A stop accepted while changes were being reviewed must win.
+        if not _update(conn, root, project, mission, token,
+                       "REVIEW_REQUIRED" if in_scope else "BLOCKED",
+                       result=result, changed_paths=paths if in_scope else None,
+                       only_from_running=True):
+            _update(conn, root, project, mission, token, "STOPPED",
+                    result="stop requested during change review; no source acceptance")
+            return {"status": "STOPPED", "workspace": str(work)}
         return {
             "status": result, "workspace": str(work), "changed_paths": paths,
             "original_workspace_untouched_by_runner": True,

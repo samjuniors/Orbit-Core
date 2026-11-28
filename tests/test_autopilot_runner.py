@@ -261,6 +261,21 @@ class AutopilotRunnerTests(unittest.TestCase):
         self.assertTrue((Path(result["workspace"]) / "src/api/api.py").is_file())
         self.assertEqual(self.preview()["status"], "HOLD_REVIEW_PREVIOUS_RUN")
 
+    def test_stop_during_change_review_is_not_overwritten(self):
+        real_review = runner._review_changes
+
+        def review_then_stop(*args, **kwargs):
+            outcome = real_review(*args, **kwargs)
+            # Stop lands after the last _needs_stop() check, during review.
+            self.assertEqual(runner.stop(self.db, self.root, self.project,
+                                         self.mission)["status"], "STOP_REQUESTED")
+            return outcome
+
+        with patch.object(runner, "_review_changes", review_then_stop):
+            result = self.invoke(self.launch_success)
+        self.assertEqual(result["status"], "STOPPED")
+        self.assertEqual(self.job()["state"], "STOPPED")
+
     def test_caller_claimed_host_denial_cannot_pass_completed_event(self):
         self.assertEqual(self.invoke(self.launch_denied)["status"], "BLOCKED")
         self.assertEqual(self.job()["state"], "BLOCKED")

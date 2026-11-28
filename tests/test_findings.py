@@ -2,6 +2,7 @@
 import sqlite3
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "source" / "runtime"))
@@ -87,6 +88,26 @@ class ProjectFindingTests(unittest.TestCase):
             self.conn, self.project, self.root, row["finding_id"], "FALSE_POSITIVE", row["revision"]
         )
         self.assertEqual(stale["status"], "STALE_REVISION")
+
+    def test_disposition_lost_compare_and_swap_is_stale(self):
+        result = orbit_findings.reconcile(
+            self.conn, self.project, self.root, audit("a" * 64, [finding()])
+        )
+        row = result["findings"][0]
+        real = orbit_findings._unique_finding
+
+        def read_then_concurrent_update(conn, project, root, finding_id):
+            current = real(conn, project, root, finding_id)
+            # Another reviewer commits between the revision check and the UPDATE.
+            conn.execute("UPDATE orbit_project_findings SET revision=revision+1, "
+                         "disposition='FALSE_POSITIVE' WHERE finding_id=?", (finding_id,))
+            return current
+
+        with mock.patch.object(orbit_findings, "_unique_finding", read_then_concurrent_update):
+            lost = orbit_findings.set_disposition(
+                self.conn, self.project, self.root, row["finding_id"], "ACCEPTED", row["revision"])
+        self.assertEqual(lost["status"], "STALE_REVISION")
+        self.assertEqual(lost["finding"]["disposition"], "FALSE_POSITIVE")
 
     def test_evidence_change_resets_disposition_for_review(self):
         result = orbit_findings.reconcile(

@@ -274,16 +274,19 @@ def set_disposition(conn, project, root, finding_id, disposition, expected_revis
             raise ValueError("Finding not found in selected project")
         if row["revision"] != expected_revision:
             return {"status": "STALE_REVISION", "finding": _public(row)}
-        conn.execute(
+        changed = conn.execute(
             """UPDATE orbit_project_findings SET disposition=?,revision=revision+1
                WHERE project=? AND project_root=? AND finding_id=? AND revision=?""",
             (disposition, project, str(root), finding_id, expected_revision),
-        )
+        ).rowcount
         updated = conn.execute(
             """SELECT * FROM orbit_project_findings
                WHERE project=? AND project_root=? AND finding_id=?""",
             (project, str(root), finding_id),
         ).fetchone()
+    if changed != 1:
+        # Lost the compare-and-swap to a concurrent reviewer.
+        return {"status": "STALE_REVISION", "finding": _public(updated)}
     return {"status": "UPDATED", "finding": _public(updated),
             "defect_confirmed": False, "task_created": False}
 

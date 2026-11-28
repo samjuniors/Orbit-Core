@@ -87,6 +87,24 @@ class SourceAuditTests(unittest.TestCase):
         self.assertIsNone(result["inventory_snapshot_sha256"])
         self.assertEqual(result["findings"], [])
 
+    def test_stale_structural_scan_does_not_reconcile_findings(self):
+        import os
+        import orbit_readiness
+        db = Path(self.temp.name) / "db" / "memory.sqlite3"
+        with mock.patch.dict(os.environ, {"ORBIT_LOCAL_DB": str(db)}):
+            conn = orbit_mcp.db_connect()
+        try:
+            args = {"project_root": str(self.root), "project": "sample", "action": "reconcile"}
+            stale = {"status": "STALE_SCAN_RESULT", "data_written": False}
+            with mock.patch.object(orbit_readiness, "complete_scan", return_value=stale), \
+                    mock.patch.object(orbit_findings, "reconcile",
+                                      side_effect=AssertionError("stale scan reconciled")):
+                result = orbit_mcp.execute(conn, "orbit_project_findings", args)
+            self.assertEqual(result["status"], "STALE_SCAN_RESULT")
+            self.assertFalse(result["findings_written"])
+        finally:
+            conn.close()
+
     def test_mcp_requires_read_consent_and_preview_does_not_write(self):
         (self.root / "main.py").write_text("value = eval(input())\n", encoding="utf-8")
         conn = sqlite3.connect(":memory:")

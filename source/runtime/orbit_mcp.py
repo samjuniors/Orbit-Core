@@ -1118,6 +1118,10 @@ def execute(conn, name, a):
         action = a.get('action')
         if action == 'reconcile':
             current = scan({**a, 'project': project}, conn)
+            # A scan overtaken by a newer one must not rewrite the newer findings.
+            if (current.get('readiness') or {}).get('status') == 'STALE_SCAN_RESULT':
+                return {'status': 'STALE_SCAN_RESULT', 'readiness': current['readiness'],
+                        'findings_written': False, 'project': project}
             result = orbit_findings.reconcile(conn, project, root, current['project_audit'], audit_scope='STRUCTURAL')
             result['project'] = project
             result['root_identity'] = current['project_audit']['root_identity']
