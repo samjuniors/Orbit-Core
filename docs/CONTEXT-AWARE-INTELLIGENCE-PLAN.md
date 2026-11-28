@@ -1,0 +1,392 @@
+# v0.34.0 proposal — Context-Aware Intelligence & Continuity
+
+**Status:** IN PROGRESS / WINDOWS HANDLE-PINNING + POSIX DESCRIPTOR-RELATIVE SOURCE AND INVENTORY ADAPTERS
+**Audit base:** `main` at `2fdf4f329774b9644e75ac0df4d89738a7cd625f` (2026-11-23)
+**Working branch:** `fix/v034-filesystem-security-20261127` (isolated repair copy; original dirty context-aware worktree preserved)
+**Version context observed on main:** `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`
+**Host implementation target:** Claude Code first; provider-neutral Orbit Core contracts retained.
+**Authority:** GitHub is implementation truth. Existing Orbit Core Notion decisions remain product-decision truth.
+
+This document proposes a new v0.34 capability. It does not authorize merging, release, installation, host configuration changes, permission changes, or autonomous execution.
+
+---
+
+## Current checkpoint — 2026-11-27 (Windows handle-pinning implementation)
+
+**Working branch:** `fix/v034-filesystem-security-20261127` (isolated repair copy; original dirty context-aware worktree preserved)
+**Prior Windows source/candidate containment commit:** `fde77820b004be8f172de723f8ffc37bf773367e`
+
+**Latest Windows structural/readiness guard commit:** `50efb36d6987cd351859a6091c924a71c48767b3`
+**Version state:** `VERSION=0.33.1`, `NEXT_VERSION=0.34.0`. This remains a development proposal, not a v0.34 release candidate.
+
+### Verified Windows security finding and containment
+
+- A deterministic disposable test reproduced a junction replacement between path validation and `os.open` in `orbit_agent_factory.candidate`. The call reported `AGENT_CANDIDATE_DRAFTED` while writing `AGENT.md` outside the selected project. This was a confirmed project-boundary escape in the previous implementation.
+- A second deterministic junction-replacement test showed that metadata-only `orbit_project_audit.scan_project` could return `SCANNED` while including `src/test_secret.py` from outside the selected project. No file contents were read, but the path and inventory metadata crossed the selected project boundary.
+- Windows specialist-candidate writes now use pinned root/ancestor directory handles, exclusive `CREATE_NEW`, reparse-point rejection and hard-link rejection. Candidate creation remains project-scoped and requires explicit `confirm_write`; it does not install or activate a host agent.
+- Windows source-content auditing is enabled through pinned directory handles and no-delete-share file handles. Reparse points and multiply-linked files are rejected; source reads remain bounded and raw contents are not returned or persisted.
+- Windows structural project auditing is enabled through pinned directory handles. A directory cannot be renamed/replaced while its descendants are scanned; child reparse points are rejected before traversal. Failed/raced paths make the scan `INCOMPLETE` rather than being treated as empty.
+- The new `orbit_windows_fs.py` adapter pins directories with Win32 handles opened without delete sharing, opens leaves with `FILE_FLAG_OPEN_REPARSE_POINT`, rejects reparse points and hard-linked files, and creates candidate files exclusively under the pinned resolved parent chain.
+- Canonical runtime and Claude Code plugin copies are synchronized. The installer ships both orbit_windows_fs.py and orbit_posix_fs.py; POSIX tests passed in exact-head Linux CI run #45981481552. Regression tests cover normal scans, directory-rename denial, junction swaps after enumeration, hard-link insertion before file open, and exclusive candidate writes.
+
+**Security boundary:** Windows scanning and candidate writes are implemented and exercised on the connected Windows host, including deterministic junction-replacement and hard-link tests. POSIX candidate writes use dir_fd/O_NOFOLLOW and O_EXCL; POSIX structural inventory and source-content audit now use descriptor-relative traversal and no-follow opens. The source audit pins the root, reopens each directory component with O_NOFOLLOW, rejects non-regular and multiply-linked leaves, and enforces a total entry bound. POSIX regression tests cover symlink skips, hard-link rejection and a leaf swap to a symlink; exact-head GitHub CI run #45981481552 passed on Ubuntu Python 3.10/3.11/3.12/3.13 and Windows Python 3.12. Neither adapter is a formal security certification; independent review remains mandatory.
+
+### Verification evidence
+
+- Focused Windows validation passed **56 tests** across filesystem adapter, structural audit, source audit, readiness, installer and protocol validation; four skips are OS symlink-creation restrictions. Nine Windows-specific adapter tests passed, including junction swaps between enumeration and pinning, hard-link insertion before source open, directory rename denial while pinned, and exclusive candidate writes.
+- Full Windows Python 3.12 suite passed: **857 tests, 46 skipped, zero failures** in 131.512 seconds after POSIX source-audit integration and canonical/plugin mirror synchronization. POSIX-only tests are skipped on Windows; the remaining skips are platform-specific or require symlink privileges unavailable on this host.
+- Installer runtime inventory now includes `orbit_windows_fs.py` and `orbit_posix_fs.py`; the disposable setup test confirms the modules are included in the installed runtime plan. Readiness now records complete Windows scans normally, while retaining the incomplete-scan preservation guard for unavailable/unsafe conditions.
+- In a disposable temporary copy, `compileall` PASS; Windows GUI `py_compile` PASS; `prepare_release_candidate.py` PASS; `check_release_readiness.py` PASS; `check_version.py --strict-bundle` PASS; fresh `build_release.py --verify` PASS; `smoke_release_zip.py` PASS with 58 MCP tools and `DISPOSABLE_INSTALL_AND_STDIO_SMOKE_PASS`. The three ZIP packages and checksum sidecars were generated only in the disposable copy. The desktop bundle/version was `0.33.1`; this is packaging validation, not a v0.34 release. No published or tracked bundle was modified.
+- A synthetic `SessionStart` payload through the Claude hook adapter recorded one minimal event in a temporary SQLite database and did not store the raw session ID or prompt/tool payload. This is an adapter smoke only; no Claude hook was activated and no native Claude Code lifecycle event was observed.
+- Exact-head GitHub Actions run [#45981481552](https://github.com/samjuniors/Orbit-Core/actions/runs/45981481552) passed **5/5** on commit `a8910328208fec8a3af12dc7e33e336878edca4e`: Ubuntu Python 3.10, 3.11, 3.12, 3.13 and Windows Python 3.12. The run includes the POSIX descriptor-relative inventory/source audit and deterministic Windows race-regression tests.
+- Local Claude Code CLI reports version `2.1.307`; the installed `orbit-core` plugin remains `0.33.1` and enabled. No plugin upgrade, hook activation or host configuration change was performed. Actual Claude lifecycle events and native host behavior remain NOT VERIFIED.
+
+### Remaining gates
+
+1. Obtain independent security review of the complete branch, including POSIX descriptor-relative traversal, Windows handle-pinning, candidate persistence, concurrent mutation and supported filesystem boundaries. Keep network shares and unusual filesystem semantics outside the supported claim until reviewed.
+2. Validate actual Claude Code lifecycle behavior in a disposable plugin installation without changing the owner's active plugin.
+3. Keep model selection advisory: host-reported capability recommendations exist, but Orbit does not switch the active Claude model or know account quota/entitlement unless the host exposes authoritative signals. Native model-switch observation is not yet verified.
+4. Draft PRs #182, #186 and #187 are open for review. No merge, tag, release, plugin installation or hook activation is authorized by this checkpoint.
+
+---
+
+## 1. Product objective
+
+When a user asks Orbit to implement a task, Orbit should first understand the actual project and its current state, identify material gaps, build a proportionate implementation plan, and help the active coding host execute that plan with the right context and model. During long work, it should preserve recoverable progress and warn about approaching limits when the host exposes reliable signals.
+
+The intended lifecycle is:
+
+1. Resolve project, repository, branch, working tree, host and current task.
+2. Determine whether project context is absent, stale or current.
+3. Run a bounded, read-only project discovery scan when required.
+4. Audit relevant code, architecture, tests, security boundaries, dependencies and documentation for evidence-backed gaps.
+5. Convert accepted findings into a prioritized plan and task DAG using existing Orbit task/build primitives.
+6. Recommend the model/effort and specialist strategy appropriate to each task, using only host-reported capabilities.
+7. Let Claude Code perform implementation through its native tools and permissions.
+8. Observe execution, validation, model-switch and limit signals where available.
+9. Checkpoint before compaction, session termination or a credible interruption risk.
+10. On resume, reconcile checkpoint claims against the actual repository, diff, task ledger and test evidence before continuing.
+
+Orbit remains a coordinator and local state/evidence layer. The connected host remains responsible for model inference, code editing, native agents, tools, permissions and actual execution.
+
+## 2. Main-branch audit — verified findings
+
+### 2.1 Existing foundations to reuse
+
+| Area | Existing main implementation | Audit conclusion |
+|---|---|---|
+| Intake and project profile | `source/runtime/orbit_intake.py` | Persists project type, complexity, maturity, goal, audience, constraints, stack and risk; has a bounded document-name inventory. It is not a full source-code audit. |
+| Engineering quality baseline | `source/runtime/orbit_delivery.py` | Proposes proportionate security, reliability, maintainability, performance and other checks. It marks applicability for review; it does not discover and prove concrete defects in source. |
+| Model recommendations | `source/runtime/orbit_decisions.py` and `orbit_model_route` | Recommends a model tier from caller/host-reported model names and host guidance. It explicitly does not switch models and has no real-time quota, pricing, entitlement or benchmark data. |
+| Task and build state | `source/runtime/orbit_tasks.py`, `orbit_build.py` | Provides a task ledger, dependencies, build stages, source fingerprinting and recovery briefs. A source fingerprint is an identity/freshness aid, not an architecture/security audit. |
+| Autopilot | `source/runtime/orbit_autopilot.py` and `orbit_autopilot_runner.py` | Provides bounded mission planning and a separately constrained local runner path. It is not a Claude Code-native general-purpose execution controller or a quota monitor. |
+| Capabilities and skills | `source/runtime/orbit_capabilities.py`, `orbit_skill_plan.py` | Discovers local skill/config candidates and returns bounded recommendations. Presence/configuration does not prove host connectivity, trust or permission. |
+| Specialist coordination | `orbit_delegation.py`, `orbit_team_builder.py`, team-event modules | Prepares host-native handoffs and coordination. Actual agent invocation and authority remain with the host. |
+| Claude Code integration | `CLAUDE.md`, `source/skills/orbit/SKILL.md`, published plugin workflow in README | Claude Code is already a supported host. A host-specific lifecycle adapter is the logical first integration point. |
+
+### 2.2 Material gaps relative to the requested capability
+
+1. **No unified project-readiness state machine.** Intake and document inventory exist, but the current flow does not consistently answer: has this exact project root been scanned, what source revision was scanned, what changed, and which audit results are stale?
+2. **No comprehensive evidence-backed code-gap audit.** Existing quality baselines and source fingerprints are not equivalent to an audit of implementation, architecture, tests, dependencies, security controls and documentation against the actual project.
+3. **No first-class audit-to-plan reconciliation.** Delivery previews and task DAGs exist, but findings need stable identities, evidence, severity/confidence, disposition and traceable links to implementation tasks.
+4. **No common policy-driven hook engine.** Claude Code has native lifecycle hooks, but Orbit's provider-neutral runtime does not yet define a safe event/policy/action contract with host-specific adapters.
+5. **No actual model selection execution.** `orbit_model_route` is advisory. Main-session switching, per-subagent model overrides, observed model changes and host capability discovery are not unified.
+6. **No reliable quota/usage telemetry abstraction.** Existing local runner launch-count budgets are not token budgets or provider account quotas. Orbit cannot infer a plan's remaining quota.
+7. **Checkpointing is not yet tied to host lifecycle signals.** Existing build/task checkpoints are useful, but need a Claude Code adapter for pre-compaction, session-end, quota notifications and task-boundary capture, with clear evidence semantics.
+
+### 2.3 Existing adaptive execution work must be reconciled, not duplicated
+
+Draft PR [#141 — opt-in evidence-gated adaptive execution preview](https://github.com/samjuniors/Orbit-Core/pull/141) already extends the existing `orbit_model_route` with a deterministic single/cascade/critique recommendation. It is read-only and does not switch models or invoke reviewers.
+
+A live compare of PR #141 head `63881cd850a1c3328b93cad92ca1cbafc0372d40` against audited main showed **diverged: 6 commits ahead and 187 behind**, with merge base `f6b7b4d81198142f121e5793fb9a06fbee195892`. Do not merge or cherry-pick the entire stale branch blindly. Review its focused changes and tests, then port/reconcile the minimal useful delta onto current main if still appropriate.
+
+### 2.4 Repository documentation drift
+
+The audited main contains `VERSION=0.33.1` and `NEXT_VERSION=0.34.0`. However, `docs/ARCHITECTURE.md` still describes a v0.29 architecture and 47-tool inventory, while `docs/NEXT-VERSION.md` still presents a v0.33 checkpoint with older main/version assumptions. The README also contains dated release-status text that should be reconciled against live Releases and the current acceptance record before a v0.34 release cut. This is a documentation consistency gap, not evidence that runtime code is broken.
+
+**Audit scope limitation:** This was a remote source/document review of selected main files and GitHub metadata. It was not a full local checkout, full line-by-line review of every repository file, live Claude Code session test, or inspection of the owner's local SQLite/host state. No local test suite was run in this audit.
+
+---
+
+## 3. Proposed architecture
+
+Add a provider-neutral core contract with a thin Claude Code adapter. Reuse current SQLite, task ledger, build ledger, intake, capability discovery, model recommendation and checkpoint functions wherever they fit. Avoid a second database, duplicate task system, standalone LLM router or background agent daemon.
+
+### Core services
+
+- **Project Context Resolver:** stable project identity, root trust, Git branch/HEAD/dirty state, host identity, task identity, context revision and scan freshness.
+- **Read-only Discovery & Audit:** bounded file inventory and source evidence collection; detects missing/inconsistent docs, untested modules, suspicious architecture boundaries, dependency/version drift, security review gaps and implementation/spec mismatches. Static heuristics are leads, not confirmed defects.
+- **Finding Ledger / Reconciliation:** normalized findings with stable ID, category, severity, confidence, affected paths/lines, evidence digest, source revision, status, disposition and linked task IDs. Prefer extending existing records over creating a duplicate ledger.
+- **Policy & Hook Engine:** event → context predicate → allowed action → approval class → result/evidence. Deterministic and declarative; no arbitrary project-provided hook execution.
+- **Adaptive Execution Planner:** maps the approved goal and accepted audit findings to task dependencies, file ownership, verification and review gates.
+- **Model/Host Capability Router:** separates recommendation from host action; supports per-task model and specialist recommendations, capability discovery, model-switch observation and fallback policy.
+- **Capacity & Continuity Monitor:** distinguishes context-window pressure, account usage limits, API spend, rate limits and generic host interruption. Creates revision-bound checkpoints and resume packets.
+
+### Finding contract (conceptual)
+
+Each audit finding should include: `finding_id`, `project_id`, `category`, `severity`, `confidence`, `summary`, `evidence_refs[]`, `affected_paths[]`, `source_snapshot`, `first_seen`, `last_verified`, `status`, `disposition`, `linked_task_ids[]`.
+
+A finding is not actionable merely because a model generated it. It must include inspectable evidence and be classified as confirmed, suspected, accepted risk, false positive, not applicable or unresolved. Findings become tasks only after review/approval appropriate to their risk.
+
+---
+
+## 4. Claude Code first adapter
+
+Claude Code has native hooks for session, prompt, tool, compaction, notification, model-switch and task/subagent lifecycle events. Its current hook reference includes `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PreCompact`, `PostCompact`, `SessionEnd`, `Notification`, `PreModelSwitch`, `PostModelSwitch`, `SubagentStart/Stop` and task lifecycle events. Hook handlers run with host-provided capabilities; they must be treated as privileged integration code.
+
+Recommended initial mapping:
+
+| Claude Code event | Orbit response |
+|---|---|
+| `SessionStart` | Resolve root and branch; inspect Orbit project registration; recover a current checkpoint; scan only if missing/stale. |
+| `UserPromptSubmit` | Classify whether prompt begins a new task, resumes work or changes scope; inject only compact relevant context. |
+| `PreToolUse` | Apply narrow policy checks for selected high-impact operations; do not replace Claude Code permission controls. |
+| `PostToolUse` / `PostToolUseFailure` | Record bounded task/evidence signals; avoid logging secrets or full command output by default. |
+| `PreCompact` | Capture a structured continuity checkpoint before context is compacted. |
+| `PostCompact` | Reconcile compacted summary with saved task state; avoid duplicate or stale context. |
+| `Notification` | Observe relevant quota/rate-limit/permission notifications when supplied; do not assume they provide advance quota percentages. |
+| `PreModelSwitch` / `PostModelSwitch` | Record requested/observed model transition and re-evaluate task fit; never silently change the user's main model. |
+| `SubagentStart/Stop`, `TaskCreated/Completed` | Correlate native specialist lifecycle with Orbit task IDs and evidence; distinguish reported events from verified outcomes. |
+| `SessionEnd` / `Stop` | Save final checkpoint and pending work summary when possible; never claim a hook ran if it did not. |
+
+Start with the smallest safe hook set: SessionStart, PreCompact, PostCompact, SessionEnd, and model-switch observation. Add tool/task hooks only after measuring overhead and proving value. Prefer the plugin-scoped configuration and existing MCP interface over new global user settings.
+
+**Hook safety:** explicit opt-in; preview exact installed hook files; allowlisted commands only; no shell evaluation of project text; no auto-execution of `package.json`, Makefile, setup scripts or project hooks; bounded input/output/time; secret redaction; fail-open for advisory enrichment and fail-closed only for explicitly approved Orbit policy checks. Hook installation/update/rollback requires user review. A hook must not bypass Claude Code's native permission prompts or auto-approve tools.
+
+### Claude Code model selection
+
+Use Claude Code's native per-subagent model selection where supported and confirmed by the running host. A task-specific model recommendation should consider task class, complexity, risk, required context, host-reported available model aliases, latency/cost preference and whether independent review is required.
+
+- Default to the existing session model for ordinary work.
+- Recommend a lighter model for bounded read-only work and a stronger model for architecture/security/high-assurance review when available.
+- Use per-invocation or agent-definition model overrides for isolated subagents where supported; do not rewrite the main session model or user settings automatically.
+- Treat `PreModelSwitch` / `PostModelSwitch` as observation and policy hooks, not permission to choose a model unilaterally.
+- If the requested model is unavailable, inherit the current host model or ask the user. Never switch account/provider or bypass a permission/usage denial.
+
+Primary references: [Claude Code hooks](https://code.claude.com/docs/en/hooks), [Claude Code subagents](https://code.claude.com/docs/en/sub-agents), [Claude Code usage, models and limits](https://support.claude.com/en/articles/14552983-models-usage-and-limits-in-claude-code).
+
+---
+
+## 5. Quota, context and interruption model
+
+Do not collapse these into one generic percentage:
+
+1. **Context-window pressure:** remaining context for the current conversation/model; may be visible through host context indicators/hooks.
+2. **Plan/account usage limit:** subscription usage pool and reset time; often not exposed as a reliable machine-readable remaining percentage.
+3. **API spend:** token/dollar cost for API-key sessions; host commands such as `/cost` and provider dashboards may be the authoritative source.
+4. **Rate limit / overload:** actual host response or notification, not necessarily predictable from prior token count.
+5. **Orbit's own execution budget:** local run/task attempt caps; never label this as provider quota.
+
+The provider interface should return value, unit, source, timestamp, confidence, reset time (if supplied), and whether it is predictive or merely reactive. Missing telemetry must return `UNKNOWN`, not a fabricated estimate.
+
+Checkpoint triggers:
+- before automatic/manual compaction when hook delivery permits;
+- after meaningful task milestones and before yielding to a specialist;
+- on a host quota/rate-limit warning or failure;
+- on session termination;
+- when the task is likely to exceed the current available context or session budget, but only when a credible signal exists.
+
+Checkpoint payload: project/root identity, branch and HEAD, dirty-worktree summary, task and build revisions, completed/pending steps, decisions, blockers, changed paths, actual verification commands/results, host/model/session metadata that is safe to retain, source snapshot, and one precise resume instruction.
+
+Recovery must re-inspect Git and relevant files, compare current source/task revisions, identify uncommitted changes, and re-run stale or unverified checks. A checkpoint is not proof that a task is correct or complete.
+
+---
+
+## 6. Delivery plan
+
+### Phase 0 — Reconcile and specify (first)
+- Read the current Notion decision hub and reconcile this proposal with adopted decisions.
+- Reconcile PR #141's useful source/tests against current main; do not merge its 187-commit-stale branch.
+- Update the architecture inventory and identify the exact existing MCP tools/schema paths to reuse.
+- Freeze data contracts, trust boundaries, hook event mapping and explicit non-goals.
+
+### Phase 1 — Project readiness and scan/audit (P0)
+- Implemented a persistent, exact-project/root scan lifecycle: SCAN_REQUIRED, SCANNING, SCANNED, INCOMPLETE and FAILED, with interrupted-scan recovery detection.
+- Persist audit version, start/completion timestamps, metadata snapshot digest, completeness, bounded inventory counts, finding count and revision; preserve the last successful snapshot when a later scan fails.
+- Report whether the metadata snapshot changed since the prior scan. The digest is explicitly not a content hash or Git revision; without a watcher, freshness is only asserted as-of the recorded scan.
+- Bounded read-only discovery is integrated with the readiness lifecycle.
+- Added a separate source-content audit action requiring `confirm_read=true`; persisting source readiness/findings additionally requires `confirm_write=true`.
+- The source audit reads only bounded allowlisted source files, computes per-file content hashes, parses Python AST and emits conservative review leads for selected risky call patterns. It never returns or persists raw source contents and never executes project code.
+- Extended the existing findings ledger with `STRUCTURAL` and `SOURCE` scopes so one audit cannot resolve findings belonging to the other. Added additive SQLite migrations and independent source-scan readiness metadata.
+- Incremental source-level invalidation between scans remains pending; the content digest detects changes only when the source audit is run.
+- Audit implementation/spec alignment, architecture, docs, tests, dependencies and proportionate security/reliability areas.
+- Emit evidence-backed findings and confidence labels; never call heuristic signals confirmed vulnerabilities.
+- Handle new, existing-unscanned, previously scanned, changed, dirty and partially inaccessible projects.
+
+### Phase 2 — Audit-to-plan (P0)
+- Deduplicate findings and connect accepted findings to the existing task ledger.
+- Generate a prioritized task DAG with dependencies, file ownership, acceptance criteria and verification gates.
+- Keep speculative recommendations separate from confirmed gaps.
+- Require approval for scope expansion, dependency installs, migrations, destructive changes and other consequential actions.
+
+### Phase 3 — Claude Code lifecycle adapter (P0)
+- Package opt-in, plugin-scoped hooks and bounded MCP integration.
+- Start with session recovery, scan freshness, compaction checkpointing, session-end checkpointing and model-switch observation.
+- Add schema/version compatibility checks and exact install/update/uninstall preview/rollback.
+- Test hooks in a disposable Claude Code project before enabling any default behavior.
+
+### Phase 4 — Adaptive model/specialist routing (P1)
+- Reconcile/port PR #141's evidence-gated execution preview.
+- Add task-specific recommendations and Claude Code per-subagent model hints.
+- Observe actual host model changes and execution outcomes.
+- Measure quality, latency and cost on disposable representative tasks before considering automatic per-subagent selection.
+
+### Phase 5 — Capacity and continuity protection (P1)
+- Add host capacity-provider contract and confidence semantics.
+- Use real Claude Code context/notification signals where exposed; support explicit user-reported usage only as unverified.
+- Implement proactive checkpoint thresholds only where telemetry supports them.
+- Validate recovery after compaction, quota stop, session end, host restart and model switch.
+
+### Phase 6 — Generalize host adapters (P2)
+- Add Codex/Antigravity/other adapters only after the core event and policy contracts prove stable.
+- Do not assume hook parity or permission equivalence across hosts.
+
+---
+
+## 7. Non-goals and safety invariants
+
+- Orbit does not become a hosted LLM, model proxy, provider-account switcher or unrestricted background daemon.
+- No automatic installation of dependencies, skills, agents, hooks or host configuration.
+- No execution of project-provided setup scripts during discovery.
+- No auto-approval, sandbox bypass, permission escalation or provider fallback after denial.
+- No invented quota percentages, remaining tokens, model entitlements or test results.
+- No automatic merge, push, release, deployment, migration or destructive action.
+- No new SQLite event store or duplicate project/task ledger unless a concrete audited need is demonstrated.
+- Repository text, audit input and skill metadata remain untrusted data, never instructions or approval.
+- Host-reported signals are labelled as such; actual outcomes require independent evidence/reconciliation.
+
+## 8. Acceptance gates
+
+A phase is not complete because source code or tests were authored. Require:
+
+1. **Correctness:** deterministic tests for project-state transitions, stale scans, finding identity/deduplication, task links and checkpoint recovery.
+2. **Security:** prompt-injection fixtures, path traversal/symlink/hard-link/TOCTOU cases, secret redaction, oversized files, malicious hooks, no project-script execution and project isolation.
+3. **Compatibility:** current Claude Code plugin manifest and hook schema validation; supported Claude Code versions tested in disposable environments.
+4. **Host behavior:** actual SessionStart, compaction, model-switch, notification and SessionEnd evidence; denied permission and hook-failure behavior.
+5. **Model routing:** host-reported model availability, unavailable model, high-risk review, user-selected model and no silent main-session change.
+6. **Quota honesty:** unknown telemetry remains unknown; distinguish context pressure, account usage, API spend and rate-limit errors.
+7. **Continuity:** recover after compaction, limit interruption and host restart without losing uncommitted work or replaying side effects.
+8. **Repository quality:** full existing unit suite, package parity, disposable plugin install/update/rollback, exact-head Linux/Windows CI.
+9. **Independent review:** source/security review and explicit owner acceptance before merge or release.
+
+## 9. Phase 1 implementation checkpoint — started
+
+**Implemented on `feat/v034-context-aware-intelligence-20261123`:**
+
+- Added `source/runtime/orbit_project_audit.py`, a bounded read-only filesystem metadata inventory.
+- Extended existing `orbit_project_scan` and the full `orbit_project_resume` path to include structural audit results; no duplicate scan tool or database ledger was introduced.
+- Added heuristic review leads for missing conventional README, test structure, architecture documentation in larger source trees, dependency lockfiles, high-assurance security documentation and CI configuration.
+- Findings include category, severity, confidence, evidence paths, recommendation and explicit `is_confirmed_defect=false`.
+- Scan reports a metadata-only snapshot digest, scan limits, incomplete/truncated status, skipped symlinks, inventory summary and explicit non-execution/non-write semantics.
+- Added `tests/test_project_audit.py` for basic findings, test/CI discovery, high-assurance profile behavior, no-write behavior and symlink-root rejection.
+
+**Safety and scope:** This first slice does not read source contents, execute project scripts, install dependencies, persist a scan baseline, create implementation tasks or claim semantic/security verification. It is a structural inventory and gap-signal layer only. The next slice should add reviewed findings and plan/task linkage after test execution and security review.
+
+**Phase 1 follow-on — finding reconciliation implemented on the same branch:**
+
+- Added `source/runtime/orbit_findings.py`, a project-root-scoped SQLite ledger keyed by stable finding ID.
+- Added lifecycle states `NEW`, `OPEN`, `RECURRING`, `STALE`, and `RESOLVED`, plus owner-review dispositions `UNREVIEWED`, `ACCEPTED`, `FALSE_POSITIVE`, `RISK_ACCEPTED`, and `NOT_APPLICABLE`.
+- A complete scan can resolve a previously observed finding; an incomplete scan only marks active findings stale and never resolves them.
+- Evidence changes reset a prior disposition to `UNREVIEWED`; revision-guarded review updates reject stale writes.
+- Added `orbit_project_findings` with `reconcile`, `list`, and `review` actions. Reconciliation persists only in Orbit's local SQLite database; it does not write into the project.
+- Added tests for new/persistent/resolved/recurring transitions, incomplete-scan safety, revision conflicts, evidence-change re-review and project/root isolation.
+- Added a read-only task-preview path for findings that are explicitly owner-accepted and still current. It reuses the existing task ledger's planning contract, creates no task, assigns no write paths and invokes no host agent.
+- Added explicit task-linking for an already registered task in the same project/root. Linking requires the finding to remain accepted/current, a matching revision and `confirm_write=true`; cross-project/root links are rejected.
+- The generated preview uses an empty write scope and no dependencies by default. A human/host must inspect source and choose exact write scopes and verification before registering a task through the existing task planner.
+- Hardened evidence-path validation against Windows separators/drive paths, absolute paths, NULs, empty segments and traversal segments.
+- Added tests for accepted-only task preview, no-write behavior, explicit task-link confirmation and hostile path forms. No new MCP tool was added; the existing `orbit_project_findings` action surface was extended, preserving the tool inventory.
+
+**Verification status (historical checkpoint superseded 2026-11-25):** The earlier 57-versus-58 MCP inventory failure was corrected. The current feature-branch head passed the full Windows Python 3.12 suite locally (833 tests, 40 skipped) and exact-head GitHub Actions run #45543537489 (5/5). See the current checkpoint at the top of this document for the remaining security and host-acceptance gates.
+
+---
+
+## 10. Immediate next actions (historical list superseded 2026-11-25)
+
+The earlier implementation sequence above has been executed and its test/CI evidence is recorded in the current checkpoint at the top of this document. Do not repeat it as an open task list. Remaining work is limited to the explicit security and host-acceptance gates listed in that checkpoint; `main` remains unchanged and no PR, merge, release, hook installation or host-setting change has been performed.
+
+
+## 8. Implementation checkpoint — persistent project readiness
+
+**Implemented on the feature branch (not released):**
+
+- Added `orbit_readiness.py` to canonical runtime and Claude Code plugin runtime.
+- Added `orbit_project_readiness` in the existing local SQLite database, scoped by both project key and resolved project root. No second database or task ledger.
+- `orbit_project_scan` now records SCANNING before inventory, then SCANNED or INCOMPLETE on completion; exceptions record FAILED while retaining the last successful snapshot. Explicit scans persist readiness; the general `orbit_project_resume` path retains its prior read-only database behavior.
+- A new scan detects whether its metadata inventory digest differs from the prior completed scan. A process interrupted while SCANNING is identified when the next scan begins.
+- Readiness output includes audit version, timestamps, revision, counts, completion state and explicit freshness/snapshot semantics.
+- Installer runtime inventory includes the new module. The packaged desktop bundle is built from the canonical runtime inventory by the existing release preparation flow.
+- This is not continuous change detection: no watcher is installed, and the metadata digest is neither a content hash nor a Git commit. A fresh scan is required to revalidate the project.
+
+**Verification:** readiness lifecycle, source/plugin parity, installer packaging and Windows upgrade paths passed exact-head CI run #45543537489 (5/5). This does not certify native IDE behavior.
+
+
+## 9. Implementation checkpoint — consented source evidence
+
+**Implemented on the feature branch (not released):**
+
+- Added `orbit_source_audit.py` to canonical runtime, Claude Code plugin runtime and installer module inventory.
+- The existing `orbit_project_findings` tool now supports `source_reconcile`. It returns `READ_CONSENT_REQUIRED` unless `confirm_read=true`; with read consent but no `confirm_write=true`, it performs a preview and writes no database state.
+- Source audit bounds traversal to 1,200 files, depth 14, 512 KiB per file and 16 MiB total. It excludes generated/vendor/cache trees, hidden folders and sensitive path/name patterns; rejects reparse-point and hard-link opens on Windows, and detects file changes during reads. Windows traversal uses pinned directory handles and no-delete-share leaf handles.
+- It computes content hashes, parses Python AST and emits conservative review leads for parser mismatches, dynamic code execution, shell execution, pickle deserialization and unsafe YAML loader patterns. These are not confirmed vulnerabilities or proof of exploitability.
+- Raw source content is neither returned nor persisted. Only bounded summaries, repository-relative evidence paths, findings, content digests and scan metadata can be saved in Orbit's local SQLite database.
+- Extended the existing findings ledger with independent `STRUCTURAL` and `SOURCE` scopes, preserving legacy rows through additive migration. Reconciliation in one scope cannot resolve the other scope's findings.
+- Extended project readiness with source-scan state, revision guards, timestamps, content snapshot digest, byte/file counts and incomplete/failure handling.
+
+**Verification:** source-read consent, no-write preview behavior, source-scope isolation, migration, bounded traversal, plugin/installer parity and Windows packaging passed prior exact-head CI. The new Windows handle-pinning adapter has focused local junction-swap and hard-link regression coverage; exact-head CI for this change remains pending.
+
+
+## 10. Implementation checkpoint — prioritized remediation plan
+
+**Implemented on the feature branch (not released):**
+
+- Added a read-only `remediation_plan` action to the existing findings tool. It selects only owner-accepted, current findings from both audit scopes; unreviewed, stale and resolved findings are not scheduled.
+- Prioritization is deterministic and explainable from severity, confidence and recurrence. The plan is capped at the existing 12-task draft limit; oversized plans HOLD rather than silently truncating.
+- Reuses `orbit_swarm_draft.preview` and the existing task ledger's graph, concurrency and active-session checks. Priority order is applied to review waves without creating artificial dependency edges.
+- Tasks include evidence-review acceptance criteria and proposed verification gates. No write paths or dependencies are inferred from evidence paths; no task is registered, no host agent is launched and no tests are claimed.
+- Actual task registration continues through the existing `orbit_task_plan` flow with explicit confirmation.
+
+**Verification:** priority ordering, task caps, source/structural inclusion, empty write/dependency scopes, existing-task collisions, read-only behavior, plugin parity and Windows packaging passed exact-head CI run #45543537489 (5/5).
+
+
+## 11. Opt-in Claude Code lifecycle adapter
+
+**Implemented on the feature branch; not enabled by default:**
+
+- Added an optional hook configuration template under `hooks/optional/`. It is deliberately not at Claude Code's auto-discovered `hooks/hooks.json` path, so enabling the Orbit plugin does not silently activate lifecycle hooks.
+- To opt in, the owner must manually copy the template to `hooks/hooks.json` inside the installed Orbit plugin and restart Claude Code. Removing that file disables the adapter. No user/project settings file is edited by Orbit.
+- The adapter observes only `SessionStart`, `PreCompact`, `PostCompact`, and `SessionEnd`. It validates the reported working directory with Orbit's existing host-side project-root policy.
+- It stores only the event name, exact project root, UTC timestamp, host label, and SHA-256 digest of the session ID. It does not persist the raw session ID, prompts, transcript paths, tool inputs/results, permission decisions or model output.
+- Retention is bounded to 30 days and 500 events per project root. Resume exposes only the latest event names/timestamps; it does not treat them as proof of a live agent or completed work.
+- Hook execution is fail-open and bounded to a 3-second timeout in the template. It does not block Claude Code, spawn agents, change permissions, run project commands, update checkpoints or register tasks.
+
+**Verification:** unit tests cover allowlisted events, rejected roots, sensitive payload exclusion, session-ID hashing, project-root isolation and retention bounds; exact-head CI run #45543537489 passed on Windows and all supported Ubuntu Python versions. No hook was installed or activated on a user's machine, and actual native Claude lifecycle behavior remains NOT VERIFIED.
+
+
+## 12. Specialist model recommendations and host-capacity observations
+
+**Implemented on the feature branch; exact-head CI PASS (run #45543537489, 5/5):**
+
+- Extended the existing read-only `orbit_team_preview` with optional host-reported `available_models`, task complexity and budget inputs. Each existing task role maps to Orbit's existing `orbit_model_route` recommendation; the team builder does not create a second model catalog or router.
+- Each specialist receives a task-fit model-tier recommendation. If the host reports no models, the recommendation is `INHERIT_HOST_MODEL`. Unknown host identifiers use generic guidance rather than being treated as a supported model-control surface.
+- Extended `orbit_model_route` with an optional `capacity_report` containing independent context-window, rate-limit, host-availability and worker-pool observations. Every observation must include a timezone-aware timestamp and source label.
+- Context pressure is reported separately from rate limits, host availability and worker concurrency. At 80% context utilization, Orbit recommends preparing a host-native checkpoint; at 90%, it marks the context state critical. These are advisory thresholds, not automated actions.
+- Account/subscription quota, reset time, billing, token price and entitlement remain `UNKNOWN` unless an authoritative provider signal is added in a future, separately reviewed integration. This contract deliberately does not accept a caller-invented account-usage percentage.
+- Rate-limit denial never triggers provider fallback. Host unavailability and a full worker pool recommend holding or deferring work; no model switch, checkpoint write, throttling, reservation, agent spawn or scheduling action is performed.
+- Synchronized the canonical decision, MCP and team-builder runtime files into the Claude Code plugin package.
+
+**Verification gate:** exact-head CI must cover context thresholds, timezone validation, unknown quota semantics, rate-limit hold behavior, worker-pool capacity, legacy model-route response compatibility, specialist-role mapping, source/plugin parity and Windows packaging. This implementation does not claim live Claude Code telemetry or measured model quality/cost.
+
+## 13. Correctness review follow-up — identity and high-assurance routing
+
+**Implemented on the feature branch; exact-head CI PASS (run #45543537489, 5/5):**
+
+- The findings table's stable identity is project/root/finding ID, while the ledger also carries an audit-scope field. Because review and task APIs address findings by ID without a scope argument, reusing one ID in STRUCTURAL and SOURCE would otherwise overwrite the prior scope through the SQLite upsert.
+- Reconciliation now serializes the cross-scope identity check and upsert in one BEGIN IMMEDIATE transaction, and rejects a finding ID already owned by the other scope. Review/task lookup also fails closed if an ambiguous legacy schema is ever encountered.
+- Added regression coverage proving a duplicate cross-scope finding ID is rejected without replacing the original STRUCTURAL finding.
+- Model routing previously allowed a balanced-tier fallback to be recommended for a high-assurance task even when the requested tier was deep. It now withholds that recommendation and returns REQUIRES_MODEL_QUALITY_REVIEW unless the host-reported candidate classifies as deep.
+- Added a regression test for the high-assurance balanced-fallback case.
+- Full project resume now includes the persisted readiness record and bounded findings ledger alongside the fresh metadata-only scan. It compares the current structural snapshot with the last persisted readiness snapshot and explicitly flags drift; it does not silently mark findings resolved or write state during resume.
+- Resume also reports the last consented source-scan status and states clearly that source content is not re-read during resume. Added a read-only regression test for finding recovery, snapshot drift detection and zero database writes.
+- Synchronized the canonical findings and model-routing modules with the committed Claude Code plugin runtime copies.
+
+**Verification and remaining limitations:** The earlier Windows containment pass and prior exact-head CI passed; the new handle-pinning implementation has focused Windows adversarial coverage and awaits a fresh full-suite run and exact-head CI. Independent security review and actual Claude Code lifecycle acceptance remain outstanding. Do not equate CI success with production host certification or release approval.

@@ -189,12 +189,18 @@ class UniversalSetupTests(unittest.TestCase):
             lines=''.join(json.dumps(x)+'\n' for x in msgs)
             run=subprocess.run([exe,str(server)],input=lines,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,
                 env={**os.environ,'ORBIT_LOCAL_DB':str(db)},timeout=12)
+            if os.environ.get('ORBIT_MCP_STRESS_LOGS') == '1':
+                print(f'[mcp-child] returncode={run.returncode}', file=sys.stderr)
+                if run.stderr:
+                    print('[mcp-child stderr begin]', file=sys.stderr)
+                    print(run.stderr, file=sys.stderr, end='' if run.stderr.endswith(chr(10)) else chr(10))
+                    print('[mcp-child stderr end]', file=sys.stderr)
             self.assertEqual(run.returncode,0,run.stderr)
             return [json.loads(x) for x in run.stdout.splitlines()]
         def req(i,method,params=None):return {'jsonrpc':'2.0','id':i,'method':method,'params':params or {}}
         def call(i,name,args):return req(i,'tools/call',{'name':name,'arguments':args})
         initial=rpc([req(1,'initialize',{'protocolVersion':'2025-11-25'}),req(2,'tools/list')])
-        self.assertEqual(len(initial[1]['result']['tools']),57)
+        self.assertEqual(len(initial[1]['result']['tools']),59)
         def tooldata(r):return json.loads(r['result']['content'][0]['text'])
         save_args={'project':'orbit-todo-lab','key':'goal','kind':'decision','summary':'Local SQLite API, no cloud sync','source':'test','confirm_write':True}
         result=rpc([call(3,'orbit_memory_save',save_args)])[0]

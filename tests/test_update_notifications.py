@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import threading
 import tempfile
 import unittest
 from pathlib import Path
@@ -163,6 +164,39 @@ class UpdateNotificationsTests(unittest.TestCase):
         with patch("orbit_update_gui.launch") as launch:
             self.assertEqual(orbit_cli.main(["manager"]), 0)
             launch.assert_called_once_with()
+
+    def test_background_check_shutdown_cancels_late_cache_write(self):
+        target_home = Path(self.temp.name) / "background-user"
+        cache = target_home / ".orbit-universal" / "update-status.json"
+        entered = threading.Event()
+        release_fetch = threading.Event()
+
+        def blocked_fetch():
+            entered.set()
+            release_fetch.wait(2)
+            return [release("0.25.2")]
+
+        with patch.dict(os.environ, {"ORBIT_UPDATE_HOME": str(target_home),
+                                     "ORBIT_UPDATE_CHECK": "1",
+                                     "ORBIT_UPDATE_CHANNEL": "candidate"}):
+            with patch.object(orbit_updates, "_fetch", side_effect=blocked_fetch):
+                try:
+                    self.assertTrue(orbit_updates.start_background_check())
+                    self.assertTrue(entered.wait(2), "background fetch did not start")
+                    # Simulate a network read that does not stop immediately. Shutdown
+                    # must return at its deadline and mark the worker cancelled.
+                    self.assertFalse(orbit_updates.shutdown_background_check(timeout=0.01))
+                    worker = orbit_updates._BACKGROUND_THREAD
+                    self.assertIsNotNone(worker)
+                    self.assertTrue(worker.is_alive())
+                finally:
+                    release_fetch.set()
+                    worker = orbit_updates._BACKGROUND_THREAD
+                    if worker is not None:
+                        worker.join(2)
+                    self.assertTrue(orbit_updates.shutdown_background_check(timeout=0.01))
+                self.assertFalse(worker.is_alive())
+                self.assertFalse(cache.exists(), "cancelled worker wrote cache after shutdown began")
 
     def test_cached_daily_check_does_not_spawn_background_network_worker(self):
         target_home = Path(self.temp.name) / "user"

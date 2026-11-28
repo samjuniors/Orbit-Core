@@ -10,6 +10,35 @@ Proposed future changes require separate owner review.
 
 - Added a GitHub Sponsors funding configuration for `samjuniors` and an optional README support section. This documentation-only patch does not change runtime, package versions, tests or releases.
 
+## [0.34.0] - Prepared release notes (2026-11-28)
+
+### Highlights
+
+- **Bounded autonomous mission supervisor (development CLI).** One explicit approval of an Orbit mission charter lets a local supervisor run its tasks in dependency order through the Codex CLI, one at a time, each in an isolated clone. Every task still stops for independent review before dependent tasks run. Reviewer-directed rework is bounded, pause/resume/stop are recorded, and an append-only, hash-chained event timeline makes tampering detectable. A second supervisor for the same mission is refused, and the supervisor holds (`HOLD_MISSION_LOCK_UNSAFE`) if its lock location cannot be pinned and validated. ([#185](https://github.com/samjuniors/Orbit-Core/issues/185), [#189](https://github.com/samjuniors/Orbit-Core/issues/189))
+- **Context-aware project intelligence.** A bounded, read-only structural audit and a consented source-evidence audit feed project scan and resume. Findings are kept in a revision-aware ledger (`orbit_project_findings`), can be previewed as prioritized remediation tasks and linked to tasks explicitly.
+- **Product-aware security review planning.** New read-only `orbit_security_review_plan`. Credential-like findings carry a locator-only reference (rule, path, line), never a hash of the matched source line. ([#184](https://github.com/samjuniors/Orbit-Core/issues/184))
+- **Safer project filesystem access.** On Windows, scans and agent-candidate writes pin every directory by handle, refuse reparse points and multiply-linked files, and compare project-root identity with the 128-bit FileIdInfo, failing closed where a filesystem cannot report it. On POSIX, scans use descriptor-relative, no-follow traversal, and a confirmed agent candidate is created by a single Linux `openat2` call confined beneath the project root (`RESOLVE_BENEATH`, no symlinks or magic links), so a concurrently renamed folder cannot redirect where it is created. Writes fail closed (`HOLD_UNSAFE_CANDIDATE_DIRECTORY`, naming the folder) unless the project root is owned by you and not group/other writable, and `.orbit`, `.orbit/agent-candidates` and the candidate folder are owned by you with mode 0700, so other local users cannot rename them. New checkpoint `.orbit` folders are now created 0700; an existing 0755 `.orbit` needs `chmod 700 .orbit` before confirmed candidate writes. A failed write is rolled back through the held parent folder (`HOLD_CANDIDATE_WRITE_FAILED`), or reported as `HOLD_CANDIDATE_CLEANUP_FAILED` with its path if removal fails. A best-effort check after writing reports `HOLD_CANDIDATE_MOVED_AFTER_CREATE` if the file was moved meanwhile. ([#183](https://github.com/samjuniors/Orbit-Core/issues/183))
+- **Team Builder model recommendations and capacity observations,** resource-first specialist and role-factory safety coverage, project-scoped skill candidate lifecycle certification and an opt-in Claude Code lifecycle adapter.
+
+### Install and upgrade
+
+- Use the Universal Setup ZIP, the Antigravity plugin ZIP, the plugin suite ZIP or the Claude Desktop `.mcpb` from the v0.34.0 release. Existing installs upgrade in place; customized files, `.orbit/STATE.md` and the local SQLite database are preserved (CI rehearses upgrades from v0.24.1 through v0.33.0).
+- Claude Code marketplace users: run `/plugin marketplace update orbit-core`, update Orbit Core in `/plugin`, then restart Claude Code.
+
+### Compatibility
+
+- **59 MCP tools** (adds `orbit_project_findings` and `orbit_security_review_plan`). Existing tools and the database remain backward compatible; legacy databases without the new audit ledgers keep working read-only for resume.
+- The mission supervisor is a development command (`scripts/orbit_autopilot_mission.py`), not an MCP action, installed command or background service.
+
+### Known limitations
+
+- **Not unattended autonomy.** The supervisor runs only while its foreground process runs, only through the Codex CLI, sequentially, and never accepts its own work: a human or independent reviewer must accept each task. There is no native Claude Code or Antigravity worker dispatch, no parallel execution, no automatic replanning and no remote or PC-off continuation.
+- The mission lock is local serialization, not a multi-user security boundary. Its Windows path (a named kernel mutex) is covered only by CI's concurrent-supervisor test.
+- Confirmed agent candidate writes need Linux 5.6+ (`openat2`) on a 64-bit x86_64, aarch64, riscv64, ppc64/ppc64le, s390x or loongarch64 ABI on POSIX; other Linux architectures and ABIs (including x32, MIPS, Alpha, IA-64, 32-bit ARM) fail closed. On macOS and other POSIX systems, and on Linux kernels or sandboxes without `openat2`, they fail closed with `HOLD_SAFE_RELATIVE_WRITE_UNAVAILABLE`; previews still work. Candidate parent folders are created through descriptors and may be left empty if renamed during creation; the file itself cannot be created outside the project. This is a point-in-time guarantee about where the file is created: a process running as the same user can still move it or its folders afterwards, and that is outside the security boundary.
+- Filesystem containment is not certified beyond NTFS on Windows and local Linux filesystems. No independent human security review of v0.34 has been recorded.
+- An intermittent crash in the MCP subprocess test `test_mcp_process_and_shared_db` remains under investigation ([#188](https://github.com/samjuniors/Orbit-Core/issues/188)).
+- All v0.33 limitations still apply: timed native grant expiry and active revocation remain unverified, and native OS isolation ([#138](https://github.com/samjuniors/Orbit-Core/issues/138)) is not part of this release.
+
 ## [0.33.1] - Prerelease (2026-11-23)
 
 ### Highlights

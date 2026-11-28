@@ -27,6 +27,15 @@ class SuiteTests(unittest.TestCase):
         for name, blob in desired.items():
             self.assertEqual(committed[name], blob, name)
 
+    def test_claude_code_readme_has_exact_marketplace_install_and_safety_notes(self):
+        readme = claude_code_files(ROOT)["README.md"].decode("utf-8")
+        self.assertIn(
+            "/plugin install orbit-core --marketplace samjuniors/Orbit-Core",
+            readme)
+        self.assertIn("local MCP server", readme)
+        self.assertIn("optional lifecycle-hook", readme)
+        self.assertIn("Model requests follow the provider", readme)
+
     def test_marketplace_points_at_committed_plugin(self):
         market = json.loads((ROOT / '.claude-plugin/marketplace.json').read_text(encoding='utf-8'))
         self.assertEqual(market['name'], 'orbit-core')

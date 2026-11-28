@@ -20,6 +20,10 @@ SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 CHECK_INTERVAL_SECONDS = 24 * 60 * 60
 MAX_RESPONSE = 2_000_000
 _LOCK = threading.Lock()
+_BACKGROUND_LOCK = threading.Lock()
+_BACKGROUND_THREAD = None
+_BACKGROUND_STOP = None
+BACKGROUND_JOIN_TIMEOUT_SECONDS = 8.5
 
 
 def _semver(s):
@@ -127,15 +131,19 @@ def _newest(releases, which):
             "url": "https://github.com/" + REPO + "/releases/tag/v" + version}
 
 
-def check_now(path=None, *, fetch=None, now=None):
+def check_now(path=None, *, fetch=None, now=None, _cancel_event=None):
     """Read only *official published release metadata*; cache advisory result."""
     if not enabled():
         return {"status": "DISABLED"}
+    if _cancel_event is not None and _cancel_event.is_set():
+        return {"status": "CANCELLED"}
     location = Path(path) if path is not None else cache_path()
     clock = time.time() if now is None else now
     which = channel()
     getter = _fetch if fetch is None else fetch
     with _LOCK:
+        if _cancel_event is not None and _cancel_event.is_set():
+            return {"status": "CANCELLED"}
         try:
             latest = _newest(getter(), which)
             result = {"checked_at": clock, "channel": which, "latest": latest,
@@ -143,7 +151,15 @@ def check_now(path=None, *, fetch=None, now=None):
         except (OSError, ValueError, TypeError, KeyError) as exc:
             result = {"checked_at": clock, "channel": which, "latest": None,
                       "status": "CHECK_FAILED", "reason": type(exc).__name__}
-        _save(location, result)
+        if _cancel_event is not None:
+            # Serialize the final cancellation check with shutdown's stop signal:
+            # once shutdown sets the event, this worker cannot write the cache.
+            with _BACKGROUND_LOCK:
+                if _cancel_event.is_set():
+                    return {"status": "CANCELLED"}
+                _save(location, result)
+        else:
+            _save(location, result)
         return result
 
 
@@ -191,8 +207,13 @@ def notice(installed_version, path=None, *, now=None):
     return result
 
 
+def _background_worker(path, stop_event):
+    check_now(path, _cancel_event=stop_event)
+
+
 def start_background_check():
-    """Non-blocking metadata-only startup check, rate-limited per local install."""
+    """Start one cancellable metadata-only startup check per local install."""
+    global _BACKGROUND_THREAD, _BACKGROUND_STOP
     if not enabled():
         return False
     path = cache_path()
@@ -201,6 +222,43 @@ def start_background_check():
         age = time.time() - state["checked_at"]
         if 0 <= age < CHECK_INTERVAL_SECONDS:
             return False
-    threading.Thread(target=check_now, kwargs={"path": path},
-                     daemon=True, name="orbit-release-metadata-check").start()
+    with _BACKGROUND_LOCK:
+        if _BACKGROUND_THREAD is not None and _BACKGROUND_THREAD.is_alive():
+            return False
+        stop_event = threading.Event()
+        worker = threading.Thread(
+            target=_background_worker, args=(path, stop_event),
+            daemon=True, name="orbit-release-metadata-check")
+        _BACKGROUND_THREAD = worker
+        _BACKGROUND_STOP = stop_event
+        try:
+            worker.start()
+        except Exception:
+            _BACKGROUND_THREAD = None
+            _BACKGROUND_STOP = None
+            raise
     return True
+
+
+def shutdown_background_check(timeout=BACKGROUND_JOIN_TIMEOUT_SECONDS):
+    """Cancel the startup check and join it for a bounded time.
+
+    Returns False only when the underlying network operation outlives the join
+    deadline. Even then, the cancellation guard prevents a late cache write.
+    """
+    global _BACKGROUND_THREAD, _BACKGROUND_STOP
+    with _BACKGROUND_LOCK:
+        worker = _BACKGROUND_THREAD
+        stop_event = _BACKGROUND_STOP
+        if worker is None:
+            return True
+        if stop_event is not None:
+            stop_event.set()
+    worker.join(timeout=max(0.0, float(timeout)))
+    stopped = not worker.is_alive()
+    if stopped:
+        with _BACKGROUND_LOCK:
+            if _BACKGROUND_THREAD is worker:
+                _BACKGROUND_THREAD = None
+                _BACKGROUND_STOP = None
+    return stopped

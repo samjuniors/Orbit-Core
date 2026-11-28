@@ -76,6 +76,10 @@ class AdaptiveTeamPreviewTests(unittest.TestCase):
         self.assertEqual(by_key["api"]["lead"], "engineering")
         self.assertEqual(by_key["tests"]["lead"], "quality")
         self.assertEqual(by_key["tests"]["proposed_kind"], "bot")
+        self.assertEqual(by_key["api"]["model_recommendation"]["role"], "orbit-backend")
+        self.assertEqual(by_key["api"]["model_recommendation"]["selection_status"],
+                         "INHERIT_HOST_MODEL")
+        self.assertTrue(by_key["api"]["model_recommendation"]["no_switch_executed"])
         self.assertFalse(by_key["tests"]["tool_permission_verified"])
         self.assertEqual(result["orbit_native_invocation_hints"],
                          ["collaboration.spawn_agent"])
@@ -84,6 +88,28 @@ class AdaptiveTeamPreviewTests(unittest.TestCase):
         self.assertEqual(result["handoffs"][0]["channel"], "AGENT_TO_BOT")
         self.assertEqual(result["handoffs"][0]["gate"], "REVIEWABLE_HANDOFF")
         self.assertFalse(result["handoffs"][0]["message_sent"])
+
+    def test_task_specific_model_recommendations_use_only_host_reported_models(self):
+        result = orbit_team_builder.preview(
+            self.conn, self.root, self.project,
+            self.args(available_models=["example-mini", "example-sonnet"],
+                      complexity="moderate", budget="balanced"))
+        by_key = {w["task_key"]: w for w in result["workers"]}
+        self.assertEqual(by_key["api"]["model_recommendation"]["recommended_model"],
+                         "example-sonnet")
+        self.assertEqual(by_key["tests"]["model_recommendation"]["role"], "orbit-qa")
+        self.assertTrue(by_key["tests"]["model_recommendation"]["no_switch_executed"])
+        self.assertEqual(by_key["tests"]["model_recommendation"]["available_models_reported"], 2)
+
+    def test_model_recommendation_rejects_invalid_host_report(self):
+        with self.assertRaises(ValueError):
+            orbit_team_builder.preview(
+                self.conn, self.root, self.project,
+                self.args(available_models=["x" * 101]))
+        with self.assertRaises(ValueError):
+            orbit_team_builder.preview(
+                self.conn, self.root, self.project,
+                self.args(budget="unlimited"))
 
     def test_dynamic_kind_and_bot_to_bot_handoff(self):
         self.add_task("format", "writer", "Format generated notes",

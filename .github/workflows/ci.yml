@@ -147,6 +147,15 @@ jobs:
       - name: Rehearse v0.33.0 to candidate preserving prior user state
         if: matrix.python-version == '3.12'
         run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.33.0 --hosts codex antigravity
+      - name: Check out immutable published v0.33.1 prerelease for upgrade rehearsal
+        if: matrix.python-version == '3.12'
+        uses: actions/checkout@v4
+        with:
+          ref: v0.33.1
+          path: previous-0.33.1
+      - name: Rehearse v0.33.1 to current candidate preserving prior user state
+        if: matrix.python-version == '3.12'
+        run: python scripts/smoke_upgrade_previous.py --previous-root previous-0.33.1 --hosts codex antigravity
       - name: Strict source and desktop bundle parity for release candidate
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python scripts/check_version.py --strict-bundle
@@ -175,5 +184,29 @@ jobs:
             dist/Orbit-Antigravity-Plugin-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip.sha256
             dist/Orbit-Core-Plugin-Suite-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip
             dist/Orbit-Core-Plugin-Suite-v${{ env.ORBIT_CANDIDATE_VERSION }}.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  mcp-subprocess-stress:
+    name: MCP subprocess stress / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Repeat shared-database MCP subprocess test with fresh caches
+        run: python scripts/stress_mcp_subprocess.py --iterations 100 --modes enabled disabled
+      - name: Preserve every iteration log, including child stderr and faulthandler output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-subprocess-stress-python-${{ matrix.python-version }}
+          path: artifacts/mcp-stress/
           if-no-files-found: error
           retention-days: 14

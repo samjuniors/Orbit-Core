@@ -48,7 +48,23 @@ def prepare(root=ROOT):
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     current = semver(version)
     target = root / ("ORBIT-Claude-Desktop-v" + version + ".mcpb")
-    if not target.exists():
+    if target.exists():
+        if target.is_symlink() or not target.is_file():
+            raise ValueError("Candidate bundle must be a regular file")
+        try:
+            source_parity(root, target, version)
+        except ValueError as exc:
+            # A feature branch may add a canonical runtime module while the
+            # checked-in current-version candidate still has the older module
+            # inventory. Rebuild only for that structural drift. Content drift
+            # in an existing module remains a hard failure.
+            if str(exc) != "Desktop bundle runtime module inventory differs from source":
+                raise
+            build(root=root)
+            created = True
+        else:
+            created = False
+    else:
         options = []
         for path in root.glob("ORBIT-Claude-Desktop-v*.mcpb"):
             old = path.name.removeprefix("ORBIT-Claude-Desktop-v").removesuffix(".mcpb")
@@ -67,10 +83,6 @@ def prepare(root=ROOT):
         if hashlib.sha256(path.read_bytes()).hexdigest() != before:
             raise ValueError("Previous published bundle was modified")
         created = True
-    else:
-        if target.is_symlink() or not target.is_file():
-            raise ValueError("Candidate bundle must be a regular file")
-        created = False
     digest = source_parity(root, target, version)
     return {"version": version, "bundle": str(target), "sha256": digest, "generated": created}
 

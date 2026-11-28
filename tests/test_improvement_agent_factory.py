@@ -1,10 +1,12 @@
 """Regression coverage for bounded session learning and project-only agent drafts."""
 from __future__ import annotations
 
+import os
 import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,7 +124,7 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.record(unknown_extra_field="invalid")
         tools = {t["name"]: t for t in orbit_mcp.TOOLS}
-        self.assertEqual(len(tools), 57)
+        self.assertEqual(len(tools), 59)
         self.assertTrue(tools["orbit_improvement_context"]["annotations"]["readOnlyHint"])
         self.assertFalse(tools["orbit_improvement_record"]["annotations"]["readOnlyHint"])
         self.assertFalse(tools["orbit_specialist_candidate"]["annotations"]["readOnlyHint"])
@@ -137,6 +139,7 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
                 self.assertFalse(x["agent_spawned"])
         self.assertFalse((self.root / ".orbit").exists())
 
+    @unittest.skipUnless(orbit_agent_factory._SAFE_RELATIVE_WRITE, "Safe relative write adapter unavailable")
     def test_candidate_preview_write_and_prevent_overwrite(self):
         x = self.agent()
         self.assertEqual(x["status"], "AGENT_DRAFT_PREVIEW_ONLY")
@@ -153,6 +156,153 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
         self.assertEqual(second["status"], "HOLD_EXISTING_CANDIDATE")
         self.assertEqual(path.read_bytes(), unchanged)
         self.assertFalse(result["agent_spawned"])
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_folder_moved_out_before_create_fails_closed(self):
+        import orbit_posix_fs
+        outside = self.root.parent / "outside"
+        real_ensure = orbit_posix_fs.ensure_directories
+
+        def ensure_then_move(root, parts):
+            fd = real_ensure(root, parts)
+            # Move the candidate folder out and leave a symlink at its old path.
+            folder = self.root.joinpath(*parts)
+            folder.rename(outside)
+            folder.symlink_to(outside, target_is_directory=True)
+            return fd
+
+        with mock.patch.object(orbit_posix_fs, "ensure_directories", ensure_then_move):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_PATH")
+        self.assertFalse(result["state_written"])
+        self.assertFalse((outside / "AGENT.md").exists())
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_moved_after_create_is_reported_not_drafted(self):
+        import orbit_posix_fs
+        outside = self.root.parent / "outside3"
+        real = orbit_posix_fs._openat2
+        calls = []
+
+        def create_then_move(dir_fd, path, flags, mode, resolve):
+            fd = real(dir_fd, path, flags, mode, resolve)
+            if not calls and flags & os.O_CREAT and fd >= 0:
+                calls.append(path)
+                # The open file follows its folder out of the project before writing.
+                self.root.joinpath(*path.split("/")[:-1]).rename(outside)
+            return fd
+
+        with mock.patch.object(orbit_posix_fs, "_openat2", create_then_move):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_CANDIDATE_MOVED_AFTER_CREATE")
+        self.assertFalse(result["location_verified"])
+
+    def _fail_on_files(self, real):
+        import stat
+
+        def fail(fd):
+            if stat.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError(5, "EIO")
+            return real(fd)
+        return fail
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_fsync_failure_is_rolled_back(self):
+        import orbit_posix_fs
+        with mock.patch.object(orbit_posix_fs.os, "fsync", self._fail_on_files(os.fsync)):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_CANDIDATE_WRITE_FAILED")
+        self.assertTrue(result["rolled_back"])
+        self.assertFalse((self.root / result["candidate_relative_path"]).exists())
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_write_failure_is_rolled_back(self):
+        import io
+        import orbit_posix_fs
+        real_fdopen = orbit_posix_fs.os.fdopen
+
+        class Failing(io.RawIOBase):
+            def __init__(self, fd):
+                self.inner = real_fdopen(fd, "wb")
+            def write(self, data):
+                raise OSError(28, "ENOSPC")
+            def close(self):
+                self.inner.close()
+            def fileno(self):
+                return self.inner.fileno()
+
+        with mock.patch.object(orbit_posix_fs.os, "fdopen", lambda fd, mode: Failing(fd)):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_CANDIDATE_WRITE_FAILED")
+        self.assertFalse((self.root / result["candidate_relative_path"]).exists())
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_cleanup_failure_is_explicit(self):
+        import orbit_posix_fs
+        with mock.patch.object(orbit_posix_fs.os, "fsync", self._fail_on_files(os.fsync)), \
+                mock.patch.object(orbit_posix_fs.os, "unlink", side_effect=OSError(1, "EPERM")):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_CANDIDATE_CLEANUP_FAILED")
+        self.assertTrue(result["partial_file_may_exist"])
+        self.assertTrue(result["cleanup_required"])
+        self.assertIn(result["candidate_id"], result["candidate_relative_path"])
+        self.assertTrue((self.root / result["candidate_relative_path"]).exists())
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_refused_when_orbit_folder_is_not_private(self):
+        (self.root / ".orbit").mkdir()
+        os.chmod(self.root / ".orbit", 0o755)
+        result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_DIRECTORY")
+        self.assertEqual(result["unsafe_directory"], ".orbit")
+        self.assertFalse((self.root / ".orbit" / "agent-candidates").exists())
+        os.chmod(self.root / ".orbit", 0o700)
+        self.assertEqual(self.agent(confirm_write=True)["status"], "AGENT_CANDIDATE_DRAFTED")
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_refused_when_root_owned_by_another_user(self):
+        import orbit_posix_fs
+        with mock.patch.object(orbit_posix_fs.os, "geteuid", return_value=os.geteuid() + 4242):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_DIRECTORY")
+        self.assertFalse((self.root / ".orbit").exists())
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_refused_in_group_writable_directories(self):
+        (self.root / ".orbit").mkdir()
+        os.chmod(self.root / ".orbit", 0o777)
+        result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_DIRECTORY")
+        self.assertFalse(any(self.root.rglob("AGENT.md")))
+        os.chmod(self.root / ".orbit", 0o700)
+        os.chmod(self.root, 0o777)
+        try:
+            self.assertEqual(self.agent(confirm_write=True)["status"],
+                             "HOLD_UNSAFE_CANDIDATE_DIRECTORY")
+        finally:
+            os.chmod(self.root, 0o755)
+        self.assertEqual(self.agent()["status"], "AGENT_DRAFT_PREVIEW_ONLY")
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX adapter")
+    def test_candidate_write_fails_closed_without_openat2(self):
+        import errno
+        import orbit_posix_fs
+        with mock.patch.object(orbit_posix_fs, "BENEATH_PLATFORM", True), \
+                mock.patch.object(orbit_agent_factory, "_SAFE_RELATIVE_WRITE", True), \
+                mock.patch.object(orbit_posix_fs, "_openat2", return_value=-errno.ENOSYS):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_SAFE_RELATIVE_WRITE_UNAVAILABLE")
+        self.assertFalse(result["state_written"])
+        self.assertFalse(any(self.root.rglob("AGENT.md")))
+        self.assertEqual(self.agent()["status"], "AGENT_DRAFT_PREVIEW_ONLY")
+
+    def test_windows_candidate_write_fails_closed_after_preview(self):
+        with mock.patch.object(orbit_agent_factory, "_SAFE_RELATIVE_WRITE", False):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_SAFE_RELATIVE_WRITE_UNAVAILABLE")
+        self.assertFalse(result["state_written"])
+        self.assertFalse(result["agent_spawned"])
+        self.assertFalse((self.root / ".orbit").exists())
 
     def test_denial_untrusted_mission_and_invalid_role(self):
         self.assertEqual(self.agent(permission_state="DENIED", confirm_write=True)["status"],
@@ -175,6 +325,7 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
         self.assertEqual(self.agent(confirm_write=True)["status"], "HOLD_EXISTING_CANDIDATE")
         self.assertEqual(path.read_text(), "OWNER CUSTOMIZED CONTENT")
 
+    @unittest.skipUnless(orbit_agent_factory._SAFE_RELATIVE_WRITE, "Safe relative write adapter unavailable")
     def test_other_project_writes_do_not_share_agent_drafts(self):
         a = self.agent(confirm_write=True)
         b = self.agent(project_root=str(self.other))

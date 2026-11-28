@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import sqlite3
 import sys
 import tempfile
@@ -18,6 +19,10 @@ import orbit_preview
 import orbit_browser
 import orbit_build
 import orbit_intake
+import orbit_project_audit
+import orbit_source_audit
+import orbit_findings
+import orbit_readiness
 import orbit_decisions
 import orbit_specialists
 import orbit_updates
@@ -29,6 +34,7 @@ import orbit_delivery
 import orbit_swarm_host
 import orbit_native_coordination
 import orbit_autopilot
+import orbit_claude_lifecycle
 import orbit_swarm_integrity
 import orbit_portable
 import orbit_pulse
@@ -36,10 +42,11 @@ import orbit_improvement
 import orbit_agent_factory
 import orbit_team_builder
 import orbit_team_events
+import orbit_security_review
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = '0.33.1'
+VERSION = '0.34.0'
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_STATE_BYTES = 24000
 SUPPORTED_PROTOCOLS = ('2025-11-25', '2025-06-18', '2025-03-26')
@@ -123,6 +130,34 @@ def snapshot(root):
             'content_trust': UNTRUSTED}
 
 
+def source_snapshot_key():
+    """Per-installation key for source-audit snapshots, kept next to the local DB.
+
+    Snapshots stay comparable across restarts on this machine but cannot be
+    recomputed elsewhere from guessed file contents. Returns None (per-process
+    key fallback) if the key file cannot be created or read safely.
+    """
+    path = db_path().parent / 'source-snapshot.key'
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0)
+        try:
+            fd = os.open(str(path), flags)
+        except FileNotFoundError:
+            fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0)
+                         | getattr(os, 'O_BINARY', 0), 0o600)
+            with os.fdopen(fd, 'wb') as out:
+                out.write(secrets.token_bytes(32))
+                out.flush()
+                os.fsync(out.fileno())
+            fd = os.open(str(path), flags)
+        with os.fdopen(fd, 'rb') as stream:
+            key = stream.read(33)
+        return key if len(key) == 32 else None
+    except OSError:
+        return None
+
+
 def db_connect():
     path = db_path()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -147,6 +182,9 @@ def db_connect():
     orbit_improvement.setup(conn)
     orbit_build.setup(conn)
     orbit_intake.setup(conn)
+    orbit_findings.setup(conn)
+    orbit_readiness.setup(conn)
+    orbit_claude_lifecycle.setup(conn)
     orbit_build.setup_browser(conn)
     if os.name != 'nt':
         try: path.chmod(0o600)
@@ -296,7 +334,7 @@ def checkpoint(conn, a):
         if a.get('expected_revision') != prior['revision']:
             return {'status':'STALE_REVISION', 'revision':prior['revision']}
         path = safe_checkpoint_path(root)
-        path.parent.mkdir(exist_ok=True)
+        path.parent.mkdir(mode=0o700, exist_ok=True)
         if path.parent.is_symlink() or path.is_symlink():
             raise ValueError('Symlink checkpoint forbidden')
         atomic_write(path, new_body)
@@ -306,11 +344,104 @@ def checkpoint(conn, a):
             conn.rollback()  # no DB rows changed; just release the cross-process lock
 
 
-def scan(a):
+def scan(a, conn=None, persist_readiness=True):
     root, project = project_root(a), project_key(a)
-    candidates = ('README.md','docs/README.md','docs/ARCHITECTURE.md','ARCHITECTURE.md','PRD.md','REQUIREMENTS.md','ROADMAP.md','.orbit/STATE.md','.orbit/PROJECT.md')
-    existing = [x for x in candidates if not (root / x).is_symlink() and (root/x).is_file()]
-    return {'project': project, 'root': str(root), 'docs_found': existing, 'checkpoint': snapshot(root), 'notice':'Metadata only; not a full semantic document audit'}
+    token = None
+    if conn is not None and persist_readiness:
+        # Some embedders call execute() with a pre-built connection rather than
+        # db_connect(); initialize this additive table idempotently at the scan boundary.
+        orbit_readiness.setup(conn)
+        token = orbit_readiness.begin_scan(conn, project, root)
+    try:
+        candidates = ('README.md','docs/README.md','docs/ARCHITECTURE.md','ARCHITECTURE.md','PRD.md','REQUIREMENTS.md','ROADMAP.md','.orbit/STATE.md','.orbit/PROJECT.md')
+        existing = [x for x in candidates if not (root / x).is_symlink() and (root/x).is_file()]
+        profile = None
+        if conn is not None:
+            intake = orbit_intake.status(conn, root, {'project': project})
+            if intake.get('status') == 'APPROVED':
+                profile = intake.get('profile')
+        audit = orbit_project_audit.scan_project(root, profile=profile)
+        readiness = orbit_readiness.complete_scan(conn, project, root, token, audit) if token is not None else None
+    except Exception as exc:
+        if token is not None:
+            orbit_readiness.fail_scan(conn, project, root, token, type(exc).__name__)
+        raise
+    return {
+        'project': project,
+        'root': str(root),
+        'docs_found': existing,
+        'checkpoint': snapshot(root),
+        'project_audit': audit,
+        'readiness': readiness,
+        'notice': 'Bounded read-only structural audit; no source contents read or project scripts executed. Findings are review leads, not confirmed defects.',
+    }
+
+
+def resume_audit_context(conn, project, root, current_audit):
+    """Read persisted audit/finding context and compare the current structural snapshot.
+
+    Resume is intentionally read-only. Older databases may predate the readiness
+    and findings ledgers, so inspect schema availability instead of running setup
+    migrations from this read path.
+    """
+    available = {
+        row["name"] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('orbit_project_readiness','orbit_project_findings')"
+        ).fetchall()
+    }
+    if "orbit_project_readiness" in available:
+        readiness = orbit_readiness.get_status(conn, project, root)
+    else:
+        readiness = {
+            "status": "SCAN_REQUIRED",
+            "project": project,
+            "project_root": str(root),
+            "revision": 0,
+            "scan_count": 0,
+            "scan_required_to_revalidate": True,
+            "freshness_semantics": "No persisted readiness ledger exists in this database.",
+            "source_status": "SCAN_REQUIRED",
+        }
+    if "orbit_project_findings" in available:
+        findings = orbit_findings.list_findings(conn, project, root, limit=40)
+    else:
+        findings = {
+            "status": "EMPTY",
+            "findings": [],
+            "count": 0,
+            "audit_scope": "ALL",
+            "tasks_created": False,
+        }
+    current_snapshot = (
+        current_audit.get('inventory_snapshot_sha256')
+        if isinstance(current_audit, dict) else None
+    )
+    persisted_snapshot = readiness.get('last_snapshot_sha256')
+    if not persisted_snapshot:
+        comparison = 'NO_PERSISTED_BASELINE'
+    elif not isinstance(current_snapshot, str):
+        comparison = 'CURRENT_SNAPSHOT_UNAVAILABLE'
+    elif persisted_snapshot == current_snapshot:
+        comparison = 'MATCH'
+    else:
+        comparison = 'MISMATCH'
+    return {
+        'readiness': readiness,
+        'finding_ledger': findings,
+        'audit_freshness': {
+            'structural_snapshot_comparison': comparison,
+            'stored_structural_findings_may_be_stale': comparison == 'MISMATCH',
+            'source_scan_status': readiness.get('source_status', 'SCAN_REQUIRED'),
+            'source_scan_revalidated_during_resume': False,
+            'source_scan_requires_explicit_read_consent': True,
+            'note': (
+                'Resume performs a fresh metadata-only structural scan. A mismatch means '
+                'persisted structural findings need reconciliation. Source findings are '
+                'shown from the last consented scan and are not revalidated during resume.'
+            ),
+        },
+    }
 
 
 def compact_resume(conn, root, project, a):
@@ -450,8 +581,9 @@ def string(n=4000):
     return {'type':'string','minLength':1,'maxLength':n}
 
 TOOLS = [
-    {'name':'orbit_project_scan','description':'Read-only bounded project checkpoint and document metadata.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
+    {'name':'orbit_project_scan','description':'Read-only bounded project inventory and structural gap audit. Inspects filesystem metadata only; does not read source contents, execute project scripts or write files. Findings are heuristic review leads, not confirmed defects.', 'inputSchema':schema({'project_root':string(2000),'project':string(80)},['project_root','project'])},
     {'name':'orbit_project_resume','description':'Resume full project state, or request an objective-scoped compact local context envelope without unrelated memory history. Compact output is read-only and cannot attest owner approvals or Git/test status.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'compact':{'type':'boolean'},'objective':string(600),'max_chars':{'type':'integer','minimum':900,'maximum':3500},'pulse':{'type':'boolean'}},['project_root','project'])},
+    {'name':'orbit_project_findings','description':'Reconcile structural findings, run an explicitly consented bounded source-content audit, or preview a prioritized remediation DAG from accepted findings. Source reads require confirm_read=true; persisting SOURCE-scope findings requires confirm_write=true. Remediation plans never register tasks or assign write scopes.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['reconcile','list','review','task_preview','link_task','source_reconcile','remediation_plan']},'audit_scope':{'type':'string','enum':['STRUCTURAL','SOURCE']},'confirm_read':{'type':'boolean'},'finding_id':string(80),'disposition':{'type':'string','enum':sorted(orbit_findings.DISPOSITIONS)},'expected_revision':{'type':'integer','minimum':1},'task_key':string(80),'confirm_write':{'type':'boolean'},'limit':{'type':'integer','minimum':1,'maximum':200}},['project_root','project','action'])},
     {'name':'orbit_update_status','description':'Read-only update notice; optional refresh fetches only published GitHub release metadata. It NEVER downloads code, executes an installer or changes a project. User opens Orbit Update Manager to approve installation.', 'inputSchema':schema({'refresh':{'type':'boolean'}},[])},
     {'name':'orbit_research_source_save','description':'Preview or save one reviewed external research pointer in folder+project-scoped SQLite; revision-guarded, no downloads, skills, Git writes or independent approval attestation.','inputSchema':schema({'project_root':string(2000),'project':string(80),'source_key':string(80),'url':string(500),'title':string(140),'tags':{'type':'array','minItems':1,'maxItems':8,'items':string(32)},'note':string(1100),'expected_revision':{'type':'integer','minimum':1},'confirm_write':{'type':'boolean'}},['project_root','project','source_key','url','title','tags','note'])},
     {'name':'orbit_research_context','description':'Read a tiny objective-relevant pack of saved source pointers from this exact project folder+key. No network calls, no execution, no bulk document retrieval.','inputSchema':schema({'project_root':string(2000),'project':string(80),'objective':string(600),'limit':{'type':'integer','minimum':1,'maximum':6},'max_chars':{'type':'integer','minimum':600,'maximum':4500}},['project_root','project','objective'])},
@@ -468,6 +600,9 @@ TOOLS = [
          'project_root':string(2000),'project':string(80),
          'host':{'type':'string','enum':list(orbit_delegation.HOST_NATIVE_TOOLS)},
          'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'available_models':{'type':'array','maxItems':20,'items':string(100)},
+         'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},
+         'budget':{'type':'string','enum':['economy','balanced','quality']},
          'host_workspace_mode':{'type':'string','enum':list(orbit_delegation.HOST_WORKSPACE_MODES)},
          'max_parallel':{'type':'integer','minimum':1,'maximum':2},
          'include_skill_review':{'type':'boolean'},
@@ -575,7 +710,7 @@ TOOLS += [
                             },['screen','state','source_revision','status'])}
         },['source_revision','scope','expected','observations']),
         'source_snapshot':schema({'source_id':string(70),'url':string(300),'version_or_commit':string(180),'license':string(180),'compatibility':string(180),'source_evidence':string(180)},['source_id'])},['project_root','project'])},
-    {'name':'orbit_model_route','description':'Read-only host-aware model tier recommendation for a role/task; never launches or switches models.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':{'type':'string'}},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']}},['project_root','project','role','task','host'])},
+    {'name':'orbit_model_route','description':'Read-only host-aware model recommendation; optional capacity_report normalizes separate caller-reported context, rate-limit, host and worker signals. Account quotas remain UNKNOWN; no model switch or capacity action is performed.', 'inputSchema':schema({'project_root':string(2000),'project':string(80),'role':{'type':'string','enum':sorted(orbit_decisions.ROLES)},'task':{'type':'string','enum':sorted(orbit_decisions.TASKS)},'host':{'type':'string','enum':sorted(orbit_decisions.HOSTS)},'available_models':{'type':'array','maxItems':20,'items':string(100)},'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},'budget':{'type':'string','enum':['economy','balanced','quality']},'capacity_report':schema({'context_window':schema({'used_tokens':{'type':'integer','minimum':0,'maximum':1000000000000},'total_tokens':{'type':'integer','minimum':1,'maximum':1000000000000},'observed_at':string(64),'source':string(100)},['used_tokens','total_tokens','observed_at','source']),'rate_limit':schema({'state':{'type':'string','enum':['CLEAR','WARNING','BLOCKED','UNKNOWN']},'observed_at':string(64),'source':string(100)},['state','observed_at','source']),'host_availability':schema({'state':{'type':'string','enum':['AVAILABLE','BUSY','UNAVAILABLE','UNKNOWN']},'observed_at':string(64),'source':string(100)},['state','observed_at','source']),'worker_pool':schema({'active_workers':{'type':'integer','minimum':0,'maximum':64},'worker_limit':{'type':'integer','minimum':1,'maximum':64},'observed_at':string(64),'source':string(100)},['active_workers','worker_limit','observed_at','source'])},[])},['project_root','project','role','task','host'])},
 ]
 TOOLS += [
     {'name':'orbit_practice_suggest','description':'Read-only opt-in M5 practice candidates from repeated, separately reviewer-accepted tasks in this exact project root/key; approvals and evidence remain caller-reported. Lists approved and optionally inactive practices without injecting instructions or running skills.','inputSchema':schema({'project_root':string(2000),'project':string(80),'limit':{'type':'integer','minimum':1,'maximum':20},'include_inactive':{'type':'boolean'}},['project_root','project'])},
@@ -622,6 +757,9 @@ TOOLS += [
          'host':{'type':'string','enum':sorted(orbit_skill_plan.HOSTS)},
          'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
          'available_host_tools':{'type':'array','maxItems':32,'items':string(64)},
+         'available_models':{'type':'array','maxItems':20,'items':string(100)},
+         'complexity':{'type':'string','enum':sorted(orbit_intake.COMPLEXITY)},
+         'budget':{'type':'string','enum':['economy','balanced','quality']},
          'project_profile':schema({
              'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
              'platform':{'type':'string','enum':sorted(orbit_skill_plan.PLATFORMS)},
@@ -734,11 +872,27 @@ TOOLS.extend([
          ['project_root','project','mission_id','expected_revision','reported_branch','task_key','category'])},
 ])
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
+TOOLS.append({
+    'name':'orbit_security_review_plan',
+    'description':'Create a product-specific cybersecurity review plan; optionally run bounded, local-only static source-pattern checks when scan_source=true and permission_state=APPROVED. No project code execution, external scanners, installation, network access, penetration test or security certification.',
+    'inputSchema':schema({
+        'project_root':string(2000),'project':string(80),
+        'objective':string(1200),
+        'project_profile':schema({
+            'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
+            'platform':{'type':'string','enum':sorted(orbit_skill_plan.PLATFORMS)},
+            'technologies':{'type':'array','maxItems':8,'items':{'type':'string','enum':sorted(orbit_skill_plan.TECHNOLOGIES)}},
+            'operation':{'type':'string','enum':sorted(orbit_skill_plan.OPERATIONS)}},[]),
+        'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
+        'available_security_tools':{'type':'array','maxItems':24,'items':string(64)},
+        'scan_source':{'type':'boolean'}},
+        ['project_root','project','objective','project_profile'])
+})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
     'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_swarm_draft_preview','orbit_software_delivery_preview','orbit_swarm_host_preflight','orbit_native_coordination_preview','orbit_swarm_integration_review','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
     'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest','orbit_improvement_context',
-    'orbit_autopilot_next','orbit_autopilot_decision','orbit_team_preview'}
+    'orbit_autopilot_next','orbit_autopilot_decision','orbit_team_preview','orbit_security_review_plan'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
 for _tool in TOOLS:
     _name=_tool['name']
@@ -797,6 +951,15 @@ def execute(conn, name, a):
     if name=='orbit_team_preview':
         root=project_root(a)
         return orbit_team_builder.preview(conn,root,project_key(a),a)
+    if name=='orbit_security_review_plan':
+        root=project_root(a)
+        result = orbit_security_review.plan(a['project_profile'], a['objective'],
+            permission_state=a.get('permission_state','UNKNOWN'),
+            available_security_tools=a.get('available_security_tools'))
+        if a.get('scan_source') is True:
+            result['static_scan'] = orbit_security_review.scan_project(
+                root, permission_state=a.get('permission_state','UNKNOWN'))
+        return result
     if name in {'orbit_autopilot_charter','orbit_autopilot_next','orbit_autopilot_decision'}:
         root=project_root(a)
         project=project_key(a)
@@ -978,12 +1141,78 @@ def execute(conn, name, a):
     if name=='orbit_preview_stop': return orbit_preview.stop(project_root(a), a)
     if name=='orbit_capability_discover': return orbit_capabilities.discover(project_root(a))
     if name=='orbit_capability_select': return orbit_capabilities.select(project_root(a),a['objective'],a.get('host_tools',[]),host_plugins=a.get('host_plugins',[]),permission_state=a.get('permission_state','UNKNOWN'),project_profile=a.get('project_profile'),requested_skill_names=a.get('requested_skill_names'),review_manifest=a.get('review_manifest'),host=a.get('host','unknown'))
-    if name=='orbit_project_scan': return scan(a)
+    if name=='orbit_project_scan': return scan(a, conn)
+    if name=='orbit_project_findings':
+        root, project = project_root(a), project_key(a)
+        action = a.get('action')
+        if action == 'reconcile':
+            current = scan({**a, 'project': project}, conn)
+            # A scan overtaken by a newer one must not rewrite the newer findings.
+            if (current.get('readiness') or {}).get('status') == 'STALE_SCAN_RESULT':
+                return {'status': 'STALE_SCAN_RESULT', 'readiness': current['readiness'],
+                        'findings_written': False, 'project': project}
+            result = orbit_findings.reconcile(conn, project, root, current['project_audit'], audit_scope='STRUCTURAL')
+            result['project'] = project
+            result['root_identity'] = current['project_audit']['root_identity']
+            result['scan_status'] = current['project_audit']['status']
+            result['audit_scope'] = current['project_audit']['audit_scope']
+            return result
+        if action == 'list':
+            return orbit_findings.list_findings(conn, project, root, a.get('limit', 100), a.get('audit_scope'))
+        if action == 'review':
+            return orbit_findings.set_disposition(
+                conn, project, root, a.get('finding_id'), a.get('disposition'),
+                a.get('expected_revision'))
+        if action == 'task_preview':
+            preview = orbit_findings.task_preview(
+                conn, project, root, a.get('finding_id'), a.get('expected_revision'))
+            if preview.get('status') != 'TASK_SPEC_READY':
+                return preview
+            planned = orbit_tasks.plan(
+                conn, {**preview['task_spec'], 'confirm_write': False}, root)
+            return {**preview, 'task_preview': planned, 'task_created': False}
+        if action == 'link_task':
+            return orbit_findings.link_task(
+                conn, project, root, a.get('finding_id'), a.get('task_key'),
+                a.get('expected_revision'), a.get('confirm_write', False))
+        if action == 'remediation_plan':
+            return orbit_findings.remediation_plan(conn, project, root)
+        if action == 'source_reconcile':
+            if a.get('confirm_read') is not True:
+                return {'status': 'READ_CONSENT_REQUIRED',
+                        'message': 'Source inspection reads bounded project source files. Set confirm_read=true only when this read is authorized.',
+                        'source_contents_read': False, 'data_written': False}
+            if a.get('confirm_write') is not True:
+                audit = orbit_source_audit.scan_source(root, source_snapshot_key())
+                return {'status': 'PREVIEW_ONLY', 'audit_scope': 'SOURCE',
+                        'source_audit': audit, 'data_written': False,
+                        'note': 'No source contents or findings were persisted. Set confirm_write=true to save readiness metadata and SOURCE-scope findings.'}
+            orbit_readiness.setup(conn)
+            token = orbit_readiness.begin_source_scan(conn, project, root)
+            try:
+                audit = orbit_source_audit.scan_source(root, source_snapshot_key())
+                readiness = orbit_readiness.complete_source_scan(conn, project, root, token, audit)
+            except Exception as exc:
+                orbit_readiness.fail_source_scan(conn, project, root, token, type(exc).__name__)
+                raise
+            if readiness.get('status') == 'STALE_SOURCE_SCAN_RESULT':
+                return {'status': 'STALE_SOURCE_SCAN_RESULT', 'readiness': readiness,
+                        'data_written': False, 'source_audit': audit}
+            result = orbit_findings.reconcile(
+                conn, project, root, audit, audit_scope='SOURCE')
+            return {**result, 'source_audit_summary': audit['summary'],
+                    'source_readiness': readiness,
+                    'source_contents_persisted': False,
+                    'project_scripts_executed': False}
+        raise ValueError('Unsupported finding action')
     if name=='orbit_project_resume':
         if a.get('compact') is True:
             root=project_root(a)
             return compact_resume(conn,root,project_key(a),a)
-        status=scan(a)
+        status=scan(a, conn, persist_readiness=False)
+        root=project_root(a)
+        status.update(resume_audit_context(
+            conn, status['project'], root, status.get('project_audit')))
         status['memories']=memory_recall(conn,{'project':status['project'],'limit':5})
         status['intake']=orbit_intake.status(conn,project_root(a),a)
         status['recovery']=orbit_build.recovery_brief(conn,project_root(a),project_key(a))
@@ -1013,6 +1242,7 @@ def execute(conn, name, a):
         # Recover the task ledger without guessing whether a host subagent survived
         # a restart; actual host sessions must be checked before recording exits.
         status['host_reconciliation']=orbit_tasks.active_reconciliation(conn,root,status['project'])
+        status['host_lifecycle']=orbit_claude_lifecycle.recent_events(conn,root,limit=8)
         status['continuity']={'status':'CHECKPOINT_ONLY_LOCAL_CONTEXT_MISSING' if status['checkpoint']['exists'] and not any(local.values()) else 'LOCAL_CONTEXT',
             'local_records':local,'database_path':str(db_path()),
             'guidance':'A different PC or folder can have an empty local database. Continue from the checkpoint without onboarding; do not invent missing records. Export orbit_project_transfer on the original PC and preview/import on this PC for task/research continuity. Historical sessions are not current-host execution evidence.'}
@@ -1109,8 +1339,8 @@ def write_frame(response):
 
 def main():
     conn=db_connect()
-    orbit_updates.start_background_check()  # metadata-only; never blocks MCP startup
     try:
+        orbit_updates.start_background_check()  # metadata-only; never blocks MCP startup
         while True:
             raw = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
             if not raw:
@@ -1129,6 +1359,10 @@ def main():
             if response is not None:
                 write_frame(response)
     finally:
+        if not orbit_updates.shutdown_background_check():
+            sys.stderr.write(
+                "Orbit update metadata check did not stop before shutdown; "
+                "its cache write has been cancelled.\\n")
         orbit_preview.shutdown_all()
         conn.close()
 
