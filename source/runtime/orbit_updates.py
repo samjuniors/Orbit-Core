@@ -142,6 +142,8 @@ def check_now(path=None, *, fetch=None, now=None, _cancel_event=None):
     which = channel()
     getter = _fetch if fetch is None else fetch
     with _LOCK:
+        if _cancel_event is not None and _cancel_event.is_set():
+            return {"status": "CANCELLED"}
         try:
             latest = _newest(getter(), which)
             result = {"checked_at": clock, "channel": which, "latest": latest,
