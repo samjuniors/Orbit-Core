@@ -15,6 +15,11 @@ from collections import Counter
 from itertools import islice
 from pathlib import Path
 
+try:
+    import orbit_windows_fs
+except ImportError:  # pragma: no cover - packaged import guard
+    orbit_windows_fs = None
+
 SOURCE_SUFFIXES = {
     ".py", ".pyi", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx",
     ".vue", ".svelte", ".go", ".rs", ".java", ".kt", ".kts", ".swift",
@@ -36,12 +41,15 @@ SENSITIVE_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".jks", ".sqlite", ".db"}
 MAX_FILES = 1200
 MAX_DEPTH = 14
 MAX_ENTRIES_PER_DIR = 4000
+MAX_TOTAL_ENTRIES = 20000
 MAX_FILE_BYTES = 512 * 1024
 MAX_TOTAL_BYTES = 16 * 1024 * 1024
 MAX_FINDINGS = 100
 MAX_LINES_PER_SIGNAL = 20
-# Windows path-based traversal cannot guarantee handle-relative, reparse-safe opens.
-_WINDOWS_SAFE_RELATIVE_SCAN = (os.name != "nt")
+# Windows scans require the packaged Win32 handle-pinning adapter.
+_WINDOWS_SAFE_RELATIVE_SCAN = (
+    os.name != "nt" or (orbit_windows_fs is not None and orbit_windows_fs.WINDOWS_SAFE)
+)
 
 
 def _safe_name(name: str) -> bool:
@@ -137,9 +145,201 @@ def _python_signals(text, rel):
     return findings, 1
 
 
+def _scan_source_posix(root: Path) -> dict:
+    """Audit POSIX source through a pinned root and descriptor-relative opens."""
+    import orbit_posix_fs
+
+    if not orbit_posix_fs.SAFE:
+        raise ValueError("Descriptor-relative POSIX source audit is unavailable")
+    root = Path(root)
+    if not root.is_absolute() or ".." in root.parts:
+        raise ValueError("Project root must be an absolute normalized directory")
+    root_fd = orbit_posix_fs.open_root(root)
+    root_identity = hashlib.sha256(str(root).encode("utf-8", "surrogatepass")).hexdigest()[:16]
+    if root == Path(root.anchor) or root == Path.home().resolve():
+        os.close(root_fd)
+        raise ValueError("Select a specific project directory")
+
+    digest = hashlib.sha256()
+    languages = Counter()
+    unreadable = []
+    findings = []
+    skipped_symlinks = 0
+    truncated = False
+    files_read = total_bytes = python_files = python_parsed = test_files = todo_count = 0
+    stack = [((), 0)]
+    entries_seen = 0
+    try:
+        while stack:
+            parts, depth = stack.pop()
+            directory_fd = os.dup(root_fd)
+            try:
+                for component in parts:
+                    child_fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+                                       | getattr(os, "O_CLOEXEC", 0), dir_fd=directory_fd)
+                    os.close(directory_fd)
+                    directory_fd = child_fd
+                try:
+                    with os.scandir(directory_fd) as iterator:
+                        entries = list(islice(iterator, MAX_ENTRIES_PER_DIR + 1))
+                    if len(entries) > MAX_ENTRIES_PER_DIR:
+                        truncated = True
+                    remaining_entries = max(0, MAX_TOTAL_ENTRIES - entries_seen)
+                    entries_seen += len(entries)
+                    if entries_seen > MAX_TOTAL_ENTRIES:
+                        truncated = True
+                        entries = entries[:remaining_entries]
+                    names = sorted((entry.name for entry in entries), key=str.casefold)
+                except OSError:
+                    unreadable.append("/".join(parts) or ".")
+                    continue
+
+                child_dirs = []
+                for name in names:
+                    try:
+                        info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                    except OSError:
+                        unreadable.append("/".join(parts + (name,)))
+                        continue
+                    relative = "/".join(parts + (name,))
+                    if stat.S_ISLNK(info.st_mode):
+                        skipped_symlinks += 1
+                        continue
+                    if stat.S_ISDIR(info.st_mode):
+                        low_name = name.casefold()
+                        if (low_name in SKIP_DIRS or low_name in SENSITIVE_DIRS
+                                or name.startswith(".")):
+                            continue
+                        if depth >= MAX_DEPTH:
+                            truncated = True
+                            continue
+                        try:
+                            child_fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+                                               | getattr(os, "O_CLOEXEC", 0), dir_fd=directory_fd)
+                            try:
+                                if not stat.S_ISDIR(os.fstat(child_fd).st_mode):
+                                    unreadable.append(relative)
+                                    continue
+                            finally:
+                                os.close(child_fd)
+                            child_dirs.append((parts + (name,), depth + 1))
+                        except OSError:
+                            unreadable.append(relative)
+                        continue
+                    if not stat.S_ISREG(info.st_mode):
+                        continue
+                    suffix = Path(name).suffix.casefold()
+                    if suffix not in SOURCE_SUFFIXES or not _safe_name(name):
+                        continue
+                    if any(part.casefold() in SENSITIVE_DIRS for part in parts):
+                        continue
+                    try:
+                        flags = (os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
+                                 | getattr(os, "O_NOCTTY", 0) | getattr(os, "O_CLOEXEC", 0))
+                        fd = os.open(name, flags, dir_fd=directory_fd)
+                        with os.fdopen(fd, "rb") as handle:
+                            actual = os.fstat(handle.fileno())
+                            if (not stat.S_ISREG(actual.st_mode) or actual.st_nlink != 1
+                                    or actual.st_size != info.st_size):
+                                unreadable.append(relative)
+                                continue
+                            if actual.st_size > MAX_FILE_BYTES:
+                                unreadable.append(relative)
+                                truncated = True
+                                continue
+                            if total_bytes + actual.st_size > MAX_TOTAL_BYTES:
+                                truncated = True
+                                break
+                            raw = handle.read(MAX_FILE_BYTES + 1)
+                            after = os.fstat(handle.fileno())
+                            if (len(raw) != actual.st_size or len(raw) > MAX_FILE_BYTES
+                                    or (after.st_size, after.st_mtime_ns, after.st_ctime_ns, after.st_nlink)
+                                    != (actual.st_size, actual.st_mtime_ns, actual.st_ctime_ns, 1)):
+                                unreadable.append(relative)
+                                truncated = True
+                                continue
+                    except OSError:
+                        unreadable.append(relative)
+                        continue
+                    try:
+                        text = raw.decode("utf-8")
+                    except UnicodeDecodeError:
+                        unreadable.append(relative)
+                        continue
+
+                    encoded_path = relative.encode("utf-8", "surrogatepass")
+                    digest.update(len(encoded_path).to_bytes(4, "big"))
+                    digest.update(encoded_path)
+                    digest.update(len(raw).to_bytes(8, "big"))
+                    digest.update(hashlib.sha256(raw).digest())
+                    total_bytes += len(raw)
+                    files_read += 1
+                    languages[suffix] += 1
+                    name_low = name.casefold()
+                    if (any(part.casefold() in {"test", "tests", "spec", "specs", "__tests__"}
+                            for part in parts)
+                            or name_low.startswith(("test_", "tests_"))
+                            or name_low.endswith((".test.js", ".test.ts", ".spec.js", ".spec.ts", "_test.go", "_test.py"))):
+                        test_files += 1
+                    todo_count += len(re.findall(r"\b(?:TODO|FIXME|HACK)\b", text, flags=re.IGNORECASE))
+                    if suffix in {".py", ".pyi"}:
+                        python_files += 1
+                        file_findings, parsed = _python_signals(text, relative)
+                        python_parsed += parsed
+                        for item in file_findings:
+                            if len(findings) < MAX_FINDINGS:
+                                findings.append(item)
+                            else:
+                                truncated = True
+                    if files_read >= MAX_FILES:
+                        truncated = True
+                        break
+                if files_read >= MAX_FILES:
+                    break
+                stack.extend(reversed(child_dirs))
+            except OSError:
+                unreadable.append("/".join(parts) or ".")
+            finally:
+                os.close(directory_fd)
+            if files_read >= MAX_FILES:
+                stack.clear()
+                break
+    finally:
+        os.close(root_fd)
+
+    return {
+        "status": "SCANNED" if not truncated and not unreadable else "INCOMPLETE",
+        "audit_scope": "SOURCE",
+        "scan_mode": "BOUNDED_DESCRIPTOR_RELATIVE_POSIX_SOURCE_CONTENT_ANALYSIS",
+        "root_identity": root_identity,
+        "inventory_snapshot_sha256": digest.hexdigest(),
+        "snapshot_semantics": "SHA256 over repository-relative source paths, byte lengths and per-file content SHA256; not a Git revision.",
+        "limits": {"max_files": MAX_FILES, "max_depth": MAX_DEPTH,
+                   "max_entries_per_directory": MAX_ENTRIES_PER_DIR,
+                   "max_total_entries": MAX_TOTAL_ENTRIES,
+                   "max_file_bytes": MAX_FILE_BYTES, "max_total_bytes": MAX_TOTAL_BYTES,
+                   "max_findings": MAX_FINDINGS},
+        "truncated": truncated,
+        "unreadable_paths": unreadable[:30],
+        "symlinks_skipped": skipped_symlinks,
+        "summary": {"source_files": files_read, "source_bytes_read": total_bytes,
+                    "python_files": python_files, "python_files_parsed": python_parsed,
+                    "test_files": test_files, "todo_markers": todo_count,
+                    "languages_by_extension": dict(sorted(languages.items()))},
+        "findings": findings, "findings_count": len(findings),
+        "audit_scope_description": "Deterministic static review leads only. No semantic architecture proof, dependency advisory scan, runtime test, exploitability determination or vulnerability certification.",
+        "data_written": False, "source_contents_read": files_read > 0,
+        "source_contents_returned": False, "source_contents_persisted": False,
+        "project_scripts_executed": False, "project_files_written": False,
+        "external_network_access": False,
+    }
+
+
 def scan_source(root: Path) -> dict:
     """Read bounded source files and emit content-hash-backed static review leads."""
     root = Path(root)
+    if os.name != "nt":
+        return _scan_source_posix(root)
     if not root.is_absolute():
         raise ValueError("Project root must be an absolute directory")
     if not _WINDOWS_SAFE_RELATIVE_SCAN:
@@ -176,10 +376,17 @@ def scan_source(root: Path) -> dict:
             "project_scripts_executed": False, "project_files_written": False,
             "external_network_access": False,
         }
-    if root.is_symlink() or not root.is_dir():
-        raise ValueError("Project root must be an absolute, existing non-symlink directory")
-    root = root.resolve(strict=True)
+    pins = None
+    if os.name == "nt" and _WINDOWS_SAFE_RELATIVE_SCAN:
+        pins = orbit_windows_fs.pin_directory_chain(root)
+        root = pins.root_path
+    else:
+        if root.is_symlink() or not root.is_dir():
+            raise ValueError("Project root must be an absolute, existing non-symlink directory")
+        root = root.resolve(strict=True)
     if root == Path(root.anchor) or root == Path.home().resolve():
+        if pins is not None:
+            pins.close()
         raise ValueError("Select a specific project directory")
 
     candidates = []
@@ -212,7 +419,13 @@ def scan_source(root: Path) -> dict:
                     if depth >= MAX_DEPTH:
                         truncated = True
                     else:
-                        stack.append((Path(entry.path), depth + 1))
+                        child = Path(entry.path)
+                        try:
+                            if pins is not None:
+                                pins.pin(child)
+                            stack.append((child, depth + 1))
+                        except OSError:
+                            unreadable.append(child.relative_to(root).as_posix())
                 elif entry.is_file(follow_symlinks=False):
                     suffix = Path(entry.name).suffix.casefold()
                     if suffix not in SOURCE_SUFFIXES or not _safe_name(entry.name):
@@ -220,7 +433,14 @@ def scan_source(root: Path) -> dict:
                     if any(part.casefold() in SENSITIVE_DIRS for part in Path(entry.path).relative_to(root).parts[:-1]):
                         continue
                     try:
-                        info = entry.stat(follow_symlinks=False)
+                        if pins is not None:
+                            fd = orbit_windows_fs.open_regular_file_fd(entry.path)
+                            try:
+                                info = os.fstat(fd)
+                            finally:
+                                os.close(fd)
+                        else:
+                            info = entry.stat(follow_symlinks=False)
                     except OSError:
                         unreadable.append(Path(entry.path).relative_to(root).as_posix())
                         continue
@@ -251,8 +471,11 @@ def scan_source(root: Path) -> dict:
     for path, observed in candidates:
         rel = path.relative_to(root).as_posix()
         try:
-            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
-            fd = os.open(str(path), flags)
+            if pins is not None:
+                fd = orbit_windows_fs.open_regular_file_fd(path)
+            else:
+                flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+                fd = os.open(str(path), flags)
             with os.fdopen(fd, "rb") as handle:
                 actual = os.fstat(handle.fileno())
                 if not stat.S_ISREG(actual.st_mode):
