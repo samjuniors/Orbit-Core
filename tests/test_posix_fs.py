@@ -48,12 +48,17 @@ class PosixFilesystemTests(unittest.TestCase):
 
     def test_openat2_abi_allowlist(self):
         abi = orbit_posix_fs._beneath_abi
-        self.assertTrue(abi("linux", "x86_64", 8))
-        self.assertTrue(abi("linux", "aarch64", 8))
+        for machine in ("x86_64", "amd64", "aarch64", "arm64", "riscv64",
+                        "ppc64", "ppc64le", "s390x", "loongarch64"):
+            with self.subTest(accepted=machine):
+                self.assertTrue(abi("linux", machine, 8))
         for platform_name, machine, size in (
                 ("linux", "x86_64", 4),        # x32 uses a different syscall number
-                ("linux", "mips64", 8), ("linux", "alpha", 8), ("linux", "ia64", 8),
-                ("linux", "armv7l", 4), ("linux", "ppc64le", 8), ("darwin", "arm64", 8)):
+                ("linux", "aarch64", 4), ("linux", "riscv64", 4),
+                ("linux", "mips64", 8), ("linux", "mips", 4), ("linux", "alpha", 8),
+                ("linux", "ia64", 8), ("linux", "armv7l", 4), ("linux", "i686", 4),
+                ("linux", "sparc64", 8), ("linux", "unknown", 8),
+                ("darwin", "arm64", 8), ("freebsd14", "amd64", 8)):
             with self.subTest(machine=machine, size=size, platform=platform_name):
                 self.assertFalse(abi(platform_name, machine, size))
 

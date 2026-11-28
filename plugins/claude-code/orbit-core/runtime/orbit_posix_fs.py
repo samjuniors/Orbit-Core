@@ -11,6 +11,7 @@ import errno
 import os
 import platform
 import stat
+import struct
 import sys
 from pathlib import Path
 
@@ -24,23 +25,31 @@ SAFE = (
 )
 
 
-# openat2(2), Linux 5.6+. 437 is its number in the generic syscall table used by
-# x86_64 and aarch64; other ABIs differ (MIPS, Alpha, IA-64, x32), so only those
-# two 64-bit ABIs are supported and everything else fails closed.
+# openat2(2), Linux 5.6+. 437 is its number on the 64-bit ABIs listed in
+# _BENEATH_MACHINES (the generic table, plus powerpc and s390, which match it).
+# Other ABIs use different numbers (MIPS 4437/5437/6437, Alpha 547, IA-64 1461,
+# x32 0x40000000+437), so they and any unknown ABI fail closed.
 _OPENAT2_NR = 437
+_BENEATH_MACHINES = frozenset({
+    "x86_64", "amd64", "aarch64", "arm64", "riscv64",
+    "ppc64", "ppc64le", "s390x", "loongarch64",
+})
 _RESOLVE_NO_MAGICLINKS = 0x02
 _RESOLVE_NO_SYMLINKS = 0x04
 _RESOLVE_BENEATH = 0x08
 # Only Linux offers an atomic "create beneath this directory" primitive. Other
 # POSIX systems fail closed for confirmed writes; previews remain available.
 def _beneath_abi(platform_name, machine, pointer_bytes):
-    """openat2 = 437 is only trusted on 64-bit x86_64 and aarch64 Linux."""
+    """openat2 = 437 is only trusted on the listed 64-bit Linux ABIs.
+
+    The pointer-width check excludes x32, which reports machine x86_64.
+    """
     return (platform_name.startswith("linux") and pointer_bytes == 8
-            and machine in {"x86_64", "amd64", "aarch64", "arm64"})
+            and machine in _BENEATH_MACHINES)
 
 
 BENEATH_PLATFORM = _beneath_abi(sys.platform, platform.machine().lower(),
-                                ctypes.sizeof(ctypes.c_void_p))
+                                struct.calcsize("P"))
 
 
 class BeneathUnavailable(OSError):
