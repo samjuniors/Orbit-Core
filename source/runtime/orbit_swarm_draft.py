@@ -107,6 +107,19 @@ def preview(conn, root, project, args):
                 "active_records_same_root": active, "review_waves": [],
                 "reason": "Inspect real host sessions before scheduling additional tasks."}
 
+    # Optional internal ordering supports deterministic priority-first plans.
+    # Public swarm-draft calls omit it and retain the established key ordering.
+    priority_order = args.get("priority_order")
+    if priority_order is None:
+        ordered_keys = sorted(proposed)
+    else:
+        if (not isinstance(priority_order, list) or len(priority_order) != len(proposed)
+                or any(not isinstance(key, str) for key in priority_order)
+                or len(set(priority_order)) != len(priority_order)
+                or set(priority_order) != set(proposed)):
+            raise ValueError("priority_order must contain every proposed task key exactly once")
+        ordered_keys = priority_order
+
     # A preview wave is an upper bound for future registration/execution, not
     # an instruction to start concurrent agents. Dependencies need acceptance
     # between waves. Overlapping writes are serialized deterministically.
@@ -114,9 +127,9 @@ def preview(conn, root, project, args):
     completed = set()
     waves = []
     while remaining:
-        eligible = [key for key in sorted(remaining)
-                    if all(dep in completed or dep in existing
-                           for dep in proposed[key]["depends_on"])]
+        eligible = [key for key in ordered_keys if key in remaining
+                    and all(dep in completed or dep in existing
+                            for dep in proposed[key]["depends_on"])]
         if not eligible:
             # Defensive fallback: cycle detection already checked.
             return {**base, "status": "HOLD_UNSCHEDULABLE_DAG",

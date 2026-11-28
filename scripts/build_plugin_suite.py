@@ -91,6 +91,11 @@ def claude_code_files(root=ROOT, source=None):
     source = build_files(root) if source is None else source
     claude = {name: blob for name, blob in source.items()
               if name.startswith(("runtime/", "skills/"))}
+    optional_hooks = root / "source" / "claude-code" / "hooks" / "optional" / "orbit-lifecycle.hooks.json"
+    if optional_hooks.is_file():
+        # Kept under hooks/optional: Claude Code does not auto-load this path.
+        # The owner must explicitly copy it to hooks/hooks.json to activate.
+        claude["hooks/optional/orbit-lifecycle.hooks.json"] = optional_hooks.read_bytes()
     claude[".claude-plugin/plugin.json"] = json_bytes({
         "name": "orbit-core", "version": version,
         "displayName": "Orbit Core",

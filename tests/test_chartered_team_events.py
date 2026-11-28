@@ -229,7 +229,7 @@ class CharteredTeamEventTests(unittest.TestCase):
             self.event(action="staff", task_key="api", event_key="evil",
                        bypass_host_permission=True)
         self.assertNotIn("orbit_team_event", orbit_mcp.READ_ONLY_TOOLS)
-        self.assertEqual(len(orbit_mcp.TOOLS), 57)
+        self.assertEqual(len(orbit_mcp.TOOLS), 58)
 
 
     def _synthetic_lease(self, **kwargs):
@@ -437,7 +437,7 @@ class CharteredTeamEventTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.event(action="receipt", event_key="unsafe",
                        grant_permissions=True)
-        self.assertEqual(len(orbit_mcp.TOOLS), 57)
+        self.assertEqual(len(orbit_mcp.TOOLS), 58)
 
 
     def _reserved_native_dispatch(self, staff_options=None):
@@ -670,7 +670,7 @@ class CharteredTeamEventTests(unittest.TestCase):
         self.assertEqual(accepted["status"], "HANDOFF_EVENT_RECORDED")
         self.assertFalse(accepted["worker_spawned"])
         self.assertFalse(accepted["payload"]["handoff_contract"]["lead_review_completed"])
-        self.assertEqual(len(orbit_mcp.TOOLS), 57)
+        self.assertEqual(len(orbit_mcp.TOOLS), 58)
 
     def test_specialist_result_receipt_requires_independent_lead_review(self):
         self._native_recipient_with_handoff({

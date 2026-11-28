@@ -1,9 +1,21 @@
 # Orbit Core — cross-agent continuity and handoff
 
 **Status:** maintained handoff contract plus a dated engineering snapshot, **not** authorization to merge, install, or release.
-**Last reviewed:** 2026-11-21 (Asia/Kolkata).
+**Last reviewed:** 2026-11-25 (Asia/Kolkata).
 **Project:** [samjuniors/Orbit-Core](https://github.com/samjuniors/Orbit-Core). The historic Orbit-Core-MCP URL redirects to this repository.
 **Applies to:** ChatGPT, Claude Code, Codex, Antigravity and other authorized coding hosts. **Not** the separate Orbit Commander project (paused by owner).
+
+## 2026-11-25 ? v0.34 Windows verification and security containment
+
+- Correct repository checkout: `E:\SOFTWARE\Plugin\Orbit-Core` is the owner's primary checkout. The active v0.34 worktree is `E:\SOFTWARE\Plugin\wt-v034-context-aware`, branch `feat/v034-context-aware-intelligence-20261123`. The primary checkout and active RAD security worktree remain untouched.
+- Feature branch source base was `2fdf4f329774b9644e75ac0df4d89738a7cd625f`. Prior source/candidate containment commit: [`fde77820b004be8f172de723f8ffc37bf773367e`](https://github.com/samjuniors/Orbit-Core/commit/fde77820b004be8f172de723f8ffc37bf773367e). Latest structural/readiness guard and acceptance record commit: [`50efb36d6987cd351859a6091c924a71c48767b3`](https://github.com/samjuniors/Orbit-Core/commit/50efb36d6987cd351859a6091c924a71c48767b3).
+- Two deterministic Windows junction-race tests proved the previous candidate writer could write outside the project and the metadata-only structural scan could expose an outside-project filename. Windows candidate writes, source-content scans and structural scans now fail closed. Blocked structural scans do not open directory entries, do not fabricate an empty snapshot, and preserve the last complete readiness snapshot/counts.
+- Windows Python 3.12 full suite: **835 PASS / 43 SKIPPED / 0 FAIL**. Focused readiness: **16/16 PASS**; project audit: **1 PASS / 4 SKIPPED**; source audit: **2 PASS / 4 SKIPPED**; agent factory: **14 PASS / 2 SKIPPED**; Claude plugin parity: **4/4 PASS**. Skips and security holds are detailed in `docs/CONTEXT-AWARE-INTELLIGENCE-PLAN.md`.
+- Disposable validation passed: Python compileall, Windows GUI compile, release readiness, strict bundle parity, fresh ZIP package build and extracted ZIP/MCP stdio smoke (**58 tools**). The generated artifacts were confined to a disposable copy; VERSION remains 0.33.1 and NEXT_VERSION 0.34.0. This is not a v0.34 release.
+- A synthetic Claude SessionStart hook payload smoke passed against a temporary SQLite DB and stored no raw session ID/prompt/tool payload. This does not verify actual Claude Code hook delivery. No plugin update, hook activation or host configuration change was performed; installed plugin remains 0.33.1.
+- Exact-head GitHub Actions run [#45557560695](https://github.com/samjuniors/Orbit-Core/actions/runs/45557560695) passed **5/5** on code commit `b1512e5dc7075fe901301148bd40bd7afca33db2`: Ubuntu Python 3.10–3.13 and Windows Python 3.12. The Windows job completed all previous-version upgrade rehearsals. The remaining acceptance/handoff updates are documentation-only; any further source/runtime/test change requires fresh exact-head CI.
+- Model routing remains advisory; no active-session model switching or authoritative quota telemetry is implemented. Non-Windows path traversal and candidate persistence still require independent adversarial security review.
+- The version-specific development gate is recorded in [RELEASE-ACCEPTANCE-v0.34.0.md](RELEASE-ACCEPTANCE-v0.34.0.md). No PR, merge, tag, release, plugin install or hook activation has been performed. Independent human security review and native Claude lifecycle acceptance remain required.
 
 ## 2026-11-22 — documentation merge and release disposition
 

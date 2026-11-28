@@ -6,6 +6,7 @@ version, entitlement, benchmark or permission verification. Host owns model swit
 from __future__ import annotations
 
 import re
+from datetime import datetime
 
 TYPES={'website','web-app','desktop-app','mobile-app','api-service','cli','sdk-library','plugin-mcp','os-platform','game','data-automation','other'}
 HOSTS={'antigravity','claude-code','codex','vscode','generic'}
@@ -75,7 +76,113 @@ def _tier(name):
     if any(x in t for x in ('sonnet','pro','codex','gpt','gemini','fable')):return 'balanced'
     return 'unknown'
 
-def model_route(role,task,complexity,models,host,budget):
+def _capacity_timestamp(value, field):
+    if not isinstance(value, str) or not 1 <= len(value) <= 64:
+        raise ValueError(field + ' must be an ISO-8601 timestamp')
+    try:
+        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError as exc:
+        raise ValueError(field + ' must be an ISO-8601 timestamp') from exc
+    if parsed.tzinfo is None:
+        raise ValueError(field + ' must include a timezone')
+    return value
+
+
+def capacity_observation(report):
+    """Normalize separate host-capacity signals; never infer provider/account quota.
+
+    All observations are caller-reported and untrusted. This is an advisory
+    interpretation only: no checkpoint, scheduling, throttling or host action.
+    """
+    if not isinstance(report, dict) or set(report) - {
+            'context_window', 'rate_limit', 'host_availability', 'worker_pool'}:
+        raise ValueError('capacity_report must contain only supported observations')
+    result = {
+        'context_window': {'status': 'UNKNOWN', 'checkpoint_recommended': False},
+        'rate_limit': {'state': 'UNKNOWN', 'recommended_action': 'NO_SIGNAL'},
+        'host_availability': {'state': 'UNKNOWN', 'recommended_action': 'NO_SIGNAL'},
+        'worker_capacity': {'status': 'UNKNOWN', 'recommended_action': 'NO_SIGNAL'},
+        'account_usage': {'status': 'UNKNOWN',
+                          'reason': 'No authoritative account quota or reset telemetry was supplied.'},
+        'telemetry_caller_reported': True,
+        'telemetry_independently_verified': False,
+        'actions_executed': False,
+        'provider_fallback_attempted': False,
+    }
+    allowed = {
+        'context_window': {'used_tokens', 'total_tokens', 'observed_at', 'source'},
+        'rate_limit': {'state', 'observed_at', 'source'},
+        'host_availability': {'state', 'observed_at', 'source'},
+        'worker_pool': {'active_workers', 'worker_limit', 'observed_at', 'source'},
+    }
+    for name, fields in allowed.items():
+        item = report.get(name)
+        if item is None:
+            continue
+        if not isinstance(item, dict) or set(item) != fields:
+            raise ValueError(name + ' observation has an invalid shape')
+        _capacity_timestamp(item['observed_at'], name + '.observed_at')
+        if not isinstance(item['source'], str) or not 1 <= len(item['source'].strip()) <= 100:
+            raise ValueError(name + '.source must identify the reporting host/source')
+    if 'context_window' in report:
+        item = report['context_window']
+        used, total = item['used_tokens'], item['total_tokens']
+        if (type(used) is not int or type(total) is not int or
+                used < 0 or total < 1 or used > total or total > 10**12):
+            raise ValueError('Invalid context-window token counts')
+        pct = round(100 * used / total, 1)
+        state = 'CRITICAL' if pct >= 90 else 'PRESSURE' if pct >= 80 else 'NORMAL'
+        result['context_window'] = {
+            'status': state, 'used_tokens': used, 'total_tokens': total,
+            'remaining_tokens': total - used, 'utilization_percent': pct,
+            'observed_at': item['observed_at'], 'source': item['source'],
+            'checkpoint_recommended': pct >= 80,
+            'next_step': ('Prepare a host-native checkpoint before continuing if practical.'
+                          if pct >= 80 else 'Continue under the host’s normal context policy.'),
+        }
+    if 'rate_limit' in report:
+        item = report['rate_limit']
+        state = item['state']
+        if state not in {'CLEAR', 'WARNING', 'BLOCKED', 'UNKNOWN'}:
+            raise ValueError('Unsupported rate-limit state')
+        result['rate_limit'] = {
+            'state': state, 'observed_at': item['observed_at'],
+            'source': item['source'],
+            'recommended_action': (
+                'HOLD_HOST_WORK_AND_WAIT_FOR_HOST_GUIDANCE' if state == 'BLOCKED' else
+                'REDUCE_NEW_WORK_AND_CHECK_HOST_STATUS' if state == 'WARNING' else
+                'NO_SIGNAL' if state == 'UNKNOWN' else 'NO_CAPACITY_ACTION_INDICATED'),
+        }
+    if 'host_availability' in report:
+        item = report['host_availability']
+        state = item['state']
+        if state not in {'AVAILABLE', 'BUSY', 'UNAVAILABLE', 'UNKNOWN'}:
+            raise ValueError('Unsupported host-availability state')
+        result['host_availability'] = {
+            'state': state, 'observed_at': item['observed_at'],
+            'source': item['source'],
+            'recommended_action': (
+                'HOLD_NEW_HOST_WORK' if state == 'UNAVAILABLE' else
+                'DEFER_NONURGENT_WORK' if state == 'BUSY' else
+                'NO_SIGNAL' if state == 'UNKNOWN' else 'HOST_REPORTED_AVAILABLE'),
+        }
+    if 'worker_pool' in report:
+        item = report['worker_pool']
+        active, limit = item['active_workers'], item['worker_limit']
+        if (type(active) is not int or type(limit) is not int or
+                active < 0 or limit < 1 or active > 64 or limit > 64 or active > limit):
+            raise ValueError('Invalid worker-pool capacity')
+        full = active >= limit
+        result['worker_capacity'] = {
+            'status': 'AT_CAPACITY' if full else 'CAPACITY_REPORTED',
+            'active_workers': active, 'worker_limit': limit,
+            'observed_at': item['observed_at'], 'source': item['source'],
+            'recommended_action': 'DEFER_NEW_DELEGATION' if full else 'CAPACITY_REPORTED_NOT_AUTHORIZED',
+        }
+    return result
+
+
+def model_route(role,task,complexity,models,host,budget,capacity_report=None):
     if host not in HOSTS or role not in ROLES or task not in TASKS or budget not in {'economy','balanced','quality'}:
         raise ValueError('Unsupported host, role, task or budget')
     if complexity not in {'simple','moderate','complex','high-assurance'}:
@@ -96,20 +203,23 @@ def model_route(role,task,complexity,models,host,budget):
            'deep':('deep','balanced','fast','unknown')}[tier]
     clean=list(dict.fromkeys(x.strip() for x in models))
     chosen=next((m for k in order for m in clean if _tier(m)==k),None)
-    insufficient=bool(tier=='deep' and chosen and _tier(chosen) in {'fast','unknown'}
-                      and complexity=='high-assurance')
+    insufficient=bool(tier=='deep' and chosen and complexity=='high-assurance'
+                      and _tier(chosen)!='deep')
     suggested=None if insufficient else chosen
     selection_status=('REQUIRES_MODEL_QUALITY_REVIEW' if insufficient else
                       'HOST_REPORTED_UNVERIFIED' if chosen else 'INHERIT_HOST_MODEL')
-    return {'role':role,'task':task,'host':host,'desired_tier':tier,
-            'available_models_reported':len(clean),
-            'recommended_model':suggested, 'selection_status':selection_status,
-            'chosen_tier':_tier(suggested) if suggested else None,
-            'tier_fallback':bool(suggested and _tier(suggested)!=tier),
-            'host_control_guidance':HOST_ROUTING[host],
-            'no_switch_executed':True,
-            'cost_note':'Heuristic only. No real-time quotas, price, billing, entitlements or benchmark measurements.',
-            'permission_note':'Do not spawn another CLI, switch providers/accounts, spend credits or edit host model settings without explicit host/user authorization.'}
+    result = {'role':role,'task':task,'host':host,'desired_tier':tier,
+              'available_models_reported':len(clean),
+              'recommended_model':suggested, 'selection_status':selection_status,
+              'chosen_tier':_tier(suggested) if suggested else None,
+              'tier_fallback':bool(suggested and _tier(suggested)!=tier),
+              'host_control_guidance':HOST_ROUTING[host],
+              'no_switch_executed':True,
+              'cost_note':'Heuristic only. No real-time quotas, price, billing, entitlements or benchmark measurements.',
+              'permission_note':'Do not spawn another CLI, switch providers/accounts, spend credits or edit host model settings without explicit host/user authorization.'}
+    if capacity_report is not None:
+        result['capacity'] = capacity_observation(capacity_report)
+    return result
 
 def components(product_type,platforms,stack,preference):
     if product_type not in TYPES or preference not in {'balanced','reuse','custom'}:
