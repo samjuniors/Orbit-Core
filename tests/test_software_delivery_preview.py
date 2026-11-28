@@ -414,7 +414,7 @@ class SoftwareDeliveryPreviewTests(unittest.TestCase):
         self.assertTrue(m["annotations"]["readOnlyHint"])
         self.assertFalse(m["annotations"]["destructiveHint"])
         self.assertIn("model",m["description"])
-        self.assertEqual(len(orbit_mcp.TOOLS),58)
+        self.assertEqual(len(orbit_mcp.TOOLS),59)
 
 
 if __name__=="__main__":

@@ -130,7 +130,7 @@ class VisualQualityTests(unittest.TestCase):
         self.assertEqual(quality["status"], "SOURCE_REVIEW_ONLY")
         self.assertEqual(quality["qa_plan"]["route_candidates"], ["/settings"])
         self.assertEqual(quality["visual_contract"]["status"], "STYLE_DRIFT_REVIEW_REQUIRED")
-        self.assertEqual(len(orbit_mcp.TOOLS), 58)
+        self.assertEqual(len(orbit_mcp.TOOLS), 59)
         self.assertFalse(result["selection_applied"])
 
     def test_full_product_coverage_rejects_missing_static_routes(self):

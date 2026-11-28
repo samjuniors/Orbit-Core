@@ -123,7 +123,7 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.record(unknown_extra_field="invalid")
         tools = {t["name"]: t for t in orbit_mcp.TOOLS}
-        self.assertEqual(len(tools), 58)
+        self.assertEqual(len(tools), 59)
         self.assertTrue(tools["orbit_improvement_context"]["annotations"]["readOnlyHint"])
         self.assertFalse(tools["orbit_improvement_record"]["annotations"]["readOnlyHint"])
         self.assertFalse(tools["orbit_specialist_candidate"]["annotations"]["readOnlyHint"])

@@ -41,6 +41,7 @@ import orbit_improvement
 import orbit_agent_factory
 import orbit_team_builder
 import orbit_team_events
+import orbit_security_review
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -839,11 +840,27 @@ TOOLS.extend([
          ['project_root','project','mission_id','expected_revision','reported_branch','task_key','category'])},
 ])
 TOOLS.append({'name':'orbit_project_transfer','description':'Explicit portable project export/import across PCs. Export returns a bounded JSON bundle without writing files; manually keep it outside Git. Import previews before confirmation, rejects conflicts, remaps only this project root, and never transfers approval. Imported sessions are historical unverified evidence. Checkpoint file is not changed.','inputSchema':schema({'project_root':string(2000),'project':string(80),'action':{'type':'string','enum':['export','import']},'bundle':string(90000),'expected_revision':string(64),'confirm_write':{'type':'boolean'}},['project_root','project','action'])})
+TOOLS.append({
+    'name':'orbit_security_review_plan',
+    'description':'Create a product-specific cybersecurity review plan; optionally run bounded, local-only static source-pattern checks when scan_source=true and permission_state=APPROVED. No project code execution, external scanners, installation, network access, penetration test or security certification.',
+    'inputSchema':schema({
+        'project_root':string(2000),'project':string(80),
+        'objective':string(1200),
+        'project_profile':schema({
+            'product_type':{'type':'string','enum':sorted(orbit_skill_plan.PRODUCT_TYPES)},
+            'platform':{'type':'string','enum':sorted(orbit_skill_plan.PLATFORMS)},
+            'technologies':{'type':'array','maxItems':8,'items':{'type':'string','enum':sorted(orbit_skill_plan.TECHNOLOGIES)}},
+            'operation':{'type':'string','enum':sorted(orbit_skill_plan.OPERATIONS)}},[]),
+        'permission_state':{'type':'string','enum':['UNKNOWN','APPROVED','DENIED']},
+        'available_security_tools':{'type':'array','maxItems':24,'items':string(64)},
+        'scan_source':{'type':'boolean'}},
+        ['project_root','project','objective','project_profile'])
+})
 READ_ONLY_TOOLS = {'orbit_project_scan','orbit_project_resume','orbit_memory_recall','orbit_gate_evaluate',
     'orbit_task_list','orbit_task_handoff','orbit_swarm_preview','orbit_swarm_draft_preview','orbit_software_delivery_preview','orbit_swarm_host_preflight','orbit_native_coordination_preview','orbit_swarm_integration_review','orbit_task_scope_check','orbit_capability_discover','orbit_capability_select',
     'orbit_preview_status','orbit_build_status','orbit_intake_status','orbit_docs_audit',
     'orbit_decision_route','orbit_model_route','orbit_update_status','orbit_research_context','orbit_practice_suggest','orbit_improvement_context',
-    'orbit_autopilot_next','orbit_autopilot_decision','orbit_team_preview'}
+    'orbit_autopilot_next','orbit_autopilot_decision','orbit_team_preview','orbit_security_review_plan'}
 EXECUTES_PROJECT_CODE = {'orbit_preview_start','orbit_browser_qa'}
 for _tool in TOOLS:
     _name=_tool['name']
@@ -902,6 +919,15 @@ def execute(conn, name, a):
     if name=='orbit_team_preview':
         root=project_root(a)
         return orbit_team_builder.preview(conn,root,project_key(a),a)
+    if name=='orbit_security_review_plan':
+        root=project_root(a)
+        result = orbit_security_review.plan(a['project_profile'], a['objective'],
+            permission_state=a.get('permission_state','UNKNOWN'),
+            available_security_tools=a.get('available_security_tools'))
+        if a.get('scan_source') is True:
+            result['static_scan'] = orbit_security_review.scan_project(
+                root, permission_state=a.get('permission_state','UNKNOWN'))
+        return result
     if name in {'orbit_autopilot_charter','orbit_autopilot_next','orbit_autopilot_decision'}:
         root=project_root(a)
         project=project_key(a)
