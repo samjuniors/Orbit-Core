@@ -269,11 +269,11 @@ def candidate(root, project, args):
                     "candidate_sha256": digest, "state_written": False,
                     "agent_spawned": False,
                     "reason": "The kernel cannot confine file creation beneath the project (openat2 unavailable); preview remains available and writes fail closed."}
-        except orbit_posix_fs.UnsafeOwnershipError:
+        except orbit_posix_fs.UnsafeOwnershipError as exc:
             return {"status": "HOLD_UNSAFE_CANDIDATE_DIRECTORY", "state_written": False,
-                    "agent_spawned": False,
+                    "agent_spawned": False, "unsafe_directory": exc.filename,
                     "candidate_relative_path": proposal["candidate_relative_path"],
-                    "reason": "The project root must not be group/other writable, and .orbit candidate folders must be owned by you (the candidate folder 0700); preview remains available."}
+                    "reason": "The project root must be owned by you and not group/other writable, and .orbit, .orbit/agent-candidates and the candidate folder must be owned by you with mode 0700 (for example: chmod 700 .orbit). Preview remains available."}
         except orbit_posix_fs.WriteRolledBackError:
             return {"status": "HOLD_CANDIDATE_WRITE_FAILED", "state_written": False,
                     "rolled_back": True, "agent_spawned": False,
@@ -282,6 +282,7 @@ def candidate(root, project, args):
         except orbit_posix_fs.CleanupFailedError:
             return {"status": "HOLD_CANDIDATE_CLEANUP_FAILED", "state_written": False,
                     "rolled_back": False, "partial_file_may_exist": True,
+                    "cleanup_required": True, "candidate_id": folder.name,
                     "agent_spawned": False,
                     "candidate_relative_path": proposal["candidate_relative_path"],
                     "reason": "Writing AGENT.md failed and the new file could not be removed; an empty or partial file may remain at this path or where its folder was moved."}

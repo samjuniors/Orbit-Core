@@ -305,7 +305,7 @@ def checkpoint(conn, a):
         if a.get('expected_revision') != prior['revision']:
             return {'status':'STALE_REVISION', 'revision':prior['revision']}
         path = safe_checkpoint_path(root)
-        path.parent.mkdir(exist_ok=True)
+        path.parent.mkdir(mode=0o700, exist_ok=True)
         if path.parent.is_symlink() or path.is_symlink():
             raise ValueError('Symlink checkpoint forbidden')
         atomic_write(path, new_body)

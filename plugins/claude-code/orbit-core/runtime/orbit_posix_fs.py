@@ -9,6 +9,7 @@ from __future__ import annotations
 import ctypes
 import errno
 import os
+import platform
 import stat
 import sys
 from pathlib import Path
@@ -23,14 +24,23 @@ SAFE = (
 )
 
 
-# openat2(2), Linux 5.6+. Same syscall number on every Linux architecture.
+# openat2(2), Linux 5.6+. 437 is its number in the generic syscall table used by
+# x86_64 and aarch64; other ABIs differ (MIPS, Alpha, IA-64, x32), so only those
+# two 64-bit ABIs are supported and everything else fails closed.
 _OPENAT2_NR = 437
 _RESOLVE_NO_MAGICLINKS = 0x02
 _RESOLVE_NO_SYMLINKS = 0x04
 _RESOLVE_BENEATH = 0x08
 # Only Linux offers an atomic "create beneath this directory" primitive. Other
 # POSIX systems fail closed for confirmed writes; previews remain available.
-BENEATH_PLATFORM = sys.platform.startswith("linux")
+def _beneath_abi(platform_name, machine, pointer_bytes):
+    """openat2 = 437 is only trusted on 64-bit x86_64 and aarch64 Linux."""
+    return (platform_name.startswith("linux") and pointer_bytes == 8
+            and machine in {"x86_64", "amd64", "aarch64", "arm64"})
+
+
+BENEATH_PLATFORM = _beneath_abi(sys.platform, platform.machine().lower(),
+                                ctypes.sizeof(ctypes.c_void_p))
 
 
 class BeneathUnavailable(OSError):
@@ -216,18 +226,19 @@ def write_new_file(parent_fd, name, content):
 def require_private_dirs(root, relative_parts, *, allow_missing=False):
     """Fail closed unless no other local user can rename the candidate chain.
 
-    The root must not be group/other writable. Every directory below it must be
-    owned by the effective user and not group/other writable; the last one must
-    be private (0700). Existing directories are checked, not just new ones.
+    The root must be owned by the effective user and not group/other writable.
+    Every directory below it must be owned by the effective user with no
+    group/other permissions (0700). Existing directories are checked too.
     """
     uid = os.geteuid()
     current = open_root(root)
     try:
         info = os.fstat(current)
-        if info.st_mode & 0o022:
-            raise UnsafeOwnershipError("Project root is writable by group or others")
-        parts = tuple(relative_parts)
-        for index, raw in enumerate(parts):
+        if info.st_uid != uid or info.st_mode & 0o022:
+            raise UnsafeOwnershipError(errno.EPERM, "Project root is not owned by this user "
+                                       "or is writable by group or others", ".")
+        seen = []
+        for raw in tuple(relative_parts):
             try:
                 child = _open_dir_at(current, raw)
             except FileNotFoundError:
@@ -236,11 +247,11 @@ def require_private_dirs(root, relative_parts, *, allow_missing=False):
                 raise
             os.close(current)
             current = child
+            seen.append(raw)
             info = os.fstat(current)
-            private = index == len(parts) - 1
-            if info.st_uid != uid or info.st_mode & (0o077 if private else 0o022):
-                raise UnsafeOwnershipError(
-                    "Candidate directory is not owned by this user or is too permissive")
+            if info.st_uid != uid or info.st_mode & 0o077:
+                raise UnsafeOwnershipError(errno.EPERM, "Directory is not owned by this "
+                                           "user or is not private (0700)", "/".join(seen))
     finally:
         os.close(current)
 

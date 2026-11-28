@@ -46,6 +46,17 @@ class PosixFilesystemTests(unittest.TestCase):
             orbit_posix_fs.create_beneath(self.root, ".orbit/candidates/AGENT.md", "x")
         self.assertFalse((self.outside / "candidates" / "AGENT.md").exists())
 
+    def test_openat2_abi_allowlist(self):
+        abi = orbit_posix_fs._beneath_abi
+        self.assertTrue(abi("linux", "x86_64", 8))
+        self.assertTrue(abi("linux", "aarch64", 8))
+        for platform_name, machine, size in (
+                ("linux", "x86_64", 4),        # x32 uses a different syscall number
+                ("linux", "mips64", 8), ("linux", "alpha", 8), ("linux", "ia64", 8),
+                ("linux", "armv7l", 4), ("linux", "ppc64le", 8), ("darwin", "arm64", 8)):
+            with self.subTest(machine=machine, size=size, platform=platform_name):
+                self.assertFalse(abi(platform_name, machine, size))
+
     def test_create_beneath_fails_closed_without_openat2(self):
         with mock.patch.object(orbit_posix_fs, "BENEATH_PLATFORM", True), \
                 mock.patch.object(orbit_posix_fs, "_openat2", return_value=-errno.ENOSYS):

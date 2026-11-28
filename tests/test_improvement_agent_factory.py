@@ -244,7 +244,28 @@ class ImprovementAndAgentFactoryTests(unittest.TestCase):
             result = self.agent(confirm_write=True)
         self.assertEqual(result["status"], "HOLD_CANDIDATE_CLEANUP_FAILED")
         self.assertTrue(result["partial_file_may_exist"])
+        self.assertTrue(result["cleanup_required"])
+        self.assertIn(result["candidate_id"], result["candidate_relative_path"])
         self.assertTrue((self.root / result["candidate_relative_path"]).exists())
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_refused_when_orbit_folder_is_not_private(self):
+        (self.root / ".orbit").mkdir()
+        os.chmod(self.root / ".orbit", 0o755)
+        result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_DIRECTORY")
+        self.assertEqual(result["unsafe_directory"], ".orbit")
+        self.assertFalse((self.root / ".orbit" / "agent-candidates").exists())
+        os.chmod(self.root / ".orbit", 0o700)
+        self.assertEqual(self.agent(confirm_write=True)["status"], "AGENT_CANDIDATE_DRAFTED")
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
+    def test_candidate_refused_when_root_owned_by_another_user(self):
+        import orbit_posix_fs
+        with mock.patch.object(orbit_posix_fs.os, "geteuid", return_value=os.geteuid() + 4242):
+            result = self.agent(confirm_write=True)
+        self.assertEqual(result["status"], "HOLD_UNSAFE_CANDIDATE_DIRECTORY")
+        self.assertFalse((self.root / ".orbit").exists())
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "openat2 is Linux-only")
     def test_candidate_refused_in_group_writable_directories(self):
