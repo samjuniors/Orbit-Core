@@ -279,3 +279,17 @@ Host: Claude Code 2.1.307 on Windows 11 build 26200. Each check used an isolated
 | Agent `tools:` allowlist enforcement in a signed-in Claude Code session | **NOT VERIFIED.** The isolated profile has no sign-in, and the owner's install is still v0.32.0, which has no allowlists. |
 
 Unchanged: host-enforced timed native grant expiry and active revocation remain **BLOCKED**. Specialist delivery and migration/rollback in the owner's own Codex and Antigravity profiles remain **NOT VERIFIED**. No independent human security review has been performed. [Issue #138](https://github.com/samjuniors/Orbit-Core/issues/138) is still open. v0.33.1 is unmerged and unpublished.
+
+## 2026-11-28 — v0.33.1 release-gap check on main `2fdf4f3`
+
+Cloud Linux container, disposable worktrees only. No real IDE, user profile or publication.
+
+| Check | Result |
+|---|---|
+| `check_version --strict-bundle`, `check_release_readiness`, `prepare_release_candidate` (bundle unchanged, `generated=false`) | **PASS** |
+| Full unit suite | **PASS** (763 passed, 6 skipped) |
+| `build_release --verify`, `smoke_release_zip` (57 tools) | **PASS** |
+| Upgrade rehearsal from published v0.33.0 | **GAP FOUND:** 0.33.0 was not an accepted prior version and CI did not rehearse it. Added to the allowlist and CI; local rehearsal (codex + antigravity) **PASS** `DISPOSABLE_STOCK_UPGRADE_PASS`. |
+| Main push CI on `2fdf4f3` ([#45167794202](https://github.com/samjuniors/Orbit-Core/actions/runs/45167794202)) | **PASS** |
+
+Still open for v0.33.1: exact-head CI on the branch carrying this fix, owner review, and owner-only manual dispatch of `Publish versioned release`. Agent `tools:` allowlist enforcement in a signed-in Claude Code session remains **NOT VERIFIED**.
