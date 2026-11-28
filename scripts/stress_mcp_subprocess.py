@@ -69,14 +69,14 @@ def main() -> int:
                         stdout = stdout.decode("utf-8", errors="replace")
                     if isinstance(stderr, bytes):
                         stderr = stderr.decode("utf-8", errors="replace")
-                    stderr += "\\nSTRESS_HARNESS_TIMEOUT: unittest exceeded 90 seconds\\n"
+                    stderr += "\nSTRESS_HARNESS_TIMEOUT: unittest exceeded 90 seconds\n"
 
                 elapsed = time.monotonic() - started
                 log = (
                     f"mode={mode} iteration={iteration}/{args.iterations} "
-                    f"returncode={code} elapsed_seconds={elapsed:.3f}\\n"
-                    f"--- stdout ---\\n{stdout}\\n"
-                    f"--- stderr (includes child stderr on assertion failure) ---\\n{stderr}\\n"
+                    f"returncode={code} elapsed_seconds={elapsed:.3f}\n"
+                    f"--- stdout ---\n{stdout}\n"
+                    f"--- stderr (includes child stderr on assertion failure) ---\n{stderr}\n"
                 )
                 log_path = args.log_dir / f"{mode}-{iteration:02d}.log"
                 log_path.write_text(log, encoding="utf-8")
@@ -91,7 +91,7 @@ def main() -> int:
     print(f"SUMMARY: {total - len(failures)}/{total} passed; "
           f"{len(failures)} failed; logs={args.log_dir}", flush=True)
     if failures:
-        print("\\n".join(failures), file=sys.stderr)
+        print("\n".join(failures), file=sys.stderr)
         return 1
     return 0
 
